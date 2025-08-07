@@ -1,17 +1,23 @@
+import { supabase } from "/supabase.js";
+
 const courseCache = {};
 
-async function fetchCourseData(year, term) {
+export async function fetchCourseData(year, term) {
     const cacheKey = `${year}-${term}`;
     if (courseCache[cacheKey]) {
         return courseCache[cacheKey];
     }
     try {
-        const response = await fetch(`https://api.blazearchive.com/api/courses?year=${year}&term=${term}`);
-        if (!response.ok) {
-            console.error("API Error: Failed to fetch course data.");
+        const { data: courses, error } = await supabase.rpc('get_courses_with_fallback_gpa', {
+            p_year: year,
+            p_term: term
+        });
+
+        if (error) {
+            console.error("Supabase error:", error.message);
             return [];
         }
-        const courses = await response.json();
+        
         courseCache[cacheKey] = courses;
         return courses;
     } catch (error) {
@@ -20,7 +26,7 @@ async function fetchCourseData(year, term) {
     }
 }
 
-function openCourseInfoMenu(course) {
+export function openCourseInfoMenu(course) {
     const classInfo = document.getElementById("class-info");
     const classContent = document.getElementById("class-content");
     const classClose = document.getElementById("class-close");

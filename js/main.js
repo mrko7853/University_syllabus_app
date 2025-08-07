@@ -1,8 +1,13 @@
+import { supabase } from "/supabase.js";
+import { fetchCourseData } from '/js/shared.js';
+import { openCourseInfoMenu } from '/js/shared.js';
+
 const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
 
 async function showCourse(year, term) {
+
     const courses = await fetchCourseData(year, term);
     courses.sort((a, b) => a.title.localeCompare(b.title));
     

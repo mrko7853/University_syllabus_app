@@ -14,6 +14,7 @@ export default defineConfig({
         login: resolve(__dirname, 'login.html'),
         register: resolve(__dirname, 'register.html'),
         profile: resolve(__dirname, 'profile.html'),
+        calendar: resolve(__dirname, 'calendar.html'),
       },
     },
   },
