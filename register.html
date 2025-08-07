@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Blaze Studio | Coming Soon</title>
+    <link rel="stylesheet" href="css/blaze.css">
+</head>
+
+<body>
+
+    <section id="auth-main">
+
+        <div id="message"></div>
+
+        <form id="register-form" method="post">
+            <label for="email">Email</label>
+            <input type="text" name="email" id="email">
+
+            <select name="email-domain" id="email-domain">
+              <option value="@mail2.doshisha.ac.jp" selected>@mail2.doshisha.ac.jp</option>
+            </select>
+
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password">
+            <input type="submit" value="Submit">
+        </form>
+    </section>
+
+    <script type="module" src="js/auth.js"></script>
+</body>
+</html>

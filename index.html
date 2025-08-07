@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Blaze Studio | Coming Soon</title>
+    <link rel="stylesheet" href="css/blaze.css">
+</head>
+
+<body>
+
+    <section id="syllabus-main">
+        <label for="term-select">Semester</label>
+
+            <select name="term" id="term-select">
+              <option value="春学期/Spring">Spring</option>
+              <option value="秋学期/Fall" selected>Fall</option>
+            </select>
+            
+        <label for="year-select">Year</label>
+
+            <select name="year" id="year-select">
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+            </select>
+
+        <div class="syllabus-content">
+            <div class="course-container">
+                <h2 class="course-main-title">Course List</h2>
+                <p class="course-main-paragraph" id="course-filter-paragraph"></p>
+                <div id="course-list">
+                </div>
+            </div>
+            <div class="class-info" id="class-info">
+                <div class="class-content" id="class-content">
+                </div>
+                <button id="class-close">x</button>
+            </div>
+        </div>
+    </section>
+
+    <script src="js/shared.js"></script>
+    <script src="js/main.js"></script>
+
+</body>
+</html>

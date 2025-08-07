@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&display=swap');
+
+html, body {
+    margin: 0;
+    border: 0;
+    font-family: 'Libre Bodoni', sans-serif;
+    line-height: 1.5;
+}
+
+/* Class list */
+
+.course-container {
+    background: #E3D5E9;
+    margin: 20px;
+    padding: 30px;
+    border-radius: 50px;
+}
+
+.course-main-title {
+    margin: 5px 0 35px 0;
+    font-size: 30px;
+}
+
+.course-main-paragraph {
+    margin: 5px 0 35px 0;
+}
+
+.gpa-bar {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    text-align: center;
+}
+
+.gpa-bar p {
+    opacity: 100% !important;
+}
+
+.gpa-bar .gpa-fill:nth-child(-n+2) {
+    grid-column: span 3;
+}
+
+.gpa-bar .gpa-fill:nth-child(1) {
+    background-color: #92ECB0;
+}
+.gpa-bar .gpa-fill:nth-child(2) {
+    background-color: #D1E7C9;
+}
+.gpa-bar .gpa-fill:nth-child(3) {
+    background-color: #F6EBC1;
+    border-bottom-left-radius: 30px;
+    font-size: 13px;
+}
+.gpa-bar .gpa-fill:nth-child(4) {
+    background-color: #FFDD55;
+    font-size: 13px;
+}
+.gpa-bar .gpa-fill:nth-child(5) {
+    background-color: #ED7F81;
+    border-bottom-right-radius: 30px;
+    font-size: 13px;
+}
+
+.gpa-bar .gpa-fill:nth-child(n+3) {
+    grid-column: span 2;
+}
+
+#course-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    max-width: 900px;
+}
+
+.syllabus-content {
+    display: flex;
+    justify-content: center;
+}
+
+.class-outside {
+    display: flex;
+    flex-direction: column; /* Stacks children vertically */
+    box-sizing: border-box;
+}
+
+.class-container {
+    padding: 20px;
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    flex: 1;
+}
+
+#course-list p {
+    opacity: 60%;
+    margin: 5px 0;
+}
+
+#course-list h2 {
+    margin: 5px 0 40px 0;
+}
+
+#course-list h3 {
+    margin: 5px 0;
+}
+
+.class-space {
+    margin: 40px 0;
+}
+
+.class-info {
+    display: flex;
+    padding: 100px;
+    background-color: black;
+    position: fixed;
+    bottom: -500%;
+    left: 0;
+    transition: all 0.2s;
+}
+
+.show {
+    width: 100%;
+    height: 50%;
+    bottom: 0;
+    transition: all 0.2s;
+}
+
+.highlight {
+    background-color: aqua;
+    margin: 0;
+    border: none;
+}
+
+.calendar-first {
+    width: 5%;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 100%;
+    height: 100%;
+}
+
+td {
+    width: 10%;
+}

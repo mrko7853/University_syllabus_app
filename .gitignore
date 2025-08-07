@@ -1,0 +1,18 @@
+# .gitignore file
+system/
+learn/
+
+# Build output
+/dist
+
+# Dependencies
+/node_modules
+
+# Environment variables
+.env
+
+# Vite cache
+.vite/
+
+# Log files
+*.log
