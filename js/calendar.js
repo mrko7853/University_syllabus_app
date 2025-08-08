@@ -1,20 +1,15 @@
+import { supabase } from "/supabase.js";
+import { fetchCourseData } from "/js/shared.js";
+
 document.addEventListener("DOMContentLoaded", async function () {
-    const token = localStorage.getItem("token");
-    if (!token) {
-        window.location.href = "login.php";
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+        window.location.href = "login.html";
         return;
     }
 
-    const res = await fetch("https://api.blazearchive.com/api/profile", {
-        method: "GET",
-        headers: { "x-auth-token": token }
-    });
-
-    if (!res.ok) {
-        localStorage.removeItem("token");
-        window.location.href = "login.php";
-        return;
-    }
+    const user = session.user;
 
     const calendar = document.getElementById("calendar");
     const calendarHeader = calendar.querySelectorAll("thead th");
@@ -54,42 +49,55 @@ document.addEventListener("DOMContentLoaded", async function () {
         displayedTerm = term;
 
         try {
-            const courses = await fetchCourseData(year, term);
-            if (courses.length === 0) return;
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('courses_selection')
+                .eq('id', user.id)
+                .single();
+            
+            if (profileError) {
+                throw profileError;
+            }
 
-            const courseProfile = await fetch("https://api.blazearchive.com/api/profile", {
-                method: "GET",
-                headers: { "x-auth-token": token }
-            });
-            const courseProfileData = await courseProfile.json();
-            const profileArray = courseProfileData.courses_selection || [];
+            const selectedCourses = profile?.courses_selection || [];
+            if (selectedCourses.length === 0) {
+                return;
+            }
 
-            const updatedCourses = courses.filter(course => 
-                profileArray.some(profileCourse => 
+            const allCoursesInSemester = await fetchCourseData(year, term);
+
+            const coursesToShow = allCoursesInSemester.filter(course =>
+                selectedCourses.some((profileCourse) => 
                     profileCourse.code === course.course_code && profileCourse.year == year
                 )
             );
-            if (updatedCourses.length === 0) return;
 
-            updatedCourses.forEach(course => {
+            coursesToShow.forEach(course => {
                 const match = course.time_slot.match(/\((\S+)曜日(\d+)講時\)/);
                 if (!match) return;
+                
                 const dayJP = match[1];
                 const period = parseInt(match[2], 10);
                 const dayMap = { "月": "Mon", "火": "Tue", "水": "Wed", "木": "Thu", "金": "Fri", "土": "Sat", "日": "Sun" };
                 const dayEN = dayMap[dayJP];
+                
                 if (!dayEN) return;
+                
                 let colIndex = -1;
                 calendarHeader.forEach((header, idx) => {
                     if (header.textContent.trim().startsWith(dayEN)) colIndex = idx;
                 });
+                
                 if (colIndex === -1) return;
+                
                 let rowIndex = -1;
                 calendar.querySelectorAll("tbody tr").forEach((row, idx) => {
                     const periodCell = row.querySelector("td");
                     if (periodCell && periodCell.textContent.trim() == period) rowIndex = idx;
                 });
+                
                 if (rowIndex === -1) return;
+                
                 const cell = calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
                 if (cell) {
                     cell.textContent = course.course_code;
@@ -132,4 +140,23 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     clearCourseCells();
     showCourse(currentYear, term);
+});
+
+const pushBtn = document.getElementById("push-button");
+pushBtn.addEventListener("click", async function() {
+    const courseCode = "12001104-003";
+    const courseYear = "2025";
+
+    const { error } = await supabase.rpc('add_course_to_selection', {
+        p_year: courseYear,
+        p_code: courseCode
+    });
+
+    if (error) {
+        console.error("Error:", error);
+        alert("Failed");
+    } else {
+        alert("Success");
+        showCourse(currentYear, term);
+    }
 });
