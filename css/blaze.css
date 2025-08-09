@@ -11,6 +11,7 @@ html, body {
     --h1: 30px;
     --h2: 24px;
     --h3: 20px;
+    --h4: 18px;
     --p: 16px;
 }
 
@@ -26,6 +27,35 @@ html, body {
     margin: 20px;
     padding: 30px;
     border-radius: 50px;
+}
+
+/* Buttons style */
+
+button {
+    border: none;
+    width: 70px;
+    height: 70px;
+    border-radius: 100px;
+    transition: box-shadow 0.2s;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    cursor: pointer;
+}
+
+button:hover {
+    transition: box-shadow 0.2s;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 0px 50px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+}
+
+button:active {
+    transition: box-shadow 0.2s;
+    box-shadow: none;
+}
+
+button#previous {
+    background-image: url(/assets/icon.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 /* Course list style */
@@ -81,7 +111,7 @@ html, body {
 #course-list {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
+    gap: 20px;
     max-width: 900px;
 }
 
@@ -151,17 +181,41 @@ table {
     width: 100%;
     height: 100%;
     max-width: 900px;
+    min-width: 900px;
 }
 
 td {
-    width: 140px;
-    height: 140px;
-    max-width: 140px;
-    max-height: 140px;
+    width: 100px;
+    height: 100px;
+    max-width: 100px;
+    max-height: 100px;
+}
+
+td p {
+    margin: 0;
+}
+
+#smaller-text {
+    font-size: 15px;
+    opacity: 60%;
+    margin-bottom: 5px;
 }
 
 .course-cell {
     border-radius: 50px;
     padding: 20px;
-    font-size: var(--h2);
+    font-size: var(--p);
+    transition: box-shadow 0.2s;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    cursor: pointer;
+}
+
+.course-cell:hover {
+    transition: box-shadow 0.2s;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 0px 0px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+}
+
+.course-cell:active {
+    transition: box-shadow 0.2s;
+    box-shadow: none;
 }

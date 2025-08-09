@@ -94,7 +94,16 @@ document.addEventListener("DOMContentLoaded", async function () {
                 let rowIndex = -1;
                 calendar.querySelectorAll("tbody tr").forEach((row, idx) => {
                     const periodCell = row.querySelector("td");
-                    if (periodCell && periodCell.textContent.trim() == period) rowIndex = idx;
+                    if (periodCell) {
+                        // Try to extract period number from <p>period N</p>
+                        const p = periodCell.querySelector("p");
+                        if (p) {
+                            const periodMatch = p.textContent.match(/period\s*(\d+)/i);
+                            if (periodMatch && parseInt(periodMatch[1], 10) === period) {
+                                rowIndex = idx;
+                            }
+                        }
+                    }
                 });
                 
                 if (rowIndex === -1) return;
@@ -147,7 +156,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 const pushBtn = document.getElementById("push-button");
 pushBtn.addEventListener("click", async function() {
-    const courseCode = "12001301-000";
+    const courseCode = "12001311-000";
     const courseYear = "2025";
 
     const { error } = await supabase.rpc('add_course_to_selection', {
