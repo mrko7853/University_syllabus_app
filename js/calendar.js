@@ -1,5 +1,5 @@
 import { supabase } from "/supabase.js";
-import { fetchCourseData } from "/js/shared.js";
+import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
 
 document.addEventListener("DOMContentLoaded", async function () {
     const { data: { session } } = await supabase.auth.getSession();
@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     const calendar = document.getElementById("calendar");
     const calendarHeader = calendar.querySelectorAll("thead th");
+    const previousBtn = document.getElementById("previous");
     
     let displayedYear;
     let displayedTerm;
@@ -28,7 +29,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     function highlightPeriod() {
-        const periodIndex = Array.from(calendarHeader).findIndex(header => header.textContent.trim() === "Period");
+        const periodIndex = Array.from(calendarHeader).findIndex(header => header.textContent.trim() === previousBtn);
         if (periodIndex === -1) return;
         calendarHeader[periodIndex].classList.add("calendar-first");
         calendar.querySelectorAll("tbody tr").forEach(row => {
@@ -100,8 +101,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 
                 const cell = calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
                 if (cell) {
-                    cell.textContent = course.course_code;
+                    cell.textContent = course.title_short.normalize("NFKC").toUpperCase();
+                    cell.courseIdentifier = course.course_code;
                     cell.classList.add("course-cell");
+                    cell.style.backgroundColor = course.color || "#E3D5E9";
                 }
             });
         } catch (error) {
@@ -113,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const clickedCell = event.target.closest("td.course-cell");
         if (!clickedCell) return;
 
-        const courseCode = clickedCell.textContent;
+        const courseCode = clickedCell.courseIdentifier;
         
         if (!displayedYear || !displayedTerm) {
             console.error("The currently displayed year and term are unknown.");
@@ -144,7 +147,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 const pushBtn = document.getElementById("push-button");
 pushBtn.addEventListener("click", async function() {
-    const courseCode = "12001104-003";
+    const courseCode = "12001301-000";
     const courseYear = "2025";
 
     const { error } = await supabase.rpc('add_course_to_selection', {

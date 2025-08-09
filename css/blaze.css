@@ -7,14 +7,28 @@ html, body {
     line-height: 1.5;
 }
 
-/* Class list */
+:root {
+    --h1: 30px;
+    --h2: 24px;
+    --h3: 20px;
+    --p: 16px;
+}
 
-.course-container {
+/* General style */
+
+.main-content {
+    display: flex;
+    justify-content: center;
+}
+
+.main-container {
     background: #E3D5E9;
     margin: 20px;
     padding: 30px;
     border-radius: 50px;
 }
+
+/* Course list style */
 
 .course-main-title {
     margin: 5px 0 35px 0;
@@ -71,14 +85,9 @@ html, body {
     max-width: 900px;
 }
 
-.syllabus-content {
-    display: flex;
-    justify-content: center;
-}
-
 .class-outside {
     display: flex;
-    flex-direction: column; /* Stacks children vertically */
+    flex-direction: column;
     box-sizing: border-box;
 }
 
@@ -123,6 +132,10 @@ html, body {
     transition: all 0.2s;
 }
 
+
+
+/* Calendar style */
+
 .highlight {
     background-color: aqua;
     margin: 0;
@@ -134,12 +147,21 @@ html, body {
 }
 
 table {
-    border-collapse: collapse;
-    border-spacing: 0;
+    border-spacing: 20px;
     width: 100%;
     height: 100%;
+    max-width: 900px;
 }
 
 td {
-    width: 10%;
+    width: 140px;
+    height: 140px;
+    max-width: 140px;
+    max-height: 140px;
+}
+
+.course-cell {
+    border-radius: 50px;
+    padding: 20px;
+    font-size: var(--h2);
 }
