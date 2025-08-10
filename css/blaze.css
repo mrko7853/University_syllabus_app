@@ -52,7 +52,7 @@ button:active {
 }
 
 button#previous {
-    background-image: url(/assets/icon.svg);
+    background-image: url(/assets/previous.svg);
     background-size: 35px;
     background-position: center;
     background-repeat: no-repeat;
