@@ -17,6 +17,18 @@ html, body {
 
 /* General style */
 
+nav {
+    position: fixed;
+    height: 100%;
+    width: 80px;
+    background-color: #92ECB0;
+    border-right: 1px solid black;
+}
+
+section {
+    margin-left: 80px;
+}
+
 .main-content {
     display: flex;
     justify-content: center;
@@ -27,6 +39,7 @@ html, body {
     margin: 20px;
     padding: 30px;
     border-radius: 50px;
+    position: relative;
 }
 
 /* Buttons style */
@@ -152,6 +165,7 @@ button#previous {
     position: fixed;
     bottom: -500%;
     left: 0;
+    z-index: 10;
     transition: all 0.2s;
 }
 
@@ -166,33 +180,42 @@ button#previous {
 
 /* Calendar style */
 
-.highlight {
-    background-color: aqua;
-    margin: 0;
-    border: none;
+.highlight-column {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background-color: white;
+    opacity: 40%;
+    z-index: 1;
+    pointer-events: none;
 }
 
 .calendar-first {
     width: 5%;
 }
 
-table {
+#calendar {
     border-collapse: collapse;
+    width: 100%;
+}
+
+table {
     width: 100%;
     height: 100%;
     max-width: 900px;
-    min-width: 900px;
+    min-height: 900px;
 }
 
 td {
     width: 100px;
-    height: 100px;
-    max-width: 100px;
-    max-height: 100px;
 }
 
 td, th {
-    padding: 20px;
+    padding: 0;
+    margin: 0;
+    padding: 10px;
+    position: relative;
+    z-index: 2;
 }
 
 td p {
@@ -209,9 +232,14 @@ td p {
     border-radius: 50px;
     padding: 20px;
     font-size: var(--p);
-    transition: box-shadow 0.2s;
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 150px;
+    width: 140px;
+    z-index: 2;
 }
 
 .course-cell:hover {

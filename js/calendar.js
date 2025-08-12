@@ -18,14 +18,50 @@ document.addEventListener("DOMContentLoaded", async function () {
     let displayedYear;
     let displayedTerm;
 
+    window.addEventListener("resize", function() {
+        if (window.currentDay) {
+            highlightDay(window.currentDay);
+        }
+    });
+
     function highlightDay(day) {
-        const columnIndex = Array.from(calendarHeader).findIndex(header => header.textContent.trim() === day);
-        if (columnIndex === -1) return;
-        calendarHeader[columnIndex].classList.add("highlight");
-        calendar.querySelectorAll("tbody tr").forEach(row => {
-            const cell = row.querySelector(`td:nth-child(${columnIndex + 1})`);
-            if (cell) cell.classList.add("highlight");
+        window.currentDay = day;
+        const table = document.getElementById("calendar");
+        const headers = table.querySelectorAll("thead th");
+        const calendar = document.getElementById("calendar");
+        const container = document.querySelector(".main-container");
+
+        const observer = new MutationObserver(() => {
+            if (window.currentDay) {
+                highlightDay(window.currentDay);
+            }
         });
+
+        const tbody = calendar.querySelector("tbody");
+        observer.observe(tbody, {
+            childList: true,
+            subtree: true
+        });
+
+        const columnIndex = Array.from(headers)
+            .findIndex(h => h.textContent.trim() === day);
+        if (columnIndex === -1) return;
+
+        let highlight = document.querySelector(".highlight-column");
+        if (!highlight) {
+            highlight = document.createElement("div");
+            highlight.className = "highlight-column";
+            container.appendChild(highlight);
+            }
+
+            const targetHeader = headers[columnIndex];
+            const rect = targetHeader.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            const left = rect.left - containerRect.left + container.scrollLeft;
+            
+            highlight.style.left = left + "px";
+            highlight.style.width = rect.width + "px";
     }
 
     function highlightPeriod() {
@@ -110,10 +146,12 @@ document.addEventListener("DOMContentLoaded", async function () {
                 
                 const cell = calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
                 if (cell) {
-                    cell.textContent = course.title_short.normalize("NFKC").toUpperCase();
-                    cell.courseIdentifier = course.course_code;
-                    cell.classList.add("course-cell");
-                    cell.style.backgroundColor = course.color || "#E3D5E9";
+                    const div = document.createElement("div");
+                    div.textContent = course.title_short.normalize("NFKC").toUpperCase();
+                    div.classList.add("course-cell");
+                    div.style.backgroundColor = course.color || "#E3D5E9";
+                    div.dataset.courseIdentifier = course.course_code;
+                    cell.appendChild(div);
                 }
             });
         } catch (error) {
@@ -122,10 +160,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     calendar.addEventListener("click", async function(event) {
-        const clickedCell = event.target.closest("td.course-cell");
+        const clickedCell = event.target.closest("div.course-cell");
         if (!clickedCell) return;
 
-        const courseCode = clickedCell.courseIdentifier;
+        const courseCode = clickedCell.dataset.courseIdentifier;
         
         if (!displayedYear || !displayedTerm) {
             console.error("The currently displayed year and term are unknown.");
