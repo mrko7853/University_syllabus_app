@@ -17,12 +17,50 @@ html, body {
 
 /* General style */
 
-nav {
+app-navigation {
     position: fixed;
     height: 100%;
     width: 80px;
     background-color: #92ECB0;
     border-right: 1px solid black;
+}
+
+nav {
+    display: flex;
+    justify-content: center;
+    height: 100%;
+    width: 80px;
+}
+
+nav ul {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+}
+
+nav ul li:nth-child(1){
+    flex: 2;
+}
+
+nav ul li:nth-child(2){
+    flex: 1;
+}
+
+nav ul li:nth-child(3){
+    flex: 1;
+}
+
+nav ul li:nth-child(4){
+    flex: 4;
+}
+
+nav ul li:nth-child(5){
+    flex: 1;
+}
+
+nav ul li:nth-child(6){
+    flex: 1;
 }
 
 section {
@@ -66,6 +104,48 @@ button:active {
 
 button#previous {
     background-image: url(/assets/previous.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#profile {
+    background-image: url(/assets/profile.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#dashboard {
+    background-image: url(/assets/dashboard.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#calendar {
+    background-image: url(/assets/calendar.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#search {
+    background-image: url(/assets/search.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#settings {
+    background-image: url(/assets/settings.svg);
+    background-size: 35px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#help {
+    background-image: url(/assets/help.svg);
     background-size: 35px;
     background-position: center;
     background-repeat: no-repeat;
