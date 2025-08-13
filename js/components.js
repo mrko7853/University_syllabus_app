@@ -34,13 +34,13 @@ class AppNavigation extends HTMLElement {
                         <p>Search</p>
                       </div>
                     </div>
-                    <div class="accessibility-container">
+                    <div class="accessibility-container accessibility-down">
                     <li><button class="${document.title.includes('Settings') && 'active'}" id="settings"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Settings</p>
                       </div>
                     </div>
-                    <div class="accessibility-container">
+                    <div class="accessibility-container accessibility-down">
                     <li><button class="${document.title.includes('Help') && 'active'}" id="help"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Help</p>

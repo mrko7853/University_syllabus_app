@@ -206,6 +206,17 @@ nav ul div:nth-child(5) {
     z-index: 10;
 }
 
+.accessibility-container.accessibility-down .accessibility-dropdown {
+    top: -125% !important;
+}
+
+.accessibility-container:hover.accessibility-down .accessibility-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(100%) !important;
+    z-index: 10;
+}
+
 button#calendar-btn {
     background-image: url(/assets/calendar.svg);
     background-size: var(--icon-size-desktop);
