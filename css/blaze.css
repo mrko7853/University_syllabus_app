@@ -13,6 +13,7 @@ html, body {
     --h3: 20px;
     --h4: 18px;
     --p: 16px;
+    --icon-size-desktop: 28px;
 }
 
 /* General style */
@@ -21,8 +22,9 @@ app-navigation {
     position: fixed;
     height: 100%;
     width: 80px;
-    background-color: #92ECB0;
-    border-right: 1px solid black;
+    background-color: white;
+    border-right: 1px solid #E3E2E2;
+    z-index: 10;
 }
 
 nav {
@@ -30,6 +32,7 @@ nav {
     justify-content: center;
     height: 100%;
     width: 80px;
+    margin: 10px 0;
 }
 
 nav ul {
@@ -37,30 +40,7 @@ nav ul {
     flex-direction: column;
     margin: 0;
     padding: 0;
-}
-
-nav ul li:nth-child(1){
-    flex: 2;
-}
-
-nav ul li:nth-child(2){
-    flex: 1;
-}
-
-nav ul li:nth-child(3){
-    flex: 1;
-}
-
-nav ul li:nth-child(4){
-    flex: 4;
-}
-
-nav ul li:nth-child(5){
-    flex: 1;
-}
-
-nav ul li:nth-child(6){
-    flex: 1;
+    list-style-type: none;
 }
 
 section {
@@ -84,12 +64,13 @@ section {
 
 button {
     border: none;
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
     border-radius: 100px;
     transition: box-shadow 0.2s;
     box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     cursor: pointer;
+    background-color: white;
 }
 
 button:hover {
@@ -104,49 +85,151 @@ button:active {
 
 button#previous {
     background-image: url(/assets/previous.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
+}
+
+.false {
+    box-shadow: none;
+    background-color: white;
+}
+
+.false:hover {
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    background-color: white;
+}
+
+.false:active {
+    transition: box-shadow 0.2s;
+    box-shadow: none;
+}
+
+.active {
+    background-color: #E3D5E9;
 }
 
 button#profile {
     background-image: url(/assets/profile.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
+}
+
+.profile-menu-container {
+    position: relative;
+    display: flex;
+}
+
+.profile-dropdown-menu {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    transform: scale(0);
+    left: 0;
+    min-width: 160px;
+    background-color: white;
+    border: 1px solid #ddd;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    z-index: 10;
+    padding: 20px;
+    border-radius: 30px;
+
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.profile-menu-container:hover button#profile {
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+}
+
+.profile-menu-container:hover .profile-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(100%);
+    z-index: 10;
 }
 
 button#dashboard {
     background-image: url(/assets/dashboard.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
 
-button#calendar {
+.accessibility-container {
+    position: relative;
+    display: flex;
+    margin-bottom: 10px;
+}
+
+nav ul div:nth-child(2),
+nav ul div:nth-child(5) {
+    margin-top: auto;
+}
+
+.accessibility-dropdown {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    transform: scale(0);
+    left: 0;
+    width: auto;
+    height: auto;
+    padding: 10px 20px;
+    background-color: white;
+    border: 1px solid #ddd;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    z-index: 10;
+    border-radius: 30px;
+
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.accessibility-dropdown:hover button#dashboard,
+.accessibility-dropdown:hover button#calendar-btn,
+.accessibility-dropdown:hover button#search,
+.accessibility-dropdown:hover button#settings,
+.accessibility-dropdown:hover button#help {
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+}
+
+.accessibility-container:hover .accessibility-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(100%);
+    z-index: 10;
+}
+
+button#calendar-btn {
     background-image: url(/assets/calendar.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
 
 button#search {
     background-image: url(/assets/search.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
 
 button#settings {
     background-image: url(/assets/settings.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
 
 button#help {
     background-image: url(/assets/help.svg);
-    background-size: 35px;
+    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
