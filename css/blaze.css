@@ -13,10 +13,22 @@ html, body {
     --h3: 20px;
     --h4: 18px;
     --p: 16px;
+    --small-desktop: 14px;
+    --small-mobile: 18px;
     --icon-size-desktop: 28px;
+    --icon-size-small-desktop: 20px;
+    --size-mobile: 25px;
 }
 
 /* General style */
+
+p {
+    font-size: var(--p);
+}
+
+a {
+    font-size: var(--p);
+}
 
 app-navigation {
     position: fixed;
@@ -71,6 +83,7 @@ button {
     box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     cursor: pointer;
     background-color: white;
+    background-size: var(--icon-size-desktop);
 }
 
 button:hover {
@@ -85,7 +98,6 @@ button:active {
 
 button#previous {
     background-image: url(/assets/previous.svg);
-    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
@@ -109,9 +121,13 @@ button#previous {
     background-color: #E3D5E9;
 }
 
+nav ul div:nth-child(2),
+nav ul div:nth-child(5) {
+    margin-top: auto;
+}
+
 button#profile {
     background-image: url(/assets/profile.svg);
-    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
@@ -130,7 +146,6 @@ button#profile {
     left: 0;
     min-width: 160px;
     background-color: white;
-    border: 1px solid #ddd;
     box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     z-index: 10;
     padding: 20px;
@@ -154,20 +169,40 @@ button#profile {
 
 button#dashboard {
     background-image: url(/assets/dashboard.svg);
-    background-size: var(--icon-size-desktop);
     background-position: center;
     background-repeat: no-repeat;
 }
+
+button#calendar-btn {
+    background-image: url(/assets/calendar.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#search {
+    background-image: url(/assets/search.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#settings {
+    background-image: url(/assets/settings.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+button#help {
+    background-image: url(/assets/help.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* Accessibility labels for buttons */
 
 .accessibility-container {
     position: relative;
     display: flex;
     margin-bottom: 10px;
-}
-
-nav ul div:nth-child(2),
-nav ul div:nth-child(5) {
-    margin-top: auto;
 }
 
 .accessibility-dropdown {
@@ -215,34 +250,6 @@ nav ul div:nth-child(5) {
     visibility: visible;
     transform: scale(100%) !important;
     z-index: 10;
-}
-
-button#calendar-btn {
-    background-image: url(/assets/calendar.svg);
-    background-size: var(--icon-size-desktop);
-    background-position: center;
-    background-repeat: no-repeat;
-}
-
-button#search {
-    background-image: url(/assets/search.svg);
-    background-size: var(--icon-size-desktop);
-    background-position: center;
-    background-repeat: no-repeat;
-}
-
-button#settings {
-    background-image: url(/assets/settings.svg);
-    background-size: var(--icon-size-desktop);
-    background-position: center;
-    background-repeat: no-repeat;
-}
-
-button#help {
-    background-image: url(/assets/help.svg);
-    background-size: var(--icon-size-desktop);
-    background-position: center;
-    background-repeat: no-repeat;
 }
 
 /* Course list style */
@@ -402,6 +409,10 @@ td p {
     margin-bottom: 5px;
 }
 
+.main-container.calendar-container {
+    padding: 20px;
+}
+
 .course-cell {
     border-radius: 50px;
     padding: 20px;
@@ -414,6 +425,7 @@ td p {
     height: 150px;
     width: 140px;
     z-index: 2;
+    justify-content: center;
 }
 
 .course-cell:hover {
@@ -424,4 +436,249 @@ td p {
 .course-cell:active {
     transition: box-shadow 0.2s;
     box-shadow: none;
+}
+
+.empty-cell {
+    display: none;
+}
+
+.mobile-day-buttons {
+    display: none;
+}
+
+@media (max-width: 780px) {
+
+    html, body {
+        height: 100%;
+    }
+
+    body {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    app-navigation {
+        position: fixed;
+        height: 80px;
+        width: 100% !important;
+        bottom: 0;
+        left: 0;
+        background-color: #9254c7;
+        z-index: 10000;
+    }
+
+    nav {
+        display: flex;
+        height: 80px;
+        width: 100% !important;
+        margin: 10px 0;
+        flex-direction: row;
+    }
+
+    nav ul {
+        flex-direction: row;
+    }
+
+    section {
+        flex: 1;
+        overflow-y: auto;
+        margin-left: 0 !important;
+        padding-bottom: 80px;
+    }
+
+    td, th {
+        padding: 0px !important;
+    }
+
+    td p {
+        font-size: var(--size-mobile) !important;
+        font-weight: 900;
+    }
+
+    #smaller-text {
+        font-size: var(--small-mobile) !important;
+        font-weight: 100;
+        margin-bottom: 0px !important;
+    }
+
+    .main-container.calendar-container {
+        width: 100%;
+        padding: 30px !important;
+    }
+
+    .main-container.calendar-container table {
+        width: 100%;
+        min-height: auto;
+    }
+
+    .main-container.calendar-container thead {
+        display: none;
+    }
+
+    .main-container.calendar-container tr {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 10px;
+    }
+
+    .main-container.calendar-container th,
+    .main-container.calendar-container td {
+        width: 100%;
+        padding: 10px;
+    }
+
+    .course-cell {
+        border-radius: 50px;
+        padding: 0px 40px 60px 40px !important;
+        font-size: var(--p);
+        height: 200px !important;
+        width: 100% !important;
+        margin: 15px 0;
+        font-size: var(--size-mobile) !important;
+    }
+
+    .course-title {
+        width: 50%;
+        display: flex;
+        height: 100%;
+        align-items: flex-end;
+    }
+
+    .course-classroom {
+        display: flex !important;
+        height: 100%;
+        width: 50%;
+        align-items: flex-end;
+        justify-content: flex-end;
+    }
+
+    .empty-cell {
+        display: flex;
+        justify-content: center;
+        padding: 40px !important;
+        align-items: center;
+        height: 100%;
+        background-color: #CCCCCC;
+        font-size: var(--size-mobile) !important;
+    }
+
+    .mobile-day-buttons {
+        display: flex;
+        margin: 0 20px;
+        margin-top: 20px;
+        padding: 10px 0;
+        justify-content: space-between;
+    }
+
+    .day-button {
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+
+        border: none;
+        transition: box-shadow 0.2s;
+        box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+        background-color: white;
+    }
+
+    .day-button:hover {
+        transition: box-shadow 0.2s;
+        box-shadow: rgba(50, 50, 93, 0.25) 0px 0px 50px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    }
+
+    .day-button.active {
+        background-color: #E3D5E9;
+        transition: box-shadow 0.2s;
+    }
+
+    .mobile-time::before {
+        content: " - ";
+    }
+
+    .mobile-time {
+        display: unset !important;
+    }
+}
+
+.course-classroom {
+    display: none;
+}
+
+.mobile-time {
+    display: block;
+}
+
+/* Calendar style (max 1020px) */
+
+@media (max-width: 1020px) {
+    .main-container.calendar-container {
+        padding: 15px;
+    }
+
+    td, th {
+        font-size: var(--small-desktop);
+        padding: 5px;
+    }
+
+    td p {
+        font-size: var(--small-desktop);
+    }
+
+    #smaller-text {
+        font-size: 13px;
+    }
+
+    .course-cell {
+        border-radius: 40px;
+        padding: 15px;
+        font-size: var(--small-desktop);
+        height: 120px;
+        width: 110px;
+    }
+}
+
+/* Button style (max 1020px) */
+
+@media (max-width: 1020px) {
+    button {
+        width: 50px;
+        height: 50px;
+        background-size: var(--icon-size-small-desktop);
+    }
+}
+
+/* Navigation sidebar (max 1020px) */
+
+@media (max-width: 1020px) {
+    app-navigation {
+        width: 70px;
+    }
+
+    nav {
+        width: 70px;
+    }
+
+    section {
+        margin-left: 70px;
+    }
+
+    .accessibility-dropdown {
+        padding: 6px 16px;
+    }
+}
+
+/* General style (max 1020px) */
+@media (max-width: 1020px) {
+    p {
+        font-size: var(--small-desktop);
+    }
+
+    a {
+        font-size: var(--small-desktop);
+    }
 }

@@ -75,3 +75,23 @@ showCourse(default_year, default_term);
 
 yearSelect.addEventListener("change", () => showCourse(yearSelect.value, termSelect.value));
 termSelect.addEventListener("change", () => showCourse(yearSelect.value, termSelect.value));
+
+// Ignore
+const pushBtn = document.getElementById("push-button");
+pushBtn.addEventListener("click", async function() {
+    const courseCode = "12001311-000";
+    const courseYear = "2025";
+
+    const { error } = await supabase.rpc('add_course_to_selection', {
+        p_year: courseYear,
+        p_code: courseCode
+    });
+
+    if (error) {
+        console.error("Error:", error);
+        alert("Failed");
+    } else {
+        alert("Success");
+        showCourse(currentYear, term);
+    }
+});
