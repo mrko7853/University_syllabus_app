@@ -476,33 +476,32 @@ td p {
         background-image: url(/assets/mobile/mobile-profile.svg) !important;
     }
 
-    button#profile:active {
+    button#profile:active, button#profile.active {
         background-image: url(/assets/mobile/mobile-profile-fill.svg) !important;
-        background-size: 25px !important;
     }
 
     button#dashboard {
-        background-image: url(/assets/mobile/mobile-calendar.svg) !important;
+        background-image: url(/assets/mobile/mobile-dashboard.svg) !important;
     }
 
-    button#dashboard.active {
-        background-image: url(/assets/mobile/mobile-calendar-fill.svg) !important;
+    button#dashboard:active, button#dashboard.active {
+        background-image: url(/assets/mobile/mobile-dashboard-fill.svg) !important;
     }
 
     button#calendar-btn {
         background-image: url(/assets/mobile/mobile-calendar.svg) !important;
     }
 
-    button#calendar-btn.active {
+    button#calendar-btn:active, button#calendar-btn.active {
         background-image: url(/assets/mobile/mobile-calendar-fill.svg) !important;
     }
 
     button#search {
-        background-image: url(/assets/mobile/mobile-calendar.svg) !important;
+        background-image: url(/assets/mobile/mobile-search.svg) !important;
     }
 
-    button#search.active {
-        background-image: url(/assets/mobile/mobile-calendar-fill.svg) !important;
+    button#search:active, button#search.active {
+        background-image: url(/assets/mobile/mobile-search-fill.svg) !important;
     }
 
     button#settings {
@@ -680,6 +679,15 @@ td p {
         height: 100%;
         background-color: #E3E2E2;
         font-size: var(--size-mobile) !important;
+    }
+
+    .empty-classroom {
+        display: none !important;
+    }
+
+    .empty-classroom-title {
+        width: 100% !important;
+        text-align: center;
     }
 
     .mobile-day-buttons {

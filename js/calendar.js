@@ -235,11 +235,15 @@ async function showCourse(year, term) {
                 const div = document.createElement("div");
                 const div_title = document.createElement("div");
                 const div_classroom = document.createElement("div");
-                div_classroom.textContent = "SK101"; // To be changed
+                div_classroom.textContent = ""; // To be changed
                 div_title.textContent = course.title_short.normalize("NFKC").toUpperCase();
                 div.classList.add("course-cell");
                 div_title.classList.add("course-title");
                 div_classroom.classList.add("course-classroom");
+                if (div_classroom.textContent === "") {
+                    div_classroom.classList.add("empty-classroom");
+                    div_title.classList.add("empty-classroom-title");
+                }
                 div.style.backgroundColor = course.color || "#E3D5E9";
                 div.dataset.courseIdentifier = course.course_code;
                 cell.appendChild(div);
