@@ -9,7 +9,8 @@ class AppNavigation extends HTMLElement {
             <nav class="test">
                 <ul>
                     <div class="profile-menu-container">
-                    <li><button class="${document.title.includes('Profile') && 'active'}" id="profile"></button></li>
+                    <li><button class="${document.title.includes('Profile') && 'active'}" id="profile"></button>
+                        <p class="navigation-text">Profile</p></li>
                       <div class="profile-dropdown-menu">
                         <a href="#view-profile">View Profile</a>
                         <a href="#settings">Settings</a>
@@ -17,19 +18,22 @@ class AppNavigation extends HTMLElement {
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Dashboard') && 'active'}" id="dashboard"></button></li>
+                    <li><button class="${document.title.includes('Dashboard') && 'active'}" id="dashboard"></button>
+                        <p class="navigation-text">Dashboard</p></li>
                       <div class="accessibility-dropdown">
                         <p>Dashboard</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Calendar') && 'active'}" id="calendar-btn"></button></li>
-                      <div class="accessibility-dropdown">
+                    <li><button class="${document.title.includes('Calendar') && 'active'}" id="calendar-btn"></button>
+                      <p class="navigation-text">Calendar</p></li>
+                    <div class="accessibility-dropdown">
                         <p>Calendar</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Search') && 'active'}" id="search"></button></li>
+                    <li><button class="${document.title.includes('Search') && 'active'}" id="search"></button>
+                        <p class="navigation-text">Search</p></li>
                       <div class="accessibility-dropdown">
                         <p>Search</p>
                       </div>
