@@ -621,7 +621,7 @@ td p {
 
     .main-container.calendar-container {
         width: 100%;
-        padding: 30px !important;
+        padding: 30px 30px 5px 30px !important;
     }
 
     .main-container.calendar-container table {
@@ -676,7 +676,7 @@ td p {
         justify-content: center;
         padding: 40px !important;
         align-items: center;
-        height: 100%;
+        height: 150px !important;
         background-color: #E3E2E2;
         font-size: var(--size-mobile) !important;
     }
