@@ -72,6 +72,14 @@ section {
     position: relative;
 }
 
+#auth-main {
+    background: #E3D5E9;
+    margin: 20px;
+    padding: 30px;
+    border-radius: 50px;
+    position: relative;
+}
+
 /* Buttons style */
 
 button {
