@@ -5,6 +5,8 @@ import { openCourseInfoMenu } from '/js/shared.js';
 const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
+const filterByDays = document.getElementById("filter-by-days");
+const filterByConcentration = document.getElementById("filter-by-concentration");
 
 async function showCourse(year, term) {
 
@@ -37,7 +39,7 @@ async function showCourse(year, term) {
         }
 
         courseHTML += `
-        <div class="class-outside">
+        <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
             <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
                 <p>${course.course_code}</p>
                 <h2>${course.title}</h2>
@@ -59,6 +61,60 @@ async function showCourse(year, term) {
     });
     courseList.innerHTML = courseHTML;
 }
+
+function applyFilters() {
+    // Days filter
+    const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
+    const selectedDays = Array.from(dayCheckboxes)
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => checkbox.value);
+
+    // Concentration filter
+    const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
+    const selectedConcentrations = Array.from(concCheckboxes)
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => checkbox.value);
+
+    const classContainers = courseList.querySelectorAll(".class-outside");
+    classContainers.forEach(container => {
+        // Day logic
+        const timeSlot = container.id;
+        const day = timeSlot.split(" ")[0];
+
+        // Concentration logic
+        const courseColor = container.dataset.color;
+        const cultureColor = "#C6E0B4";
+        const economyColor = "#FFE699";
+        const politicsColor = "#FFCCCC";
+
+        // Check if matches day filter
+        const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
+
+        // Check if matches concentration filter
+        const concMatch =
+            selectedConcentrations.length === 0 ||
+            (selectedConcentrations.includes("culture") && courseColor === cultureColor) ||
+            (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
+            (selectedConcentrations.includes("politics") && courseColor === politicsColor);
+
+        // Show only if matches both filters
+        if (dayMatch && concMatch) {
+            container.style.display = "flex";
+        } else {
+            container.style.display = "none";
+        }
+    });
+
+    // After filtering, check if all containers are hidden
+    const allHidden = Array.from(classContainers).every(container => container.style.display === "none");
+    if (allHidden) {
+        courseList.innerHTML = "<p>No courses found for the selected filters.</p>";
+    } else {
+    }
+}
+
+filterByDays.addEventListener("change", applyFilters);
+filterByConcentration.addEventListener("change", applyFilters);
 
 courseList.addEventListener("click", function(event) {
     const clickedContainer = event.target.closest(".class-container");
