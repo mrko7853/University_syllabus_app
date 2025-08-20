@@ -56,4 +56,21 @@ class AppNavigation extends HTMLElement {
     }
 }
 
+class TotalCourses extends HTMLElement {
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.innerHTML = `
+            <style>
+                @import url('/css/blaze.css');
+            </style>
+            <div class="total-courses">
+                <h2 class="total-count">0</h2>
+                <h2 class="total-text">Registered<br>Courses</h2>
+            </div>
+        `;
+    }
+}
+
 customElements.define('app-navigation', AppNavigation);
+customElements.define('total-courses', TotalCourses);
