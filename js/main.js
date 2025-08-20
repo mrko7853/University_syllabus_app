@@ -173,6 +173,33 @@ pushBtn.addEventListener("click", async function() {
     }
 });
 
+const saveBtn = document.getElementById("save-button");
+saveBtn.addEventListener("click", async function() {
+    const concentration = "Global Culture";
+
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+        console.error("Error:", error);
+        alert("Failed to get session");
+        return;
+    }
+
+    const user = session.user;
+
+    const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ concentration })
+        .eq('id', user.id);
+
+    if (updateError) {
+        console.error("Error:", updateError);
+        alert("Failed to update concentration");
+    } else {
+        alert("Concentration updated successfully");
+    }
+});
+
 document.addEventListener("DOMContentLoaded", async function () {
     const { data: { session } } = await supabase.auth.getSession();
 

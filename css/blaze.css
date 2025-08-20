@@ -271,6 +271,14 @@ button#help {
 
 /* Main page top content style */
 
+total-courses {
+    width: 50%;
+}
+
+concentration-term {
+    width: 50%;
+}
+
 .top-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -279,14 +287,34 @@ button#help {
 
 .top-content .main-container {
     padding: 20px !important;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
 }
 
 .total-courses {
     background-color: #E3E2E2;
     display: flex;
     flex-direction: column;
-    padding: 25px;
+    padding: 15px 25px;
     border-radius: 30px;
+}
+
+.user-concentration {
+    background-color: #E3E2E2;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 25px 15px 25px;
+    border-radius: 30px;
+    height: 100%;
+    max-height: -webkit-fill-available;
+    justify-content: space-between;
+}
+
+.user-concentration h2 {
+    font-size: var(--h3);
+    font-weight: 100;
+    margin: 0;
 }
 
 .total-count {
@@ -297,7 +325,7 @@ button#help {
 
 .total-text {
     margin: 10px 0 0 0;
-    font-size: var(--p);
+    font-size: var(--h3);
     font-weight: 100;
 }
 

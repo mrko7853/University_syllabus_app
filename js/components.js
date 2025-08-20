@@ -1,6 +1,8 @@
 import { supabase } from "/supabase.js";
 
 const { data: { session } } = await supabase.auth.getSession();
+const yearSelect = document.getElementById("year-select");
+const termSelect = document.getElementById("term-select");
 
 const user = session?.user || null;
 
@@ -87,7 +89,7 @@ class TotalCourses extends HTMLElement {
                       @import url('/css/blaze.css');
                     </style>
                     <div class="total-courses">
-                      <h2 class="total-count">20</h2>
+                      <h2 class="total-count">14</h2>
                       <h2 class="total-text">Registered<br>Courses</h2>
                     </div>
                   `);
@@ -117,5 +119,108 @@ class TotalCourses extends HTMLElement {
     }
 }
 
+class ConcentrationTerm extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        @import url('/css/blaze.css');
+      </style>
+      <div class="user-concentration">
+        <h2 class="concentration-text" id="concentration-text-id"></h2>
+        <h2 class="display-term"></h2>
+      </div>
+    `;
+
+    this.handleSelectChange = () => this.updateDisplayTerm();
+  }
+
+  connectedCallback() {
+    // Initialize concentration text
+    this.initConcentration();
+
+    // Set initial term/year display
+    this.updateDisplayTerm();
+
+    // Attach listeners to keep display updated on changes
+    this._ys = document.getElementById('year-select');
+    this._ts = document.getElementById('term-select');
+
+    if (this._ys) this._ys.addEventListener('change', this.handleSelectChange);
+    if (this._ts) this._ts.addEventListener('change', this.handleSelectChange);
+  }
+
+  disconnectedCallback() {
+    if (this._ys) this._ys.removeEventListener('change', this.handleSelectChange);
+    if (this._ts) this._ts.removeEventListener('change', this.handleSelectChange);
+  }
+
+  translateTerm(termRaw) {
+    return (termRaw || '')
+      .replace('春学期', 'Spring')
+      .replace('秋学期', 'Fall')
+      .trim();
+  }
+
+  updateDisplayTerm() {
+    const displayEl = this.shadowRoot.querySelector('.display-term');
+    if (!displayEl) return;
+
+    const ys = document.getElementById('year-select');
+    const ts = document.getElementById('term-select');
+
+    let year = ys?.value || '';
+    let termRaw = ts?.value || '';
+
+    if (termRaw.includes('/')) {
+      const parts = termRaw.split('/');
+      if (parts.length > 1) {
+        if (!year) year = (parts[0] || '').trim();
+        termRaw = (parts[1] || '').trim();
+      }
+    }
+
+    const term = this.translateTerm(termRaw);
+    const text = `${term} ${year}`.trim();
+    displayEl.textContent = text;
+  }
+
+  async initConcentration() {
+    const concentrationText = this.shadowRoot.querySelector('.concentration-text');
+
+    try {
+      if (!user) {
+        concentrationText.textContent = 'Global Culture';
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('concentration')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      const userConcentration = profile?.concentration || [];
+      concentrationText.textContent = userConcentration;
+
+      if (concentrationText.textContent === "Global Culture") {
+        concentrationText.parentElement.style.backgroundColor = "#C6E0B4";
+      } else if (concentrationText.textContent === "Economy") {
+        concentrationText.parentElement.style.backgroundColor = "#FFE699";
+      } else if (concentrationText.textContent === "Politics") {
+        concentrationText.parentElement.style.backgroundColor = "#FFCCCC";
+      }
+    } catch (error) {
+      console.error('Error fetching total courses:', error);
+      concentrationText.textContent = '0';
+    }
+  }
+}
+
 customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
+customElements.define('concentration-term', ConcentrationTerm);
