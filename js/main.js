@@ -6,6 +6,7 @@ const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
 const filterByDays = document.getElementById("filter-by-days");
+const filterByTime = document.getElementById("filter-by-time");
 const filterByConcentration = document.getElementById("filter-by-concentration");
 
 async function showCourse(year, term) {
@@ -69,6 +70,12 @@ function applyFilters() {
         .filter(checkbox => checkbox.checked)
         .map(checkbox => checkbox.value);
 
+    // Time filter
+    const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
+    const selectedTimes = Array.from(timeCheckboxes)
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => checkbox.value);
+
     // Concentration filter
     const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
     const selectedConcentrations = Array.from(concCheckboxes)
@@ -81,6 +88,9 @@ function applyFilters() {
         const timeSlot = container.id;
         const day = timeSlot.split(" ")[0];
 
+        // Time logic
+        const time = timeSlot.split(" ")[1];
+
         // Concentration logic
         const courseColor = container.dataset.color;
         const cultureColor = "#C6E0B4";
@@ -90,6 +100,9 @@ function applyFilters() {
         // Check if matches day filter
         const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
 
+        // Check if matches time filter
+        const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
+
         // Check if matches concentration filter
         const concMatch =
             selectedConcentrations.length === 0 ||
@@ -97,8 +110,8 @@ function applyFilters() {
             (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
             (selectedConcentrations.includes("politics") && courseColor === politicsColor);
 
-        // Show only if matches both filters
-        if (dayMatch && concMatch) {
+        // Show only if matches all filters
+        if (dayMatch && timeMatch && concMatch) {
             container.style.display = "flex";
         } else {
             container.style.display = "none";
@@ -107,13 +120,21 @@ function applyFilters() {
 
     // After filtering, check if all containers are hidden
     const allHidden = Array.from(classContainers).every(container => container.style.display === "none");
-    if (allHidden) {
-        courseList.innerHTML = "<p>No courses found for the selected filters.</p>";
-    } else {
+
+    // Toggle a non-destructive "no results" message instead of replacing the list
+    let noResults = courseList.querySelector(".no-results");
+    if (!noResults) {
+        noResults = document.createElement("p");
+        noResults.className = "no-results";
+        noResults.textContent = "No courses found for the selected filters.";
+        noResults.style.display = "none";
+        courseList.appendChild(noResults);
     }
+    noResults.style.display = allHidden ? "block" : "none";
 }
 
 filterByDays.addEventListener("change", applyFilters);
+filterByTime.addEventListener("change", applyFilters);
 filterByConcentration.addEventListener("change", applyFilters);
 
 courseList.addEventListener("click", function(event) {
