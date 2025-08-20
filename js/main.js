@@ -172,3 +172,137 @@ pushBtn.addEventListener("click", async function() {
         showCourse(currentYear, term);
     }
 });
+
+document.addEventListener("DOMContentLoaded", async function () {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+        return;
+    }
+
+    const user = session.user;
+
+    console.log(user.email, user.id);
+
+    const profileButton = document.getElementById("profile");
+    profileButton.addEventListener("click", function() {
+        window.location.href = `/profile/${user.id}`;
+    });
+
+    const profileText = document.querySelector(".navigation-text");
+    profileText.textContent = `Welcome, ${user.email}`;
+});
+
+async function calendarSchedule(year, term) {
+    displayedYear = year;
+    displayedTerm = term;
+
+    try {
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('courses_selection')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError) {
+            throw profileError;
+        }
+
+        const selectedCourses = profile?.courses_selection || [];
+
+        calendar.querySelectorAll('tbody td .course-cell').forEach(el => el.remove());
+
+        if (selectedCourses.length === 0) {
+            calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
+                if (!cell.querySelector('.course-cell')) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.textContent = 'EMPTY';
+                    emptyDiv.classList.add('course-cell', 'empty-cell');
+                    cell.appendChild(emptyDiv);
+                }
+            });
+            return;
+        }
+
+        const allCoursesInSemester = await fetchCourseData(year, term);
+
+        const coursesToShow = allCoursesInSemester.filter(course =>
+            selectedCourses.some((profileCourse) =>
+                profileCourse.code === course.course_code && profileCourse.year == year
+            )
+        );
+
+        coursesToShow.forEach(course => {
+            const match = course.time_slot.match(/\((\S+)曜日(\d+)講時\)/);
+            if (!match) return;
+
+            const dayJP = match[1];
+            const period = parseInt(match[2], 10);
+            const dayMap = { "月": "Mon", "火": "Tue", "水": "Wed", "木": "Thu", "金": "Fri", "土": "Sat", "日": "Sun" };
+            const dayEN = dayMap[dayJP];
+            if (!dayEN) return;
+
+            let colIndex = -1;
+            calendarHeader.forEach((header, idx) => {
+                if (header.textContent.trim().startsWith(dayEN)) colIndex = idx;
+            });
+            if (colIndex === -1) return;
+
+            let rowIndex = -1;
+            calendar.querySelectorAll("tbody tr").forEach((row, idx) => {
+                const periodCell = row.querySelector("td");
+                if (periodCell) {
+                    const p = periodCell.querySelector("p");
+                    if (p) {
+                        const periodMatch = p.textContent.match(/period\s*(\d+)/i);
+                        if (periodMatch && parseInt(periodMatch[1], 10) === period) {
+                            rowIndex = idx;
+                        }
+                    }
+                }
+            });
+            if (rowIndex === -1) return;
+
+            const cell = calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
+            if (cell) {
+                const div = document.createElement("div");
+                const div_title = document.createElement("div");
+                const div_classroom = document.createElement("div");
+                div_classroom.textContent = ""; // To be changed
+                div_title.textContent = course.title_short.normalize("NFKC").toUpperCase();
+                div.classList.add("course-cell");
+                div_title.classList.add("course-title");
+                div_classroom.classList.add("course-classroom");
+                if (div_classroom.textContent === "") {
+                    div_classroom.classList.add("empty-classroom");
+                    div_title.classList.add("empty-classroom-title");
+                }
+                div.style.backgroundColor = course.color || "#E3D5E9";
+                div.dataset.courseIdentifier = course.course_code;
+                cell.appendChild(div);
+                div.appendChild(div_title);
+                div.appendChild(div_classroom);
+            }
+        });
+
+        calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
+            if (!cell.querySelector('.course-cell')) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.textContent = 'EMPTY';
+                emptyDiv.classList.add('course-cell', 'empty-cell');
+                cell.appendChild(emptyDiv);
+            }
+        });
+    } catch (error) {
+        console.error('An unexpected error occurred while showing courses:', error);
+    }
+}
+
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    let term = "春学期/Spring";
+    if (currentMonth >= 8 || currentMonth <= 2) {
+        term = "秋学期/Fall";
+    }
+
+    showCourse(currentYear, term);
