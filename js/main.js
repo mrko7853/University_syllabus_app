@@ -2,6 +2,14 @@ import { supabase } from "/supabase.js";
 import { fetchCourseData } from '/js/shared.js';
 import { openCourseInfoMenu } from '/js/shared.js';
 
+// Helper function to refresh calendar component
+function refreshCalendarComponent() {
+    const calendarComponent = document.querySelector('course-calendar');
+    if (calendarComponent && calendarComponent.refreshCalendar) {
+        calendarComponent.refreshCalendar();
+    }
+}
+
 const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
@@ -150,8 +158,22 @@ const default_year = yearSelect.value;
 const default_term = termSelect.value;
 showCourse(default_year, default_term);
 
-yearSelect.addEventListener("change", () => showCourse(yearSelect.value, termSelect.value));
-termSelect.addEventListener("change", () => showCourse(yearSelect.value, termSelect.value));
+yearSelect.addEventListener("change", () => {
+    showCourse(yearSelect.value, termSelect.value);
+    // Also update the calendar component if it exists
+    const calendarComponent = document.querySelector('course-calendar');
+    if (calendarComponent && calendarComponent.showTerm) {
+        calendarComponent.showTerm(yearSelect.value, termSelect.value);
+    }
+});
+termSelect.addEventListener("change", () => {
+    showCourse(yearSelect.value, termSelect.value);
+    // Also update the calendar component if it exists
+    const calendarComponent = document.querySelector('course-calendar');
+    if (calendarComponent && calendarComponent.showTerm) {
+        calendarComponent.showTerm(yearSelect.value, termSelect.value);
+    }
+});
 
 // Ignore
 const pushBtn = document.getElementById("push-button");
@@ -170,6 +192,7 @@ pushBtn.addEventListener("click", async function() {
     } else {
         alert("Success");
         showCourse(currentYear, term);
+        refreshCalendarComponent(); // Refresh calendar after course selection change
     }
 });
 
