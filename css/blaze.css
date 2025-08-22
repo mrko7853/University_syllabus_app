@@ -272,42 +272,47 @@ button#help {
 /* Main page top content style */
 
 total-courses {
-}
-
-concentration-box {
-}
-
-course-calendar {
-}
-
-.top-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.top-content .main-container {
-    padding: 20px !important;
-    gap: 20px;
-    display: flex;
-    flex-direction: column;
-}
-
-.top-content-two {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.total-courses {
     background-color: #E3E2E2;
     height: 100%;
     border-radius: 30px;
 }
 
-.user-concentration {
+concentration-box {
+    height: 100%;
+}
+
+term-box {
     background-color: #E3E2E2;
     height: 100%;
+    border-radius: 30px;
+}
+
+.top-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.top-content .main-container {
+    padding: 20px !important;
+    gap: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.top-content-two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.total-courses {
+    padding: 15px 20px;
+}
+
+.user-concentration {
+    padding: 15px 20px;
     border-radius: 30px;
 }
 
@@ -315,6 +320,10 @@ course-calendar {
     font-size: var(--h3);
     font-weight: 100;
     margin: 0;
+}
+
+.concentration-text {
+    text-align: center;
 }
 
 .total-count {
@@ -340,7 +349,7 @@ table#calendar-main {
     width: 40px;
     display: flex;
     height: 40px;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
     margin-top: 0px;
     align-items: center;
     justify-content: center;
@@ -365,12 +374,12 @@ table#calendar-main {
 }
 
 #calendar-main td {
-    border-bottom: 1px solid black;
-    border-right: 1px solid black;
+    border-bottom: 1px solid #BDAAC6;
+    border-right: 1px solid #BDAAC6;
 }
 
 #calendar-main th {
-    border-right: 1px solid black;
+    border-right: 1px solid #BDAAC6;
 }
 
 #calendar-main tr:last-child td {
@@ -469,7 +478,7 @@ table#calendar-main {
 #course-list {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 20px;
+    gap: 15px;
     max-width: 900px;
 }
 

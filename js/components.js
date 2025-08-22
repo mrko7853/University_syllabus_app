@@ -158,8 +158,9 @@ class TermBox extends HTMLElement {
       <style>
         @import url('/css/blaze.css');
       </style>
-      <div class="user-concentration">
-        <h2 class="display-term"></h2>
+      <div class="total-courses">
+        <h2 class="total-count" id="display-term"></h2>
+        <h2 class="total-text" id="display-year"></h2>
       </div>
     `;
 
@@ -192,8 +193,9 @@ class TermBox extends HTMLElement {
   }
 
   updateDisplayTerm() {
-    const displayEl = this.shadowRoot.querySelector('.display-term');
-    if (!displayEl) return;
+    const displayTerm = this.shadowRoot.getElementById('display-term');
+    const displayYear = this.shadowRoot.getElementById('display-year');
+    if (!displayTerm || !displayYear) return;
 
     const ys = document.getElementById('year-select');
     const ts = document.getElementById('term-select');
@@ -210,8 +212,9 @@ class TermBox extends HTMLElement {
     }
 
     const term = this.translateTerm(termRaw);
-    const text = `${term} ${year}`.trim();
-    displayEl.textContent = text;
+    const text = `${term}`.trim();
+    displayTerm.textContent = text;
+    displayYear.textContent = year;
   }
 }
 
