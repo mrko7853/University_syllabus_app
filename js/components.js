@@ -149,7 +149,7 @@ class TotalCourses extends HTMLElement {
     }
 }
 
-class ConcentrationTerm extends HTMLElement {
+class TermBox extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -159,7 +159,6 @@ class ConcentrationTerm extends HTMLElement {
         @import url('/css/blaze.css');
       </style>
       <div class="user-concentration">
-        <h2 class="concentration-text" id="concentration-text-id"></h2>
         <h2 class="display-term"></h2>
       </div>
     `;
@@ -168,8 +167,6 @@ class ConcentrationTerm extends HTMLElement {
   }
 
   connectedCallback() {
-    // Initialize concentration text
-    this.initConcentration();
 
     // Set initial term/year display
     this.updateDisplayTerm();
@@ -215,6 +212,29 @@ class ConcentrationTerm extends HTMLElement {
     const term = this.translateTerm(termRaw);
     const text = `${term} ${year}`.trim();
     displayEl.textContent = text;
+  }
+}
+
+class ConcentrationBox extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        @import url('/css/blaze.css');
+      </style>
+      <div class="user-concentration">
+        <h2 class="concentration-text" id="concentration-text-id"></h2>
+      </div>
+    `;
+
+    this.handleSelectChange = () => this.updateDisplayTerm();
+  }
+
+  connectedCallback() {
+    // Initialize concentration text
+    this.initConcentration();
   }
 
   async initConcentration() {
@@ -281,18 +301,18 @@ class CourseCalendar extends HTMLElement {
           min-height: 200px;
         }
       </style>
-      <div class="main-container calendar-container">
+      <div class="calendar-container-main">
         <div class="calendar-wrapper">
           <div class="loading-indicator" id="loading-indicator" style="display: none;">Loading courses...</div>
-          <table id="calendar">
+          <table id="calendar-main">
             <thead>
               <tr>
                 <th><p style="display: none;">empty</p></th>
-                <th id="calendar-monday">M</th>
-                <th id="calendar-tuesday">T</th>
-                <th id="calendar-wednesday">W</th>
-                <th id="calendar-thursday">T</th>
-                <th id="calendar-friday">F</th>
+                <th id="calendar-monday"><p>M</p></th>
+                <th id="calendar-tuesday"><p>T</p></th>
+                <th id="calendar-wednesday"><p>W</p></th>
+                <th id="calendar-thursday"><p>T</p></th>
+                <th id="calendar-friday"><p>F</p></th>
               </tr>
             </thead>
             <tbody>
@@ -323,7 +343,7 @@ class CourseCalendar extends HTMLElement {
     `;
 
     this.shadow = this.shadowRoot;
-    this.calendar = this.shadow.getElementById("calendar");
+    this.calendar = this.shadow.getElementById("calendar-main");
     this.calendarHeader = this.calendar.querySelectorAll("thead th");
     this.loadingIndicator = this.shadow.getElementById("loading-indicator");
 
@@ -604,8 +624,10 @@ class CourseCalendar extends HTMLElement {
 
         const div = document.createElement("div");
         const div_title = document.createElement("div");
+        const div_box = document.createElement("div");
         const div_classroom = document.createElement("div");
         div.classList.add("course-cell-main");
+        div_box.classList.add("course-cell-box");
         div_title.classList.add("course-title");
         div_classroom.classList.add("course-classroom");
         
@@ -617,9 +639,10 @@ class CourseCalendar extends HTMLElement {
         //  div_classroom.classList.add("empty-classroom");
         //  div_title.classList.add("empty-classroom-title");
         //}
-        div.style.backgroundColor = course.color || "#E3D5E9";
+        div_box.style.backgroundColor = "#ED7F81";
         div.dataset.courseIdentifier = course.course_code;
         cell.appendChild(div);
+        div.appendChild(div_box);
         div.appendChild(div_title);
         div.appendChild(div_classroom);
       });
@@ -709,7 +732,8 @@ class CourseCalendar extends HTMLElement {
 
 customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
-customElements.define('concentration-term', ConcentrationTerm);
+customElements.define('concentration-box', ConcentrationBox);
+customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
 
 // Make calendar debugging available globally
