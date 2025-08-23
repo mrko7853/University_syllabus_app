@@ -294,6 +294,10 @@ class CourseCalendar extends HTMLElement {
           position: absolute;
           top: 50%;
           left: 50%;
+          width: 100%;
+          text-align: center;
+          height: 100%;
+          backdrop-filter: blur(3px);
           transform: translate(-50%, -50%);
           font-size: 14px;
           color: #666;
@@ -306,7 +310,7 @@ class CourseCalendar extends HTMLElement {
       </style>
       <div class="calendar-container-main">
         <div class="calendar-wrapper">
-          <div class="loading-indicator" id="loading-indicator" style="display: none;">Loading courses...</div>
+          <div class="loading-indicator" id="loading-indicator" style="display: none;"></div>
           <table id="calendar-main">
             <thead>
               <tr>

@@ -65,6 +65,12 @@ section {
     align-items: center;
 }
 
+#course-summary {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
 .main-content {
     display: flex;
     justify-content: center;
@@ -75,7 +81,7 @@ section {
 
 .main-container {
     background: #E3D5E9;
-    margin: 20px 0px 0px 0px;
+    margin: 20px 0px 20px 0px;
     padding: 30px;
     border-radius: 50px;
     position: relative;
@@ -295,6 +301,7 @@ term-box {
 
 .top-content .main-container {
     padding: 20px !important;
+    margin-bottom: 0px !important;
     gap: 15px;
     display: flex;
     flex-direction: column;
@@ -371,6 +378,7 @@ table#calendar-main {
 
 #calendar-main td p {
     font-size: 12px !important;
+    text-align: right;
 }
 
 #calendar-main td {
@@ -769,7 +777,7 @@ td p {
         flex: 1;
         overflow-y: auto;
         margin-left: 0 !important;
-        padding-bottom: 80px;
+        margin-bottom: 80px !important;
     }
 }
 
@@ -792,8 +800,15 @@ td p {
         margin-bottom: 0px !important;
     }
 
+    .main-content {
+        display: unset !important;
+        margin: unset !important;
+        width: fit-content;
+        height: fit-content;
+        max-width: unset !important;
+    }
+
     .main-container.calendar-container {
-        width: 100%;
         padding: 30px 30px 5px 30px !important;
     }
 
