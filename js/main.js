@@ -141,6 +141,17 @@ function applyFilters() {
     noResults.style.display = allHidden ? "block" : "none";
 }
 
+async function updateCoursesAndFilters() {
+    await showCourse(yearSelect.value, termSelect.value);
+    applyFilters();
+    
+    // Also update the calendar component if it exists
+    const calendarComponent = document.querySelector('course-calendar');
+    if (calendarComponent && calendarComponent.showTerm) {
+        calendarComponent.showTerm(yearSelect.value, termSelect.value);
+    }
+}
+
 filterByDays.addEventListener("change", applyFilters);
 filterByTime.addEventListener("change", applyFilters);
 filterByConcentration.addEventListener("change", applyFilters);
@@ -158,22 +169,8 @@ const default_year = yearSelect.value;
 const default_term = termSelect.value;
 showCourse(default_year, default_term);
 
-yearSelect.addEventListener("change", () => {
-    showCourse(yearSelect.value, termSelect.value);
-    // Also update the calendar component if it exists
-    const calendarComponent = document.querySelector('course-calendar');
-    if (calendarComponent && calendarComponent.showTerm) {
-        calendarComponent.showTerm(yearSelect.value, termSelect.value);
-    }
-});
-termSelect.addEventListener("change", () => {
-    showCourse(yearSelect.value, termSelect.value);
-    // Also update the calendar component if it exists
-    const calendarComponent = document.querySelector('course-calendar');
-    if (calendarComponent && calendarComponent.showTerm) {
-        calendarComponent.showTerm(yearSelect.value, termSelect.value);
-    }
-});
+yearSelect.addEventListener("change", updateCoursesAndFilters);
+termSelect.addEventListener("change", updateCoursesAndFilters);
 
 // Ignore
 const pushBtn = document.getElementById("push-button");
@@ -356,3 +353,73 @@ async function calendarSchedule(year, term) {
     }
 
     showCourse(currentYear, term);
+
+const filterBtn = document.getElementById("filter-btn");
+const filterContainer = document.querySelector(".filter-container");
+
+filterBtn.addEventListener("click", () => {
+    if (filterContainer.classList.contains("hidden")) {
+        filterContainer.classList.remove("hidden");
+        filterContainer.style.opacity = "0";
+        filterContainer.style.transform = "translateY(-10px)";
+        
+        // Trigger animation
+        requestAnimationFrame(() => {
+            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+            filterContainer.style.opacity = "1";
+            filterContainer.style.transform = "translateY(0)";
+        });
+    } else {
+        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+        filterContainer.style.opacity = "0";
+        filterContainer.style.transform = "translateY(-10px)";
+        
+        setTimeout(() => {
+            filterContainer.classList.add("hidden");
+        }, 300);
+    }
+});
+
+document.addEventListener("click", (event) => {
+    if (!filterContainer.contains(event.target) && event.target !== filterBtn && !filterContainer.classList.contains("hidden")) {
+        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+        filterContainer.style.opacity = "0";
+        filterContainer.style.transform = "translateY(-10px)";
+        
+        setTimeout(() => {
+            filterContainer.classList.add("hidden");
+        }, 300);
+    }
+});
+
+const filterDaysDiv = document.getElementById("filter-by-days");
+const value = [];
+const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
+const courseFilterParagraph = document.getElementById("course-filter-paragraph");
+courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+inputElements.forEach((input) => {
+    input.addEventListener("change", () => {
+        value.length = 0; // Clear the array
+        inputElements.forEach((el) => {
+            if (el.checked) {
+                if (el.value === "Mon") {
+                    const newValue = "Monday";
+                    value.push(newValue);
+                } else if (el.value === "Tue") {
+                    const newValue = "Tuesday";
+                    value.push(newValue);
+                } else if (el.value === "Wed") {
+                    const newValue = "Wednesday";
+                    value.push(newValue);
+                } else if (el.value === "Thu") {
+                    const ewValue = "Thursday";
+                    value.push(newValue);
+                } else if (el.value === "Fri") {
+                    const newValue = "Friday";
+                    value.push(newValue);
+                }
+            }
+        });
+        courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+    });
+});

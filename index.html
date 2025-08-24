@@ -15,43 +15,7 @@
     <app-navigation></app-navigation>
 
     <section id="syllabus-main">
-        <label for="term-select">Semester</label>
-
-            <select name="term" id="term-select">
-              <option value="春学期/Spring">Spring</option>
-              <option value="秋学期/Fall" selected>Fall</option>
-            </select>
-            
-        <label for="year-select">Year</label>
-
-            <select name="year" id="year-select">
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
-            </select>
-
-        <div id="filter-by-days">
-            <label><input type="checkbox" class="filter-checkbox" value="Mon">Monday</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="Tue">Tuesday</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="Wed">Wednesday</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="Thu">Thursday</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="Fri">Friday</label><br>
-        </div>
-
-        <div id="filter-by-time">
-            <label><input type="checkbox" class="filter-checkbox" value="09:00">09:00 - 10:30</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="10:45">10:45 - 12:15</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="13:10">13:10 - 14:40</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="14:55">14:55 - 16:25</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="16:40">16:40 - 18:10</label><br>
-        </div>
-
-        <div id="filter-by-concentration">
-            <label><input type="checkbox" class="filter-checkbox" value="culture">Global Culture</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="economy">Economy</label><br>
-            <label><input type="checkbox" class="filter-checkbox" value="politics">Politics</label><br>
-        </div>
-
-        <div class="main-content">
+    <div class="main-content">
 
         <div class="top-content">
             <div class="main-container">
@@ -69,8 +33,54 @@
         </div>
 
             <div class="main-container">
-                <h2 class="course-main-title">Course List</h2>
-                <p class="course-main-paragraph" id="course-filter-paragraph"></p>
+                <div class="container-above">
+                    <div class="title-box">
+                        <h2 class="course-main-title">Courses</h2>
+                        <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
+                    </div>
+                    <div class="buttons-box">
+                        <button id="search-btn"></button>
+                        <button id="sort-btn"></button>
+                        <button id="filter-btn">Filter</button>
+                    </div>
+                </div>
+                                    <div class="filter-container hidden">
+                        <div class="filter-popup">
+                            <label for="term-select">Semester</label>
+                            <select name="term" id="term-select">
+                                <option value="春学期/Spring">Spring</option>
+                                <option value="秋学期/Fall" selected>Fall</option>
+                            </select>
+                            
+                            <label for="year-select">Year</label>
+                            <select name="year" id="year-select">
+                                <option value="2025">2025</option>
+                                <option value="2024">2024</option>
+                            </select>
+
+                            <div id="filter-by-days">
+                                <label><input type="checkbox" name="filter-monday" class="filter-checkbox" value="Mon">Monday</label><br>
+                                <label><input type="checkbox" name="filter-tuesday" class="filter-checkbox" value="Tue">Tuesday</label><br>
+                                <label><input type="checkbox" name="filter-wednesday" class="filter-checkbox" value="Wed">Wednesday</label><br>
+                                <label><input type="checkbox" name="filter-thursday" class="filter-checkbox" value="Thu">Thursday</label><br>
+                                <label><input type="checkbox" name="filter-friday" class="filter-checkbox" value="Fri">Friday</label><br>
+                            </div>
+
+                            <div id="filter-by-time">
+                                <label><input type="checkbox" name="filter-period-1" class="filter-checkbox" value="09:00">09:00 - 10:30</label><br>
+                                <label><input type="checkbox" name="filter-period-2" class="filter-checkbox" value="10:45">10:45 - 12:15</label><br>
+                                <label><input type="checkbox" name="filter-period-3" class="filter-checkbox" value="13:10">13:10 - 14:40</label><br>
+                                <label><input type="checkbox" name="filter-period-4" class="filter-checkbox" value="14:55">14:55 - 16:25</label><br>
+                                <label><input type="checkbox" name="filter-period-5" class="filter-checkbox" value="16:40">16:40 - 18:10</label><br>
+                            </div>
+
+                            <div id="filter-by-concentration">
+                                <label><input type="checkbox" name="filter-culture" class="filter-checkbox" value="culture">Global Culture</label><br>
+                                <label><input type="checkbox" name="filter-economy" class="filter-checkbox" value="economy">Economy</label><br>
+                                <label><input type="checkbox" name="filter-politics" class="filter-checkbox" value="politics">Politics</label><br>
+                            </div>
+                        </div>
+                    </div>
                 <div id="course-list">
                 </div>
             </div>
