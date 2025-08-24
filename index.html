@@ -59,25 +59,57 @@
                             </select>
 
                             <div id="filter-by-days">
-                                <label><input type="checkbox" name="filter-monday" class="filter-checkbox" value="Mon">Monday</label><br>
-                                <label><input type="checkbox" name="filter-tuesday" class="filter-checkbox" value="Tue">Tuesday</label><br>
-                                <label><input type="checkbox" name="filter-wednesday" class="filter-checkbox" value="Wed">Wednesday</label><br>
-                                <label><input type="checkbox" name="filter-thursday" class="filter-checkbox" value="Thu">Thursday</label><br>
-                                <label><input type="checkbox" name="filter-friday" class="filter-checkbox" value="Fri">Friday</label><br>
+                                <h3 class="filter-title">Day of the week</h3>
+                                <div class="checkboxes-container" id="filter-by-days-container">
+                                    <input type="checkbox" id="filter-monday" name="filter-monday" class="filter-checkbox" value="Mon">
+                                    <label for="filter-monday">Monday</label>
+                                    
+                                    <input type="checkbox" id="filter-tuesday" name="filter-tuesday" class="filter-checkbox" value="Tue">
+                                    <label for="filter-tuesday">Tuesday</label>
+                                    
+                                    <input type="checkbox" id="filter-wednesday" name="filter-wednesday" class="filter-checkbox" value="Wed">
+                                    <label for="filter-wednesday">Wednesday</label>
+                                    
+                                    <input type="checkbox" id="filter-thursday" name="filter-thursday" class="filter-checkbox" value="Thu">
+                                    <label for="filter-thursday">Thursday</label>
+                                    
+                                    <input type="checkbox" id="filter-friday" name="filter-friday" class="filter-checkbox" value="Fri">
+                                    <label for="filter-friday">Friday</label>
+                                </div>
                             </div>
 
                             <div id="filter-by-time">
-                                <label><input type="checkbox" name="filter-period-1" class="filter-checkbox" value="09:00">09:00 - 10:30</label><br>
-                                <label><input type="checkbox" name="filter-period-2" class="filter-checkbox" value="10:45">10:45 - 12:15</label><br>
-                                <label><input type="checkbox" name="filter-period-3" class="filter-checkbox" value="13:10">13:10 - 14:40</label><br>
-                                <label><input type="checkbox" name="filter-period-4" class="filter-checkbox" value="14:55">14:55 - 16:25</label><br>
-                                <label><input type="checkbox" name="filter-period-5" class="filter-checkbox" value="16:40">16:40 - 18:10</label><br>
+                                <h3 class="filter-title">Period</h3>
+                                <div class="checkboxes-container">
+                                    <input type="checkbox" id="filter-period-1" name="filter-period-1" class="filter-checkbox" value="09:00">
+                                    <label for="filter-period-1">09:00 - 10:30</label>
+                                    
+                                    <input type="checkbox" id="filter-period-2" name="filter-period-2" class="filter-checkbox" value="10:45">
+                                    <label for="filter-period-2">10:45 - 12:15</label>
+                                    
+                                    <input type="checkbox" id="filter-period-3" name="filter-period-3" class="filter-checkbox" value="13:10">
+                                    <label for="filter-period-3">13:10 - 14:40</label>
+                                    
+                                    <input type="checkbox" id="filter-period-4" name="filter-period-4" class="filter-checkbox" value="14:55">
+                                    <label for="filter-period-4">14:55 - 16:25</label>
+                                    
+                                    <input type="checkbox" id="filter-period-5" name="filter-period-5" class="filter-checkbox" value="16:40">
+                                    <label for="filter-period-5">16:40 - 18:10</label>
+                                </div>
                             </div>
 
                             <div id="filter-by-concentration">
-                                <label><input type="checkbox" name="filter-culture" class="filter-checkbox" value="culture">Global Culture</label><br>
-                                <label><input type="checkbox" name="filter-economy" class="filter-checkbox" value="economy">Economy</label><br>
-                                <label><input type="checkbox" name="filter-politics" class="filter-checkbox" value="politics">Politics</label><br>
+                                <h3 class="filter-title">Course type</h3>
+                                <div class="checkboxes-container">
+                                    <input type="checkbox" id="filter-culture" name="filter-culture" class="filter-checkbox" value="culture">
+                                    <label for="filter-culture">Global Culture</label>
+                                    
+                                    <input type="checkbox" id="filter-economy" name="filter-economy" class="filter-checkbox" value="economy">
+                                    <label for="filter-economy">Economy</label>
+                                    
+                                    <input type="checkbox" id="filter-politics" name="filter-politics" class="filter-checkbox" value="politics">
+                                    <label for="filter-politics">Politics</label>
+                                </div>
                             </div>
                         </div>
                     </div>

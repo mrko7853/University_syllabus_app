@@ -412,7 +412,7 @@ inputElements.forEach((input) => {
                     const newValue = "Wednesday";
                     value.push(newValue);
                 } else if (el.value === "Thu") {
-                    const ewValue = "Thursday";
+                    const newValue = "Thursday";
                     value.push(newValue);
                 } else if (el.value === "Fri") {
                     const newValue = "Friday";
