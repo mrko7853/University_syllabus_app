@@ -156,6 +156,77 @@ filterByDays.addEventListener("change", applyFilters);
 filterByTime.addEventListener("change", applyFilters);
 filterByConcentration.addEventListener("change", applyFilters);
 
+// Filter action buttons functionality
+const seeResultsBtn = document.getElementById("see-results-btn");
+const clearAllBtn = document.getElementById("clear-all-btn");
+
+// See Results button - close filter menu
+seeResultsBtn.addEventListener("click", () => {
+    const filterContainer = document.querySelector(".filter-container");
+    const pageBody = document.body;
+    
+    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+    filterContainer.style.opacity = "0";
+    filterContainer.style.transform = "translateY(-10px)";
+    pageBody.style.overflow = "auto";
+    
+    setTimeout(() => {
+        filterContainer.classList.add("hidden");
+        filterContainer.style.transition = "";
+        filterContainer.style.opacity = "";
+        filterContainer.style.transform = "";
+    }, 300);
+});
+
+// Clear All button - reset all filters
+clearAllBtn.addEventListener("click", () => {
+    // Clear day checkboxes
+    const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
+    dayCheckboxes.forEach(checkbox => checkbox.checked = false);
+    
+    // Clear time checkboxes
+    const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
+    timeCheckboxes.forEach(checkbox => checkbox.checked = false);
+    
+    // Clear concentration checkboxes
+    const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
+    concCheckboxes.forEach(checkbox => checkbox.checked = false);
+    
+    // Reset custom dropdowns to default values
+    const termSelect = document.getElementById("term-select");
+    const yearSelect = document.getElementById("year-select");
+    const termCustomSelect = document.querySelector('[data-target="term-select"]');
+    const yearCustomSelect = document.querySelector('[data-target="year-select"]');
+    
+    if (termCustomSelect) {
+        const termValue = termCustomSelect.querySelector('.custom-select-value');
+        const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
+        termOptions.forEach(option => option.classList.remove('selected'));
+        const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
+        if (fallOption) {
+            fallOption.classList.add('selected');
+            termValue.textContent = 'Fall';
+            termSelect.value = '秋学期/Fall';
+        }
+    }
+    
+    if (yearCustomSelect) {
+        const yearValue = yearCustomSelect.querySelector('.custom-select-value');
+        const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
+        yearOptions.forEach(option => option.classList.remove('selected'));
+        const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
+        if (currentYearOption) {
+            currentYearOption.classList.add('selected');
+            yearValue.textContent = '2025';
+            yearSelect.value = '2025';
+        }
+    }
+    
+    // Apply filters to update the display
+    applyFilters();
+    updateCoursesAndFilters();
+});
+
 courseList.addEventListener("click", function(event) {
     const clickedContainer = event.target.closest(".class-container");
     if (clickedContainer) {
@@ -353,6 +424,96 @@ async function calendarSchedule(year, term) {
     }
 
     showCourse(currentYear, term);
+
+// Custom dropdown functionality
+function initCustomDropdowns() {
+    const customSelects = document.querySelectorAll('.custom-select');
+    console.log('Found custom selects:', customSelects.length);
+    
+    customSelects.forEach(customSelect => {
+        const trigger = customSelect.querySelector('.custom-select-trigger');
+        const options = customSelect.querySelectorAll('.custom-select-option');
+        const valueDisplay = customSelect.querySelector('.custom-select-value');
+        const hiddenSelect = document.getElementById(customSelect.dataset.target);
+        
+        console.log('Initializing dropdown for:', customSelect.dataset.target);
+        
+        // Toggle dropdown
+        trigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Dropdown clicked, current state:', customSelect.classList.contains('open'));
+            
+            // Close other dropdowns
+            customSelects.forEach(other => {
+                if (other !== customSelect) {
+                    other.classList.remove('open');
+                }
+            });
+            
+            customSelect.classList.toggle('open');
+            console.log('New state:', customSelect.classList.contains('open'));
+        });
+        
+        // Handle keyboard navigation
+        trigger.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                customSelect.classList.toggle('open');
+            } else if (e.key === 'Escape') {
+                customSelect.classList.remove('open');
+            }
+        });
+        
+        // Handle option selection
+        options.forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                console.log('Option selected:', option.textContent);
+                
+                // Update selected state
+                options.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+                
+                // Update display value
+                valueDisplay.textContent = option.textContent;
+                
+                // Update hidden select value
+                if (hiddenSelect) {
+                    hiddenSelect.value = option.dataset.value;
+                    // Trigger change event on hidden select
+                    hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                
+                // Close dropdown
+                customSelect.classList.remove('open');
+            });
+        });
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-select')) {
+            customSelects.forEach(customSelect => {
+                customSelect.classList.remove('open');
+            });
+        }
+    });
+}
+
+// Initialize custom dropdowns when DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, initializing dropdowns...');
+        initCustomDropdowns();
+    });
+} else {
+    // DOM is already loaded
+    console.log('DOM already loaded, initializing dropdowns immediately...');
+    setTimeout(initCustomDropdowns, 100); // Small delay to ensure elements are rendered
+}
 
 const filterBtn = document.getElementById("filter-btn");
 const filterContainer = document.querySelector(".filter-container");

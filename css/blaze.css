@@ -102,21 +102,22 @@ button {
     width: 60px;
     height: 60px;
     border-radius: 100px;
-    transition: box-shadow 0.2s;
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    transition: box-shadow 0.2s, filter 0.2s;
+    box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
     cursor: pointer;
     background-color: white;
     background-size: var(--icon-size-desktop);
 }
 
 button:hover {
-    transition: box-shadow 0.2s;
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 0px 50px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    transition: filter 0.2s;
+    filter: drop-shadow(0 0 0 rgba(50, 50, 93, 0.25));
 }
 
 button:active {
     transition: box-shadow 0.2s;
-    box-shadow: none;
+    box-shadow: 0 2px 6px 0 rgba(10, 37, 64, 0.35) inset;
 }
 
 button#previous {
@@ -126,18 +127,15 @@ button#previous {
 }
 
 .false {
-    box-shadow: none;
     background-color: white;
 }
 
 .false:hover {
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     background-color: white;
 }
 
 .false:active {
     transition: box-shadow 0.2s;
-    box-shadow: none;
 }
 
 .active {
@@ -180,7 +178,6 @@ button#profile {
 }
 
 .profile-menu-container:hover button#profile {
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
 }
 
 .profile-menu-container:hover .profile-dropdown-menu {
@@ -239,7 +236,6 @@ button#help {
     height: auto;
     padding: 10px 20px;
     background-color: white;
-    border: 1px solid #ddd;
     box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     z-index: 10;
     border-radius: 30px;
@@ -448,38 +444,46 @@ table#calendar-main {
 }
 
 .filter-container {
-    position: relative;
-    z-index: 10;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1000;
 }
 
 .filter-background {
     width: 100%;
     height: 100vh;
     display: block;
-    position: absolute;
-    z-index: 10;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1001;
     background: rgba(0, 0, 0, 0.5);
 }
 
 .filter-popup {
-    position: absolute;
+    position: fixed;
     top: 0;
     right: 0;
     background-color: white;
-
-
     opacity: 1;
     visibility: visible;
     transform: scale(100%) !important;
     display: flex !important;
     flex-direction: column;
-
-    width: auto;
+    width: 400px;
     height: 100%;
     padding: 0 20px;
-    z-index: 10;
-
+    z-index: 1002;
     overflow-y: auto;
+    overflow-x: visible; /* Allow dropdowns to extend outside */
+}
+
+.filter-content {
+    padding: 0 0 1em 0;
+    flex: 1;
 }
 
 .hidden {
@@ -508,67 +512,94 @@ table#calendar-main {
     font-weight: 100;
     color: black;
     background-color: white;
-    border: 2px solid #BDAAC6;
+    border: 2px solid #E3D5E9;
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
-    transition: background-color .2s, box-shadow .2s, border .2s, filter .2s;
+    transition: background-color .2s, border .2s, filter .2s;
     padding: 10px 40px;
     font-size: var(--p);
     text-align: center;
 }
 
 #filter-by-concentration label {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    min-width: 60px;
-    height: 40px;
-    border-radius: 50px;
-    font-weight: 100;
-    color: black;
-    background-color: white;
-    border: 2px solid #BDAAC6;
     cursor: pointer;
     user-select: none;
-    box-sizing: border-box;
-    transition: background-color .2s, box-shadow .2s, border .2s, filter .2s;
-    padding: 10px 40px;
     font-size: var(--p);
-    text-align: center;
+    color: black;
+    margin-left: 0;
+    position: relative;
 }
 
 #filter-by-concentration input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    width: 0;
+    height: 0;
+}
+
+#filter-by-concentration label::before {
+    content: "";
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border: 2px solid #E3D5E9;
+    border-radius: 15px;
+    background-color: white;
+    margin-right: 10px;
+    transition: all 0.2s ease;
+    display: inline-block;
     position: relative;
-    left: -9999px;
+}
+
+#filter-by-concentration input[type="checkbox"]:checked + label::before {
+    background-color: #E3D5E9;
+    border-color: #E3D5E9;
+}
+
+#filter-by-concentration input[type="checkbox"]:checked + label::after {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+    background-image: url(/assets/done.svg);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.checkbox-content {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
 }
 
 #filter-by-days label:hover,
-#filter-by-time label:hover,
-#filter-by-concentration label:hover {
-    filter: drop-shadow(0 2px 5px rgba(50, 50, 93, 0.25));
+#filter-by-time label:hover {
+
 }
 
 #filter-by-days input[type="checkbox"]:active + label,
-#filter-by-time input[type="checkbox"]:active + label,
-#filter-by-concentration input[type="checkbox"]:active + label {
-    background-color: #E3D5E9; /* darker on press */
+#filter-by-time input[type="checkbox"]:active + label {
+    background-color: #E3D5E9;
     box-shadow: none;
-    border: 2px solid #BDAAC6;
-    filter: drop-shadow(0 2px 5px rgba(50, 50, 93, 0.25));
+    border: 2px solid #E3D5E9;
 }
 
 #filter-by-days input[type="checkbox"]:checked + label,
-#filter-by-time input[type="checkbox"]:checked + label,
-#filter-by-concentration input[type="checkbox"]:checked + label {
-    background-color: #E3D5E9; /* darker when checked */
-    border: 2px solid #BDAAC6;
-    filter: drop-shadow(0 2px 5px rgba(50, 50, 93, 0.25));
+#filter-by-time input[type="checkbox"]:checked + label {
+    background-color: #E3D5E9;
+    border: 2px solid #E3D5E9;
 }
 
 #filter-by-days input[type="checkbox"]:focus-visible + label,
-#filter-by-time input[type="checkbox"]:focus-visible + label,
-#filter-by-concentration input[type="checkbox"]:focus-visible + label {
+#filter-by-time input[type="checkbox"]:focus-visible + label {
     outline: 2px solid #E3D5E9;
     outline-offset: 2px;
 }
@@ -609,6 +640,12 @@ table#calendar-main {
     gap: 10px;
 }
 
+#filter-year-term-container {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
 #filter-by-days-container {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
@@ -619,6 +656,157 @@ table#calendar-main {
     grid-template-columns: 1fr 1fr;
 }
 
+/* Style select inputs to match checkboxes */
+#filter-year-term select {
+    display: none; /* Hide native select, we'll create custom dropdown */
+}
+
+/* Custom dropdown styling */
+#filter-year-term .custom-select {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+#filter-year-term .custom-select-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 120px;
+    width: 100%;
+    height: 40px;
+    border-radius: 50px;
+    font-weight: 100;
+    color: black;
+    background-color: white;
+    border: 2px solid #E3D5E9;
+    cursor: pointer;
+    user-select: none;
+    box-sizing: border-box;
+    transition: background-color .2s, border .2s, filter .2s;
+    padding: 10px 20px;
+    font-size: var(--p);
+    font-family: 'Libre Bodoni', sans-serif;
+}
+
+#filter-year-term .custom-select-trigger:hover {
+    
+}
+
+#filter-year-term .custom-select-trigger:focus,
+#filter-year-term .custom-select.open .custom-select-trigger {
+    background-color: #E3D5E9;
+    border: 2px solid #E3D5E9;
+    outline: none;
+}
+
+#filter-year-term .custom-select-trigger:focus-visible {
+    outline: 2px solid #E3D5E9;
+    outline-offset: 2px;
+}
+
+#filter-year-term .custom-select-arrow {
+    width: 16px;
+    height: 16px;
+    background-image: url(/assets/arrow.svg);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    margin-left: 10px;
+    transition: transform 0.2s ease;
+    border: none;
+}
+
+#filter-year-term .custom-select.open .custom-select-arrow {
+    transform: rotate(180deg);
+}
+
+#filter-year-term .custom-select-options {
+    position: absolute;
+    top: 133%;
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 2px solid #E3D5E9;
+    border-radius: 20px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+}
+
+#filter-year-term .custom-select.open .custom-select-options {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+#filter-year-term .custom-select-option {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: var(--p);
+    font-family: 'Libre Bodoni', sans-serif;
+    font-weight: 100;
+    color: black;
+    transition: background-color 0.2s ease;
+}
+
+#filter-year-term .custom-select-option:hover {
+    background-color: #F5F3F7;
+}
+
+#filter-year-term .custom-select-option.selected {
+    background-color: #E3D5E9;
+}
+
+#filter-year-term .custom-select-option:last-child {
+    border-radius: 0 0 18px 18px;
+}
+
+#filter-year-term label {
+    display: block;
+    font-size: var(--p);
+    font-weight: 100;
+    margin-bottom: 10px;
+    margin-top: 20px;
+    color: black;
+}
+
+#filter-year-term label:first-child {
+    margin-top: 0;
+}
+
+/* Filter action buttons */
+.filter-buttons {
+    display: flex;
+    gap: 10px;
+    padding: 1em 20px 1em 20px;
+    background-color: white;
+    border-bottom: 1px solid #E3E2E2;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin: 0 -20px 0 -20px; /* Extend to full width of popup */
+}
+
+#clear-all-btn,
+#see-results-btn {
+    flex: 1;
+    font-family: 'Libre Bodoni', sans-serif;
+    font-size: var(--p);
+    font-weight: 400;
+}
+
+#clear-all-btn {
+    background-color: white;
+}
+
+#see-results-btn {
+    background-color: #E3D5E9;
+}
 
 /* Course list style */
 

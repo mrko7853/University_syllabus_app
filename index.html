@@ -17,21 +17,50 @@
                     <div class="filter-container hidden">
                         <div class="filter-background">
                         <div class="filter-popup">
+                            <div class="filter-buttons">
+                                <button id="clear-all-btn">Clear All</button>
+                                <button id="see-results-btn">See Results</button>
+                            </div>
                             <div class="filter-content">
-                            <label for="term-select">Semester</label>
-                            <select name="term" id="term-select">
-                                <option value="春学期/Spring">Spring</option>
-                                <option value="秋学期/Fall" selected>Fall</option>
-                            </select>
+
+                            <div id="filter-year-term">
+                            <h3 class="filter-title">Semester and Year</h3>
+                                <div id="filter-year-term-container">
+                                <div class="custom-select" data-target="term-select">
+                                    <div class="custom-select-trigger" tabindex="0">
+                                        <span class="custom-select-value">Fall</span>
+                                        <div class="custom-select-arrow"></div>
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <div class="custom-select-option" data-value="春学期/Spring">Spring</div>
+                                        <div class="custom-select-option selected" data-value="秋学期/Fall">Fall</div>
+                                    </div>
+                                </div>
+                                <select name="term" id="term-select" style="display: none;">
+                                    <option value="春学期/Spring">Spring</option>
+                                    <option value="秋学期/Fall" selected>Fall</option>
+                                </select>
                             
-                            <label for="year-select">Year</label>
-                            <select name="year" id="year-select">
-                                <option value="2025">2025</option>
-                                <option value="2024">2024</option>
-                            </select>
+                                
+                                <div class="custom-select" data-target="year-select">
+                                    <div class="custom-select-trigger" tabindex="0">
+                                        <span class="custom-select-value">2025</span>
+                                        <div class="custom-select-arrow"></div>
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <div class="custom-select-option selected" data-value="2025">2025</div>
+                                        <div class="custom-select-option" data-value="2024">2024</div>
+                                    </div>
+                                </div>
+                                <select name="year" id="year-select" style="display: none;">
+                                    <option value="2025">2025</option>
+                                    <option value="2024">2024</option>
+                                </select>
+                                </div>
+                            </div>
 
                             <div id="filter-by-days">
-                                <h3 class="filter-title">Day of the week</h3>
+                                <h3 class="filter-title">Day of the Week</h3>
                                 <div class="checkboxes-container" id="filter-by-days-container">
                                     <input type="checkbox" id="filter-monday" name="filter-monday" class="filter-checkbox" value="Mon">
                                     <label for="filter-monday">Monday</label>
@@ -71,16 +100,20 @@
                             </div>
 
                             <div id="filter-by-concentration">
-                                <h3 class="filter-title">Course type</h3>
+                                <h3 class="filter-title">Course Type</h3>
                                 <div class="checkboxes-container">
-                                    <input type="checkbox" id="filter-culture" name="filter-culture" class="filter-checkbox" value="culture">
-                                    <label for="filter-culture">Global Culture</label>
-                                    
-                                    <input type="checkbox" id="filter-economy" name="filter-economy" class="filter-checkbox" value="economy">
-                                    <label for="filter-economy">Economy</label>
-                                    
-                                    <input type="checkbox" id="filter-politics" name="filter-politics" class="filter-checkbox" value="politics">
-                                    <label for="filter-politics">Politics</label>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="filter-culture" name="filter-culture" class="filter-checkbox" value="culture">
+                                        <label for="filter-culture">Japanese Society and Global Culture Concentration</label>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="filter-economy" name="filter-economy" class="filter-checkbox" value="economy">
+                                        <label for="filter-economy">Japanese Business and the Global Economy Concentration</label>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="filter-politics" name="filter-politics" class="filter-checkbox" value="politics">
+                                        <label for="filter-politics">Japanese Politics and Global Studies Concentration</label>
+                                    </div>
                                 </div>
                             </div>
                             </div>
