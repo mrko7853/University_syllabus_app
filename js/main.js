@@ -104,6 +104,9 @@ function applyFilters() {
         const cultureColor = "#C6E0B4";
         const economyColor = "#FFE699";
         const politicsColor = "#FFCCCC";
+        const seminarColor = "#FFFF99";
+        const academicColor = "#CCFFFF";
+        const specialColor = "#CCCCFF";
 
         // Check if matches day filter
         const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
@@ -116,7 +119,10 @@ function applyFilters() {
             selectedConcentrations.length === 0 ||
             (selectedConcentrations.includes("culture") && courseColor === cultureColor) ||
             (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
-            (selectedConcentrations.includes("politics") && courseColor === politicsColor);
+            (selectedConcentrations.includes("politics") && courseColor === politicsColor) ||
+            (selectedConcentrations.includes("seminar") && courseColor === seminarColor) ||
+            (selectedConcentrations.includes("academic") && courseColor === academicColor) ||
+            (selectedConcentrations.includes("special") && courseColor === specialColor);
 
         // Show only if matches all filters
         if (dayMatch && timeMatch && concMatch) {
