@@ -372,22 +372,10 @@ class CourseCalendar extends HTMLElement {
   connectedCallback() {
     // Initialize when connected to DOM
     this.initializeCalendar();
-    
-    // Add visibility change listener for page refocus
-    this.handleVisibilityChange = () => {
-      if (!document.hidden && this.isInitialized) {
-        // Page became visible again, refresh calendar
-        setTimeout(() => this.refreshCalendar(), 100);
-      }
-    };
-    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   disconnectedCallback() {
-    // Clean up event listeners
-    if (this.handleVisibilityChange) {
-      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-    }
+    // Clean up event listeners if needed
   }
 
   async initializeCalendar() {
@@ -409,8 +397,6 @@ class CourseCalendar extends HTMLElement {
       if (currentMonth >= 8 || currentMonth <= 2) {
         term = "秋学期/Fall";
       }
-      
-      console.log('Calendar initialization:', { currentYear, currentMonth, term });
 
       // Load courses with retry mechanism
       await this.showCourseWithRetry(currentYear, term);
@@ -445,18 +431,15 @@ class CourseCalendar extends HTMLElement {
       await this.showCourse(year, term);
       if (retryAttempt === 0) this.hideLoading(); // Only hide loading if this was the initial attempt
     } catch (error) {
-      console.error(`Error loading courses (attempt ${retryAttempt + 1}):`, error);
       if (retryAttempt < this.maxRetries) {
         // Don't hide loading for retries
         // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
         const delay = 500 * Math.pow(2, retryAttempt);
-        console.log(`Retrying in ${delay}ms...`);
         setTimeout(() => {
           this.showCourseWithRetry(year, term, retryAttempt + 1);
         }, delay);
       } else {
         // Final fallback: show empty cells and hide loading
-        console.log('All retry attempts failed, showing empty calendar');
         this.hideLoading();
         this.showEmptyCalendar();
       }
@@ -512,20 +495,15 @@ class CourseCalendar extends HTMLElement {
     this.displayedYear = year;
     this.displayedTerm = term;
 
-    console.log('showCourse called with:', { year, term });
-
     try {
       // Ensure we have the latest user session
       if (!this.currentUser) {
-        console.log('Getting fresh session data...');
         const { data: { session } } = await supabase.auth.getSession();
         this.currentUser = session?.user || null;
-        console.log('Current user:', this.currentUser ? 'logged in' : 'not logged in');
       }
 
       let selectedCourses = [];
       if (this.currentUser) {
-        console.log('Fetching user course selections...');
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('courses_selection')
@@ -533,21 +511,16 @@ class CourseCalendar extends HTMLElement {
           .single();
         if (profileError) throw profileError;
         selectedCourses = profile?.courses_selection || [];
-        console.log('Selected courses from profile:', selectedCourses.length);
-      } else {
-        console.log('No user logged in, showing empty calendar');
       }
 
       this.clearCourseCells();
 
       // If no selected courses, fill with EMPTY placeholders
       if (!selectedCourses.length) {
-        console.log('No selected courses, showing empty calendar');
         this.showEmptyCalendar();
         return;
       }
 
-      console.log('Fetching course data...');
       const allCoursesInSemester = await fetchCourseData(year, term);
 
       const coursesToShow = allCoursesInSemester.filter(course =>
@@ -556,17 +529,7 @@ class CourseCalendar extends HTMLElement {
         )
       );
 
-      console.log('CourseCalendar Debug:', {
-        selectedCourses: selectedCourses.length,
-        allCourses: allCoursesInSemester.length,
-        coursesToShow: coursesToShow.length,
-        year,
-        term
-      });
-
       coursesToShow.forEach(course => {
-        console.log('Processing course:', course.course_code, course.title, course.time_slot);
-        
         // Try Japanese format first: (月曜日1講時)
         let match = course.time_slot?.match(/\((\S+)曜日(\d+)講時\)/);
         let dayEN, period;
@@ -577,7 +540,6 @@ class CourseCalendar extends HTMLElement {
           period = parseInt(match[2], 10);
           const dayMap = { "月": "Mon", "火": "Tue", "水": "Wed", "木": "Thu", "金": "Fri", "土": "Sat", "日": "Sun" };
           dayEN = dayMap[dayJP];
-          console.log('Japanese format matched:', { dayJP, dayEN, period });
         } else {
           // Try English format: "Mon 10:45 - 12:15", "Wed 09:00 - 10:30", etc.
           const englishMatch = course.time_slot?.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
@@ -594,18 +556,14 @@ class CourseCalendar extends HTMLElement {
             else if (timeToSlot >= 1455 && timeToSlot < 1625) period = 4;
             else if (timeToSlot >= 1640 && timeToSlot < 1810) period = 5;
             else period = -1; // Invalid time slot
-            
-            console.log('English format matched:', { dayEN, startHour, startMin, timeToSlot, period });
           }
         }
         
         if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
-          console.log('No valid time slot match for course:', course.course_code, { dayEN, period });
           return;
         }
 
         if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
-          console.log('No valid time slot match for course:', course.course_code, { dayEN, period });
           return;
         }
 
@@ -707,33 +665,9 @@ class CourseCalendar extends HTMLElement {
 
   // Public method to show specific term
   async showTerm(year, term) {
-    console.log('Showing term:', { year, term });
     // Clear current user to force fresh session fetch
     this.currentUser = null;
     await this.showCourseWithRetry(year, term);
-  }
-
-  // Debug method to check component state
-  debugState() {
-    console.log('CourseCalendar Debug State:', {
-      isInitialized: this.isInitialized,
-      currentUser: this.currentUser ? 'logged in' : 'not logged in',
-      displayedYear: this.displayedYear,
-      displayedTerm: this.displayedTerm,
-      retryCount: this.retryCount,
-      maxRetries: this.maxRetries,
-      calendarExists: !!this.calendar,
-      loadingIndicatorExists: !!this.loadingIndicator
-    });
-  }
-
-  // Force reinitialize the calendar (for debugging)
-  async forceReinit() {
-    console.log('Force reinitializing calendar...');
-    this.isInitialized = false;
-    this.currentUser = null;
-    this.retryCount = 0;
-    await this.initializeCalendar();
   }
 }
 
@@ -742,18 +676,6 @@ customElements.define('total-courses', TotalCourses);
 customElements.define('concentration-box', ConcentrationBox);
 customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
-
-// Make calendar debugging available globally
-window.debugCalendar = () => {
-  const calendar = document.querySelector('course-calendar');
-  if (calendar) {
-    calendar.debugState();
-    return calendar;
-  } else {
-    console.log('No course-calendar component found');
-    return null;
-  }
-};
 
 window.refreshCalendar = () => {
   const calendar = document.querySelector('course-calendar');

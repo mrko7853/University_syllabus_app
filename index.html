@@ -14,38 +14,10 @@
 
     <app-navigation></app-navigation>
 
-    <section id="syllabus-main">
-    <div class="main-content">
-
-        <div class="top-content">
-            <div class="main-container">
-                <div class="top-content-two">
-                    <total-courses></total-courses>
-                    <term-box></term-box>
-                </div>
-                <div class="top-content-one">
-                    <concentration-box></concentration-box>
-                </div>
-            </div>
-            <div class="main-container" id="calendar-container">
-                <course-calendar></course-calendar>
-            </div>
-        </div>
-
-            <div class="main-container">
-                <div class="container-above">
-                    <div class="title-box">
-                        <h2 class="course-main-title">Courses</h2>
-                        <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
-                    </div>
-                    <div class="buttons-box">
-                        <button id="search-btn"></button>
-                        <button id="sort-btn"></button>
-                        <button id="filter-btn">Filter</button>
-                    </div>
-                </div>
-                                    <div class="filter-container hidden">
+                    <div class="filter-container hidden">
+                        <div class="filter-background">
                         <div class="filter-popup">
+                            <div class="filter-content">
                             <label for="term-select">Semester</label>
                             <select name="term" id="term-select">
                                 <option value="春学期/Spring">Spring</option>
@@ -80,7 +52,7 @@
 
                             <div id="filter-by-time">
                                 <h3 class="filter-title">Period</h3>
-                                <div class="checkboxes-container">
+                                <div class="checkboxes-container" id="filter-by-time-container">
                                     <input type="checkbox" id="filter-period-1" name="filter-period-1" class="filter-checkbox" value="09:00">
                                     <label for="filter-period-1">09:00 - 10:30</label>
                                     
@@ -111,8 +83,41 @@
                                     <label for="filter-politics">Politics</label>
                                 </div>
                             </div>
+                            </div>
+                        </div>
                         </div>
                     </div>
+
+    <section id="syllabus-main">
+    <div class="main-content">
+
+        <div class="top-content">
+            <div class="main-container">
+                <div class="top-content-two">
+                    <total-courses></total-courses>
+                    <term-box></term-box>
+                </div>
+                <div class="top-content-one">
+                    <concentration-box></concentration-box>
+                </div>
+            </div>
+            <div class="main-container" id="calendar-container">
+                <course-calendar></course-calendar>
+            </div>
+        </div>
+
+            <div class="main-container">
+                <div class="container-above">
+                    <div class="title-box">
+                        <h2 class="course-main-title">Courses</h2>
+                        <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
+                    </div>
+                    <div class="buttons-box">
+                        <button id="search-btn"></button>
+                        <button id="sort-btn"></button>
+                        <button id="filter-btn">Filter</button>
+                    </div>
+                </div>
                 <div id="course-list">
                 </div>
             </div>

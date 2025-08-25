@@ -356,12 +356,15 @@ async function calendarSchedule(year, term) {
 
 const filterBtn = document.getElementById("filter-btn");
 const filterContainer = document.querySelector(".filter-container");
+const filterBackground = document.querySelector(".filter-background");
+const pageBody = document.body;
 
 filterBtn.addEventListener("click", () => {
     if (filterContainer.classList.contains("hidden")) {
         filterContainer.classList.remove("hidden");
         filterContainer.style.opacity = "0";
         filterContainer.style.transform = "translateY(-10px)";
+        pageBody.style.overflow = "hidden";
         
         // Trigger animation
         requestAnimationFrame(() => {
@@ -381,10 +384,26 @@ filterBtn.addEventListener("click", () => {
 });
 
 document.addEventListener("click", (event) => {
-    if (!filterContainer.contains(event.target) && event.target !== filterBtn && !filterContainer.classList.contains("hidden")) {
+    // Check if filter menu is visible
+    if (filterContainer.classList.contains("hidden")) {
+        return;
+    }
+    
+    // Get the actual filter popup/content div (child of filter-container)
+    const filterPopup = filterContainer.querySelector('.filter-popup, .filter-content, [class*="filter"]:not(.filter-container):not(.filter-background)');
+    
+    // Check if click is inside the filter popup content
+    const isInsideFilterPopup = filterPopup && filterPopup.contains(event.target);
+    
+    // Check if click is on the filter button
+    const isFilterButton = filterBtn.contains(event.target);
+    
+    // Only close if click is NOT on the button and NOT inside the filter popup
+    if (!isFilterButton && !isInsideFilterPopup) {
         filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
         filterContainer.style.opacity = "0";
         filterContainer.style.transform = "translateY(-10px)";
+        pageBody.style.overflow = "auto";
         
         setTimeout(() => {
             filterContainer.classList.add("hidden");
