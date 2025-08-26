@@ -460,7 +460,27 @@ table#calendar-main {
     z-index: 1000;
 }
 
+.search-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1000;
+}
+
 .filter-background {
+    width: 100%;
+    height: 100vh;
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.search-background {
     width: 100%;
     height: 100vh;
     display: block;
@@ -489,6 +509,20 @@ table#calendar-main {
     overflow-x: visible; /* Allow dropdowns to extend outside */
 }
 
+.search-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    border-radius: 30px;
+    padding: 40px;
+    z-index: 1002;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    min-width: 400px;
+    max-width: 500px;
+}
+
 .filter-content {
     padding: 0 0 1em 0;
     flex: 1;
@@ -499,6 +533,139 @@ table#calendar-main {
     visibility: hidden;
     transform: scale(0);
     display: none !important;
+}
+
+.search-modal h2 {
+    font-size: var(--h2);
+    font-weight: 400;
+    margin: 0 0 20px 0;
+    text-align: center;
+    color: #333;
+}
+
+.search-input {
+    width: 100%;
+    padding: 15px 20px;
+    border: 2px solid #E3D5E9;
+    border-radius: 50px;
+    font-size: var(--p);
+    font-family: 'Libre Bodoni', sans-serif;
+    outline: none;
+    margin-bottom: 25px;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: #BDAAC6;
+}
+
+.search-input::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+.search-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.search-submit,
+.search-cancel {
+    padding: 12px 30px;
+    border: none;
+    border-radius: 50px;
+    font-size: var(--p);
+    font-family: 'Libre Bodoni', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 100px;
+    width: auto;
+    height: auto;
+}
+
+.search-submit {
+    background-color: #E3D5E9;
+    color: #333;
+    box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+}
+
+.search-submit:hover {
+    filter: drop-shadow(0 0 0 rgba(50, 50, 93, 0.25));
+}
+
+.search-submit:active {
+    box-shadow: 0 2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+}
+
+.search-cancel {
+    background-color: white;
+    color: #666;
+    border: 2px solid #E3E2E2;
+}
+
+.search-cancel:hover {
+    background-color: #f5f5f5;
+    border-color: #ccc;
+}
+
+.search-autocomplete {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #E3D5E9;
+    border-top: none;
+    border-radius: 0 0 20px 20px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1003;
+    display: none;
+}
+
+.search-autocomplete-item {
+    padding: 12px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: var(--p);
+    transition: background-color 0.2s ease;
+}
+
+.search-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.search-autocomplete-item:hover,
+.search-autocomplete-item.highlighted {
+    background-color: #f8f4fb;
+}
+
+.search-autocomplete-item .item-title {
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.search-autocomplete-item .item-details {
+    font-size: calc(var(--p) - 2px);
+    color: #666;
+    display: flex;
+    gap: 15px;
+}
+
+.search-autocomplete-item .item-code {
+    font-weight: 400;
+}
+
+.search-autocomplete-item .item-professor {
+    font-style: italic;
+}
+
+.search-input-container {
+    position: relative;
 }
 
 /* Hide the native checkbox */
@@ -814,6 +981,96 @@ table#calendar-main {
 
 #see-results-btn {
     background-color: #E3D5E9;
+}
+
+/* Buttons course list style */
+
+#search-btn,
+#sort-btn,
+#filter-btn {
+    font-family: 'Libre Bodoni', sans-serif;
+    font-size: var(--h3);
+    font-weight: 400;
+}
+
+#filter-btn {
+    width: 160px;
+    height: 70px;
+}
+
+#search-btn,
+#sort-btn {
+    width: 70px;
+    height: 70px;
+}
+
+#search-btn div {
+    background-image: url(/assets/search.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 30px;
+    filter: brightness(0) saturate(100%);
+    height: 100%;
+}
+
+#sort-btn div {
+    background-image: url(/assets/sort.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 30px;
+    filter: brightness(0) saturate(100%);
+    height: 100%;
+}
+
+/* Sort dropdown styles */
+.sort-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.sort-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 2px solid #E3D5E9;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    min-width: 180px;
+    z-index: 1000;
+    margin-top: 5px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.sort-dropdown:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.sort-option {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s ease;
+}
+
+.sort-option:last-child {
+    border-bottom: none;
+}
+
+.sort-option:hover {
+    background-color: #f8f5ff;
+    color: #7B68EE;
+}
+
+.sort-option.selected {
+    background-color: #E3D5E9;
+    color: #7B68EE;
+    font-weight: 500;
 }
 
 /* Course list style */

@@ -133,6 +133,22 @@
                         </div>
                     </div>
 
+                    <div class="search-container hidden">
+                        <div class="search-background">
+                            <div class="search-modal">
+                                <h2>Search Courses</h2>
+                                <div class="search-input-container">
+                                    <input type="text" class="search-input" id="search-input" placeholder="Enter course title, professor name, or course code..." autocomplete="off">
+                                    <div class="search-autocomplete" id="search-autocomplete"></div>
+                                </div>
+                                <div class="search-buttons">
+                                    <button class="search-submit" id="search-submit">Search</button>
+                                    <button class="search-cancel" id="search-cancel">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
     <section id="syllabus-main">
     <div class="main-content">
 
@@ -155,8 +171,16 @@
                         <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
                     </div>
                     <div class="buttons-box">
-                        <button id="search-btn"></button>
-                        <button id="sort-btn"></button>
+                        <button id="search-btn"><div></div></button>
+                        <div class="sort-wrapper">
+                            <button id="sort-btn"><div></div></button>
+                            <div class="sort-dropdown hidden" id="sort-dropdown">
+                                <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
+                                <div class="sort-option" data-sort="title-za">Course Z-A</div>
+                                <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
+                                <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
+                            </div>
+                        </div>
                         <button id="filter-btn">Filter</button>
                     </div>
                 </div>

@@ -17,6 +17,9 @@ const filterByDays = document.getElementById("filter-by-days");
 const filterByTime = document.getElementById("filter-by-time");
 const filterByConcentration = document.getElementById("filter-by-concentration");
 
+// Global sorting state
+let currentSortMethod = null;
+
 async function showCourse(year, term) {
 
     const courses = await fetchCourseData(year, term);
@@ -149,7 +152,13 @@ function applyFilters() {
 
 async function updateCoursesAndFilters() {
     await showCourse(yearSelect.value, termSelect.value);
-    applyFilters();
+    
+    // Re-apply current sort if one is selected
+    if (currentSortMethod) {
+        sortCourses(currentSortMethod);
+    } else {
+        applyFilters();
+    }
     
     // Also update the calendar component if it exists
     const calendarComponent = document.querySelector('course-calendar');
@@ -228,6 +237,11 @@ clearAllBtn.addEventListener("click", () => {
         }
     }
     
+    // Reset sorting
+    currentSortMethod = null;
+    const sortOptions = document.querySelectorAll('.sort-option');
+    sortOptions.forEach(option => option.classList.remove('selected'));
+    
     // Apply filters to update the display
     applyFilters();
     updateCoursesAndFilters();
@@ -245,6 +259,9 @@ courseList.addEventListener("click", function(event) {
 const default_year = yearSelect.value;
 const default_term = termSelect.value;
 showCourse(default_year, default_term);
+
+// Set default sort to Course A-Z
+currentSortMethod = 'title-az';
 
 yearSelect.addEventListener("change", updateCoursesAndFilters);
 termSelect.addEventListener("change", updateCoursesAndFilters);
@@ -524,6 +541,14 @@ if (document.readyState === 'loading') {
 const filterBtn = document.getElementById("filter-btn");
 const filterContainer = document.querySelector(".filter-container");
 const filterBackground = document.querySelector(".filter-background");
+const searchBtn = document.getElementById("search-btn");
+const searchContainer = document.querySelector(".search-container");
+const searchBackground = document.querySelector(".search-background");
+const searchModal = document.querySelector(".search-modal");
+const searchInput = document.getElementById("search-input");
+const searchSubmit = document.getElementById("search-submit");
+const searchCancel = document.getElementById("search-cancel");
+const searchAutocomplete = document.getElementById("search-autocomplete");
 const pageBody = document.body;
 
 filterBtn.addEventListener("click", () => {
@@ -575,6 +600,436 @@ document.addEventListener("click", (event) => {
         setTimeout(() => {
             filterContainer.classList.add("hidden");
         }, 300);
+    }
+});
+
+// Sort dropdown functionality
+const sortBtn = document.getElementById("sort-btn");
+const sortDropdown = document.getElementById("sort-dropdown");
+
+// Function to sort courses based on selected method
+function sortCourses(method) {
+    const courseContainers = Array.from(courseList.querySelectorAll(".class-outside"));
+    
+    courseContainers.sort((a, b) => {
+        const courseA = JSON.parse(a.querySelector('.class-container').dataset.course);
+        const courseB = JSON.parse(b.querySelector('.class-container').dataset.course);
+        
+        switch(method) {
+            case 'title-az':
+                return (courseA.title || '').localeCompare(courseB.title || '');
+            case 'title-za':
+                return (courseB.title || '').localeCompare(courseA.title || '');
+            case 'gpa-a-high':
+                return (courseB.gpa_a_percent || 0) - (courseA.gpa_a_percent || 0);
+            case 'gpa-f-high':
+                return (courseB.gpa_f_percent || 0) - (courseA.gpa_f_percent || 0);
+            default:
+                return 0;
+        }
+    });
+    
+    // Clear and re-append sorted courses
+    courseList.innerHTML = '';
+    courseContainers.forEach(container => {
+        courseList.appendChild(container);
+    });
+    
+    // Re-apply current filters after sorting
+    applyFilters();
+}
+
+// Sort button click handler
+sortBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    
+    // Close other dropdowns/modals
+    if (!filterContainer.classList.contains("hidden")) {
+        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+        filterContainer.style.opacity = "0";
+        filterContainer.style.transform = "translateY(-10px)";
+        setTimeout(() => {
+            filterContainer.classList.add("hidden");
+        }, 300);
+    }
+    
+    sortDropdown.classList.toggle("hidden");
+});
+
+// Sort option selection
+sortDropdown.addEventListener("click", (event) => {
+    const option = event.target.closest('.sort-option');
+    if (!option) return;
+    
+    const sortMethod = option.dataset.sort;
+    
+    // Update selected state
+    sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    option.classList.add('selected');
+    
+    // Apply sorting
+    currentSortMethod = sortMethod;
+    sortCourses(sortMethod);
+    
+    // Close dropdown
+    sortDropdown.classList.add("hidden");
+});
+
+// Close sort dropdown when clicking outside
+document.addEventListener("click", (event) => {
+    if (!sortBtn.contains(event.target) && !sortDropdown.contains(event.target)) {
+        sortDropdown.classList.add("hidden");
+    }
+});
+
+// Search modal functionality
+let originalCourses = []; // Store original courses for search
+let allCourses = []; // Store all courses for autocomplete
+let currentHighlightIndex = -1;
+
+// Function to get all courses for autocomplete
+async function getAllCourses() {
+    try {
+        const year = yearSelect.value;
+        const term = termSelect.value;
+        const courses = await fetchCourseData(year, term);
+        allCourses = courses;
+        return courses;
+    } catch (error) {
+        console.error('Error fetching courses for autocomplete:', error);
+        return [];
+    }
+}
+
+// Function to show autocomplete suggestions
+function showAutocomplete(query) {
+    if (!query.trim() || query.length < 2) {
+        searchAutocomplete.style.display = 'none';
+        return;
+    }
+    
+    const normalizedQuery = query.toLowerCase().trim();
+    const suggestions = allCourses.filter(course => {
+        const title = (course.title || '').toLowerCase();
+        const professor = (course.professor || '').toLowerCase();
+        const courseCode = (course.course_code || '').toLowerCase();
+        
+        return title.includes(normalizedQuery) || 
+               professor.includes(normalizedQuery) || 
+               courseCode.includes(normalizedQuery);
+    }).slice(0, 5); // Limit to 5 suggestions
+    
+    if (suggestions.length === 0) {
+        searchAutocomplete.style.display = 'none';
+        return;
+    }
+    
+    searchAutocomplete.innerHTML = '';
+    suggestions.forEach((course, index) => {
+        const item = document.createElement('div');
+        item.className = 'search-autocomplete-item';
+        item.innerHTML = `
+            <div class="item-title">${course.title}</div>
+            <div class="item-details">
+                <span class="item-code">${course.course_code}</span>
+                <span class="item-professor">${course.professor}</span>
+            </div>
+        `;
+        
+        item.addEventListener('click', () => {
+            searchInput.value = course.title;
+            searchAutocomplete.style.display = 'none';
+            currentHighlightIndex = -1;
+        });
+        
+        searchAutocomplete.appendChild(item);
+    });
+    
+    searchAutocomplete.style.display = 'block';
+    currentHighlightIndex = -1;
+}
+
+// Function to handle keyboard navigation in autocomplete
+function handleAutocompleteNavigation(event) {
+    const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
+    
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        currentHighlightIndex = Math.min(currentHighlightIndex + 1, items.length - 1);
+        updateHighlight(items);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        currentHighlightIndex = Math.max(currentHighlightIndex - 1, -1);
+        updateHighlight(items);
+    } else if (event.key === 'Enter') {
+        if (currentHighlightIndex >= 0 && items[currentHighlightIndex]) {
+            event.preventDefault();
+            items[currentHighlightIndex].click();
+        }
+    }
+}
+
+// Function to update highlight in autocomplete
+function updateHighlight(items) {
+    items.forEach((item, index) => {
+        if (index === currentHighlightIndex) {
+            item.classList.add('highlighted');
+        } else {
+            item.classList.remove('highlighted');
+        }
+    });
+}
+
+// Function to calculate word similarity (simple Jaccard similarity)
+function calculateSimilarity(str1, str2) {
+    const words1 = str1.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+    const words2 = str2.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+    
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+    
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+    
+    return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+// Function to find similar courses
+function findSimilarCourses(searchQuery, courses, limit = 5) {
+    if (!searchQuery.trim() || courses.length === 0) return [];
+    
+    const query = searchQuery.toLowerCase().trim();
+    const coursesWithSimilarity = courses.map(course => {
+        const titleSimilarity = calculateSimilarity(query, course.title || '');
+        const professorSimilarity = calculateSimilarity(query, course.professor || '');
+        const codeSimilarity = calculateSimilarity(query, course.course_code || '');
+        
+        // Weight title similarity more heavily
+        const overallSimilarity = (titleSimilarity * 0.6) + (professorSimilarity * 0.3) + (codeSimilarity * 0.1);
+        
+        return {
+            course,
+            similarity: overallSimilarity
+        };
+    })
+    .filter(item => item.similarity > 0.1) // Only include courses with some similarity
+    .sort((a, b) => b.similarity - a.similarity) // Sort by similarity descending
+    .slice(0, limit); // Limit results
+    
+    return coursesWithSimilarity.map(item => item.course);
+}
+
+// Function to display suggested courses
+function displaySuggestedCourses(courses, searchQuery) {
+    const courseList = document.getElementById("course-list");
+    
+    if (courses.length === 0) {
+        courseList.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <h3 style="color: #666; margin-bottom: 10px;">No courses found</h3>
+                <p style="color: #999;">No courses match your search for "${searchQuery}"</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let suggestionsHTML = `
+        <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #E3D5E9; margin-bottom: 20px;">
+            <h3 style="color: #666; margin-bottom: 10px;">No exact matches found</h3>
+            <p style="color: #999; margin-bottom: 0;">Here are some courses that might interest you based on "${searchQuery}":</p>
+        </div>
+    `;
+    
+    courses.forEach(function(course) {
+        const days = {
+            "月曜日": "Mon",
+            "火曜日": "Tue",
+            "水曜日": "Wed",
+            "木曜日": "Thu",
+            "金曜日": "Fri"
+        };
+        const times = {
+            "1講時": "09:00 - 10:30",
+            "2講時": "10:45 - 12:15",
+            "3講時": "13:10 - 14:40",
+            "4講時": "14:55 - 16:25",
+            "5講時": "16:40 - 18:10"
+        };
+        
+        let timeSlot = course.time_slot;
+        const match = course.time_slot.match(/(月曜日|火曜日|水曜日|木曜日|金曜日)([1-5]講時)/);
+        const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
+        
+        if (specialMatch) {
+            timeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
+        } else if (match) {
+            timeSlot = `${days[match[1]]} ${times[match[2]]}`;
+        }
+
+        suggestionsHTML += `
+        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${course.color}' style="opacity: 0.8; border: 2px dashed #BDAAC6;">
+            <div class="class-container" style="background-color: ${course.color}; position: relative;" data-course='${JSON.stringify(course)}'>
+                <div style="position: absolute; top: 10px; right: 15px; background: rgba(255,255,255,0.9); border-radius: 15px; padding: 4px 12px; font-size: 12px; color: #666; font-weight: 500;">
+                    Suggested
+                </div>
+                <p>${course.course_code}</p>
+                <h2>${course.title}</h2>
+                <p>Professor</p>
+                <h3>${course.professor}</h3>
+                <div class="class-space"></div>
+                <p>Time</p>
+                <h3>${timeSlot}</h3>
+            </div>
+            <div class="gpa-bar ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
+                <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
+                <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
+                <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
+                <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+            </div>
+        </div>
+        `;
+    });
+    
+    courseList.innerHTML = suggestionsHTML;
+}
+
+// Function to perform search
+function performSearch(searchQuery) {
+    if (!searchQuery.trim()) {
+        // If search is empty, show all courses
+        const classContainers = courseList.querySelectorAll(".class-outside");
+        classContainers.forEach(container => {
+            container.style.display = "flex";
+        });
+        // Remove any existing no-results message
+        const noResults = courseList.querySelector(".no-results");
+        if (noResults) noResults.remove();
+        return;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    const classContainers = courseList.querySelectorAll(".class-outside");
+    let hasResults = false;
+    
+    classContainers.forEach(container => {
+        const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
+        
+        // Search in course title, professor name, and course code
+        const title = (courseData.title || '').toLowerCase();
+        const professor = (courseData.professor || '').toLowerCase();
+        const courseCode = (courseData.course_code || '').toLowerCase();
+        
+        const matches = title.includes(query) || 
+                       professor.includes(query) || 
+                       courseCode.includes(query);
+        
+        if (matches) {
+            container.style.display = "flex";
+            hasResults = true;
+        } else {
+            container.style.display = "none";
+        }
+    });
+    
+    // Remove any existing no-results message
+    const existingNoResults = courseList.querySelector(".no-results");
+    if (existingNoResults) existingNoResults.remove();
+    
+    // If no results found, show suggestions
+    if (!hasResults) {
+        const similarCourses = findSimilarCourses(searchQuery, allCourses, 5);
+        displaySuggestedCourses(similarCourses, searchQuery);
+    }
+}
+
+// Search button click handler
+searchBtn.addEventListener("click", async () => {
+    searchContainer.classList.remove("hidden");
+    pageBody.style.overflow = "hidden";
+    
+    // Load courses for autocomplete
+    await getAllCourses();
+    
+    // Focus on search input after modal is shown
+    setTimeout(() => {
+        searchInput.focus();
+    }, 100);
+});
+
+// Search submit handler
+searchSubmit.addEventListener("click", () => {
+    const searchQuery = searchInput.value;
+    performSearch(searchQuery);
+    
+    // Close search modal
+    searchContainer.classList.add("hidden");
+    pageBody.style.overflow = "auto";
+});
+
+// Search cancel handler
+searchCancel.addEventListener("click", () => {
+    searchInput.value = ""; // Clear search input
+    searchAutocomplete.style.display = 'none';
+    currentHighlightIndex = -1;
+    searchContainer.classList.add("hidden");
+    pageBody.style.overflow = "auto";
+});
+
+// Search input event handlers for autocomplete
+searchInput.addEventListener("input", (event) => {
+    showAutocomplete(event.target.value);
+});
+
+// Allow Enter key to submit search and handle autocomplete navigation
+searchInput.addEventListener("keydown", (event) => {
+    if (searchAutocomplete.style.display === 'block' && 
+        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        handleAutocompleteNavigation(event);
+    } else if (event.key === "Enter") {
+        event.preventDefault();
+        if (searchAutocomplete.style.display === 'block' && currentHighlightIndex >= 0) {
+            const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
+            if (items[currentHighlightIndex]) {
+                items[currentHighlightIndex].click();
+                return;
+            }
+        }
+        searchSubmit.click();
+    } else if (event.key === "Escape") {
+        event.preventDefault();
+        if (searchAutocomplete.style.display === 'block') {
+            searchAutocomplete.style.display = 'none';
+            currentHighlightIndex = -1;
+        } else {
+            searchCancel.click();
+        }
+    }
+});
+
+// Close search modal when clicking on background
+searchBackground.addEventListener("click", (event) => {
+    if (event.target === searchBackground) {
+        searchAutocomplete.style.display = 'none';
+        currentHighlightIndex = -1;
+        searchCancel.click();
+    }
+});
+
+// Prevent search modal from closing when clicking inside the modal
+searchModal.addEventListener("click", (event) => {
+    event.stopPropagation();
+});
+
+// Close autocomplete when clicking outside of search input or autocomplete
+document.addEventListener("click", (event) => {
+    if (!searchInput.contains(event.target) && 
+        !searchAutocomplete.contains(event.target) &&
+        !searchContainer.classList.contains("hidden")) {
+        searchAutocomplete.style.display = 'none';
+        currentHighlightIndex = -1;
     }
 });
 
