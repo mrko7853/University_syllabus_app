@@ -20,6 +20,10 @@ const filterByConcentration = document.getElementById("filter-by-concentration")
 // Global sorting state
 let currentSortMethod = null;
 
+// Global search state
+let currentSearchQuery = null;
+let suggestionsDisplayed = false; // Track if suggestions are currently shown
+
 async function showCourse(year, term) {
 
     const courses = await fetchCourseData(year, term);
@@ -72,9 +76,41 @@ async function showCourse(year, term) {
         `;
     });
     courseList.innerHTML = courseHTML;
+    
+    // Reset suggestions flag when courses are reloaded
+    suggestionsDisplayed = false;
 }
 
-function applyFilters() {
+// Helper function to convert course time slot to container ID format
+function convertTimeSlotToContainerFormat(timeSlot) {
+    const days = {
+        "月曜日": "Mon",
+        "火曜日": "Tue",
+        "水曜日": "Wed",
+        "木曜日": "Thu",
+        "金曜日": "Fri"
+    };
+    const times = {
+        "1講時": "09:00 - 10:30",
+        "2講時": "10:45 - 12:15",
+        "3講時": "13:10 - 14:40",
+        "4講時": "14:55 - 16:25",
+        "5講時": "16:40 - 18:10"
+    };
+    
+    const match = timeSlot.match(/(月曜日|火曜日|水曜日|木曜日|金曜日)([1-5]講時)/);
+    const specialMatch = timeSlot.match(/(月曜日3講時・木曜日3講時)/);
+    
+    if (specialMatch) {
+        return "Mon 13:10 - 14:40"; // Just return the first occurrence for filter matching
+    } else if (match) {
+        return `${days[match[1]]} ${times[match[2]]}`;
+    }
+    return timeSlot; // Return as-is if no match
+}
+
+// Helper function to check if a container matches current filters
+function containerMatchesFilters(container) {
     // Days filter
     const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
     const selectedDays = Array.from(dayCheckboxes)
@@ -93,61 +129,141 @@ function applyFilters() {
         .filter(checkbox => checkbox.checked)
         .map(checkbox => checkbox.value);
 
+    // Day logic
+    const timeSlot = container.id;
+    const day = timeSlot.split(" ")[0];
+
+    // Time logic
+    const time = timeSlot.split(" ")[1];
+
+    // Concentration logic
+    const courseColor = container.dataset.color;
+    const cultureColor = "#C6E0B4";
+    const economyColor = "#FFE699";
+    const politicsColor = "#FFCCCC";
+    const seminarColor = "#FFFF99";
+    const academicColor = "#CCFFFF";
+    const specialColor = "#CCCCFF";
+
+    // Check if matches day filter
+    const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
+
+    // Check if matches time filter
+    const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
+
+    // Check if matches concentration filter
+    const concMatch =
+        selectedConcentrations.length === 0 ||
+        (selectedConcentrations.includes("culture") && courseColor === cultureColor) ||
+        (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
+        (selectedConcentrations.includes("politics") && courseColor === politicsColor) ||
+        (selectedConcentrations.includes("seminar") && courseColor === seminarColor) ||
+        (selectedConcentrations.includes("academic") && courseColor === academicColor) ||
+        (selectedConcentrations.includes("special") && courseColor === specialColor);
+
+    return dayMatch && timeMatch && concMatch;
+}
+
+function applyFilters() {
+    // Use the unified search and filter function
+    return applySearchAndFilters(currentSearchQuery);
+}
+
+// Unified function that applies both search and filter criteria
+async function applySearchAndFilters(searchQuery) {
+    // If suggestions are currently displayed, reload the courses first
+    if (suggestionsDisplayed) {
+        await showCourse(yearSelect.value, termSelect.value);
+        suggestionsDisplayed = false;
+        
+        // Re-apply current sort if one is selected
+        if (currentSortMethod) {
+            sortCourses(currentSortMethod);
+        }
+    }
+    
     const classContainers = courseList.querySelectorAll(".class-outside");
+    let hasResults = false;
+    
+    // Remove any existing no-results message
+    const existingNoResults = courseList.querySelector(".no-results");
+    if (existingNoResults) existingNoResults.remove();
+    
     classContainers.forEach(container => {
-        // Day logic
-        const timeSlot = container.id;
-        const day = timeSlot.split(" ")[0];
-
-        // Time logic
-        const time = timeSlot.split(" ")[1];
-
-        // Concentration logic
-        const courseColor = container.dataset.color;
-        const cultureColor = "#C6E0B4";
-        const economyColor = "#FFE699";
-        const politicsColor = "#FFCCCC";
-        const seminarColor = "#FFFF99";
-        const academicColor = "#CCFFFF";
-        const specialColor = "#CCCCFF";
-
-        // Check if matches day filter
-        const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
-
-        // Check if matches time filter
-        const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
-
-        // Check if matches concentration filter
-        const concMatch =
-            selectedConcentrations.length === 0 ||
-            (selectedConcentrations.includes("culture") && courseColor === cultureColor) ||
-            (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
-            (selectedConcentrations.includes("politics") && courseColor === politicsColor) ||
-            (selectedConcentrations.includes("seminar") && courseColor === seminarColor) ||
-            (selectedConcentrations.includes("academic") && courseColor === academicColor) ||
-            (selectedConcentrations.includes("special") && courseColor === specialColor);
-
-        // Show only if matches all filters
-        if (dayMatch && timeMatch && concMatch) {
+        let shouldShow = true;
+        
+        // First check if it matches current filters
+        const filterMatches = containerMatchesFilters(container);
+        
+        // If there's an active search query, also check search criteria
+        if (searchQuery && searchQuery.trim()) {
+            const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
+            
+            const title = (courseData.title || '').toLowerCase();
+            const professor = (courseData.professor || '').toLowerCase();
+            const courseCode = (courseData.course_code || '').toLowerCase();
+            const query = searchQuery.toLowerCase().trim();
+            
+            const searchMatches = title.includes(query) || 
+                                 professor.includes(query) || 
+                                 courseCode.includes(query);
+            
+            shouldShow = filterMatches && searchMatches;
+        } else {
+            shouldShow = filterMatches;
+        }
+        
+        if (shouldShow) {
             container.style.display = "flex";
+            hasResults = true;
         } else {
             container.style.display = "none";
         }
     });
-
-    // After filtering, check if all containers are hidden
-    const allHidden = Array.from(classContainers).every(container => container.style.display === "none");
-
-    // Toggle a non-destructive "no results" message instead of replacing the list
-    let noResults = courseList.querySelector(".no-results");
-    if (!noResults) {
-        noResults = document.createElement("p");
-        noResults.className = "no-results";
-        noResults.textContent = "No courses found for the selected filters.";
-        noResults.style.display = "none";
-        courseList.appendChild(noResults);
+    
+    // Handle no results case
+    if (!hasResults) {
+        if (searchQuery && searchQuery.trim()) {
+            // If we have a search query but no results, show suggestions from filtered courses
+            if (allCourses && allCourses.length > 0) {
+                const filteredCourses = allCourses.filter(course => {
+                    const convertedTimeSlot = convertTimeSlotToContainerFormat(course.time_slot);
+                    const tempContainer = {
+                        id: convertedTimeSlot,
+                        dataset: { color: course.color }
+                    };
+                    return containerMatchesFilters(tempContainer);
+                });
+                
+                const similarCourses = findSimilarCourses(searchQuery, filteredCourses, 5);
+                displaySuggestedCourses(similarCourses, searchQuery);
+                suggestionsDisplayed = true;
+            } else {
+                // Show simple no results message if allCourses not available
+                let noResults = courseList.querySelector(".no-results");
+                if (!noResults) {
+                    noResults = document.createElement("p");
+                    noResults.className = "no-results";
+                    noResults.textContent = `No courses found for "${searchQuery}".`;
+                    courseList.appendChild(noResults);
+                } else {
+                    noResults.textContent = `No courses found for "${searchQuery}".`;
+                    noResults.style.display = "block";
+                }
+            }
+        } else {
+            // No search query, just show standard no results message
+            let noResults = courseList.querySelector(".no-results");
+            if (!noResults) {
+                noResults = document.createElement("p");
+                noResults.className = "no-results";
+                noResults.textContent = "No courses found for the selected filters.";
+                noResults.style.display = "none";
+                courseList.appendChild(noResults);
+            }
+            noResults.style.display = "block";
+        }
     }
-    noResults.style.display = allHidden ? "block" : "none";
 }
 
 async function updateCoursesAndFilters() {
@@ -157,7 +273,8 @@ async function updateCoursesAndFilters() {
     if (currentSortMethod) {
         sortCourses(currentSortMethod);
     } else {
-        applyFilters();
+        // Apply both current search and filters
+        await applySearchAndFilters(currentSearchQuery);
     }
     
     // Also update the calendar component if it exists
@@ -194,7 +311,7 @@ seeResultsBtn.addEventListener("click", () => {
 });
 
 // Clear All button - reset all filters
-clearAllBtn.addEventListener("click", () => {
+clearAllBtn.addEventListener("click", async () => {
     // Clear day checkboxes
     const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
     dayCheckboxes.forEach(checkbox => checkbox.checked = false);
@@ -242,9 +359,14 @@ clearAllBtn.addEventListener("click", () => {
     const sortOptions = document.querySelectorAll('.sort-option');
     sortOptions.forEach(option => option.classList.remove('selected'));
     
+    // Reset search
+    currentSearchQuery = null;
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+    
     // Apply filters to update the display
-    applyFilters();
-    updateCoursesAndFilters();
+    await applyFilters();
+    await updateCoursesAndFilters();
 });
 
 courseList.addEventListener("click", function(event) {
@@ -523,6 +645,12 @@ function initCustomDropdowns() {
                 customSelect.classList.remove('open');
             });
         }
+        
+        // Close sort dropdown when clicking outside
+        const sortWrapper = document.querySelector('.sort-wrapper');
+        if (sortWrapper && !sortWrapper.contains(e.target)) {
+            sortWrapper.classList.remove("open");
+        }
     });
 }
 
@@ -641,6 +769,7 @@ function sortCourses(method) {
 
 // Sort button click handler
 sortBtn.addEventListener("click", (event) => {
+    event.preventDefault();
     event.stopPropagation();
     
     // Close other dropdowns/modals
@@ -653,7 +782,15 @@ sortBtn.addEventListener("click", (event) => {
         }, 300);
     }
     
-    sortDropdown.classList.toggle("hidden");
+    // Close any open custom selects
+    const customSelects = document.querySelectorAll('.custom-select');
+    customSelects.forEach(customSelect => {
+        customSelect.classList.remove('open');
+    });
+    
+    // Toggle sort dropdown
+    const sortWrapper = sortBtn.closest('.sort-wrapper');
+    sortWrapper.classList.toggle("open");
 });
 
 // Sort option selection
@@ -674,14 +811,8 @@ sortDropdown.addEventListener("click", (event) => {
     sortCourses(sortMethod);
     
     // Close dropdown
-    sortDropdown.classList.add("hidden");
-});
-
-// Close sort dropdown when clicking outside
-document.addEventListener("click", (event) => {
-    if (!sortBtn.contains(event.target) && !sortDropdown.contains(event.target)) {
-        sortDropdown.classList.add("hidden");
-    }
+    const sortWrapper = sortBtn.closest('.sort-wrapper');
+    sortWrapper.classList.remove("open");
 });
 
 // Search modal functionality
@@ -898,89 +1029,105 @@ function displaySuggestedCourses(courses, searchQuery) {
 
 // Function to perform search
 function performSearch(searchQuery) {
-    if (!searchQuery.trim()) {
-        // If search is empty, show all courses
-        const classContainers = courseList.querySelectorAll(".class-outside");
-        classContainers.forEach(container => {
-            container.style.display = "flex";
-        });
-        // Remove any existing no-results message
-        const noResults = courseList.querySelector(".no-results");
-        if (noResults) noResults.remove();
-        return;
-    }
+    // Update the global search state
+    currentSearchQuery = searchQuery && searchQuery.trim() ? searchQuery : null;
     
-    const query = searchQuery.toLowerCase().trim();
-    const classContainers = courseList.querySelectorAll(".class-outside");
-    let hasResults = false;
-    
-    classContainers.forEach(container => {
-        const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
-        
-        // Search in course title, professor name, and course code
-        const title = (courseData.title || '').toLowerCase();
-        const professor = (courseData.professor || '').toLowerCase();
-        const courseCode = (courseData.course_code || '').toLowerCase();
-        
-        const matches = title.includes(query) || 
-                       professor.includes(query) || 
-                       courseCode.includes(query);
-        
-        if (matches) {
-            container.style.display = "flex";
-            hasResults = true;
-        } else {
-            container.style.display = "none";
-        }
-    });
-    
-    // Remove any existing no-results message
-    const existingNoResults = courseList.querySelector(".no-results");
-    if (existingNoResults) existingNoResults.remove();
-    
-    // If no results found, show suggestions
-    if (!hasResults) {
-        const similarCourses = findSimilarCourses(searchQuery, allCourses, 5);
-        displaySuggestedCourses(similarCourses, searchQuery);
-    }
+    // Use the unified search and filter function
+    return applySearchAndFilters(currentSearchQuery);
 }
 
 // Search button click handler
 searchBtn.addEventListener("click", async () => {
-    searchContainer.classList.remove("hidden");
-    pageBody.style.overflow = "hidden";
-    
-    // Load courses for autocomplete
-    await getAllCourses();
-    
-    // Focus on search input after modal is shown
-    setTimeout(() => {
-        searchInput.focus();
-    }, 100);
+    if (searchContainer.classList.contains("hidden")) {
+        searchContainer.classList.remove("hidden");
+        searchContainer.style.opacity = "0";
+        searchModal.style.transform = "translate(-50%, -60%)";
+        pageBody.style.overflow = "hidden";
+        
+        // Trigger animation
+        requestAnimationFrame(() => {
+            searchContainer.style.transition = "opacity 0.3s ease";
+            searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+            searchContainer.style.opacity = "1";
+            searchModal.style.transform = "translate(-50%, -50%)";
+        });
+        
+        // Load courses for autocomplete
+        await getAllCourses();
+        
+        // Focus on search input after animation
+        setTimeout(() => {
+            searchInput.focus();
+        }, 100);
+    }
 });
 
 // Search submit handler
-searchSubmit.addEventListener("click", () => {
+searchSubmit.addEventListener("click", async () => {
     const searchQuery = searchInput.value;
-    performSearch(searchQuery);
+    await performSearch(searchQuery);
     
-    // Close search modal
-    searchContainer.classList.add("hidden");
-    pageBody.style.overflow = "auto";
+    // Close search modal with animation
+    searchContainer.style.transition = "opacity 0.3s ease";
+    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+    searchContainer.style.opacity = "0";
+    searchModal.style.transform = "translate(-50%, -60%)";
+    
+    setTimeout(() => {
+        searchContainer.classList.add("hidden");
+        pageBody.style.overflow = "auto";
+        // Reset styles
+        searchContainer.style.transition = "";
+        searchModal.style.transition = "";
+        searchContainer.style.opacity = "";
+        searchModal.style.transform = "";
+    }, 300);
 });
 
 // Search cancel handler
-searchCancel.addEventListener("click", () => {
+searchCancel.addEventListener("click", async () => {
     searchInput.value = ""; // Clear search input
     searchAutocomplete.style.display = 'none';
     currentHighlightIndex = -1;
-    searchContainer.classList.add("hidden");
-    pageBody.style.overflow = "auto";
+    
+    // Close search modal with animation
+    searchContainer.style.transition = "opacity 0.3s ease";
+    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+    searchContainer.style.opacity = "0";
+    searchModal.style.transform = "translate(-50%, -60%)";
+    
+    setTimeout(() => {
+        searchContainer.classList.add("hidden");
+        pageBody.style.overflow = "auto";
+        // Reset styles
+        searchContainer.style.transition = "";
+        searchModal.style.transition = "";
+        searchContainer.style.opacity = "";
+        searchModal.style.transform = "";
+    }, 300);
+    
+    // Clear search state and restore filtered state
+    currentSearchQuery = null;
+    await applySearchAndFilters(null);
 });
 
 // Search input event handlers for autocomplete
 searchInput.addEventListener("input", (event) => {
     showAutocomplete(event.target.value);
+});
+
+// Show autocomplete when clicking in search input (if there's content)
+searchInput.addEventListener("click", (event) => {
+    if (event.target.value.trim() && event.target.value.length >= 2) {
+        showAutocomplete(event.target.value);
+    }
+});
+
+// Focus event to show autocomplete when tabbing into input
+searchInput.addEventListener("focus", (event) => {
+    if (event.target.value.trim() && event.target.value.length >= 2) {
+        showAutocomplete(event.target.value);
+    }
 });
 
 // Allow Enter key to submit search and handle autocomplete navigation
@@ -1018,16 +1165,31 @@ searchBackground.addEventListener("click", (event) => {
     }
 });
 
-// Prevent search modal from closing when clicking inside the modal
+// Handle clicks inside the modal (for autocomplete behavior and preventing modal closure)
 searchModal.addEventListener("click", (event) => {
+    // Check if click is inside search input or autocomplete dropdown
+    const clickedInsideSearch = searchInput.contains(event.target);
+    const clickedInsideAutocomplete = searchAutocomplete.contains(event.target);
+    
+    // If clicked inside the modal but outside search input and autocomplete, hide autocomplete
+    if (!clickedInsideSearch && !clickedInsideAutocomplete) {
+        searchAutocomplete.style.display = 'none';
+        currentHighlightIndex = -1;
+    }
+    
+    // Always prevent modal from closing when clicking inside
     event.stopPropagation();
 });
 
-// Close autocomplete when clicking outside of search input or autocomplete
+// Close autocomplete when clicking completely outside the modal
 document.addEventListener("click", (event) => {
-    if (!searchInput.contains(event.target) && 
-        !searchAutocomplete.contains(event.target) &&
-        !searchContainer.classList.contains("hidden")) {
+    // Only handle clicks when search modal is open
+    if (searchContainer.classList.contains("hidden")) {
+        return;
+    }
+    
+    // If clicked completely outside the modal, hide autocomplete
+    if (!searchModal.contains(event.target)) {
         searchAutocomplete.style.display = 'none';
         currentHighlightIndex = -1;
     }
