@@ -235,8 +235,8 @@ async function applySearchAndFilters(searchQuery) {
                     return containerMatchesFilters(tempContainer);
                 });
                 
-                const similarCourses = findSimilarCourses(searchQuery, filteredCourses, 5);
-                displaySuggestedCourses(similarCourses, searchQuery);
+                const similarCoursesWithRelevance = findSimilarCourses(searchQuery, filteredCourses, 8);
+                displaySuggestedCourses(similarCoursesWithRelevance, searchQuery);
                 suggestionsDisplayed = true;
             } else {
                 // Show simple no results message if allCourses not available
@@ -659,11 +659,34 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         console.log('DOM loaded, initializing dropdowns...');
         initCustomDropdowns();
+        initStickyObserver();
     });
 } else {
     // DOM is already loaded
     console.log('DOM already loaded, initializing dropdowns immediately...');
-    setTimeout(initCustomDropdowns, 100); // Small delay to ensure elements are rendered
+    setTimeout(() => {
+        initCustomDropdowns();
+        initStickyObserver();
+    }, 100); // Small delay to ensure elements are rendered
+}
+
+// Simple sticky observer for visual effects
+function initStickyObserver() {
+    const containerAbove = document.querySelector('.container-above');
+    if (!containerAbove) return;
+
+    const observer = new IntersectionObserver(
+        ([entry]) => {
+            if (entry.intersectionRatio < 1) {
+                containerAbove.classList.add('scrolled');
+            } else {
+                containerAbove.classList.remove('scrolled');
+            }
+        },
+        { threshold: [1] }
+    );
+
+    observer.observe(containerAbove);
 }
 
 const filterBtn = document.getElementById("filter-btn");
@@ -834,7 +857,7 @@ async function getAllCourses() {
     }
 }
 
-// Function to show autocomplete suggestions
+// Enhanced autocomplete function with fuzzy matching
 function showAutocomplete(query) {
     if (!query.trim() || query.length < 2) {
         searchAutocomplete.style.display = 'none';
@@ -842,7 +865,9 @@ function showAutocomplete(query) {
     }
     
     const normalizedQuery = query.toLowerCase().trim();
-    const suggestions = allCourses.filter(course => {
+    
+    // First, try exact substring matches
+    let suggestions = allCourses.filter(course => {
         const title = (course.title || '').toLowerCase();
         const professor = (course.professor || '').toLowerCase();
         const courseCode = (course.course_code || '').toLowerCase();
@@ -850,7 +875,20 @@ function showAutocomplete(query) {
         return title.includes(normalizedQuery) || 
                professor.includes(normalizedQuery) || 
                courseCode.includes(normalizedQuery);
-    }).slice(0, 5); // Limit to 5 suggestions
+    }).slice(0, 5);
+    
+    // If no exact matches found, use fuzzy matching
+    if (suggestions.length === 0) {
+        const coursesWithRelevance = allCourses.map(course => {
+            const relevance = calculateCourseRelevance(normalizedQuery, course);
+            return { course, relevance };
+        })
+        .filter(item => item.relevance > 0.15) // Threshold for autocomplete suggestions
+        .sort((a, b) => b.relevance - a.relevance)
+        .slice(0, 6); // Get more fuzzy matches
+        
+        suggestions = coursesWithRelevance.map(item => item.course);
+    }
     
     if (suggestions.length === 0) {
         searchAutocomplete.style.display = 'none';
@@ -861,8 +899,13 @@ function showAutocomplete(query) {
     suggestions.forEach((course, index) => {
         const item = document.createElement('div');
         item.className = 'search-autocomplete-item';
+        
+        // Highlight matching parts in the title
+        const title = course.title || '';
+        const highlightedTitle = highlightMatches(title, query);
+        
         item.innerHTML = `
-            <div class="item-title">${course.title}</div>
+            <div class="item-title">${highlightedTitle}</div>
             <div class="item-details">
                 <span class="item-code">${course.course_code}</span>
                 <span class="item-professor">${course.professor}</span>
@@ -880,6 +923,40 @@ function showAutocomplete(query) {
     
     searchAutocomplete.style.display = 'block';
     currentHighlightIndex = -1;
+}
+
+// Function to highlight matching characters in text
+function highlightMatches(text, query) {
+    if (!query || query.length < 2) return text;
+    
+    const queryLower = query.toLowerCase();
+    const textLower = text.toLowerCase();
+    
+    // Simple highlighting for substring matches
+    if (textLower.includes(queryLower)) {
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<mark style="background: #E3D5E9; padding: 0 2px; border-radius: 3px;">$1</mark>');
+    }
+    
+    // For fuzzy matches, highlight individual matching characters
+    let result = '';
+    let queryIndex = 0;
+    
+    for (let i = 0; i < text.length && queryIndex < query.length; i++) {
+        if (textLower[i] === queryLower[queryIndex]) {
+            result += `<mark style="background: #E3D5E9; padding: 0 1px; border-radius: 2px;">${text[i]}</mark>`;
+            queryIndex++;
+        } else {
+            result += text[i];
+        }
+    }
+    
+    // Add remaining characters
+    if (queryIndex < query.length || result.length < text.length) {
+        result += text.slice(result.replace(/<[^>]*>/g, '').length);
+    }
+    
+    return result;
 }
 
 // Function to handle keyboard navigation in autocomplete
@@ -913,13 +990,47 @@ function updateHighlight(items) {
     });
 }
 
-// Function to calculate word similarity (simple Jaccard similarity)
-function calculateSimilarity(str1, str2) {
-    const words1 = str1.toLowerCase().split(/\s+/).filter(word => word.length > 2);
-    const words2 = str2.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+// Enhanced similarity functions for better fuzzy matching
+
+// Calculate Levenshtein distance
+function levenshteinDistance(str1, str2) {
+    const matrix = [];
+    const len1 = str1.length;
+    const len2 = str2.length;
+
+    // Initialize matrix
+    for (let i = 0; i <= len1; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+        matrix[0][j] = j;
+    }
+
+    // Fill matrix
+    for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+            if (str1[i - 1] === str2[j - 1]) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,     // deletion
+                    matrix[i][j - 1] + 1,     // insertion
+                    matrix[i - 1][j - 1] + 1  // substitution
+                );
+            }
+        }
+    }
+
+    return matrix[len1][len2];
+}
+
+// Calculate character-based similarity
+function characterSimilarity(str1, str2) {
+    const chars1 = str1.toLowerCase().split('');
+    const chars2 = str2.toLowerCase().split('');
     
-    const set1 = new Set(words1);
-    const set2 = new Set(words2);
+    const set1 = new Set(chars1);
+    const set2 = new Set(chars2);
     
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
@@ -927,40 +1038,129 @@ function calculateSimilarity(str1, str2) {
     return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
-// Function to find similar courses
-function findSimilarCourses(searchQuery, courses, limit = 5) {
-    if (!searchQuery.trim() || courses.length === 0) return [];
+// Calculate substring similarity (how much one string contains the other)
+function substringSimilarity(query, target) {
+    const queryLower = query.toLowerCase();
+    const targetLower = target.toLowerCase();
     
-    const query = searchQuery.toLowerCase().trim();
-    const coursesWithSimilarity = courses.map(course => {
-        const titleSimilarity = calculateSimilarity(query, course.title || '');
-        const professorSimilarity = calculateSimilarity(query, course.professor || '');
-        const codeSimilarity = calculateSimilarity(query, course.course_code || '');
-        
-        // Weight title similarity more heavily
-        const overallSimilarity = (titleSimilarity * 0.6) + (professorSimilarity * 0.3) + (codeSimilarity * 0.1);
-        
-        return {
-            course,
-            similarity: overallSimilarity
-        };
-    })
-    .filter(item => item.similarity > 0.1) // Only include courses with some similarity
-    .sort((a, b) => b.similarity - a.similarity) // Sort by similarity descending
-    .slice(0, limit); // Limit results
+    // Check if query is a substring of target
+    if (targetLower.includes(queryLower)) {
+        return queryLower.length / targetLower.length;
+    }
     
-    return coursesWithSimilarity.map(item => item.course);
+    // Check if target is a substring of query
+    if (queryLower.includes(targetLower)) {
+        return targetLower.length / queryLower.length;
+    }
+    
+    return 0;
 }
 
-// Function to display suggested courses
-function displaySuggestedCourses(courses, searchQuery) {
+// Enhanced word similarity with multiple algorithms
+function calculateSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    
+    const query = str1.toLowerCase().trim();
+    const target = str2.toLowerCase().trim();
+    
+    // Exact match gets highest score
+    if (query === target) return 1.0;
+    
+    // Substring match gets high score
+    const substringScore = substringSimilarity(query, target);
+    if (substringScore > 0) return 0.8 + (substringScore * 0.2);
+    
+    // Calculate different similarity metrics
+    const maxLength = Math.max(query.length, target.length);
+    const levenshteinScore = maxLength === 0 ? 0 : 1 - (levenshteinDistance(query, target) / maxLength);
+    const charScore = characterSimilarity(query, target);
+    
+    // Word-based Jaccard similarity
+    const words1 = query.split(/\s+/).filter(word => word.length > 1);
+    const words2 = target.split(/\s+/).filter(word => word.length > 1);
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+    const jaccardScore = union.size === 0 ? 0 : intersection.size / union.size;
+    
+    // Combine scores with different weights
+    const combinedScore = (levenshteinScore * 0.4) + (charScore * 0.3) + (jaccardScore * 0.3);
+    
+    return Math.max(combinedScore, 0);
+}
+
+// Advanced fuzzy matching for course fields
+function calculateCourseRelevance(query, course) {
+    if (!query.trim()) return 0;
+    
+    const normalizedQuery = query.toLowerCase().trim();
+    const title = (course.title || '').toLowerCase();
+    const professor = (course.professor || '').toLowerCase();
+    const courseCode = (course.course_code || '').toLowerCase();
+    
+    // Exact matches get bonus scores
+    if (title.includes(normalizedQuery) || 
+        professor.includes(normalizedQuery) || 
+        courseCode.includes(normalizedQuery)) {
+        return 0.9;
+    }
+    
+    // Calculate similarity for each field
+    const titleSimilarity = calculateSimilarity(normalizedQuery, title);
+    const professorSimilarity = calculateSimilarity(normalizedQuery, professor);
+    const codeSimilarity = calculateSimilarity(normalizedQuery, courseCode);
+    
+    // Special handling for course codes (they're often abbreviated)
+    let codeBonus = 0;
+    if (normalizedQuery.length >= 2 && courseCode.includes(normalizedQuery.substring(0, 2))) {
+        codeBonus = 0.3;
+    }
+    
+    // Weight different fields differently
+    const overallSimilarity = Math.max(
+        titleSimilarity * 0.6,
+        professorSimilarity * 0.4,
+        codeSimilarity * 0.5 + codeBonus
+    );
+    
+    return overallSimilarity;
+}
+
+// Enhanced function to find similar courses with better fuzzy matching
+function findSimilarCourses(searchQuery, courses, limit = 8) {
+    if (!searchQuery.trim() || courses.length === 0) return [];
+    
+    const coursesWithRelevance = courses.map(course => {
+        const relevance = calculateCourseRelevance(searchQuery, course);
+        return { course, relevance };
+    })
+    .filter(item => item.relevance > 0.05) // Lower threshold for more inclusive results
+    .sort((a, b) => b.relevance - a.relevance) // Sort by relevance descending
+    .slice(0, limit); // Limit results
+    
+    return coursesWithRelevance.map(item => ({ 
+        course: item.course, 
+        relevanceScore: item.relevance 
+    }));
+}
+
+// Function to display suggested courses with relevance information
+function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
     const courseList = document.getElementById("course-list");
     
-    if (courses.length === 0) {
+    if (coursesWithRelevance.length === 0) {
         courseList.innerHTML = `
             <div style="text-align: center; padding: 40px;">
                 <h3 style="color: #666; margin-bottom: 10px;">No courses found</h3>
                 <p style="color: #999;">No courses match your search for "${searchQuery}"</p>
+                <p style="color: #aaa; font-size: 14px; margin-top: 15px;">Try:</p>
+                <ul style="color: #aaa; font-size: 14px; text-align: left; max-width: 300px; margin: 10px auto;">
+                    <li>Checking your spelling</li>
+                    <li>Using fewer or different keywords</li>
+                    <li>Searching for a professor's name</li>
+                    <li>Using course codes (e.g., "MATH", "ENG")</li>
+                </ul>
             </div>
         `;
         return;
@@ -968,12 +1168,12 @@ function displaySuggestedCourses(courses, searchQuery) {
     
     let suggestionsHTML = `
         <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #E3D5E9; margin-bottom: 20px;">
-            <h3 style="color: #666; margin-bottom: 10px;">No exact matches found</h3>
-            <p style="color: #999; margin-bottom: 0;">Here are some courses that might interest you based on "${searchQuery}":</p>
+            <h3 style="color: #666; margin-bottom: 10px;">No exact matches found for "${searchQuery}"</h3>
+            <p style="color: #999; margin-bottom: 0;">Here are the most similar courses we found:</p>
         </div>
     `;
     
-    courses.forEach(function(course) {
+    coursesWithRelevance.forEach(function({ course, relevanceScore }) {
         const days = {
             "月曜日": "Mon",
             "火曜日": "Tue",
@@ -999,11 +1199,21 @@ function displaySuggestedCourses(courses, searchQuery) {
             timeSlot = `${days[match[1]]} ${times[match[2]]}`;
         }
 
+        // Calculate relevance percentage for display
+        const relevancePercent = Math.round(relevanceScore * 100);
+        const matchQuality = relevanceScore > 0.7 ? "High" : relevanceScore > 0.4 ? "Medium" : "Low";
+        const matchColor = relevanceScore > 0.7 ? "#4CAF50" : relevanceScore > 0.4 ? "#FF9800" : "#757575";
+
         suggestionsHTML += `
-        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${course.color}' style="opacity: 0.8; border: 2px dashed #BDAAC6;">
+        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${course.color}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
             <div class="class-container" style="background-color: ${course.color}; position: relative;" data-course='${JSON.stringify(course)}'>
-                <div style="position: absolute; top: 10px; right: 15px; background: rgba(255,255,255,0.9); border-radius: 15px; padding: 4px 12px; font-size: 12px; color: #666; font-weight: 500;">
-                    Suggested
+                <div style="position: absolute; top: 10px; right: 15px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <div style="background: rgba(255,255,255,0.9); border-radius: 15px; padding: 4px 12px; font-size: 12px; color: #666; font-weight: 500;">
+                        Suggested
+                    </div>
+                    <div style="background: ${matchColor}; color: white; border-radius: 12px; padding: 2px 8px; font-size: 10px; font-weight: 600;">
+                        ${matchQuality} Match
+                    </div>
                 </div>
                 <p>${course.course_code}</p>
                 <h2>${course.title}</h2>
