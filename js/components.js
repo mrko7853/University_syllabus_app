@@ -90,8 +90,10 @@ class TotalCourses extends HTMLElement {
                 @import url('/css/blaze.css');
             </style>
             <div class="total-courses">
+                <div class="total-courses-container">
                 <h2 class="total-count">0</h2>
                 <h2 class="total-text">Registered<br>Courses</h2>
+                </div>
             </div>
         `;
     }
@@ -115,8 +117,10 @@ class TotalCourses extends HTMLElement {
                       @import url('/css/blaze.css');
                     </style>
                     <div class="total-courses">
+                      <div class="total-courses-container">
                       <h2 class="total-count">14</h2>
                       <h2 class="total-text">Registered<br>Courses</h2>
+                      </div>
                     </div>
                   `);
                 }
@@ -157,10 +161,18 @@ class TermBox extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         @import url('/css/blaze.css');
+        .concentration-section {
+          margin-top: 15px;
+          padding-top: 15px;
+        }
       </style>
       <div class="total-courses">
-        <h2 class="total-count" id="display-term"></h2>
-        <h2 class="total-text" id="display-year"></h2>
+        <div class="total-courses-container">
+          <div class="total-count" id="term-year-display"></div>
+          <div class="concentration-section">
+            <h2 class="total-text" id="concentration-text-id">Loading...</h2>
+          </div>
+        </div>
       </div>
     `;
 
@@ -168,13 +180,16 @@ class TermBox extends HTMLElement {
   }
 
   connectedCallback() {
-
     // Set initial term/year display
     this.updateDisplayTerm();
+    
+    // Initialize concentration text
+    this.initConcentration();
 
     // Attach listeners to keep display updated on changes
     this._ys = document.getElementById('year-select');
     this._ts = document.getElementById('term-select');
+    this._termYearDisplay = this.shadowRoot.getElementById('term-year-display');
 
     if (this._ys) this._ys.addEventListener('change', this.handleSelectChange);
     if (this._ts) this._ts.addEventListener('change', this.handleSelectChange);
@@ -193,9 +208,8 @@ class TermBox extends HTMLElement {
   }
 
   updateDisplayTerm() {
-    const displayTerm = this.shadowRoot.getElementById('display-term');
-    const displayYear = this.shadowRoot.getElementById('display-year');
-    if (!displayTerm || !displayYear) return;
+    const displayTermYear = this.shadowRoot.getElementById('term-year-display');
+    if (!displayTermYear) return;
 
     const ys = document.getElementById('year-select');
     const ts = document.getElementById('term-select');
@@ -212,36 +226,12 @@ class TermBox extends HTMLElement {
     }
 
     const term = this.translateTerm(termRaw);
-    const text = `${term}`.trim();
-    displayTerm.textContent = text;
-    displayYear.textContent = year;
-  }
-}
-
-class ConcentrationBox extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-
-    this.shadowRoot.innerHTML = `
-      <style>
-        @import url('/css/blaze.css');
-      </style>
-      <div class="user-concentration">
-        <h2 class="concentration-text" id="concentration-text-id"></h2>
-      </div>
-    `;
-
-    this.handleSelectChange = () => this.updateDisplayTerm();
-  }
-
-  connectedCallback() {
-    // Initialize concentration text
-    this.initConcentration();
+    displayTermYear.textContent = `${term} ${year}`;
   }
 
   async initConcentration() {
-    const concentrationText = this.shadowRoot.querySelector('.concentration-text');
+    const concentrationText = this.shadowRoot.getElementById('concentration-text-id');
+    const containerDiv = this.shadowRoot.querySelector('.total-courses');
 
     try {
       // Get fresh session data
@@ -250,6 +240,7 @@ class ConcentrationBox extends HTMLElement {
 
       if (!currentUser) {
         concentrationText.textContent = 'Global Culture';
+        containerDiv.style.backgroundColor = "#C6E0B4";
         return;
       }
 
@@ -261,22 +252,28 @@ class ConcentrationBox extends HTMLElement {
 
       if (profileError) throw profileError;
 
-      const userConcentration = profile?.concentration || [];
+      const userConcentration = profile?.concentration || 'Global Culture';
       concentrationText.textContent = userConcentration;
 
-      if (concentrationText.textContent === "Global Culture") {
-        concentrationText.parentElement.style.backgroundColor = "#C6E0B4";
-      } else if (concentrationText.textContent === "Economy") {
-        concentrationText.parentElement.style.backgroundColor = "#FFE699";
-      } else if (concentrationText.textContent === "Politics") {
-        concentrationText.parentElement.style.backgroundColor = "#FFCCCC";
+      // Apply background color based on concentration
+      if (userConcentration === "Global Culture") {
+        containerDiv.style.backgroundColor = "#C6E0B4";
+      } else if (userConcentration === "Economy") {
+        containerDiv.style.backgroundColor = "#FFE699";
+      } else if (userConcentration === "Politics") {
+        containerDiv.style.backgroundColor = "#FFCCCC";
+      } else {
+        containerDiv.style.backgroundColor = "#C6E0B4"; // Default to Global Culture color
       }
     } catch (error) {
-      console.error('Error fetching total courses:', error);
-      concentrationText.textContent = '0';
+      console.error('Error fetching user concentration:', error);
+      concentrationText.textContent = 'Global Culture';
+      containerDiv.style.backgroundColor = "#C6E0B4";
     }
   }
 }
+
+// Remove the old ConcentrationBox class since it's now integrated into TermBox
 
 class CourseCalendar extends HTMLElement {
   constructor() {
@@ -305,7 +302,6 @@ class CourseCalendar extends HTMLElement {
         }
         .calendar-wrapper {
           position: relative;
-          min-height: 200px;
         }
       </style>
       <div class="calendar-container-main">
@@ -673,7 +669,6 @@ class CourseCalendar extends HTMLElement {
 
 customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
-customElements.define('concentration-box', ConcentrationBox);
 customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
 
