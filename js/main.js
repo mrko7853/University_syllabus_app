@@ -310,6 +310,38 @@ seeResultsBtn.addEventListener("click", () => {
     }, 300);
 });
 
+const filterDaysDiv = document.getElementById("filter-by-days");
+const value = [];
+const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
+const courseFilterParagraph = document.getElementById("course-filter-paragraph");
+courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+inputElements.forEach((input) => {
+    input.addEventListener("change", () => {
+        value.length = 0; // Clear the array
+        inputElements.forEach((el) => {
+            if (el.checked) {
+                if (el.value === "Mon") {
+                    const newValue = "Monday";
+                    value.push(newValue);
+                } else if (el.value === "Tue") {
+                    const newValue = "Tuesday";
+                    value.push(newValue);
+                } else if (el.value === "Wed") {
+                    const newValue = "Wednesday";
+                    value.push(newValue);
+                } else if (el.value === "Thu") {
+                    const newValue = "Thursday";
+                    value.push(newValue);
+                } else if (el.value === "Fri") {
+                    const newValue = "Friday";
+                    value.push(newValue);
+                }
+            }
+        });
+        courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+    });
+});
+
 // Clear All button - reset all filters
 clearAllBtn.addEventListener("click", async () => {
     // Clear day checkboxes
@@ -323,6 +355,10 @@ clearAllBtn.addEventListener("click", async () => {
     // Clear concentration checkboxes
     const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
     concCheckboxes.forEach(checkbox => checkbox.checked = false);
+
+    // Reset course filter paragraph
+    value.length = 0;
+    courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
     
     // Reset custom dropdowns to default values
     const termSelect = document.getElementById("term-select");
@@ -1403,36 +1439,4 @@ document.addEventListener("click", (event) => {
         searchAutocomplete.style.display = 'none';
         currentHighlightIndex = -1;
     }
-});
-
-const filterDaysDiv = document.getElementById("filter-by-days");
-const value = [];
-const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
-const courseFilterParagraph = document.getElementById("course-filter-paragraph");
-courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
-inputElements.forEach((input) => {
-    input.addEventListener("change", () => {
-        value.length = 0; // Clear the array
-        inputElements.forEach((el) => {
-            if (el.checked) {
-                if (el.value === "Mon") {
-                    const newValue = "Monday";
-                    value.push(newValue);
-                } else if (el.value === "Tue") {
-                    const newValue = "Tuesday";
-                    value.push(newValue);
-                } else if (el.value === "Wed") {
-                    const newValue = "Wednesday";
-                    value.push(newValue);
-                } else if (el.value === "Thu") {
-                    const newValue = "Thursday";
-                    value.push(newValue);
-                } else if (el.value === "Fri") {
-                    const newValue = "Friday";
-                    value.push(newValue);
-                }
-            }
-        });
-        courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
-    });
 });

@@ -443,6 +443,8 @@ table#calendar-main {
     box-sizing: border-box;
     height: 8px;
     width: 8px;
+    box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
 }
 
 /* Main page course list container */
