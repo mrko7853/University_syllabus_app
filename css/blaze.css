@@ -1242,7 +1242,7 @@ table#calendar-main {
     display: flex;
     flex-direction: row;
     gap: 30px;
-    padding: 10px 30px 30px 30px;
+    padding: 30px;
 }
 
 .class-info-container p, .class-info-container h3 {
@@ -1255,11 +1255,17 @@ table#calendar-main {
 }
 
 .class-info-1 {
-   width: 50%;
+    width: 50%;
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
 }
 
 .class-info-2 {
     width: 50%;
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
 }
 
 .class-component {
@@ -1267,7 +1273,6 @@ table#calendar-main {
     align-items: center;
     gap: 20px;
     flex-direction: row;
-    margin-top: 20px;
 }
 
 .class-content {
@@ -1281,14 +1286,50 @@ table#calendar-main {
     margin: 30px 30px 0 30px;
 }
 
+.class-content h3 {
+    font-weight: 100;
+    margin: 0;
+}
+
+.class-subtitle {
+    margin: 30px 30px 0 30px;
+    opacity: 60%;
+}
+
+.gpa-graph {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    padding: 10px 30px 30px 30px;
+}
+
+.gpa-bar-graph {
+    display: flex;
+    height: 50px;
+    justify-content: center;
+    align-items: center;
+    border-radius: 30px;
+    padding: 0 40px;
+}
+
+.gpa-container {
+    width: 100%;
+    display: flex;
+    gap: 20px;
+    flex-direction: row;
+    align-items: center;
+}
+
 #external-link-btn {
     width: 160px;
+    height: 50px;
 }
 
 .class-component-label {
     width: 50%;
     display: flex;
-    height: 40px;
+    height: 50px;
+    padding: 0 20px;
     background: #E3E2E2;
     border-radius: 30px;
     align-items: center;
@@ -1298,7 +1339,7 @@ table#calendar-main {
 
 .show {
     width: 100%;
-    height: 68%;
+    height: 90%;
     bottom: 0;
     transition: all 0.2s;
 }
@@ -1781,5 +1822,580 @@ td p {
 
     a {
         font-size: var(--small-desktop);
+    }
+}
+
+/* ===== COURSE INFO AND MODALS ===== */
+
+/* Class info background overlay */
+#class-info-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Course header styles */
+.course-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.course-header h2 {
+    margin: 0;
+}
+
+.course-header button {
+    padding: 8px 16px;
+    border: 1px solid #007bff;
+    background: white;
+    color: #007bff;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    width: auto;
+    height: auto;
+}
+
+/* Class info container flex direction override */
+.class-info-container.gpa-layout {
+    flex-direction: column;
+}
+
+/* No GPA data message */
+.class-gpa-graph p {
+    margin: 30px;
+}
+
+/* GPA related styles */
+.gpa-container h3 {
+    margin: 0;
+}
+
+.gpa-bar-graph h3 {
+    margin: 0;
+}
+
+/* Review avatar styles */
+.review-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* Bar fill for rating distribution */
+.bar-fill {
+    height: 100%;
+    background: #007bff;
+    transition: width 0.3s ease;
+}
+
+/* ===== REVIEW MODALS ===== */
+
+/* Review modal overlay */
+.review-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Review modal content */
+.review-modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Review modal header */
+.review-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+}
+
+.review-modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+/* Close modal button */
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 5px;
+    width: auto;
+    height: auto;
+    border-radius: 50%;
+}
+
+.close-modal:hover {
+    background: #f5f5f5;
+}
+
+/* Year input section */
+.year-input {
+    margin-bottom: 20px;
+}
+
+.year-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.year-input select,
+#course-year,
+#course-year-edit {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+/* Rating input section */
+.rating-input {
+    margin-bottom: 20px;
+}
+
+.rating-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+/* Star rating input */
+.star-rating-input {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+.star-input {
+    cursor: pointer;
+    color: #ddd;
+    margin-right: 5px;
+    transition: color 0.2s;
+}
+
+.star-input:hover,
+.star-input.selected {
+    color: #ffc107;
+}
+
+/* Review text input section */
+.review-text-input {
+    margin-bottom: 20px;
+}
+
+.review-text-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.review-text-input textarea,
+#review-content,
+#review-content-edit {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* Review modal footer */
+.review-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.review-modal-footer.space-between {
+    justify-content: space-between;
+}
+
+.review-modal-footer .button-group {
+    display: flex;
+    gap: 10px;
+}
+
+/* Modal buttons */
+.cancel-review,
+.submit-review,
+.update-review,
+.delete-review {
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    width: auto;
+    height: auto;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cancel-review {
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+}
+
+.cancel-review:hover {
+    background: #f5f5f5;
+}
+
+.submit-review,
+.update-review {
+    border: none;
+    background: #007bff;
+    color: white;
+}
+
+.submit-review:hover,
+.update-review:hover {
+    background: #0056b3;
+}
+
+.delete-review {
+    border: none;
+    background: #dc3545;
+    color: white;
+}
+
+.delete-review:hover {
+    background: #c82333;
+}
+
+/* Button disabled state */
+.submit-review:disabled,
+.update-review:disabled,
+.delete-review:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ===== STAR RATINGS AND REVIEWS ===== */
+
+/* Star rating display */
+.star {
+    color: #ffc107;
+}
+
+.star.filled {
+    color: #ffc107;
+}
+
+.star-small {
+    font-size: 14px;
+}
+
+.star-large {
+    font-size: 20px;
+}
+
+/* Review items */
+.review-item {
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.review-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.review-user-info {
+    flex-grow: 1;
+}
+
+.review-user-name {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.review-rating {
+    margin-bottom: 5px;
+}
+
+.review-dates {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.review-date,
+.review-course-date {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.review-actions {
+    flex-shrink: 0;
+}
+
+.edit-review-btn {
+    padding: 5px 10px;
+    border: 1px solid #007bff;
+    background: white;
+    color: #007bff;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    width: auto;
+    height: auto;
+}
+
+.edit-review-btn:hover {
+    background: #f8f9fa;
+}
+
+.review-content {
+    margin-top: 10px;
+}
+
+.review-content p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Review summary */
+.review-summary {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.average-rating {
+    text-align: center;
+}
+
+.rating-display {
+    margin-bottom: 10px;
+}
+
+.rating-number {
+    font-size: 36px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.rating-total {
+    font-size: 14px;
+    color: #666;
+}
+
+.rating-stars {
+    margin-bottom: 10px;
+}
+
+.total-reviews {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+}
+
+/* Rating distribution */
+.rating-distribution {
+    flex-grow: 1;
+}
+
+.rating-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.rating-label {
+    min-width: 30px;
+    font-size: 14px;
+}
+
+.bar-container {
+    flex-grow: 1;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    background: #007bff;
+    transition: width 0.3s ease;
+}
+
+.rating-count {
+    min-width: 20px;
+    font-size: 12px;
+    text-align: right;
+}
+
+/* Reviews container */
+.reviews-container {
+    margin-top: 30px;
+}
+
+.reviews-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.reviews-list {
+    margin-bottom: 20px;
+}
+
+.load-more-reviews {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #007bff;
+    background: white;
+    color: #007bff;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.load-more-reviews:hover {
+    background: #f8f9fa;
+}
+
+/* No reviews state */
+.no-reviews {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.no-reviews p {
+    margin: 10px 0;
+}
+
+/* Add review section */
+.add-review-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.add-review-btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    background: #28a745;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.add-review-btn:hover {
+    background: #218838;
+}
+
+/* ===== NOTIFICATIONS ===== */
+
+/* Link copied notification */
+#link-copied-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+}
+
+#link-copied-notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ===== RESPONSIVE ADJUSTMENTS ===== */
+
+@media (max-width: 768px) {
+    .review-modal-content {
+        width: 95%;
+        padding: 20px;
+        margin: 20px;
+    }
+    
+    .review-summary {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+    }
+    
+    .rating-distribution {
+        max-width: none;
+    }
+    
+    .review-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .review-dates {
+        text-align: left;
+    }
+    
+    .course-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    #link-copied-notification {
+        right: 10px;
+        left: 10px;
+        text-align: center;
     }
 }

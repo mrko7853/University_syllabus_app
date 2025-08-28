@@ -1,6 +1,6 @@
 import { supabase } from "/supabase.js";
 import { fetchCourseData } from '/js/shared.js';
-import { openCourseInfoMenu } from '/js/shared.js';
+import { openCourseInfoMenu, initializeCourseRouting } from '/js/shared.js';
 
 // Helper function to refresh calendar component
 function refreshCalendarComponent() {
@@ -414,9 +414,15 @@ courseList.addEventListener("click", function(event) {
     }
 });
 
-const default_year = yearSelect.value;
-const default_term = termSelect.value;
-showCourse(default_year, default_term);
+// Initialize the application
+(async function() {
+    const default_year = yearSelect.value;
+    const default_term = termSelect.value;
+    await showCourse(default_year, default_term);
+
+    // Initialize URL-based course routing after courses are loaded
+    initializeCourseRouting();
+})();
 
 // Set default sort to Course A-Z
 currentSortMethod = 'title-az';

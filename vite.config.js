@@ -7,6 +7,11 @@ export default defineConfig({
     include: ['@supabase/supabase-js'],
   },
   
+  server: {
+    // Enable history API fallback for client-side routing
+    historyApiFallback: true,
+  },
+  
   build: {
     rollupOptions: {
       input: {

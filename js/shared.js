@@ -11,6 +11,99 @@ function rgbToHex(rgb) {
     return rgb; // Return original if conversion fails
 }
 
+// Helper function to generate course URL
+function generateCourseURL(courseCode, academicYear, term) {
+    const baseURL = window.location.origin;
+    // Clean the course code for URL: remove special characters, convert spaces to underscores, lowercase
+    const cleanCode = courseCode
+        .replace(/[^\w\s]/g, '') // Remove special characters except word chars and spaces
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .toLowerCase();
+    const encodedCourseCode = encodeURIComponent(cleanCode);
+    const encodedYear = encodeURIComponent(academicYear);
+    const encodedTerm = encodeURIComponent(term.toLowerCase().replace(/.*\//, '')); // Extract just Fall/Spring
+    return `${baseURL}/course/${encodedCourseCode}/${encodedYear}/${encodedTerm}`;
+}
+
+// Export function to generate course URLs for external use
+export function getCourseURL(course) {
+    if (!course.course_code || !course.academic_year || !course.term) {
+        console.warn('Course missing required fields for URL generation:', course);
+        return window.location.pathname;
+    }
+    return generateCourseURL(course.course_code, course.academic_year, course.term);
+}
+
+// Helper function to parse course URL parameters
+function parseCourseURL() {
+    const path = window.location.pathname;
+    // Look for clean URL pattern: /course/courseCode/year/term
+    const match = path.match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)\/?$/);
+    
+    if (match) {
+        const courseCode = decodeURIComponent(match[1]).replace(/_/g, ' ');
+        const year = parseInt(match[2]);
+        const termParam = match[3].toLowerCase();
+        const term = termParam === 'fall' ? '秋学期/Fall' : '春学期/Spring';
+        
+        return { courseCode, year, term };
+    }
+    
+    return null;
+}
+
+// Helper function to find course by code, year, and term
+async function findCourseByParams(courseCode, year, term) {
+    try {
+        console.log('Searching for course:', { courseCode, year, term });
+        const courses = await fetchCourseData(year, term);
+        console.log('Total courses available:', courses.length);
+        
+        // Try exact match first (case insensitive)
+        let course = courses.find(c => 
+            c.course_code && c.course_code.toLowerCase() === courseCode.toLowerCase()
+        );
+        console.log('Exact match result:', course);
+        
+        // If not found, try partial match on title
+        if (!course) {
+            const searchTerm = courseCode.toLowerCase().replace(/_/g, ' ');
+            course = courses.find(c => 
+                (c.title && c.title.toLowerCase().includes(searchTerm)) ||
+                (c.title && c.title.toLowerCase().replace(/\s+/g, '_').includes(courseCode.toLowerCase()))
+            );
+            console.log('Title match result:', course);
+        }
+        
+        // If still not found, try matching by course code parts or containing
+        if (!course) {
+            course = courses.find(c => 
+                (c.course_code && c.course_code.toLowerCase().includes(courseCode.toLowerCase())) ||
+                (c.course_code && courseCode.toLowerCase().includes(c.course_code.toLowerCase()))
+            );
+            console.log('Partial code match result:', course);
+        }
+        
+        // If still not found, try to find by any numeric match (for codes like 12001104003)
+        if (!course && /^\d+$/.test(courseCode)) {
+            course = courses.find(c => 
+                c.course_code && c.course_code.replace(/[^\d]/g, '') === courseCode
+            );
+            console.log('Numeric match result:', course);
+        }
+        
+        // Log all available course codes for debugging
+        if (!course) {
+            console.log('Available course codes:', courses.slice(0, 10).map(c => c.course_code));
+        }
+        
+        return course;
+    } catch (error) {
+        console.error('Error finding course:', error);
+        return null;
+    }
+}
+
 export async function fetchCourseData(year, term) {
     const cacheKey = `${year}-${term}`;
     if (courseCache[cacheKey]) {
@@ -35,7 +128,9 @@ export async function fetchCourseData(year, term) {
     }
 }
 
-export async function openCourseInfoMenu(course) {
+export async function openCourseInfoMenu(course, updateURL = true) {
+    console.log('Opening course info menu for:', course);
+    
     const classInfo = document.getElementById("class-info");
     const classContent = document.getElementById("class-content");
     const classGPA = document.getElementById("class-gpa-graph");
@@ -44,7 +139,30 @@ export async function openCourseInfoMenu(course) {
 
     if (!classInfo || !classContent || !classClose) {
         console.error("Could not find the class info menu elements in the HTML.");
+        console.error("classInfo:", classInfo);
+        console.error("classContent:", classContent); 
+        console.error("classClose:", classClose);
+        
+        // Try to wait a bit for DOM to be ready and retry once
+        setTimeout(() => {
+            console.log('Retrying after DOM delay...');
+            const retryClassInfo = document.getElementById("class-info");
+            const retryClassContent = document.getElementById("class-content");
+            const retryClassClose = document.getElementById("class-close");
+            
+            if (retryClassInfo && retryClassContent && retryClassClose) {
+                openCourseInfoMenu(course, updateURL);
+            } else {
+                console.error("Still cannot find course modal elements after retry");
+            }
+        }, 1000);
         return;
+    }
+
+    // Update URL if requested (default behavior)
+    if (updateURL && course.course_code && course.academic_year && course.term) {
+        const newURL = generateCourseURL(course.course_code, course.academic_year, course.term);
+        window.history.pushState({ course: course }, '', newURL);
     }
 
     // Create or get the background overlay
@@ -52,17 +170,6 @@ export async function openCourseInfoMenu(course) {
     if (!classInfoBackground) {
         classInfoBackground = document.createElement("div");
         classInfoBackground.id = "class-info-background";
-        classInfoBackground.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 999;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        `;
         document.body.appendChild(classInfoBackground);
         
         // Close menu when clicking background
@@ -70,6 +177,9 @@ export async function openCourseInfoMenu(course) {
             classInfo.classList.remove("show");
             classInfoBackground.style.opacity = "0";
             document.body.style.overflow = "auto";
+            
+            // Clear URL when closing - go back to home
+            window.history.pushState({}, '', '/');
             
             setTimeout(() => {
                 if (classInfoBackground.parentNode) {
@@ -132,9 +242,6 @@ export async function openCourseInfoMenu(course) {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return false; // No user logged in, assume available
             
-            console.log('Checking if course is already selected:', courseCode, courseYear);
-            console.log('Full course object:', course); // Debug: see all properties
-            
             // Get user profile with selected courses
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
@@ -143,12 +250,8 @@ export async function openCourseInfoMenu(course) {
                 .single();
             
             if (profileData && profileData.courses_selection && profileData.courses_selection.length > 0) {
-                console.log('Selected courses from profile:', profileData.courses_selection);
-                
                 // Since year might be undefined, let's check with and without year
                 const isAlreadySelected = profileData.courses_selection.some(selectedCourse => {
-                    console.log('Comparing:', selectedCourse.code, 'vs', courseCode, '|', selectedCourse.year, 'vs', courseYear);
-                    
                     // Primary check: match by course code and year (if year is available)
                     if (courseYear && courseYear !== undefined) {
                         return selectedCourse.code === courseCode && selectedCourse.year === courseYear;
@@ -158,11 +261,9 @@ export async function openCourseInfoMenu(course) {
                     return selectedCourse.code === courseCode;
                 });
                 
-                console.log('Is course already selected?', isAlreadySelected);
                 return isAlreadySelected;
             }
             
-            console.log('No selected courses found - showing as available');
             return false;
             
         } catch (error) {
@@ -176,7 +277,10 @@ export async function openCourseInfoMenu(course) {
     const timeBackgroundColor = hasTimeConflict ? '#ED7F81' : '#92ECB0'; // Red for already selected, Green for available
 
     classContent.innerHTML = `
-        <h2>${course.title}</h2>
+        <div class="course-header">
+            <h2>${course.title}</h2>
+            <button onclick="shareCourseURL()" title="Share this course">Share Course</button>
+        </div>
         <div class="class-info-container">
             <div class="class-info-1">
                 <div class="class-component"><p>Professor</p><h3>${course.professor}</h3></div>
@@ -188,6 +292,350 @@ export async function openCourseInfoMenu(course) {
                 <div class="class-component"><p>Course type</p><div class="class-component-label" style="background: ${courseColor};">${courseType}</div></div>
                 <div class="class-component"><p>Syllabus Link</p><button id="external-link-btn" onclick="window.open('${course.url}', '_blank')">University Page</button></div>
             </div>
+        </div>
+    `;
+
+    const gpaA = "#92ECB0";
+    const gpaB = "#D1E7C9";
+    const gpaC = "#F6EBC1";
+    const gpaD = "#FFDD55";
+    const gpaF = "#ED7F81";
+
+    if (course.gpa_a_percent === null || course.gpa_b_percent === null || course.gpa_c_percent === null || course.gpa_d_percent === null || course.gpa_f_percent === null) {
+    classGPA.innerHTML = `
+            <p class="class-subtitle">Grade Point Average</p>
+            <p>No GPA data available for this course.</p>
+            `;
+    } else {
+        classGPA.innerHTML = `
+            <p class="class-subtitle">Grade Point Average</p>
+            <div class="class-info-container gpa-layout">
+                <div class="gpa-container"><h3>A</h3><div class="gpa-bar-graph" style="background: ${gpaA}; width: ${course.gpa_a_percent}%;"><h3>${course.gpa_a_percent}%</h3></div></div>
+                <div class="gpa-container"><h3>B</h3><div class="gpa-bar-graph" style="background: ${gpaB}; width: ${course.gpa_b_percent}%;"><h3>${course.gpa_b_percent}%</h3></div></div>
+                <div class="gpa-container"><h3>C</h3><div class="gpa-bar-graph" style="background: ${gpaC}; width: ${course.gpa_c_percent}%;"><h3>${course.gpa_c_percent}%</h3></div></div>
+                <div class="gpa-container"><h3>D</h3><div class="gpa-bar-graph" style="background: ${gpaD}; width: ${course.gpa_d_percent}%;"><h3>${course.gpa_d_percent}%</h3></div></div>
+                <div class="gpa-container"><h3>F</h3><div class="gpa-bar-graph" style="background: ${gpaF}; width: ${course.gpa_f_percent}%;"><h3>${course.gpa_f_percent}%</h3></div></div>
+            </div>
+        `};
+
+    // Function to load course reviews
+    async function loadCourseReviews(courseCode, academicYear, term) {
+        try {
+            // Build the query - if academicYear is null, get reviews from all years
+            let query = supabase
+                .from('course_reviews')
+                .select('*')
+                .eq('course_code', courseCode)
+                .eq('term', term)
+                .order('created_at', { ascending: false });
+            
+            // Only filter by academic year if it's provided
+            if (academicYear !== null) {
+                query = query.eq('academic_year', academicYear);
+            }
+            
+            const { data: reviews, error: reviewsError } = await query;
+
+            if (reviewsError) {
+                console.error('Error loading reviews:', reviewsError);
+                return [];
+            }
+
+            if (!reviews || reviews.length === 0) {
+                return [];
+            }
+
+            // Then, get user profiles for each review
+            const userIds = reviews.map(review => review.user_id);
+            
+            // Get user profiles from profiles table
+            let profiles = null;
+            let profilesError = null;
+            
+            // Try common column name variations for profiles table
+            const possibleSelects = [
+                'id, display_name, avatar_url',
+                'id, name, avatar_url', 
+                'id, full_name, avatar_url',
+                'id, username, avatar_url',
+                'id, email, avatar_url',
+                '*'
+            ];
+            
+            for (let selectString of possibleSelects) {
+                const { data: profilesData, error: err } = await supabase
+                    .from('profiles')
+                    .select(selectString)
+                    .in('id', userIds);
+                
+                if (!err) {
+                    profiles = profilesData;
+                    break;
+                } else {
+                    profilesError = err;
+                }
+            }
+
+            // If still no profiles, try getting current user info differently
+            if (!profiles || profiles.length === 0) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    // Create a mock profile for the current user if their review is in the list
+                    if (userIds.includes(session.user.id)) {
+                        profiles = [{
+                            id: session.user.id,
+                            display_name: session.user.user_metadata?.display_name || 
+                                         session.user.user_metadata?.name || 
+                                         session.user.user_metadata?.full_name ||
+                                         session.user.email?.split('@')[0] ||
+                                         'Current User',
+                            avatar_url: session.user.user_metadata?.avatar_url || null,
+                            email: session.user.email
+                        }];
+                    }
+                }
+            }
+
+            if (!profiles || profiles.length === 0) {
+                console.error('Error loading profiles after all attempts:', profilesError);
+                // Continue without profile data
+                return reviews.map(review => ({
+                    ...review,
+                    profiles: { display_name: 'Anonymous User', avatar_url: null }
+                }));
+            }
+
+            // Get current session once for all reviews
+            const { data: { session } } = await supabase.auth.getSession();
+
+            // Combine reviews with profile data
+            const reviewsWithProfiles = reviews.map(review => {
+                const profile = profiles?.find(p => p.id === review.user_id);
+                
+                if (profile) {
+                    // Try different possible column names for the display name
+                    let displayName = profile.display_name || 
+                                    profile.name || 
+                                    profile.full_name || 
+                                    profile.username || 
+                                    profile.email;
+                    
+                    // If display_name is null/undefined and we still don't have a name, try to get it from session
+                    if (!displayName || displayName === null) {
+                        if (session && session.user && session.user.id === review.user_id) {
+                            displayName = session.user.email?.split('@')[0] || 'Current User';
+                        } else {
+                            displayName = 'Anonymous User';
+                        }
+                    }
+                    
+                    return {
+                        ...review,
+                        profiles: { 
+                            display_name: displayName, 
+                            avatar_url: profile.avatar_url || null 
+                        }
+                    };
+                } else {
+                    // If no profile found, try to get current user info
+                    if (session && session.user && session.user.id === review.user_id) {
+                        const displayName = session.user.email?.split('@')[0] || 'Current User';
+                        return {
+                            ...review,
+                            profiles: { 
+                                display_name: displayName, 
+                                avatar_url: null 
+                            }
+                        };
+                    }
+                    
+                    return {
+                        ...review,
+                        profiles: { display_name: 'Anonymous User', avatar_url: null }
+                    };
+                }
+            });
+
+            return reviewsWithProfiles;
+
+        } catch (error) {
+            console.error('Error loading course reviews:', error);
+            return [];
+        }
+    }
+
+    // Function to calculate review statistics
+    function calculateReviewStats(reviews) {
+        if (!reviews || reviews.length === 0) {
+            return {
+                averageRating: 0,
+                totalReviews: 0,
+                ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+            };
+        }
+
+        const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+        const averageRating = (totalRating / reviews.length).toFixed(2);
+        
+        const ratingDistribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+        reviews.forEach(review => {
+            ratingDistribution[review.rating]++;
+        });
+
+        return {
+            averageRating: parseFloat(averageRating),
+            totalReviews: reviews.length,
+            ratingDistribution
+        };
+    }
+
+    // Function to render star rating
+    function renderStarRating(rating, size = 'small') {
+        const stars = [];
+        const sizeClass = size === 'large' ? 'star-large' : 'star-small';
+        
+        for (let i = 1; i <= 5; i++) {
+            if (i <= rating) {
+                stars.push(`<span class="star ${sizeClass} filled">★</span>`);
+            } else {
+                stars.push(`<span class="star ${sizeClass}">☆</span>`);
+            }
+        }
+        return stars.join('');
+    }
+
+    // Function to format date
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+    }
+
+    // Function to render individual review
+    function renderReview(review, currentUserId = null) {
+        // Create a simple data URL for avatar placeholder instead of external URL
+        const createAvatarPlaceholder = (name) => {
+            const initial = name.charAt(0).toUpperCase();
+            const canvas = document.createElement('canvas');
+            canvas.width = 40;
+            canvas.height = 40;
+            const ctx = canvas.getContext('2d');
+            
+            // Create a circular background
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(0, 0, 40, 40);
+            
+            // Add initial text
+            ctx.fillStyle = '#666666';
+            ctx.font = '18px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initial, 20, 20);
+            
+            return canvas.toDataURL();
+        };
+        
+        const displayName = review.profiles?.display_name || 'Anonymous User';
+        const avatarUrl = review.profiles?.avatar_url || createAvatarPlaceholder(displayName);
+        const isOwnReview = currentUserId && review.user_id === currentUserId;
+        
+        return `
+            <div class="review-item">
+                <div class="review-header">
+                    <img src="${avatarUrl}" alt="${displayName}" class="review-avatar">
+                    <div class="review-user-info">
+                        <h4 class="review-user-name">${displayName}</h4>
+                        <div class="review-rating">${renderStarRating(review.rating)}</div>
+                    </div>
+                    <div class="review-dates">
+                        <p class="review-date">Reviewed: ${formatDate(review.created_at)}</p>
+                        <p class="review-course-date">Took course: ${review.term} ${review.academic_year}</p>
+                    </div>
+                    ${isOwnReview ? `
+                        <div class="review-actions">
+                            <button class="edit-review-btn" onclick="openEditReviewModal('${review.id}', '${review.course_code}', '${review.term}', ${review.rating}, '${(review.content || '').replace(/'/g, "\\'")}', ${review.academic_year})">Edit</button>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="review-content">
+                    <p>${review.content || 'No written review provided.'}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    // Load reviews for this course (from all years, just matching course code and term)
+    const reviews = await loadCourseReviews(course.course_code, null, course.term);
+    const stats = calculateReviewStats(reviews);
+    const initialReviewsToShow = 3;
+    const reviewsToShow = reviews.slice(0, initialReviewsToShow);
+    const hasMoreReviews = reviews.length > initialReviewsToShow;
+    
+    // Get current user ID for edit functionality
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id;
+
+    classReview.innerHTML = `
+        <p class="class-subtitle">Course Reviews</p>
+        
+        ${stats.totalReviews > 0 ? `
+            <!-- Average Rating Section -->
+            <div class="review-summary">
+                <div class="average-rating">
+                    <div class="rating-display">
+                        <span class="rating-number">${stats.averageRating}</span>
+                        <span class="rating-total">out of 5</span>
+                    </div>
+                    <div class="rating-stars">${renderStarRating(Math.round(stats.averageRating), 'large')}</div>
+                    <p class="total-reviews">${stats.totalReviews} review${stats.totalReviews !== 1 ? 's' : ''}</p>
+                </div>
+                
+                <!-- Rating Distribution -->
+                <div class="rating-distribution">
+                    ${[5, 4, 3, 2, 1].map(rating => {
+                        const count = stats.ratingDistribution[rating];
+                        const percentage = stats.totalReviews > 0 ? (count / stats.totalReviews * 100).toFixed(1) : 0;
+                        return `
+                            <div class="rating-bar">
+                                <span class="rating-label">${rating} ★</span>
+                                <div class="bar-container">
+                                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                                </div>
+                                <span class="rating-count">${count}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            
+            <!-- Individual Reviews -->
+            <div class="reviews-container">
+                <h3 class="reviews-header">Reviews</h3>
+                <div class="reviews-list" id="reviews-list-${course.course_code}">
+                    ${reviewsToShow.map(review => renderReview(review, currentUserId)).join('')}
+                </div>
+                
+                ${hasMoreReviews ? `
+                    <button class="load-more-reviews" onclick="loadMoreReviews('${course.course_code}', null, '${course.term}', ${initialReviewsToShow})">
+                        Load More Reviews (${reviews.length - initialReviewsToShow} more)
+                    </button>
+                ` : ''}
+            </div>
+        ` : `
+            <div class="no-reviews">
+                <p>No reviews available for this course yet.</p>
+                <p>Be the first to share your experience!</p>
+            </div>
+        `}
+        
+        <!-- Add Review Button -->
+        <div class="add-review-section">
+            <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
+                Write a Review
+            </button>
         </div>
     `;
 
@@ -205,6 +653,9 @@ export async function openCourseInfoMenu(course) {
             classInfo.classList.remove("show");
             document.body.style.overflow = "auto";
             
+            // Clear URL when closing - go back to home
+            window.history.pushState({}, '', '/');
+            
             if (currentBackground) {
                 currentBackground.style.opacity = "0";
                 // Remove background after animation
@@ -218,3 +669,869 @@ export async function openCourseInfoMenu(course) {
         classClose.dataset.listenerAttached = "true";
     }
 }
+
+// Global function to load more reviews
+window.loadMoreReviews = async function(courseCode, academicYear, term, currentlyShowing) {
+    try {
+        // Build the query - if academicYear is null, get reviews from all years
+        let query = supabase
+            .from('course_reviews')
+            .select('*')
+            .eq('course_code', courseCode)
+            .eq('term', term)
+            .order('created_at', { ascending: false });
+        
+        // Only filter by academic year if it's provided
+        if (academicYear !== null) {
+            query = query.eq('academic_year', academicYear);
+        }
+        
+        const { data: reviews, error: reviewsError } = await query;
+
+        if (reviewsError) {
+            console.error('Error loading more reviews:', reviewsError);
+            return;
+        }
+
+        if (!reviews || reviews.length === 0) {
+            return;
+        }
+
+        // Then, get user profiles for each review
+        const userIds = reviews.map(review => review.user_id);
+        
+        // Get user profiles from profiles table  
+        let profiles = null;
+        let profilesError = null;
+        
+        // Try common column name variations
+        const possibleSelects = [
+            'id, display_name, avatar_url',
+            'id, name, avatar_url', 
+            'id, full_name, avatar_url',
+            'id, username, avatar_url',
+            'id, email, avatar_url',
+            '*'
+        ];
+        
+        for (let selectString of possibleSelects) {
+            const { data: profilesData, error: err } = await supabase
+                .from('profiles')
+                .select(selectString)
+                .in('id', userIds);
+            
+            if (!err) {
+                profiles = profilesData;
+                break;
+            } else {
+                profilesError = err;
+            }
+        }
+
+        if (profilesError && !profiles) {
+            console.error('Error loading profiles:', profilesError);
+        }
+
+        // Get current session once for all reviews
+        const { data: { session } } = await supabase.auth.getSession();
+
+        // Combine reviews with profile data
+        const reviewsWithProfiles = reviews.map(review => {
+            const profile = profiles?.find(p => p.id === review.user_id);
+            
+            if (profile) {
+                // Try different possible column names for the display name
+                let displayName = profile.display_name || 
+                                profile.name || 
+                                profile.full_name || 
+                                profile.username || 
+                                profile.email;
+                
+                // If display_name is null/undefined and we still don't have a name, try to get it from session
+                if (!displayName || displayName === null) {
+                    if (session && session.user && session.user.id === review.user_id) {
+                        displayName = session.user.email?.split('@')[0] || 'Current User';
+                    } else {
+                        displayName = 'Anonymous User';
+                    }
+                }
+                
+                return {
+                    ...review,
+                    profiles: { 
+                        display_name: displayName, 
+                        avatar_url: profile.avatar_url || null 
+                    }
+                };
+            } else {
+                // If no profile found, try to get current user info
+                if (session && session.user && session.user.id === review.user_id) {
+                    const displayName = session.user.email?.split('@')[0] || 'Current User';
+                    return {
+                        ...review,
+                        profiles: { 
+                            display_name: displayName, 
+                            avatar_url: null 
+                        }
+                    };
+                }
+                
+                return {
+                    ...review,
+                    profiles: { display_name: 'Anonymous User', avatar_url: null }
+                };
+            }
+        });
+
+        const reviewsList = document.getElementById(`reviews-list-${courseCode}`);
+        const loadMoreBtn = document.querySelector('.load-more-reviews');
+        
+        if (reviewsList && reviewsWithProfiles) {
+            const nextBatch = reviewsWithProfiles.slice(currentlyShowing, currentlyShowing + 3);
+            
+            // Get current user ID for edit functionality
+            const { data: { session } } = await supabase.auth.getSession();
+            const currentUserId = session?.user?.id;
+            
+            nextBatch.forEach(review => {
+                const reviewElement = document.createElement('div');
+                reviewElement.innerHTML = renderReview(review, currentUserId);
+                reviewsList.appendChild(reviewElement.firstElementChild);
+            });
+            
+            const newCurrentlyShowing = currentlyShowing + nextBatch.length;
+            
+            if (newCurrentlyShowing >= reviewsWithProfiles.length) {
+                loadMoreBtn.remove();
+            } else {
+                loadMoreBtn.textContent = `Load More Reviews (${reviewsWithProfiles.length - newCurrentlyShowing} more)`;
+                loadMoreBtn.onclick = () => loadMoreReviews(courseCode, academicYear, term, newCurrentlyShowing);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading more reviews:', error);
+    }
+};
+
+// Global function to open add review modal
+window.openAddReviewModal = async function(courseCode, academicYear, term, courseTitle) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            alert('Please log in to write a review.');
+            return;
+        }
+
+        // Check if user has already reviewed this course (same code and term, any year)
+        const { data: existingReviews, error } = await supabase
+            .from('course_reviews')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .eq('course_code', courseCode)
+            .eq('term', term);
+
+        if (error) {
+            console.error('Error checking existing reviews:', error);
+            // Continue anyway - user can still try to submit
+        }
+
+        if (existingReviews && existingReviews.length > 0) {
+            const existingReview = existingReviews[0];
+            if (confirm('You have already reviewed this course. Would you like to edit your existing review?')) {
+                // Open the edit modal instead
+                openEditReviewModal(
+                    existingReview.id,
+                    existingReview.course_code,
+                    existingReview.term,
+                    existingReview.rating,
+                    existingReview.content || '',
+                    existingReview.academic_year
+                );
+                return;
+            } else {
+                return;
+            }
+        }
+
+        // Create and show add review modal
+        const modal = document.createElement('div');
+        modal.className = 'review-modal';
+        
+        modal.innerHTML = `
+            <div class="review-modal-content">
+                <div class="review-modal-header">
+                    <h3>Write a Review for ${courseTitle}</h3>
+                    <button class="close-modal" onclick="closeReviewModal()">&times;</button>
+                </div>
+                <div class="review-modal-body">
+                    <div class="year-input">
+                        <label for="course-year">When did you take this course?</label>
+                        <select id="course-year">
+                            <option value="">Select year...</option>
+                            ${(() => {
+                                const currentYear = new Date().getFullYear();
+                                let options = '';
+                                for (let year = currentYear; year >= currentYear - 10; year--) {
+                                    const selected = year === academicYear ? 'selected' : '';
+                                    options += `<option value="${year}" ${selected}>${year}</option>`;
+                                }
+                                return options;
+                            })()}
+                        </select>
+                    </div>
+                    <div class="rating-input">
+                        <label>Rating:</label>
+                        <div class="star-rating-input" id="star-rating-input">
+                            ${[1, 2, 3, 4, 5].map(rating => 
+                                `<span class="star-input" data-rating="${rating}" onclick="setRating(${rating})" onmouseover="hoverRating(${rating})" onmouseout="unhoverRating()">☆</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="review-text-input">
+                        <label for="review-content">Your Review:</label>
+                        <textarea id="review-content" placeholder="Share your experience with this course..." rows="6"></textarea>
+                    </div>
+                </div>
+                <div class="review-modal-footer">
+                    <button class="cancel-review" onclick="closeReviewModal()">Cancel</button>
+                    <button class="submit-review" onclick="submitReview('${courseCode}', ${academicYear}, '${term}')">Submit Review</button>
+                </div>
+            </div>
+        `;
+
+        console.log('Adding modal to body');
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+        
+    } catch (error) {
+        console.error('Error opening review modal:', error);
+        alert('Error opening review form. Please try again.');
+    }
+};
+
+// Global function to close review modal
+window.closeReviewModal = function() {
+    const modal = document.querySelector('.review-modal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = 'auto';
+    }
+};
+
+// Global function to open edit review modal
+window.openEditReviewModal = async function(reviewId, courseCode, term, currentRating, currentContent, currentYear) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            alert('Please log in to edit your review.');
+            return;
+        }
+
+        // Create and show edit review modal
+        const modal = document.createElement('div');
+        modal.className = 'review-modal';
+        
+        modal.innerHTML = `
+            <div class="review-modal-content">
+                <div class="review-modal-header">
+                    <h3>Edit Your Review for ${courseCode}</h3>
+                    <button class="close-modal" onclick="closeReviewModal()">&times;</button>
+                </div>
+                <div class="review-modal-body">
+                    <div class="year-input">
+                        <label for="course-year-edit">When did you take this course?</label>
+                        <select id="course-year-edit">
+                            <option value="">Select year...</option>
+                            ${(() => {
+                                const currentYearDate = new Date().getFullYear();
+                                let options = '';
+                                for (let year = currentYearDate; year >= currentYearDate - 10; year--) {
+                                    const selected = year === currentYear ? 'selected' : '';
+                                    options += `<option value="${year}" ${selected}>${year}</option>`;
+                                }
+                                return options;
+                            })()}
+                        </select>
+                    </div>
+                    <div class="rating-input">
+                        <label>Rating:</label>
+                        <div class="star-rating-input" id="star-rating-input-edit" data-selected-rating="${currentRating}">
+                            ${[1, 2, 3, 4, 5].map(rating => 
+                                `<span class="star-input ${rating <= currentRating ? 'selected' : ''}" data-rating="${rating}" onclick="setEditRating(${rating})" onmouseover="hoverEditRating(${rating})" onmouseout="unhoverEditRating()">${rating <= currentRating ? '★' : '☆'}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="review-text-input">
+                        <label for="review-content-edit">Your Review:</label>
+                        <textarea id="review-content-edit" placeholder="Share your experience with this course..." rows="6">${currentContent}</textarea>
+                    </div>
+                </div>
+                <div class="review-modal-footer space-between">
+                    <button class="delete-review" onclick="deleteReview('${reviewId}')">Delete Review</button>
+                    <div class="button-group">
+                        <button class="cancel-review" onclick="closeReviewModal()">Cancel</button>
+                        <button class="update-review" onclick="updateReview('${reviewId}')">Update Review</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+        
+    } catch (error) {
+        console.error('Error opening edit review modal:', error);
+        alert('Error opening edit form. Please try again.');
+    }
+};
+
+// Global function to set rating in edit modal
+window.setEditRating = function(rating) {
+    const stars = document.querySelectorAll('#star-rating-input-edit .star-input');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.textContent = '★';
+            star.style.color = '#ffc107'; // Gold color for selected stars
+            star.classList.add('selected');
+        } else {
+            star.textContent = '☆';
+            star.style.color = '#ddd'; // Gray color for unselected stars
+            star.classList.remove('selected');
+        }
+    });
+    
+    // Store the selected rating
+    document.getElementById('star-rating-input-edit').dataset.selectedRating = rating;
+};
+
+// Global function to handle star hover in edit modal
+window.hoverEditRating = function(rating) {
+    const stars = document.querySelectorAll('#star-rating-input-edit .star-input');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.textContent = '★';
+            star.style.color = '#ffc107';
+        } else {
+            star.textContent = '☆';
+            star.style.color = '#ddd';
+        }
+    });
+};
+
+// Global function to remove hover effect in edit modal
+window.unhoverEditRating = function() {
+    const ratingInput = document.getElementById('star-rating-input-edit');
+    const selectedRating = parseInt(ratingInput?.dataset.selectedRating || 0);
+    
+    if (selectedRating > 0) {
+        setEditRating(selectedRating); // Restore the selected rating
+    } else {
+        // Reset all stars to empty if no rating selected
+        const stars = document.querySelectorAll('#star-rating-input-edit .star-input');
+        stars.forEach(star => {
+            star.textContent = '☆';
+            star.style.color = '#ddd';
+        });
+    }
+};
+window.setRating = function(rating) {
+    const stars = document.querySelectorAll('.star-input');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.textContent = '★';
+            star.style.color = '#ffc107'; // Gold color for selected stars
+            star.classList.add('selected');
+        } else {
+            star.textContent = '☆';
+            star.style.color = '#ddd'; // Gray color for unselected stars
+            star.classList.remove('selected');
+        }
+    });
+    
+    // Store the selected rating
+    document.getElementById('star-rating-input').dataset.selectedRating = rating;
+};
+
+// Global function to handle star hover
+window.hoverRating = function(rating) {
+    const stars = document.querySelectorAll('.star-input');
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.textContent = '★';
+            star.style.color = '#ffc107';
+        } else {
+            star.textContent = '☆';
+            star.style.color = '#ddd';
+        }
+    });
+};
+
+// Global function to remove hover effect
+window.unhoverRating = function() {
+    const ratingInput = document.getElementById('star-rating-input');
+    const selectedRating = parseInt(ratingInput?.dataset.selectedRating || 0);
+    
+    if (selectedRating > 0) {
+        setRating(selectedRating); // Restore the selected rating
+    } else {
+        // Reset all stars to empty if no rating selected
+        const stars = document.querySelectorAll('.star-input');
+        stars.forEach(star => {
+            star.textContent = '☆';
+            star.style.color = '#ddd';
+        });
+    }
+};
+
+// Global function to update review
+window.updateReview = async function(reviewId) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            alert('Please log in to update your review.');
+            return;
+        }
+
+        const ratingInput = document.getElementById('star-rating-input-edit');
+        const contentInput = document.getElementById('review-content-edit');
+        const yearInput = document.getElementById('course-year-edit');
+        
+        const rating = parseInt(ratingInput.dataset.selectedRating);
+        const content = contentInput.value.trim();
+        const selectedYear = parseInt(yearInput.value);
+        
+        if (!rating) {
+            alert('Please select a rating.');
+            return;
+        }
+        
+        if (!selectedYear) {
+            alert('Please select the year when you took this course.');
+            return;
+        }
+
+        const updateBtn = document.querySelector('.update-review');
+        updateBtn.disabled = true;
+        updateBtn.textContent = 'Updating...';
+
+        const { data, error } = await supabase
+            .from('course_reviews')
+            .update({
+                rating: rating,
+                content: content,
+                academic_year: selectedYear
+            })
+            .eq('id', reviewId)
+            .eq('user_id', session.user.id); // Double-check ownership
+
+        if (error) {
+            console.error('Error updating review:', error);
+            alert('Error updating review. Please try again.');
+            updateBtn.disabled = false;
+            updateBtn.textContent = 'Update Review';
+            return;
+        }
+
+        alert('Review updated successfully!');
+        closeReviewModal();
+        
+        // Reload the page to show updated review
+        window.location.reload();
+        
+    } catch (error) {
+        console.error('Error updating review:', error);
+        alert('Error updating review. Please try again.');
+    }
+};
+
+// Global function to delete review
+window.deleteReview = async function(reviewId) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            alert('Please log in to delete your review.');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
+            return;
+        }
+
+        const deleteBtn = document.querySelector('.delete-review');
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting...';
+
+        const { data, error } = await supabase
+            .from('course_reviews')
+            .delete()
+            .eq('id', reviewId)
+            .eq('user_id', session.user.id); // Double-check ownership
+
+        if (error) {
+            console.error('Error deleting review:', error);
+            alert('Error deleting review. Please try again.');
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = 'Delete Review';
+            return;
+        }
+
+        alert('Review deleted successfully!');
+        closeReviewModal();
+        
+        // Reload the page to show updated reviews
+        window.location.reload();
+        
+    } catch (error) {
+        console.error('Error deleting review:', error);
+        alert('Error deleting review. Please try again.');
+    }
+};
+
+// Function to initialize URL-based course routing
+export async function initializeCourseRouting() {
+    console.log('Initializing course routing with History API...');
+    
+    try {
+        // Handle route changes (both initial load and popstate events)
+        const handleRouteChange = async () => {
+            console.log('Handling route change for path:', window.location.pathname);
+            
+            const params = parseCourseURL();
+            if (params) {
+                console.log('Found course parameters in URL:', params);
+                
+                // Add a delay to ensure DOM is ready
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                console.log('Searching for course...');
+                const course = await findCourseByParams(params.courseCode, params.year, params.term);
+                
+                if (course) {
+                    console.log('Course found:', course.title);
+                    await openCourseInfoMenu(course, false); // false to prevent URL update loop
+                } else {
+                    console.warn('Course not found for parameters:', params);
+                    console.log('Available courses:', await fetchCourseData(params.year, params.term));
+                }
+            } else {
+                console.log('No course parameters found in URL path');
+                // Close modal if open and we're not on a course URL
+                const classInfo = document.getElementById("class-info");
+                if (classInfo && classInfo.classList.contains("show")) {
+                    const classClose = document.getElementById("class-close");
+                    if (classClose) {
+                        classClose.click();
+                    }
+                }
+            }
+        };
+        
+        // Listen for popstate events (back/forward button)
+        window.addEventListener('popstate', handleRouteChange);
+        
+        // Handle initial page load
+        await handleRouteChange();
+        
+        // Intercept clicks on course links to use History API
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('a[href*="/course/"]');
+            if (target) {
+                event.preventDefault();
+                const url = target.getAttribute('href');
+                window.history.pushState({}, '', url);
+                handleRouteChange();
+            }
+        });
+        
+        console.log('Course routing initialized successfully');
+        
+    } catch (error) {
+        console.error('Error initializing course routing:', error);
+    }
+}
+
+// Debug function to test course routing manually
+window.testCourseRouting = function() {
+    console.log('Testing course routing...');
+    console.log('Current path:', window.location.pathname);
+    
+    const params = parseCourseURL();
+    if (params) {
+        console.log('Parsed parameters:', params);
+        findCourseByParams(params.courseCode, params.year, params.term)
+            .then(course => {
+                if (course) {
+                    console.log('Found course:', course);
+                } else {
+                    console.log('No course found');
+                }
+            });
+    } else {
+        console.log('No course parameters found in URL');
+    }
+};
+
+// Global function to share course URL
+window.shareCourseURL = function() {
+    const currentURL = window.location.href;
+    
+    // Function to show "Link copied!" notification
+    function showCopiedNotification() {
+        // Remove any existing notification
+        const existingNotification = document.getElementById('link-copied-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'link-copied-notification';
+        notification.textContent = 'Link copied!';
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Animate in with CSS class
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+        
+        // Remove after 2 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 2000);
+    }
+    
+    if (navigator.share) {
+        // Use Web Share API if available (mobile devices)
+        navigator.share({
+            title: 'Course Information',
+            url: currentURL
+        }).then(() => {
+            console.log('Course shared successfully');
+        }).catch(console.error);
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        // Automatically copy to clipboard (requires HTTPS or localhost)
+        navigator.clipboard.writeText(currentURL).then(() => {
+            console.log('Course URL copied to clipboard:', currentURL);
+            showCopiedNotification();
+        }).catch((error) => {
+            console.error('Clipboard API failed:', error);
+            // Silent fallback - try alternative copy method
+            const success = fallbackCopyToClipboard(currentURL);
+            if (success) {
+                showCopiedNotification();
+            }
+        });
+    } else {
+        // Fallback copy method for older browsers
+        const success = fallbackCopyToClipboard(currentURL);
+        if (success) {
+            showCopiedNotification();
+        }
+    }
+};
+
+// Fallback function to copy text to clipboard
+function fallbackCopyToClipboard(text) {
+    try {
+        // Create a temporary textarea element
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        // Try to copy using execCommand
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+            console.log('Course URL copied to clipboard (fallback):', text);
+            return true;
+        } else {
+            console.warn('Failed to copy URL to clipboard');
+            return false;
+        }
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        return false;
+    }
+}
+
+// Global function to open course by URL programmatically
+window.openCourseByURL = function(courseCode, academicYear, term) {
+    const courseURL = generateCourseURL(courseCode, academicYear, term);
+    window.history.pushState({}, '', courseURL);
+    
+    // Trigger route change handling
+    const params = parseCourseURL();
+    if (params) {
+        findCourseByParams(params.courseCode, params.year, params.term)
+            .then(course => {
+                if (course) {
+                    openCourseInfoMenu(course, false);
+                }
+            })
+            .catch(console.error);
+    }
+};
+window.submitReview = async function(courseCode, academicYear, term) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+            alert('Please log in to submit a review.');
+            return;
+        }
+
+        const ratingInput = document.getElementById('star-rating-input');
+        const contentInput = document.getElementById('review-content');
+        const yearInput = document.getElementById('course-year');
+        
+        const rating = parseInt(ratingInput.dataset.selectedRating);
+        const content = contentInput.value.trim();
+        const selectedYear = parseInt(yearInput.value);
+        
+        if (!rating) {
+            alert('Please select a rating.');
+            return;
+        }
+        
+        if (!selectedYear) {
+            alert('Please select the year when you took this course.');
+            return;
+        }
+
+        const submitBtn = document.querySelector('.submit-review');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        const { data, error } = await supabase
+            .from('course_reviews')
+            .insert({
+                user_id: session.user.id,
+                course_code: courseCode,
+                academic_year: selectedYear,
+                term: term,
+                rating: rating,
+                content: content
+            });
+
+        if (error) {
+            console.error('Error submitting review:', error);
+            alert('Error submitting review. Please try again.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Review';
+            return;
+        }
+
+        alert('Review submitted successfully!');
+        closeReviewModal();
+        
+        // Refresh the course info to show updated reviews
+        // You might want to reload the modal content here
+        
+    } catch (error) {
+        console.error('Error submitting review:', error);
+        alert('Error submitting review. Please try again.');
+    }
+};
+
+// Helper function to render review (make it global for loadMoreReviews)
+window.renderReview = function(review, currentUserId = null) {
+    // Create a simple data URL for avatar placeholder instead of external URL
+    const createAvatarPlaceholder = (name) => {
+        const initial = name.charAt(0).toUpperCase();
+        const canvas = document.createElement('canvas');
+        canvas.width = 40;
+        canvas.height = 40;
+        const ctx = canvas.getContext('2d');
+        
+        // Create a circular background
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(0, 0, 40, 40);
+        
+        // Add initial text
+        ctx.fillStyle = '#666666';
+        ctx.font = '18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(initial, 20, 20);
+        
+        return canvas.toDataURL();
+    };
+    
+    const displayName = review.profiles?.display_name || 'Anonymous User';
+    const avatarUrl = review.profiles?.avatar_url || createAvatarPlaceholder(displayName);
+    const isOwnReview = currentUserId && review.user_id === currentUserId;
+    
+    function renderStarRating(rating, size = 'small') {
+        const stars = [];
+        const sizeClass = size === 'large' ? 'star-large' : 'star-small';
+        
+        for (let i = 1; i <= 5; i++) {
+            if (i <= rating) {
+                stars.push(`<span class="star ${sizeClass} filled">★</span>`);
+            } else {
+                stars.push(`<span class="star ${sizeClass}">☆</span>`);
+            }
+        }
+        return stars.join('');
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+        });
+    }
+    
+    return `
+        <div class="review-item">
+            <div class="review-header">
+                <img src="${avatarUrl}" alt="${displayName}" class="review-avatar">
+                <div class="review-user-info">
+                    <h4 class="review-user-name">${displayName}</h4>
+                    <div class="review-rating">${renderStarRating(review.rating)}</div>
+                </div>
+                <div class="review-dates">
+                    <p class="review-date">Reviewed: ${formatDate(review.created_at)}</p>
+                    <p class="review-course-date">Took course: ${review.term} ${review.academic_year}</p>
+                </div>
+                ${isOwnReview ? `
+                    <div class="review-actions">
+                        <button class="edit-review-btn" onclick="openEditReviewModal('${review.id}', '${review.course_code}', '${review.term}', ${review.rating}, '${(review.content || '').replace(/'/g, "\\'")}', ${review.academic_year})" style="
+                            padding: 5px 10px;
+                            border: 1px solid #007bff;
+                            background: white;
+                            color: #007bff;
+                            border-radius: 3px;
+                            cursor: pointer;
+                            font-size: 12px;
+                            width: auto;
+                            height: auto;
+                        ">Edit</button>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="review-content">
+                <p>${review.content || 'No written review provided.'}</p>
+            </div>
+        </div>
+    `;
+};
