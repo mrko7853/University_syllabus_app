@@ -279,7 +279,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     classContent.innerHTML = `
         <div class="course-header">
             <h2>${course.title}</h2>
-            <button onclick="shareCourseURL()" title="Share this course">Share Course</button>
+            <button onclick="shareCourseURL()" title="Share this course"><div class="button-icon"><p>Share</p><div class="share-icon"></div></div></button>
         </div>
         <div class="class-info-container">
             <div class="class-info-1">
@@ -1279,97 +1279,46 @@ window.testCourseRouting = function() {
 window.shareCourseURL = function() {
     const currentURL = window.location.href;
     
-    // Function to show "Link copied!" notification
-    function showCopiedNotification() {
-        // Remove any existing notification
-        const existingNotification = document.getElementById('link-copied-notification');
-        if (existingNotification) {
-            existingNotification.remove();
-        }
-        
-        // Create notification element
+    // Simple notification function
+    function showNotification(message) {
         const notification = document.createElement('div');
         notification.id = 'link-copied-notification';
-        notification.textContent = 'Link copied!';
-        
-        // Add to page
+        notification.textContent = message;
+        notification.classList.add('show');
         document.body.appendChild(notification);
-        
-        // Animate in with CSS class
-        setTimeout(() => {
-            notification.classList.add('show');
-        }, 10);
         
         // Remove after 2 seconds
         setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
         }, 2000);
     }
     
-    if (navigator.share) {
-        // Use Web Share API if available (mobile devices)
-        navigator.share({
-            title: 'Course Information',
-            url: currentURL
-        }).then(() => {
-            console.log('Course shared successfully');
-        }).catch(console.error);
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-        // Automatically copy to clipboard (requires HTTPS or localhost)
+    // Try to copy URL to clipboard
+    if (navigator.clipboard) {
         navigator.clipboard.writeText(currentURL).then(() => {
-            console.log('Course URL copied to clipboard:', currentURL);
-            showCopiedNotification();
-        }).catch((error) => {
-            console.error('Clipboard API failed:', error);
-            // Silent fallback - try alternative copy method
-            const success = fallbackCopyToClipboard(currentURL);
-            if (success) {
-                showCopiedNotification();
-            }
+            showNotification('Link copied!');
+        }).catch(() => {
+            showNotification('Failed to copy link');
         });
     } else {
-        // Fallback copy method for older browsers
-        const success = fallbackCopyToClipboard(currentURL);
-        if (success) {
-            showCopiedNotification();
+        // Fallback for older browsers
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = currentURL;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showNotification('Link copied!');
+        } catch (err) {
+            showNotification('Failed to copy link');
         }
     }
 };
-
-// Fallback function to copy text to clipboard
-function fallbackCopyToClipboard(text) {
-    try {
-        // Create a temporary textarea element
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        // Try to copy using execCommand
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        
-        if (successful) {
-            console.log('Course URL copied to clipboard (fallback):', text);
-            return true;
-        } else {
-            console.warn('Failed to copy URL to clipboard');
-            return false;
-        }
-    } catch (err) {
-        console.error('Fallback copy failed:', err);
-        return false;
-    }
-}
 
 // Global function to open course by URL programmatically
 window.openCourseByURL = function(courseCode, academicYear, term) {
