@@ -573,7 +573,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     }
 
     // Function to render individual review
-    function renderReview(review, currentUserId = null) {
+    function renderReview(review, currentUserId = null, anonymousName = null, avatarSrc = null) {
         // Create a simple data URL for avatar placeholder instead of external URL
         const createAvatarPlaceholder = (name) => {
             const initial = name.charAt(0).toUpperCase();
@@ -596,8 +596,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             return canvas.toDataURL();
         };
         
-        const displayName = review.profiles?.display_name || 'Anonymous User';
-        const avatarUrl = review.profiles?.avatar_url || createAvatarPlaceholder(displayName);
+        // Use provided anonymous name and avatar, or create defaults
+        const displayName = anonymousName || (review.profiles?.display_name || 'Anonymous User');
+        const avatarUrl = avatarSrc || (review.profiles?.avatar_url || createAvatarPlaceholder(displayName));
         const isOwnReview = currentUserId && review.user_id === currentUserId;
         
         return `
@@ -626,18 +627,39 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     }
 
     // Load reviews for this course (from all years, just matching course code and term)
-    const reviews = await loadCourseReviews(course.course_code, null, course.term);
-    const stats = calculateReviewStats(reviews);
-    const initialReviewsToShow = 3;
-    const reviewsToShow = reviews.slice(0, initialReviewsToShow);
-    const hasMoreReviews = reviews.length > initialReviewsToShow;
+    const allReviews = await loadCourseReviews(course.course_code, null, course.term);
     
     // Get current user ID for edit functionality
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id;
+    
+    // Sort reviews to put user's own review first, then by creation date
+    const sortedReviews = allReviews.sort((a, b) => {
+        const aIsOwn = currentUserId && a.user_id === currentUserId;
+        const bIsOwn = currentUserId && b.user_id === currentUserId;
+        
+        if (aIsOwn && !bIsOwn) return -1;  // User's review goes first
+        if (!aIsOwn && bIsOwn) return 1;   // Other user's review goes second
+        
+        // If both are user's or both are others', sort by date (newest first)
+        return new Date(b.created_at) - new Date(a.created_at);
+    });
+    
+    const stats = calculateReviewStats(sortedReviews);
+    const initialReviewsToShow = 3;
+    const reviewsToShow = sortedReviews.slice(0, initialReviewsToShow);
+    const hasMoreReviews = sortedReviews.length > initialReviewsToShow;
 
     classReview.innerHTML = `
-        <p class="class-subtitle">Course Reviews</p>
+        <div class="class-subtitle-review">
+            <p class="subtitle-opacity">Course Reviews</p>
+            <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
+                <div class="button-icon">
+                    <p>Write a Review</p>
+                    <div class="edit-icon"></div>
+                </div>
+            </button>
+        </div>
         
         ${stats.totalReviews > 0 ? `
             <!-- Average Rating Section -->
@@ -678,7 +700,15 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             <div class="reviews-container">
                 <h3 class="reviews-header">Reviews</h3>
                 <div class="reviews-list" id="reviews-list-${course.course_code}">
-                    ${reviewsToShow.map(review => renderReview(review, currentUserId)).join('')}
+                    ${reviewsToShow.map((review, index) => {
+            const isOwnReview = currentUserId && review.user_id === currentUserId;
+            // Count only non-user reviews for Student numbering
+            const nonUserReviewsBeforeThis = reviewsToShow.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
+            const anonymousName = isOwnReview ? "Your review" : `Student ${nonUserReviewsBeforeThis + 1}`;
+            const avatarSrc = "/assets/user.svg";  // Use user icon for all reviews
+            
+            return renderReview(review, currentUserId, anonymousName, avatarSrc);
+        }).join('')}
                 </div>
                 
                 ${hasMoreReviews ? `
@@ -693,13 +723,6 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 <p>Be the first to share your experience!</p>
             </div>
         `}
-        
-        <!-- Add Review Button -->
-        <div class="add-review-section">
-            <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
-                Write a Review
-            </button>
-        </div>
     `;
 
     classInfo.classList.add("show");
@@ -798,7 +821,7 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
         // Get current session once for all reviews
         const { data: { session } } = await supabase.auth.getSession();
 
-        // Combine reviews with profile data
+        // Combine reviews with profile data (but we'll anonymize them later)
         const reviewsWithProfiles = reviews.map(review => {
             const profile = profiles?.find(p => p.id === review.user_id);
             
@@ -846,28 +869,50 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
             }
         });
 
+        // Use the session already obtained above for current user ID
+        const currentUserId = session?.user?.id;
+        
+        // Sort reviews to put user's own review first, then by creation date
+        const sortedReviews = reviewsWithProfiles.sort((a, b) => {
+            const aIsOwn = currentUserId && a.user_id === currentUserId;
+            const bIsOwn = currentUserId && b.user_id === currentUserId;
+            
+            if (aIsOwn && !bIsOwn) return -1;  // User's review goes first
+            if (!aIsOwn && bIsOwn) return 1;   // Other user's review goes second
+            
+            // If both are user's or both are others', sort by date (newest first)
+            return new Date(b.created_at) - new Date(a.created_at);
+        });
+
         const reviewsList = document.getElementById(`reviews-list-${courseCode}`);
         const loadMoreBtn = document.querySelector('.load-more-reviews');
         
-        if (reviewsList && reviewsWithProfiles) {
-            const nextBatch = reviewsWithProfiles.slice(currentlyShowing, currentlyShowing + 3);
+        if (reviewsList && sortedReviews) {
+            const nextBatch = sortedReviews.slice(currentlyShowing, currentlyShowing + 3);
             
-            // Get current user ID for edit functionality
-            const { data: { session } } = await supabase.auth.getSession();
-            const currentUserId = session?.user?.id;
+            // Count non-user reviews that have already been shown to continue numbering correctly
+            const reviewsShownSoFar = sortedReviews.slice(0, currentlyShowing);
+            const nonUserReviewsShownSoFar = reviewsShownSoFar.filter(r => !(currentUserId && r.user_id === currentUserId)).length;
             
-            nextBatch.forEach(review => {
+            nextBatch.forEach((review, index) => {
+                const isOwnReview = currentUserId && review.user_id === currentUserId;
+                // Count non-user reviews in the current batch before this one
+                const nonUserReviewsInBatchBeforeThis = nextBatch.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
+                const studentNumber = nonUserReviewsShownSoFar + nonUserReviewsInBatchBeforeThis + 1;
+                const anonymousName = isOwnReview ? "Your review" : `Student ${studentNumber}`;
+                const avatarSrc = "/assets/user.svg";
+                
                 const reviewElement = document.createElement('div');
-                reviewElement.innerHTML = renderReview(review, currentUserId);
+                reviewElement.innerHTML = renderReview(review, currentUserId, anonymousName, avatarSrc);
                 reviewsList.appendChild(reviewElement.firstElementChild);
             });
             
             const newCurrentlyShowing = currentlyShowing + nextBatch.length;
             
-            if (newCurrentlyShowing >= reviewsWithProfiles.length) {
+            if (newCurrentlyShowing >= sortedReviews.length) {
                 loadMoreBtn.remove();
             } else {
-                loadMoreBtn.textContent = `Load More Reviews (${reviewsWithProfiles.length - newCurrentlyShowing} more)`;
+                loadMoreBtn.textContent = `Load More Reviews (${sortedReviews.length - newCurrentlyShowing} more)`;
                 loadMoreBtn.onclick = () => loadMoreReviews(courseCode, academicYear, term, newCurrentlyShowing);
             }
         }
@@ -978,7 +1023,11 @@ window.closeReviewModal = function() {
     const modal = document.querySelector('.review-modal');
     if (modal) {
         modal.remove();
-        document.body.style.overflow = 'auto';
+        // Only restore body overflow if the main course info modal is not open
+        const classInfo = document.getElementById("class-info");
+        if (!classInfo || !classInfo.classList.contains("show")) {
+            document.body.style.overflow = 'auto';
+        }
     }
 };
 

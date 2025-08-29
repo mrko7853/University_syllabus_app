@@ -1296,6 +1296,38 @@ table#calendar-main {
     opacity: 60%;
 }
 
+.class-subtitle-review {
+    display: flex;
+    margin: 30px 30px 0 30px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.subtitle-opacity {
+    opacity: 60%;
+    margin: 0;
+}
+
+.class-subtitle-review button {
+    width: 185px;
+    height: auto;
+    font-family: 'Libre Bodoni', sans-serif;
+    font-size: var(--h3);
+    font-weight: 400;
+}
+
+.edit-icon {
+    background-image: url(/assets/add.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 30px;
+    image-rendering: pixelated;
+    filter: brightness(0) saturate(100%);
+    height: 30px;
+    width: 30px;
+}
+
 .gpa-graph {
     display: flex;
     flex-direction: column;
@@ -1903,6 +1935,9 @@ td p {
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
+    background-color: #E3D5E9;
+    padding: 8px;
+    box-sizing: border-box;
 }
 
 /* Bar fill for rating distribution */
@@ -2235,10 +2270,6 @@ td p {
     align-content: center;
 }
 
-.rating-display {
-    
-}
-
 .rating-total {
     font-size: var(--h3);
     font-weight: 100;
@@ -2341,29 +2372,6 @@ td p {
 
 .no-reviews p {
     margin: 10px 0;
-}
-
-/* Add review section */
-.add-review-section {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-}
-
-.add-review-btn {
-    width: 100%;
-    padding: 15px;
-    border: none;
-    background: #28a745;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 500;
-}
-
-.add-review-btn:hover {
-    background: #218838;
 }
 
 /* ===== NOTIFICATIONS ===== */
