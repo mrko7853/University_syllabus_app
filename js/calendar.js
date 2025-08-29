@@ -200,7 +200,8 @@ async function showCourse(year, term) {
         );
 
         coursesToShow.forEach(course => {
-            const match = course.time_slot.match(/\((\S+)曜日(\d+)講時\)/);
+            // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)  
+            const match = course.time_slot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
             if (!match) return;
 
             const dayJP = match[1];

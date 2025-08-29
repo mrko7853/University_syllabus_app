@@ -2123,19 +2123,32 @@ td p {
 
 /* Star rating display */
 .star {
-    color: #ffc107;
+    background-image: url(/assets/star.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    display: inline-block;
 }
 
 .star.filled {
-    color: #ffc107;
+    filter: brightness(0) saturate(100%) invert(75%) sepia(98%) saturate(1610%) hue-rotate(359deg) brightness(102%) contrast(104%);
+}
+
+.star-extrasmall {
+    background-size: 15px;
+    height: 15px;
+    width: 15px;
 }
 
 .star-small {
-    font-size: 14px;
+    background-size: 25px;
+    height: 25px;
+    width: 25px;
 }
 
 .star-large {
-    font-size: 20px;
+    background-size: 50px;
+    height: 50px;
+    width: 50px;
 }
 
 /* Review items */
@@ -2212,29 +2225,24 @@ td p {
 .review-summary {
     display: flex;
     gap: 30px;
-    margin-bottom: 30px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 8px;
+    padding: 30px;
 }
 
 .average-rating {
-    text-align: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-content: center;
 }
 
 .rating-display {
-    margin-bottom: 10px;
-}
-
-.rating-number {
-    font-size: 36px;
-    font-weight: bold;
-    color: #007bff;
+    
 }
 
 .rating-total {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--h3);
+    font-weight: 100;
+    margin: 0;
 }
 
 .rating-stars {
@@ -2261,26 +2269,36 @@ td p {
 
 .rating-label {
     min-width: 30px;
-    font-size: 14px;
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: center;
+    gap: 5px;
+    align-items: center;
+}
+
+.rating-label p {
+    font-size: var(--p);
+    text-align: right;
+    margin: 0;
+    min-width: 10px;
 }
 
 .bar-container {
     flex-grow: 1;
     height: 20px;
-    background: #e9ecef;
     border-radius: 10px;
     overflow: hidden;
 }
 
 .bar-fill {
     height: 100%;
-    background: #007bff;
+    background: #BDAAC6;
     transition: width 0.3s ease;
 }
 
 .rating-count {
-    min-width: 20px;
-    font-size: 12px;
+    min-width: 10px;
+    font-size: var(--p);
     text-align: right;
 }
 

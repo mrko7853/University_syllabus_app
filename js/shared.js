@@ -131,6 +131,64 @@ export async function fetchCourseData(year, term) {
 export async function openCourseInfoMenu(course, updateURL = true) {
     console.log('Opening course info menu for:', course);
     
+    // Function to properly format time slots from Japanese to English
+    function formatTimeSlot(timeSlot) {
+        if (!timeSlot) return 'TBA';
+        
+        // Japanese day mappings
+        const dayMap = {
+            "月": "Monday",
+            "火": "Tuesday", 
+            "水": "Wednesday",
+            "木": "Thursday",
+            "金": "Friday",
+            "土": "Saturday",
+            "日": "Sunday"
+        };
+        
+        // Period time mappings
+        const timeMap = {
+            "1": "09:00 - 10:30",
+            "2": "10:45 - 12:15", 
+            "3": "13:10 - 14:40",
+            "4": "14:55 - 16:25",
+            "5": "16:40 - 18:10"
+        };
+        
+        // Try to match Japanese format: (月曜日1講時) or variants
+        let match = timeSlot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
+        if (match) {
+            const dayChar = match[1];
+            const period = match[2];
+            const dayName = dayMap[dayChar];
+            const timeRange = timeMap[period];
+            
+            if (dayName && timeRange) {
+                return `${dayName} ${timeRange}`;
+            }
+        }
+        
+        // Try to match English format that's already converted: "Mon 10:45 - 12:15" etc
+        const englishMatch = timeSlot.match(/(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
+        if (englishMatch) {
+            const dayAbbr = englishMatch[1];
+            const timeRange = englishMatch[2];
+            const fullDayMap = {
+                "Mon": "Monday",
+                "Tue": "Tuesday",
+                "Wed": "Wednesday", 
+                "Thu": "Thursday",
+                "Fri": "Friday",
+                "Sat": "Saturday",
+                "Sun": "Sunday"
+            };
+            return `${fullDayMap[dayAbbr]} ${timeRange}`;
+        }
+        
+        // If it's already in a good format or unrecognized, return as-is
+        return timeSlot;
+    }
+    
     const classInfo = document.getElementById("class-info");
     const classContent = document.getElementById("class-content");
     const classGPA = document.getElementById("class-gpa-graph");
@@ -285,7 +343,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             <div class="class-info-1">
                 <div class="class-component"><p>Professor</p><h3>${course.professor}</h3></div>
                 <div class="class-component"><p>Course Code</p><h3>${course.course_code}</h3></div>
-                <div class="class-component"><p>Time</p><div class="class-component-label" style="background: ${timeBackgroundColor};">${course.time_slot.replace(/曜日(\d+)講時/, ` Day Period $1`).replace(/Mon /g, 'Monday ').replace(/Tue /g, 'Tuesday ').replace(/Wed /g, 'Wednesday ').replace(/Thu /g, 'Thursday ').replace(/Fri /g, 'Friday ')}</div></div>
+                <div class="class-component"><p>Time</p><div class="class-component-label" style="background: ${timeBackgroundColor};">${formatTimeSlot(course.time_slot)}</div></div>
                 <div class="class-component"><p>Location</p><h3>${course.location || 'TBA'}</h3></div>
             </div>
             <div class="class-info-2">
@@ -496,9 +554,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         
         for (let i = 1; i <= 5; i++) {
             if (i <= rating) {
-                stars.push(`<span class="star ${sizeClass} filled">★</span>`);
+                stars.push(`<span class="star ${sizeClass} filled"></span>`);
             } else {
-                stars.push(`<span class="star ${sizeClass}">☆</span>`);
+                stars.push(`<span class="star ${sizeClass}"></span>`);
             }
         }
         return stars.join('');
@@ -585,12 +643,17 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             <!-- Average Rating Section -->
             <div class="review-summary">
                 <div class="average-rating">
-                    <div class="rating-display">
-                        <span class="rating-number">${stats.averageRating}</span>
-                        <span class="rating-total">out of 5</span>
+                    <div>
+                        <h3>Average Rating</h3>
                     </div>
+                    <div></div>
                     <div class="rating-stars">${renderStarRating(Math.round(stats.averageRating), 'large')}</div>
-                    <p class="total-reviews">${stats.totalReviews} review${stats.totalReviews !== 1 ? 's' : ''}</p>
+                    <div>
+                        <p class="total-reviews">${stats.totalReviews} review${stats.totalReviews !== 1 ? 's' : ''}</p>
+                        <div class="rating-display">
+                            <p class="rating-total">${stats.averageRating} out of 5</p>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Rating Distribution -->
@@ -600,7 +663,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                         const percentage = stats.totalReviews > 0 ? (count / stats.totalReviews * 100).toFixed(1) : 0;
                         return `
                             <div class="rating-bar">
-                                <span class="rating-label">${rating} ★</span>
+                                <span class="rating-label"><p>${rating}</p> <div class="star star-extrasmall"></div></span>
                                 <div class="bar-container">
                                     <div class="bar-fill" style="width: ${percentage}%"></div>
                                 </div>

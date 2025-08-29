@@ -526,8 +526,8 @@ class CourseCalendar extends HTMLElement {
       );
 
       coursesToShow.forEach(course => {
-        // Try Japanese format first: (月曜日1講時)
-        let match = course.time_slot?.match(/\((\S+)曜日(\d+)講時\)/);
+        // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
+        let match = course.time_slot?.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
         let dayEN, period;
         
         if (match) {

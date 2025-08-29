@@ -32,20 +32,21 @@ async function showCourse(year, term) {
     let courseHTML = "";
     courses.forEach(function(course) {
         const days = {
-            "月曜日": "Mon",
-            "火曜日": "Tue",
-            "水曜日": "Wed",
-            "木曜日": "Thu",
-            "金曜日": "Fri"
+            "月曜日": "Mon", "月": "Mon",
+            "火曜日": "Tue", "火": "Tue", 
+            "水曜日": "Wed", "水": "Wed",
+            "木曜日": "Thu", "木": "Thu",
+            "金曜日": "Fri", "金": "Fri"
         };
         const times = {
-            "1講時": "09:00 - 10:30",
-            "2講時": "10:45 - 12:15",
-            "3講時": "13:10 - 14:40",
-            "4講時": "14:55 - 16:25",
-            "5講時": "16:40 - 18:10"
+            "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
+            "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
+            "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
+            "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
+            "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
         };
-        const match = course.time_slot.match(/(月曜日|火曜日|水曜日|木曜日|金曜日)([1-5]講時)/);
+        // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
         if (specialMatch) {
             course.time_slot = "Mon 13:10 - 14:40\nThu 13:10 - 14:40";
@@ -84,21 +85,22 @@ async function showCourse(year, term) {
 // Helper function to convert course time slot to container ID format
 function convertTimeSlotToContainerFormat(timeSlot) {
     const days = {
-        "月曜日": "Mon",
-        "火曜日": "Tue",
-        "水曜日": "Wed",
-        "木曜日": "Thu",
-        "金曜日": "Fri"
+        "月曜日": "Mon", "月": "Mon",
+        "火曜日": "Tue", "火": "Tue",
+        "水曜日": "Wed", "水": "Wed",
+        "木曜日": "Thu", "木": "Thu",
+        "金曜日": "Fri", "金": "Fri"
     };
     const times = {
-        "1講時": "09:00 - 10:30",
-        "2講時": "10:45 - 12:15",
-        "3講時": "13:10 - 14:40",
-        "4講時": "14:55 - 16:25",
-        "5講時": "16:40 - 18:10"
+        "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
+        "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
+        "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
+        "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
+        "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
     };
     
-    const match = timeSlot.match(/(月曜日|火曜日|水曜日|木曜日|金曜日)([1-5]講時)/);
+    // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+    const match = timeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
     const specialMatch = timeSlot.match(/(月曜日3講時・木曜日3講時)/);
     
     if (specialMatch) {
@@ -538,7 +540,8 @@ async function calendarSchedule(year, term) {
         );
 
         coursesToShow.forEach(course => {
-            const match = course.time_slot.match(/\((\S+)曜日(\d+)講時\)/);
+            // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+            const match = course.time_slot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
             if (!match) return;
 
             const dayJP = match[1];
@@ -1217,22 +1220,23 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
     
     coursesWithRelevance.forEach(function({ course, relevanceScore }) {
         const days = {
-            "月曜日": "Mon",
-            "火曜日": "Tue",
-            "水曜日": "Wed",
-            "木曜日": "Thu",
-            "金曜日": "Fri"
+            "月曜日": "Mon", "月": "Mon",
+            "火曜日": "Tue", "火": "Tue",
+            "水曜日": "Wed", "水": "Wed",
+            "木曜日": "Thu", "木": "Thu",
+            "金曜日": "Fri", "金": "Fri"
         };
         const times = {
-            "1講時": "09:00 - 10:30",
-            "2講時": "10:45 - 12:15",
-            "3講時": "13:10 - 14:40",
-            "4講時": "14:55 - 16:25",
-            "5講時": "16:40 - 18:10"
+            "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
+            "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
+            "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
+            "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
+            "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
         };
         
         let timeSlot = course.time_slot;
-        const match = course.time_slot.match(/(月曜日|火曜日|水曜日|木曜日|金曜日)([1-5]講時)/);
+        // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
         
         if (specialMatch) {
