@@ -348,7 +348,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             </div>
             <div class="class-info-2">
                 <div class="class-component"><p>Course type</p><div class="class-component-label" style="background: ${courseColor};">${courseType}</div></div>
-                <div class="class-component"><p>Syllabus Link</p><button id="external-link-btn" onclick="window.open('${course.url}', '_blank')">University Page</button></div>
+                <div class="class-component"><p>Syllabus Link</p><button id="external-link-btn" onclick="window.open('${course.url}', '_blank')">
+                    <div class="button-icon">
+                        <p>University Link</p>
+                        <div class="external-link-icon"></div>
+                    </div>
+                </button></div>
             </div>
         </div>
     `;
@@ -610,12 +615,17 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                         <div class="review-rating">${renderStarRating(review.rating)}</div>
                     </div>
                     <div class="review-dates">
-                        <p class="review-date">Reviewed: ${formatDate(review.created_at)}</p>
-                        <p class="review-course-date">Took course: ${review.term} ${review.academic_year}</p>
+                        <p class="review-date">Reviewed on ${formatDate(review.created_at)}</p>
+                        <p class="review-course-date"><div class="term-label">${review.term.includes('/') ? review.term.split('/')[1] : review.term} ${review.academic_year}</div></p>
                     </div>
                     ${isOwnReview ? `
                         <div class="review-actions">
-                            <button class="edit-review-btn" onclick="openEditReviewModal('${review.id}', '${review.course_code}', '${review.term}', ${review.rating}, '${(review.content || '').replace(/'/g, "\\'")}', ${review.academic_year})">Edit</button>
+                            <button class="edit-review-btn" onclick="openEditReviewModal('${review.id}', '${review.course_code}', '${review.term}', ${review.rating}, '${(review.content || '').replace(/'/g, "\\'")}', ${review.academic_year})">
+                                <div class="button-icon">
+                                    <p>Edit</p>
+                                    <div class="edit-icon"></div>
+                                </div>
+                            </button>
                         </div>
                     ` : ''}
                 </div>
@@ -656,7 +666,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
                 <div class="button-icon">
                     <p>Write a Review</p>
-                    <div class="edit-icon"></div>
+                    <div class="add-icon"></div>
                 </div>
             </button>
         </div>
