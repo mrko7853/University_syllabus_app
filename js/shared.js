@@ -1056,7 +1056,15 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
-                alert('Please log in to manage courses.');
+                // Use authentication modal system
+                if (window.requireAuth) {
+                    window.requireAuth('add this course to your schedule', async () => {
+                        // Re-trigger the add course action after authentication
+                        newButton.click();
+                    });
+                } else {
+                    alert('Please log in to manage courses.');
+                }
                 return;
             }
             
@@ -1376,7 +1384,15 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
-            alert('Please log in to write a review.');
+            // Use authentication modal system
+            if (window.requireAuth) {
+                window.requireAuth('write a review for this course', () => {
+                    // Re-trigger the review modal after authentication
+                    window.openAddReviewModal(courseCode, academicYear, term, courseTitle);
+                });
+            } else {
+                alert('Please log in to write a review.');
+            }
             return;
         }
 
