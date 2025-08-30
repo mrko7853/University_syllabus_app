@@ -136,7 +136,15 @@ class TotalCourses extends HTMLElement {
                 }
 
                 const selectedCourses = profile?.courses_selection || [];
-                return selectedCourses.length;
+                
+                // Filter to only count courses for the current year and term using utility functions
+                const currentDisplayCourses = selectedCourses.filter(course => {
+                    const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear());
+                    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || '秋学期/Fall');
+                    return course.year === currentYear && (!course.term || course.term === currentTerm);
+                });
+                
+                return currentDisplayCourses.length;
             } catch (error) {
                 console.error('Error fetching total courses:', error);
                 return 0; // Return 0 if there's an error
@@ -507,11 +515,16 @@ class CourseCalendar extends HTMLElement {
           .single();
         if (profileError) throw profileError;
         selectedCourses = profile?.courses_selection || [];
+        
+        // Filter to only show courses for the current year and term
+        selectedCourses = selectedCourses.filter(course => {
+          return course.year === parseInt(year) && (!course.term || course.term === term);
+        });
       }
 
       this.clearCourseCells();
 
-      // If no selected courses, fill with EMPTY placeholders
+      // If no selected courses for current year/term, fill with EMPTY placeholders
       if (!selectedCourses.length) {
         this.showEmptyCalendar();
         return;
@@ -521,7 +534,7 @@ class CourseCalendar extends HTMLElement {
 
       const coursesToShow = allCoursesInSemester.filter(course =>
         selectedCourses.some((profileCourse) =>
-          profileCourse.code === course.course_code && profileCourse.year == year
+          profileCourse.code === course.course_code
         )
       );
 
@@ -649,14 +662,14 @@ class CourseCalendar extends HTMLElement {
       return this.initializeCalendar();
     }
     
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    let term = "春学期/Spring";
-    if (currentMonth >= 8 || currentMonth <= 2) {
-      term = "秋学期/Fall";
-    }
+    // Use utility functions to get current year and term from selectors
+    const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
+      const currentMonth = new Date().getMonth() + 1;
+      return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+    })();
 
-    await this.showCourseWithRetry(currentYear, term);
+    await this.showCourseWithRetry(currentYear, currentTerm);
   }
 
   // Public method to show specific term

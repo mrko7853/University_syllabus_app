@@ -542,49 +542,47 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     const courseType = getCourseType(courseColor);
 
-    // Function to check if there's a time conflict with registered courses
-    async function checkTimeConflict(timeSlot, courseCode, courseYear) {
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return false; // No user logged in, assume available
-            
-            // Get user profile with selected courses
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('courses_selection')
-                .eq('id', session.user.id)
-                .single();
-            
-            if (profileData && profileData.courses_selection && profileData.courses_selection.length > 0) {
-                // Since year might be undefined, let's check with and without year
-                const isAlreadySelected = profileData.courses_selection.some(selectedCourse => {
-                    // Primary check: match by course code and year (if year is available)
-                    if (courseYear && courseYear !== undefined) {
-                        return selectedCourse.code === courseCode && selectedCourse.year === courseYear;
-                    }
-                    
-                    // Fallback: match by course code only (since year might not be available in course object)
-                    return selectedCourse.code === courseCode;
-                });
-                
-                return isAlreadySelected;
-            }
-            
-            return false;
-            
-        } catch (error) {
-            console.error('Error checking course selection:', error);
-            return false; // Assume available on error
+    // Check if course is already selected by user (for time slot background color)
+    let isAlreadySelected = false;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        const { data: profileData } = await supabase
+            .from('profiles')
+            .select('courses_selection')
+            .eq('id', session.user.id)
+            .single();
+        
+        if (profileData?.courses_selection) {
+            // Filter courses by current year and term, then check if this course is selected
+            const currentYearCourses = filterCoursesByCurrentYearTerm(profileData.courses_selection);
+            isAlreadySelected = currentYearCourses.some(selected => 
+                selected.code === course.course_code
+            );
         }
     }
-
-    // Check for time conflict and set appropriate color
-    const hasTimeConflict = await checkTimeConflict(course.time_slot, course.course_code, course.academic_year);
-    const timeBackgroundColor = hasTimeConflict ? '#ED7F81' : '#92ECB0'; // Red for already selected, Green for available
+    
+    // Set background color based on selection status and whether modifications are allowed
+    let timeBackgroundColor;
+    const canModify = window.isCurrentSemester ? window.isCurrentSemester() : true; // Default to true if function not available yet
+    
+    if (!canModify) {
+        // Gray for non-current semesters (locked)
+        timeBackgroundColor = isAlreadySelected ? '#B0B0B0' : '#D3D3D3';
+    } else {
+        // Red for already selected, Green for available
+        timeBackgroundColor = isAlreadySelected ? '#ED7F81' : '#92ECB0';
+    }
+    
+    // Reference to the exported checkTimeConflict function defined later in the file
+    const checkTimeConflictForModal = async (timeSlot, courseCode, academicYear) => {
+        // This will reference the exported function defined at the bottom of the file
+        return await window.checkTimeConflictExported(timeSlot, courseCode, academicYear);
+    };
 
     classContent.innerHTML = `
         <div class="course-header">
             <h2>${course.title}</h2>
+            ${!canModify ? `<div class="semester-status locked" style="background: #ffebcc; color: #d6620f; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 5px 0;" title="This semester is locked for modifications"><p style="margin: 0;">🔒 Semester Locked</p></div>` : ''}
             <button onclick="shareCourseURL()" title="Share this course"><div class="button-icon"><p>Share</p><div class="share-icon"></div></div></button>
         </div>
         <div class="class-info-container">
@@ -887,8 +885,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     // Load reviews for this course (from all years, just matching course code and term)
     const allReviews = await loadCourseReviews(course.course_code, null, course.term);
     
-    // Get current user ID for edit functionality
-    const { data: { session } } = await supabase.auth.getSession();
+    // Get current user ID for edit functionality (using session already declared above)
     const currentUserId = session?.user?.id;
     
     // Sort reviews to put user's own review first, then by creation date
@@ -990,6 +987,200 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     setTimeout(() => {
         classInfoBackground.style.opacity = "1";
     }, 10);
+
+    // Set up add/remove course button functionality
+    const addRemoveButton = document.getElementById("class-add-remove");
+    
+    if (addRemoveButton) {
+        // Always remove existing listener and set up fresh
+        const newButton = addRemoveButton.cloneNode(true);
+        addRemoveButton.parentNode.replaceChild(newButton, addRemoveButton);
+        
+        // Simple function to check if course is selected
+        async function isCourseSelected(courseCode, year) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return false;
+            
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('courses_selection')
+                .eq('id', session.user.id)
+                .single();
+            
+            if (!profile?.courses_selection) return false;
+            
+            // Filter by current year and term, then check for the course
+            const currentYearCourses = filterCoursesByCurrentYearTerm(profile.courses_selection);
+            return currentYearCourses.some(selected => selected.code === courseCode);
+        }
+        
+        // Simple function to update button appearance
+        async function updateButton() {
+            const isSelected = await isCourseSelected(course.course_code, course.academic_year);
+            const canModify = isCurrentSemester();
+            
+            if (!canModify) {
+                // For non-current semesters, show a disabled state
+                newButton.textContent = "Semester Locked";
+                newButton.style.background = "#cccccc";
+                newButton.style.color = "#666666";
+                newButton.style.cursor = "not-allowed";
+                newButton.disabled = true;
+            } else if (isSelected) {
+                newButton.textContent = "Remove Course";
+                newButton.style.background = "#dc3545";
+                newButton.style.color = "white";
+                newButton.style.cursor = "pointer";
+                newButton.disabled = false;
+            } else {
+                newButton.textContent = "Add Course";
+                newButton.style.background = "#28a745";
+                newButton.style.color = "white";
+                newButton.style.cursor = "pointer";
+                newButton.disabled = false;
+            }
+        }
+        
+        // Set initial button state
+        await updateButton();
+        
+        // Add click handler
+        newButton.addEventListener("click", async function(e) {
+            e.preventDefault();
+            
+            // Check if we can modify courses for this semester
+            if (!isCurrentSemester()) {
+                alert('You can only add or remove courses for the current semester. Please switch to the current semester to make changes.');
+                return;
+            }
+            
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                alert('Please log in to manage courses.');
+                return;
+            }
+            
+            try {
+                // Get current profile
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('courses_selection')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                const currentSelection = profile?.courses_selection || [];
+                
+                // Filter to get only courses for current year and term
+                const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
+                const isCurrentlySelected = currentYearCourses.some(selected => 
+                    selected.code === course.course_code
+                );
+                
+                if (isCurrentlySelected) {
+                    // Remove course - remove from the full selection, not just current year
+                    const updatedSelection = currentSelection.filter(selected => 
+                        !(selected.code === course.course_code && selected.year === getCurrentYear() && (!selected.term || selected.term === getCurrentTerm()))
+                    );
+                    
+                    const { error } = await supabase
+                        .from('profiles')
+                        .update({ courses_selection: updatedSelection })
+                        .eq('id', session.user.id);
+                    
+                    if (error) {
+                        console.error('Error removing course:', error);
+                        alert('Failed to remove course. Please try again.');
+                        return;
+                    }
+                    
+                    alert('Course removed successfully!');
+                } else {
+                    // Check for conflicts first
+                    console.log('Checking for conflicts for course:', course.course_code, 'time:', course.time_slot);
+                    const conflictResult = await checkTimeConflictForModal(course.time_slot, course.course_code, course.academic_year);
+                    console.log('Conflict result:', conflictResult);
+                    
+                    if (conflictResult.hasConflict) {
+                        console.log('Conflict detected, showing modal');
+                        showTimeConflictModal(conflictResult.conflictingCourses, course, async (shouldReplace, conflictingCourses) => {
+                            if (shouldReplace) {
+                                // Remove conflicting courses and add new one
+                                let updatedSelection = currentSelection.filter(selected => {
+                                    return !conflictingCourses.some(conflict => {
+                                        // Remove conflicting courses from current year/term only
+                                        return conflict.course_code === selected.code && 
+                                               selected.year === getCurrentYear() && 
+                                               (!selected.term || selected.term === getCurrentTerm());
+                                    });
+                                });
+                                
+                                // Add the new course with current year and term
+                                updatedSelection = [
+                                    ...updatedSelection,
+                                    {
+                                        code: course.course_code,
+                                        year: getCurrentYear(),
+                                        term: getCurrentTerm()
+                                    }
+                                ];
+                                
+                                const { error } = await supabase
+                                    .from('profiles')
+                                    .update({ courses_selection: updatedSelection })
+                                    .eq('id', session.user.id);
+                                
+                                if (error) {
+                                    console.error('Error updating courses:', error);
+                                    alert('Failed to update courses. Please try again.');
+                                    return;
+                                }
+                                
+                                alert('Course replaced successfully!');
+                                await updateButton();
+                                if (window.refreshCalendarComponent) {
+                                    window.refreshCalendarComponent();
+                                }
+                            }
+                        });
+                        return;
+                    }
+                    
+                    // Add course with current year and term
+                    const updatedSelection = [
+                        ...currentSelection,
+                        {
+                            code: course.course_code,
+                            year: getCurrentYear(),
+                            term: getCurrentTerm()
+                        }
+                    ];
+                    
+                    const { error } = await supabase
+                        .from('profiles')
+                        .update({ courses_selection: updatedSelection })
+                        .eq('id', session.user.id);
+                    
+                    if (error) {
+                        console.error('Error adding course:', error);
+                        alert('Failed to add course. Please try again.');
+                        return;
+                    }
+                    
+                    alert('Course added successfully!');
+                }
+                
+                // Update button and refresh calendar
+                await updateButton();
+                if (window.refreshCalendarComponent) {
+                    window.refreshCalendarComponent();
+                }
+                
+            } catch (error) {
+                console.error('Error managing course:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+    }
 
     if (!classClose.dataset.listenerAttached) {
         classClose.addEventListener("click", function() {
@@ -1854,3 +2045,302 @@ window.renderReview = function(review, currentUserId = null) {
         </div>
     `;
 };
+
+// Export the existing checkTimeConflict function with enhanced conflict resolution
+export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
+    console.log('checkTimeConflict called with:', { timeSlot, courseCode, academicYear });
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            console.log('No session found');
+            return { hasConflict: false, conflictingCourses: [] };
+        }
+        
+        // Get user profile with selected courses
+        const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('courses_selection')
+            .eq('id', session.user.id)
+            .single();
+        
+        console.log('Profile data:', profileData);
+        
+        if (!profileData || !profileData.courses_selection || profileData.courses_selection.length === 0) {
+            console.log('No courses selected yet');
+            return { hasConflict: false, conflictingCourses: [] };
+        }
+        
+        // Filter courses by current year and term only
+        const currentYearCourses = filterCoursesByCurrentYearTerm(profileData.courses_selection);
+        
+        if (currentYearCourses.length === 0) {
+            console.log('No courses selected for current year and term');
+            return { hasConflict: false, conflictingCourses: [] };
+        }
+        
+        // Function to parse time slot to day and period
+        function parseTimeSlot(slot) {
+            console.log('Parsing time slot:', slot);
+            if (!slot) return null;
+            
+            // Japanese day mappings
+            const dayMap = {
+                "月": "Monday",
+                "火": "Tuesday", 
+                "水": "Wednesday",
+                "木": "Thursday",
+                "金": "Friday",
+                "土": "Saturday",
+                "日": "Sunday"
+            };
+            
+            // Try to match Japanese format: (月曜日1講時) or variants
+            let match = slot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
+            if (match) {
+                const dayChar = match[1];
+                const period = match[2];
+                const result = {
+                    day: dayMap[dayChar] || dayChar,
+                    period: period,
+                    original: slot
+                };
+                console.log('Japanese format matched:', result);
+                return result;
+            }
+            
+            // Try to match English format: "Monday 09:00 - 10:30" etc (both full and abbreviated day names)
+            const englishMatch = slot.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-?\s*\d{2}:\d{2})/);
+            if (englishMatch) {
+                const dayMap = {
+                    'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday', 
+                    'Thu': 'Thursday', 'Fri': 'Friday', 'Sat': 'Saturday', 'Sun': 'Sunday'
+                };
+                const fullDay = dayMap[englishMatch[1]] || englishMatch[1];
+                const result = {
+                    day: fullDay,
+                    timeRange: englishMatch[2],
+                    original: slot
+                };
+                console.log('English format matched:', result);
+                return result;
+            }
+            
+            console.log('No format matched, returning original:', slot);
+            return { original: slot };
+        }
+        
+        const newTimeSlot = parseTimeSlot(timeSlot);
+        console.log('Parsed new time slot:', newTimeSlot);
+        if (!newTimeSlot) return { hasConflict: false, conflictingCourses: [] };
+        
+        // Get the current year and term from global variables or the course being checked
+        const currentYear = academicYear;
+        const currentTerm = getCurrentTerm(); // We'll need this function
+        console.log('Current year/term:', currentYear, currentTerm);
+        
+        // Fetch actual course details for selected courses to get their time slots
+        const selectedCourseCodes = currentYearCourses.map(course => course.code);
+        console.log('Selected course codes for current year/term:', selectedCourseCodes);
+        
+        let conflictingCourseDetails = [];
+        
+        if (selectedCourseCodes.length > 0) {
+            // Fetch actual course data to get time slots
+            console.log('Fetching course data for conflict check...');
+            const { data: coursesData } = await supabase
+                .from('courses')
+                .select('course_code, title, time_slot, professor, academic_year, term')
+                .in('course_code', selectedCourseCodes)
+                .eq('academic_year', currentYear)
+                .eq('term', currentTerm);
+            
+            console.log('Fetched courses data:', coursesData);
+            
+            if (coursesData) {
+                console.log('Processing', coursesData.length, 'courses for conflicts');
+                // Check for time conflicts with fetched course data
+                conflictingCourseDetails = coursesData.filter(courseData => {
+                    console.log('Checking course:', courseData.course_code, 'with time:', courseData.time_slot);
+                    
+                    // Skip if it's the same course
+                    if (courseData.course_code === courseCode) {
+                        console.log('Skipping same course:', courseData.course_code);
+                        return false;
+                    }
+                    
+                    const existingTimeSlot = parseTimeSlot(courseData.time_slot);
+                    console.log('Parsed existing time slot:', existingTimeSlot);
+                    if (!existingTimeSlot) return false;
+                    
+                    // Check for time conflicts
+                    if (newTimeSlot.day && existingTimeSlot.day) {
+                        console.log('Comparing days:', newTimeSlot.day, 'vs', existingTimeSlot.day);
+                        if (newTimeSlot.day === existingTimeSlot.day) {
+                            console.log('Same day detected!');
+                            // If both have periods, compare periods
+                            if (newTimeSlot.period && existingTimeSlot.period) {
+                                console.log('Comparing periods:', newTimeSlot.period, 'vs', existingTimeSlot.period);
+                                return newTimeSlot.period === existingTimeSlot.period;
+                            }
+                            // If both have time ranges, they conflict (same day)
+                            if (newTimeSlot.timeRange && existingTimeSlot.timeRange) {
+                                console.log('Both have time ranges, conflict detected');
+                                return true;
+                            }
+                            // If one has period and one has time range, assume conflict
+                            console.log('Mixed time formats, assuming conflict');
+                            return true;
+                        }
+                    }
+                    
+                    console.log('No conflict found for course:', courseData.course_code);
+                    return false;
+                });
+                
+                console.log('Found conflicts:', conflictingCourseDetails);
+            }
+        }
+        
+        const result = {
+            hasConflict: conflictingCourseDetails.length > 0,
+            conflictingCourses: conflictingCourseDetails
+        };
+        
+        console.log('Final conflict result:', result);
+        return result;
+        
+    } catch (error) {
+        console.error('Error checking time conflict:', error);
+        return { hasConflict: false, conflictingCourses: [] };
+    }
+}
+
+// Make the function available globally for internal use
+window.checkTimeConflictExported = checkTimeConflict;
+
+// Utility functions to get current year and term from UI
+function getCurrentYear() {
+    const yearSelect = document.getElementById('year-select');
+    if (yearSelect && yearSelect.value) {
+        return parseInt(yearSelect.value);
+    }
+    // Fallback to current year
+    return new Date().getFullYear();
+}
+
+function getCurrentTerm() {
+    const termSelect = document.getElementById('term-select');
+    if (termSelect && termSelect.value) {
+        return termSelect.value;
+    }
+    // Fallback to current term logic
+    return '秋学期/Fall'; // Adjust as needed
+}
+
+// Check if the currently selected year/term is the current semester
+function isCurrentSemester() {
+    const selectedYear = getCurrentYear();
+    const selectedTerm = getCurrentTerm();
+    
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // 0-indexed, so add 1
+    
+    // Determine current term based on month
+    let actualCurrentTerm = "春学期/Spring";
+    if (currentMonth >= 8 || currentMonth <= 2) {
+        actualCurrentTerm = "秋学期/Fall";
+    }
+    
+    return selectedYear === currentYear && selectedTerm === actualCurrentTerm;
+}
+
+// Filter courses selection by current year and term
+function filterCoursesByCurrentYearTerm(coursesSelection) {
+    const currentYear = getCurrentYear();
+    const currentTerm = getCurrentTerm();
+    
+    return coursesSelection.filter(course => {
+        // Match by year, and if term is specified in the selection, match by term too
+        return course.year === currentYear && (!course.term || course.term === currentTerm);
+    });
+}
+
+// Make utility functions globally available
+window.getCurrentYear = getCurrentYear;
+window.getCurrentTerm = getCurrentTerm;
+window.isCurrentSemester = isCurrentSemester;
+window.filterCoursesByCurrentYearTerm = filterCoursesByCurrentYearTerm;
+
+// Function to show time conflict modal (similar to search modal)
+export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) {
+    // Remove any existing conflict modal
+    const existingModal = document.querySelector('.conflict-container');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Create modal container
+    const modalContainer = document.createElement('div');
+    modalContainer.className = 'conflict-container';
+    
+    modalContainer.innerHTML = `
+        <div class="search-background">
+            <div class="search-modal">
+                <h2><div></div>Time Slot Conflict</h2>
+                <div class="conflict-content">
+                    <p>You are trying to add <strong>${newCourse.title}</strong> but there's already a course scheduled at the same time:</p>
+                    
+                    ${conflictingCourses.map(course => `
+                        <div class="conflicting-course">
+                            <div class="course-details">
+                                <h3>${course.title}</h3>
+                                <p><strong>Course Code:</strong> ${course.course_code}</p>
+                                <p><strong>Time:</strong> ${course.time_slot}</p>
+                                <p><strong>Professor:</strong> ${course.professor || 'TBA'}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    <div class="conflict-question">
+                        <p>Would you like to remove the conflicting course and add the new one?</p>
+                    </div>
+                </div>
+                <div class="search-buttons">
+                    <button class="search-cancel conflict-cancel">Cancel</button>
+                    <button class="search-submit conflict-replace">Replace Course</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add to body
+    document.body.appendChild(modalContainer);
+    
+    // Add event listeners
+    const cancelBtn = modalContainer.querySelector('.conflict-cancel');
+    const replaceBtn = modalContainer.querySelector('.conflict-replace');
+    const background = modalContainer.querySelector('.search-background');
+    
+    function closeModal() {
+        modalContainer.remove();
+        if (onResolve) onResolve(false);
+    }
+    
+    function replaceAndAdd() {
+        modalContainer.remove();
+        if (onResolve) onResolve(true, conflictingCourses);
+    }
+    
+    cancelBtn.addEventListener('click', closeModal);
+    replaceBtn.addEventListener('click', replaceAndAdd);
+    background.addEventListener('click', (e) => {
+        if (e.target === background) {
+            closeModal();
+        }
+    });
+    
+    // Show modal with animation
+    setTimeout(() => {
+        modalContainer.classList.add('show');
+    }, 10);
+}

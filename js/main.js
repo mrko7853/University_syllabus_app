@@ -1,6 +1,6 @@
 import { supabase } from "/supabase.js";
 import { fetchCourseData } from '/js/shared.js';
-import { openCourseInfoMenu, initializeCourseRouting } from '/js/shared.js';
+import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 
 // Helper function to refresh calendar component
 function refreshCalendarComponent() {
@@ -9,6 +9,9 @@ function refreshCalendarComponent() {
         calendarComponent.refreshCalendar();
     }
 }
+
+// Make refreshCalendarComponent globally accessible
+window.refreshCalendarComponent = refreshCalendarComponent;
 
 const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
@@ -143,8 +146,8 @@ async function fetchCourseDataWithRetry(year, term, retryCount = 0) {
 // Loading state management
 function createSkeletonCourse() {
     return `
-        <div class="class-outside skeleton-class-outside">
-            <div class="class-container skeleton-class-container">
+        <div class="skeleton-class-outside">
+            <div class="skeleton-class-container">
                 <div class="skeleton-line short"></div>
                 <div class="skeleton-title"></div>
                 <div class="skeleton-line short"></div>
@@ -153,7 +156,7 @@ function createSkeletonCourse() {
                 <div class="skeleton-line short"></div>
                 <div class="skeleton-line medium"></div>
             </div>
-            <div class="gpa-bar skeleton-gpa-bar">
+            <div class="skeleton-gpa-bar">
                 <div class="skeleton-gpa-section"></div>
                 <div class="skeleton-gpa-section"></div>
                 <div class="skeleton-gpa-section"></div>
@@ -169,7 +172,7 @@ function showCourseLoadingState() {
     
     isLoadingCourses = true;
     
-    // Create skeleton courses directly in the existing #course-list grid
+    // Create multiple skeleton courses as direct children for grid layout
     let skeletonHTML = '';
     for (let i = 0; i < 6; i++) {
         skeletonHTML += createSkeletonCourse();
@@ -697,10 +700,15 @@ async function calendarSchedule(year, term) {
         }
 
         const selectedCourses = profile?.courses_selection || [];
+        
+        // Filter to only show courses for the current year and term being displayed
+        const currentDisplayCourses = selectedCourses.filter(course => {
+            return course.year === parseInt(year) && (!course.term || course.term === term);
+        });
 
         calendar.querySelectorAll('tbody td .course-cell').forEach(el => el.remove());
 
-        if (selectedCourses.length === 0) {
+        if (currentDisplayCourses.length === 0) {
             calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
                 if (!cell.querySelector('.course-cell')) {
                     const emptyDiv = document.createElement('div');
@@ -715,8 +723,8 @@ async function calendarSchedule(year, term) {
         const allCoursesInSemester = await fetchCourseData(year, term);
 
         const coursesToShow = allCoursesInSemester.filter(course =>
-            selectedCourses.some((profileCourse) =>
-                profileCourse.code === course.course_code && profileCourse.year == year
+            currentDisplayCourses.some((profileCourse) =>
+                profileCourse.code === course.course_code
             )
         );
 

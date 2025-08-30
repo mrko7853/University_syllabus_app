@@ -176,10 +176,15 @@ async function showCourse(year, term) {
         }
 
         const selectedCourses = profile?.courses_selection || [];
+        
+        // Filter to only show courses for the current year and term
+        const currentDisplayCourses = selectedCourses.filter(course => {
+            return course.year === parseInt(year) && (!course.term || course.term === term);
+        });
 
         calendar.querySelectorAll('tbody td .course-cell').forEach(el => el.remove());
 
-        if (selectedCourses.length === 0) {
+        if (currentDisplayCourses.length === 0) {
             calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
                 if (!cell.querySelector('.course-cell')) {
                     const emptyDiv = document.createElement('div');
@@ -194,8 +199,8 @@ async function showCourse(year, term) {
         const allCoursesInSemester = await fetchCourseData(year, term);
 
         const coursesToShow = allCoursesInSemester.filter(course =>
-            selectedCourses.some((profileCourse) =>
-                profileCourse.code === course.course_code && profileCourse.year == year
+            currentDisplayCourses.some((profileCourse) =>
+                profileCourse.code === course.course_code
             )
         );
 
@@ -289,13 +294,12 @@ async function showCourse(year, term) {
     highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
     highlightPeriod();
 
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    let term = "春学期/Spring";
-    if (currentMonth >= 8 || currentMonth <= 2) {
-        term = "秋学期/Fall";
-    }
+    const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
+        const currentMonth = new Date().getMonth() + 1;
+        return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+    })();
 
     clearCourseCells();
-    showCourse(currentYear, term);
+    showCourse(currentYear, currentTerm);
 });

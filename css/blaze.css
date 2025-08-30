@@ -1985,213 +1985,6 @@ td p {
     transition: width 0.3s ease;
 }
 
-/* ===== REVIEW MODALS ===== */
-
-/* Review modal overlay */
-.review-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-/* Review modal content */
-.review-modal-content {
-    background: white;
-    padding: 30px;
-    border-radius: 15px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    position: relative;
-}
-
-/* Review modal header */
-.review-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 15px;
-}
-
-.review-modal-header h3 {
-    margin: 0;
-    font-size: 20px;
-}
-
-/* Close modal button */
-.close-modal {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-    padding: 5px;
-    width: auto;
-    height: auto;
-    border-radius: 50%;
-}
-
-.close-modal:hover {
-    background: #f5f5f5;
-}
-
-/* Year input section */
-.year-input {
-    margin-bottom: 20px;
-}
-
-.year-input label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-.year-input select,
-#course-year,
-#course-year-edit {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-family: inherit;
-    box-sizing: border-box;
-}
-
-/* Rating input section */
-.rating-input {
-    margin-bottom: 20px;
-}
-
-.rating-input label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-/* Star rating input */
-.star-rating-input {
-    font-size: 28px;
-    margin-bottom: 10px;
-}
-
-.star-input {
-    cursor: pointer;
-    color: #ddd;
-    margin-right: 5px;
-    transition: color 0.2s;
-}
-
-.star-input:hover,
-.star-input.selected {
-    color: #ffc107;
-}
-
-/* Review text input section */
-.review-text-input {
-    margin-bottom: 20px;
-}
-
-.review-text-input label {
-    display: block;
-    margin-bottom: 10px;
-    font-weight: bold;
-}
-
-.review-text-input textarea,
-#review-content,
-#review-content-edit {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-family: inherit;
-    resize: vertical;
-    box-sizing: border-box;
-}
-
-/* Review modal footer */
-.review-modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-    padding-top: 15px;
-    border-top: 1px solid #eee;
-}
-
-.review-modal-footer.space-between {
-    justify-content: space-between;
-}
-
-.review-modal-footer .button-group {
-    display: flex;
-    gap: 10px;
-}
-
-/* Modal buttons */
-.cancel-review,
-.submit-review,
-.update-review,
-.delete-review {
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
-    width: auto;
-    height: auto;
-    font-family: inherit;
-    font-size: 14px;
-}
-
-.cancel-review {
-    border: 1px solid #ddd;
-    background: white;
-    color: #333;
-}
-
-.cancel-review:hover {
-    background: #f5f5f5;
-}
-
-.submit-review,
-.update-review {
-    border: none;
-    background: #007bff;
-    color: white;
-}
-
-.submit-review:hover,
-.update-review:hover {
-    background: #0056b3;
-}
-
-.delete-review {
-    border: none;
-    background: #dc3545;
-    color: white;
-}
-
-.delete-review:hover {
-    background: #c82333;
-}
-
-/* Button disabled state */
-.submit-review:disabled,
-.update-review:disabled,
-.delete-review:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
 /* ===== STAR RATINGS AND REVIEWS ===== */
 
 /* Star rating display */
@@ -2484,59 +2277,6 @@ td p {
     }
 }
 
-/* Course loading and error states */
-.course-loading-state {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    padding: 40px !important;
-    font-size: 18px !important;
-    color: #666 !important;
-    grid-column: 1 / -1 !important;
-    text-align: center !important;
-}
-
-.course-error-state {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    padding: 40px !important;
-    font-size: 18px !important;
-    color: #d32f2f !important;
-    grid-column: 1 / -1 !important;
-    text-align: center !important;
-}
-
-.course-loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #E3D5E9;
-    border-radius: 50%;
-    animation: courseLoadSpin 1s linear infinite;
-    margin: 0 auto 15px auto;
-}
-
-@keyframes courseLoadSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.course-retry-button {
-    background-color: #E3D5E9 !important;
-    border: none !important;
-    padding: 10px 20px !important;
-    border-radius: 5px !important;
-    cursor: pointer !important;
-    font-family: 'Libre Bodoni', sans-serif !important;
-    font-size: 16px !important;
-    transition: background-color 0.2s ease !important;
-}
-
-.course-retry-button:hover {
-    background-color: #BDAAC6 !important;
-}
-
 /* Skeleton loading styles - integrated with existing course layout */
 .skeleton-class-outside {
     display: flex;
@@ -2638,18 +2378,6 @@ td p {
     }
 }
 
-@keyframes skeletonPulse {
-    0% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.6;
-    }
-    100% {
-        opacity: 1;
-    }
-}
-
 /* Mobile responsiveness for skeleton - inherits from #course-list grid behavior */
 @media (max-width: 768px) {
     .skeleton-class-container {
@@ -2671,4 +2399,545 @@ td p {
         padding: 12px;
         min-height: 140px;
     }
+}
+
+/* Course loading and error states */
+.course-loading-state {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 40px !important;
+    font-size: 18px !important;
+    color: #666 !important;
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+}
+
+.course-error-state {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 40px !important;
+    font-size: 18px !important;
+    color: #d32f2f !important;
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+}
+
+.course-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #E3D5E9;
+    border-radius: 50%;
+    animation: courseLoadSpin 1s linear infinite;
+    margin: 0 auto 15px auto;
+}
+
+@keyframes courseLoadSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.course-retry-button {
+    background-color: #E3D5E9 !important;
+    border: none !important;
+    padding: 10px 20px !important;
+    border-radius: 5px !important;
+    cursor: pointer !important;
+    font-family: 'Libre Bodoni', sans-serif !important;
+    font-size: 16px !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.course-retry-button:hover {
+    background-color: #BDAAC6 !important;
+}
+
+/* ===== REVIEW MODALS ===== */
+
+/* Review modal overlay */
+.review-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Review modal content */
+.review-modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* Review modal header */
+.review-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+}
+
+.review-modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+}
+
+/* Close modal button */
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 5px;
+    width: auto;
+    height: auto;
+    border-radius: 50%;
+}
+
+.close-modal:hover {
+    background: #f5f5f5;
+}
+
+/* Year input section */
+.year-input {
+    margin-bottom: 20px;
+}
+
+.year-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.year-input select,
+#course-year,
+#course-year-edit {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+/* Rating input section */
+.rating-input {
+    margin-bottom: 20px;
+}
+
+.rating-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+/* Star rating input */
+.star-rating-input {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+.star-input {
+    cursor: pointer;
+    color: #ddd;
+    margin-right: 5px;
+    transition: color 0.2s;
+}
+
+.star-input:hover,
+.star-input.selected {
+    color: #ffc107;
+}
+
+/* Review text input section */
+.review-text-input {
+    margin-bottom: 20px;
+}
+
+.review-text-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.review-text-input textarea,
+#review-content,
+#review-content-edit {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* Review modal footer */
+.review-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.review-modal-footer.space-between {
+    justify-content: space-between;
+}
+
+.review-modal-footer .button-group {
+    display: flex;
+    gap: 10px;
+}
+
+/* Modal buttons */
+.cancel-review,
+.submit-review,
+.update-review,
+.delete-review {
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    width: auto;
+    height: auto;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.cancel-review {
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+}
+
+.cancel-review:hover {
+    background: #f5f5f5;
+}
+
+.submit-review,
+.update-review {
+    border: none;
+    background: #007bff;
+    color: white;
+}
+
+.submit-review:hover,
+.update-review:hover {
+    background: #0056b3;
+}
+
+.delete-review {
+    border: none;
+    background: #dc3545;
+    color: white;
+}
+
+.delete-review:hover {
+    background: #c82333;
+}
+
+/* Button disabled state */
+.submit-review:disabled,
+.update-review:disabled,
+.delete-review:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ===== CONFLICT RESOLUTION MODAL ===== */
+
+/* Conflict modal overlay */
+.conflict-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* Conflict modal content */
+.conflict-modal-content {
+    background: white;
+    border-radius: 15px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Conflict modal header */
+.conflict-modal-header {
+    background: #BDAAC6;
+    border-radius: 15px 15px 0 0;
+    padding: 20px 30px;
+    position: relative;
+}
+
+.conflict-modal-header h3 {
+    margin: 0;
+    color: white;
+    font-size: var(--h3);
+}
+
+/* Close conflict modal button */
+.close-conflict-modal {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 30px;
+    color: white;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+}
+
+.close-conflict-modal:hover {
+    opacity: 0.7;
+}
+
+.conflict-modal-body {
+    padding: 30px;
+}
+
+.conflict-modal-body p {
+    margin-bottom: 20px;
+    font-size: var(--p);
+    line-height: 1.5;
+}
+
+/* Conflicting courses list */
+.conflicting-courses-list {
+    margin: 20px 0;
+}
+
+.conflicting-course-item {
+    border: 2px solid #BDAAC6;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.conflicting-course-item .course-info {
+    flex-grow: 1;
+}
+
+.conflicting-course-item .course-info h4 {
+    margin: 0 0 10px 0;
+    font-size: var(--h4);
+    color: #333;
+}
+
+.conflicting-course-item .course-info p {
+    margin: 5px 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.remove-course-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+    transition: background 0.3s ease;
+}
+
+.remove-course-btn:hover {
+    background: #c82333;
+}
+
+/* Conflict modal actions */
+.conflict-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.cancel-add-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: var(--p);
+    transition: background 0.3s ease;
+}
+
+.cancel-add-btn:hover {
+    background: #5a6268;
+}
+
+.force-add-btn {
+    background: #fd7e14;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: var(--p);
+    transition: background 0.3s ease;
+}
+
+.force-add-btn:hover {
+    background: #e96b00;
+}
+
+/* Mobile responsive styles for conflict modal */
+@media (max-width: 768px) {
+    .conflict-modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .conflicting-course-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .remove-course-btn {
+        width: 100%;
+        padding: 12px;
+    }
+    
+    .conflict-modal-actions {
+        flex-direction: column;
+    }
+    
+    .cancel-add-btn, .force-add-btn {
+        width: 100%;
+        padding: 15px;
+    }
+}
+
+/* Time Conflict Modal Styles */
+.conflict-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.conflict-container.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.conflict-container .search-background {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+.conflict-container .search-modal h2 div {
+    background-image: url(/assets/help.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    width: 30px;
+    height: 30px;
+    filter: brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);
+}
+
+.conflict-content {
+    margin-bottom: 30px;
+}
+
+.conflict-content > p {
+    font-size: var(--p);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.conflicting-course {
+    background: #f8f9fa;
+    border: 2px solid #E3D5E9;
+    border-radius: 15px;
+    padding: 20px;
+    margin: 15px 0;
+}
+
+.course-details h3 {
+    font-size: var(--h3);
+    font-weight: 700;
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.course-details p {
+    font-size: var(--p);
+    margin: 5px 0;
+    color: #666;
+}
+
+.conflict-question {
+    text-align: center;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #E3D5E9;
+}
+
+.conflict-question p {
+    font-size: var(--p);
+    font-weight: 600;
+    color: #333;
+}
+
+.conflict-cancel {
+    background-color: #6c757d;
+    color: white;
+}
+
+.conflict-cancel:hover {
+    background-color: #5a6268;
+}
+
+.conflict-replace {
+    background-color: #E3D5E9;
+    color: #333;
+}
+
+.conflict-replace:hover {
+    background-color: #d4c5db;
 }
