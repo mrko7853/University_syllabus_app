@@ -24,63 +24,181 @@ let currentSortMethod = null;
 let currentSearchQuery = null;
 let suggestionsDisplayed = false; // Track if suggestions are currently shown
 
+// Global course loading state management
+let isLoadingCourses = false;
+let courseLoadRetryCount = 0;
+const MAX_COURSE_LOAD_RETRIES = 3;
+
 async function showCourse(year, term) {
-
-    const courses = await fetchCourseData(year, term);
-    courses.sort((a, b) => a.title.localeCompare(b.title));
-    
-    let courseHTML = "";
-    courses.forEach(function(course) {
-        const days = {
-            "月曜日": "Mon", "月": "Mon",
-            "火曜日": "Tue", "火": "Tue", 
-            "水曜日": "Wed", "水": "Wed",
-            "木曜日": "Thu", "木": "Thu",
-            "金曜日": "Fri", "金": "Fri"
-        };
-        const times = {
-            "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
-            "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
-            "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
-            "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
-            "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
-        };
-        // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
-        const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
-        if (specialMatch) {
-            course.time_slot = "Mon 13:10 - 14:40\nThu 13:10 - 14:40";
-            course.time_slot = course.time_slot.replace(/\n/g, "<br>");
-        } else if (match) {
-            course.time_slot = `${days[match[1]]} ${times[match[2]]}`;
+    try {
+        // Check if courseList element exists
+        if (!courseList) {
+            console.error('Course list element not found');
+            return;
         }
+        
+        const courses = await fetchCourseDataWithRetry(year, term);
+        if (!courses || courses.length === 0) {
+            console.warn('No courses returned');
+            courseList.innerHTML = `
+                <div class="course-error-state">
+                    <div>
+                        <p>No courses found for ${term} ${year}</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        courses.sort((a, b) => a.title.localeCompare(b.title));
+        
+        let courseHTML = "";
+        courses.forEach(function(course) {
+            const days = {
+                "月曜日": "Mon", "月": "Mon",
+                "火曜日": "Tue", "火": "Tue", 
+                "水曜日": "Wed", "水": "Wed",
+                "木曜日": "Thu", "木": "Thu",
+                "金曜日": "Fri", "金": "Fri"
+            };
+            const times = {
+                "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
+                "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
+                "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
+                "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
+                "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
+            };
+            // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+            const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+            const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
+            if (specialMatch) {
+                course.time_slot = "Mon 13:10 - 14:40\nThu 13:10 - 14:40";
+                course.time_slot = course.time_slot.replace(/\n/g, "<br>");
+            } else if (match) {
+                course.time_slot = `${days[match[1]]} ${times[match[2]]}`;
+            }
 
-        courseHTML += `
-        <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
-            <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
-                <p>${course.course_code}</p>
-                <h2>${course.title}</h2>
-                <p>Professor</p>
-                <h3>${course.professor}</h3>
-                <div class="class-space"></div>
-                <p>Time</p>
-                <h3>${course.time_slot}</h3>
+            courseHTML += `
+            <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
+                <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
+                    <p>${course.course_code}</p>
+                    <h2>${course.title}</h2>
+                    <p>Professor</p>
+                    <h3>${course.professor}</h3>
+                    <div class="class-space"></div>
+                    <p>Time</p>
+                    <h3>${course.time_slot}</h3>
+                </div>
+                <div class="gpa-bar ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                    <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
+                    <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
+                    <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
+                    <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
+                    <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+                </div>
             </div>
-            <div class="gpa-bar ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
-                <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
-                <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
-                <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
-                <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+            `;
+        });
+        courseList.innerHTML = courseHTML;
+        
+        // Reset suggestions flag when courses are reloaded
+        suggestionsDisplayed = false;
+        
+        console.log(`Successfully loaded ${courses.length} courses for ${term} ${year}`);
+    } catch (error) {
+        console.error('Failed to load courses after all retries:', error);
+        showCourseLoadError();
+    }
+}
+
+// Robust course data fetching with retry mechanism
+async function fetchCourseDataWithRetry(year, term, retryCount = 0) {
+    try {
+        showCourseLoadingState();
+        const courses = await fetchCourseData(year, term);
+        hideCourseLoadingState();
+        
+        if (!courses || courses.length === 0) {
+            throw new Error('No courses returned from database');
+        }
+        
+        courseLoadRetryCount = 0; // Reset retry count on success
+        return courses;
+    } catch (error) {
+        console.error(`Course loading attempt ${retryCount + 1} failed:`, error);
+        
+        if (retryCount < MAX_COURSE_LOAD_RETRIES) {
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.log(`Retrying course loading in ${delay}ms...`);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return fetchCourseDataWithRetry(year, term, retryCount + 1);
+        } else {
+            hideCourseLoadingState();
+            throw error;
+        }
+    }
+}
+
+// Loading state management
+function createSkeletonCourse() {
+    return `
+        <div class="class-outside skeleton-class-outside">
+            <div class="class-container skeleton-class-container">
+                <div class="skeleton-line short"></div>
+                <div class="skeleton-title"></div>
+                <div class="skeleton-line short"></div>
+                <div class="skeleton-line medium"></div>
+                <div class="skeleton-space"></div>
+                <div class="skeleton-line short"></div>
+                <div class="skeleton-line medium"></div>
+            </div>
+            <div class="gpa-bar skeleton-gpa-bar">
+                <div class="skeleton-gpa-section"></div>
+                <div class="skeleton-gpa-section"></div>
+                <div class="skeleton-gpa-section"></div>
+                <div class="skeleton-gpa-section"></div>
+                <div class="skeleton-gpa-section"></div>
             </div>
         </div>
-        `;
-    });
-    courseList.innerHTML = courseHTML;
-    
-    // Reset suggestions flag when courses are reloaded
-    suggestionsDisplayed = false;
+    `;
 }
+
+function showCourseLoadingState() {
+    if (isLoadingCourses) return; // Prevent multiple loading indicators
+    
+    isLoadingCourses = true;
+    
+    // Create skeleton courses directly in the existing #course-list grid
+    let skeletonHTML = '';
+    for (let i = 0; i < 6; i++) {
+        skeletonHTML += createSkeletonCourse();
+    }
+    
+    courseList.innerHTML = skeletonHTML;
+}
+
+function hideCourseLoadingState() {
+    isLoadingCourses = false;
+}
+
+function showCourseLoadError() {
+    courseList.innerHTML = `
+        <div class="course-error-state">
+            <div>
+                <p style="margin-bottom: 15px;">⚠️ Failed to load courses</p>
+                <button class="course-retry-button" onclick="retryLoadCourses()">Retry</button>
+            </div>
+        </div>
+    `;
+}
+
+// Global retry function
+window.retryLoadCourses = function() {
+    const year = yearSelect.value;
+    const term = termSelect.value;
+    showCourse(year, term);
+};
 
 // Helper function to convert course time slot to container ID format
 function convertTimeSlotToContainerFormat(timeSlot) {
@@ -269,20 +387,27 @@ async function applySearchAndFilters(searchQuery) {
 }
 
 async function updateCoursesAndFilters() {
-    await showCourse(yearSelect.value, termSelect.value);
-    
-    // Re-apply current sort if one is selected
-    if (currentSortMethod) {
-        sortCourses(currentSortMethod);
-    } else {
-        // Apply both current search and filters
-        await applySearchAndFilters(currentSearchQuery);
-    }
-    
-    // Also update the calendar component if it exists
-    const calendarComponent = document.querySelector('course-calendar');
-    if (calendarComponent && calendarComponent.showTerm) {
-        calendarComponent.showTerm(yearSelect.value, termSelect.value);
+    try {
+        // Prevent multiple simultaneous updates
+        if (isLoadingCourses) {
+            console.log('Course loading already in progress, skipping update');
+            return;
+        }
+        
+        await showCourse(yearSelect.value, termSelect.value);
+        
+        // Re-apply current sort if one is selected
+        if (currentSortMethod) {
+            sortCourses(currentSortMethod);
+        } else {
+            // Apply both current search and filters
+            await applySearchAndFilters(currentSearchQuery);
+        }
+        
+        refreshCalendarComponent(); // Refresh calendar when year/term changes
+    } catch (error) {
+        console.error('Error updating courses and filters:', error);
+        // Don't show error state here as showCourse already handles it
     }
 }
 
@@ -417,13 +542,60 @@ courseList.addEventListener("click", function(event) {
 });
 
 // Initialize the application
-(async function() {
-    const default_year = yearSelect.value;
-    const default_term = termSelect.value;
-    await showCourse(default_year, default_term);
-
-    // Initialize URL-based course routing after courses are loaded
-    initializeCourseRouting();
+// Initialize courses with robust loading
+(async function initializeCourses() {
+    try {
+        console.log('Initializing course loading...');
+        
+        // Ensure DOM is ready
+        if (document.readyState === 'loading') {
+            await new Promise(resolve => {
+                document.addEventListener('DOMContentLoaded', resolve, { once: true });
+            });
+        }
+        
+        // Additional delay to ensure all components and custom elements are mounted
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Check if required elements exist
+        if (!yearSelect || !termSelect || !courseList) {
+            console.error('Required DOM elements not found:', {
+                yearSelect: !!yearSelect,
+                termSelect: !!termSelect, 
+                courseList: !!courseList
+            });
+            
+            // Try to find them again
+            const yearSelectFallback = document.getElementById("year-select");
+            const termSelectFallback = document.getElementById("term-select");
+            const courseListFallback = document.getElementById("course-list");
+            
+            console.log('Fallback element search:', {
+                yearSelect: !!yearSelectFallback,
+                termSelect: !!termSelectFallback,
+                courseList: !!courseListFallback
+            });
+            
+            if (!yearSelectFallback || !termSelectFallback || !courseListFallback) {
+                throw new Error('Critical DOM elements missing');
+            }
+        }
+        
+        const default_year = yearSelect.value || "2025"; // Back to 2025 as default
+        const default_term = termSelect.value || "秋学期/Fall";
+        
+        console.log('Loading courses for:', { year: default_year, term: default_term });
+        
+        await showCourse(default_year, default_term);
+        console.log('Initial course loading completed successfully');
+        
+        // Initialize URL-based course routing after courses are loaded
+        initializeCourseRouting();
+    } catch (error) {
+        console.error('Failed to initialize courses:', error);
+        // Show error state but don't prevent rest of app from loading
+        showCourseLoadError();
+    }
 })();
 
 // Set default sort to Course A-Z
@@ -448,7 +620,12 @@ pushBtn.addEventListener("click", async function() {
         alert("Failed");
     } else {
         alert("Success");
-        showCourse(currentYear, term);
+        // Use reliable loading with current year/term
+        try {
+            await showCourse(yearSelect.value, termSelect.value);
+        } catch (err) {
+            console.error("Error reloading courses:", err);
+        }
         refreshCalendarComponent(); // Refresh calendar after course selection change
     }
 });
@@ -492,12 +669,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     console.log(user.email, user.id);
 
     const profileButton = document.getElementById("profile");
-    profileButton.addEventListener("click", function() {
-        window.location.href = `/profile/${user.id}`;
-    });
+    if (profileButton) {
+        profileButton.addEventListener("click", function() {
+            window.location.href = `/profile/${user.id}`;
+        });
+    }
 
     const profileText = document.querySelector(".navigation-text");
-    profileText.textContent = `Welcome, ${user.email}`;
+    if (profileText) {
+        profileText.textContent = `Welcome, ${user.email}`;
+    }
 });
 
 async function calendarSchedule(year, term) {
@@ -605,15 +786,6 @@ async function calendarSchedule(year, term) {
         console.error('An unexpected error occurred while showing courses:', error);
     }
 }
-
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    let term = "春学期/Spring";
-    if (currentMonth >= 8 || currentMonth <= 2) {
-        term = "秋学期/Fall";
-    }
-
-    showCourse(currentYear, term);
 
 // Custom dropdown functionality
 function initCustomDropdowns() {

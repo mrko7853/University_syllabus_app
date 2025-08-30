@@ -107,24 +107,272 @@ async function findCourseByParams(courseCode, year, term) {
 export async function fetchCourseData(year, term) {
     const cacheKey = `${year}-${term}`;
     if (courseCache[cacheKey]) {
+        console.log(`Using cached courses for ${term} ${year}`);
         return courseCache[cacheKey];
     }
+    
     try {
+        console.log(`Fetching courses for ${term} ${year}...`);
+        
+        // Skip the problematic RPC and use direct table queries instead
+        return await fetchCourseDataFallback(year, term);
+        
+        /* Original RPC call - disabled due to temp_courses permission issues
         const { data: courses, error } = await supabase.rpc('get_courses_with_fallback_gpa', {
             p_year: year,
             p_term: term
         });
 
         if (error) {
-            console.error("Supabase error:", error.message);
+            console.error("Supabase RPC error:", error.message, error.details, error.hint);
+            
+            // Handle specific permission errors with temp_courses table
+            if (error.message?.includes('must be owner of table temp_courses')) {
+                console.warn('Database permissions issue detected. Trying fallback method...');
+                return await fetchCourseDataFallback(year, term);
+            }
+            
+            throw new Error(`Database query failed: ${error.message}`);
+        }
+        
+        if (!courses) {
+            console.warn(`No courses data returned for ${term} ${year}`);
             return [];
         }
         
+        if (courses.length === 0) {
+            console.warn(`Empty courses array returned for ${term} ${year}`);
+            return [];
+        }
+        
+        console.log(`Successfully fetched ${courses.length} courses for ${term} ${year}`);
         courseCache[cacheKey] = courses;
         return courses;
+        */
     } catch (error) {
-        console.error('Error fetching course data', error);
-        return [];
+        console.error(`Error fetching course data for ${term} ${year}:`, error);
+        
+        // Check if we have stale cache data as fallback
+        if (courseCache[cacheKey]) {
+            console.log(`Using stale cached data as fallback for ${term} ${year}`);
+            return courseCache[cacheKey];
+        }
+        
+        // Re-throw the error for retry mechanisms to handle
+        throw error;
+    }
+}
+
+// Fallback method for when RPC permissions fail
+async function fetchCourseDataFallback(year, term) {
+    try {
+        console.log(`Attempting fallback fetch for ${term} ${year}...`);
+        
+        // First, try to get courses WITH GPA columns directly
+        const { data: courses, error: coursesError } = await supabase
+            .from('courses')
+            .select(`
+                *,
+                gpa_a_percent,
+                gpa_b_percent, 
+                gpa_c_percent,
+                gpa_d_percent,
+                gpa_f_percent
+            `)
+            .eq('academic_year', year)
+            .eq('term', term);
+
+        if (coursesError) {
+            console.error("Courses fallback query error:", coursesError);
+            throw new Error(`Courses fallback query failed: ${coursesError.message}`);
+        }
+        
+        if (!courses || courses.length === 0) {
+            console.warn(`No courses found in fallback method for ${term} ${year}`);
+            return [];
+        }
+        
+        console.log(`Successfully fetched ${courses.length} courses with embedded GPA data for ${term} ${year}`);
+        
+        // Debug: Let's see what the first course looks like
+        if (courses.length > 0) {
+            console.log('Sample course data structure:', courses[0]);
+            console.log('Available columns:', Object.keys(courses[0]));
+            console.log('GPA values in sample course:', {
+                gpa_a_percent: courses[0].gpa_a_percent,
+                gpa_b_percent: courses[0].gpa_b_percent,
+                gpa_c_percent: courses[0].gpa_c_percent,
+                gpa_d_percent: courses[0].gpa_d_percent,
+                gpa_f_percent: courses[0].gpa_f_percent
+            });
+        }
+        
+        // Check if GPA data is present (checking for non-null AND non-zero values)
+        const coursesWithGPA = courses.filter(course => {
+            const hasValidGPA = (
+                (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+                (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+                (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+                (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+                (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+            );
+            return hasValidGPA;
+        });
+        
+        const coursesWithoutGPA = courses.filter(course => {
+            const hasValidGPA = (
+                (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+                (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+                (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+                (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+                (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+            );
+            return !hasValidGPA;
+        });
+        
+        if (coursesWithGPA.length > 0) {
+            console.log(`Found GPA data for ${coursesWithGPA.length} out of ${courses.length} courses`);
+        }
+        
+        if (coursesWithoutGPA.length > 0) {
+            console.log(`${coursesWithoutGPA.length} courses missing GPA data - attempting to find historical GPA data...`);
+            
+            // Get historical GPA data for courses that don't have current GPA data
+            const historicalGpaData = await fetchHistoricalGpaData(coursesWithoutGPA.map(c => c.course_code));
+            
+            // Apply historical GPA data to courses that need it
+            coursesWithoutGPA.forEach(course => {
+                const historicalGpa = historicalGpaData[course.course_code];
+                if (historicalGpa) {
+                    course.gpa_a_percent = historicalGpa.gpa_a_percent;
+                    course.gpa_b_percent = historicalGpa.gpa_b_percent;
+                    course.gpa_c_percent = historicalGpa.gpa_c_percent;
+                    course.gpa_d_percent = historicalGpa.gpa_d_percent;
+                    course.gpa_f_percent = historicalGpa.gpa_f_percent;
+                    course.gpa_year_source = historicalGpa.academic_year; // Track where GPA came from
+                    course.gpa_term_source = historicalGpa.term;
+                }
+            });
+            
+            const coursesWithHistoricalGpa = coursesWithoutGPA.filter(course => course.gpa_year_source);
+            if (coursesWithHistoricalGpa.length > 0) {
+                console.log(`Found historical GPA data for ${coursesWithHistoricalGpa.length} additional courses`);
+                console.log('Sample course with historical GPA:', coursesWithHistoricalGpa[0]);
+            } else {
+                console.log('No historical GPA data found for courses missing current GPA');
+            }
+        }
+        
+        const cacheKey = `${year}-${term}`;
+        courseCache[cacheKey] = courses;
+        
+        return courses;
+    } catch (error) {
+        console.error(`Fallback method failed for ${term} ${year}:`, error);
+        
+        // Last resort: return courses with minimal data structure
+        try {
+            console.log('Attempting minimal fallback...');
+            const { data: minimalCourses, error: minimalError } = await supabase
+                .from('courses')
+                .select(`
+                    course_code,
+                    title,
+                    professor,
+                    academic_year,
+                    term,
+                    time_slot,
+                    location,
+                    url,
+                    color
+                `)
+                .eq('academic_year', year)
+                .eq('term', term);
+            
+            if (!minimalError && minimalCourses && minimalCourses.length > 0) {
+                console.log(`Minimal fallback successful: ${minimalCourses.length} courses`);
+                const minimalProcessed = minimalCourses.map(course => ({
+                    ...course,
+                    gpa_a_percent: null,
+                    gpa_b_percent: null,
+                    gpa_c_percent: null,
+                    gpa_d_percent: null,
+                    gpa_f_percent: null
+                }));
+                
+                const cacheKey = `${year}-${term}`;
+                courseCache[cacheKey] = minimalProcessed;
+                return minimalProcessed;
+            }
+        } catch (minimalFallbackError) {
+            console.error('Even minimal fallback failed:', minimalFallbackError);
+        }
+        
+        throw error;
+    }
+}
+
+// Helper function to fetch historical GPA data for courses that don't have current GPA
+async function fetchHistoricalGpaData(courseCodes) {
+    try {
+        if (courseCodes.length === 0) return {};
+        
+        console.log(`Fetching historical GPA data for ${courseCodes.length} course codes...`);
+        
+        // Query for historical GPA data, ordered by most recent first
+        const { data: historicalData, error } = await supabase
+            .from('courses')
+            .select(`
+                course_code,
+                academic_year,
+                term,
+                gpa_a_percent,
+                gpa_b_percent,
+                gpa_c_percent,
+                gpa_d_percent,
+                gpa_f_percent
+            `)
+            .in('course_code', courseCodes)
+            .not('gpa_a_percent', 'is', null)
+            .order('academic_year', { ascending: false })
+            .order('term', { ascending: false });
+        
+        if (error) {
+            console.error('Error fetching historical GPA data:', error);
+            return {};
+        }
+        
+        if (!historicalData || historicalData.length === 0) {
+            console.log('No historical GPA data found');
+            return {};
+        }
+        
+        // Create a map of course_code to most recent GPA data
+        const gpaMap = {};
+        historicalData.forEach(course => {
+            // Only take the first (most recent) entry for each course code
+            if (!gpaMap[course.course_code]) {
+                // Verify this course actually has GPA data
+                const hasValidGPA = (
+                    (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+                    (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+                    (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+                    (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+                    (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+                );
+                
+                if (hasValidGPA) {
+                    gpaMap[course.course_code] = course;
+                }
+            }
+        });
+        
+        console.log(`Found historical GPA data for ${Object.keys(gpaMap).length} courses`);
+        return gpaMap;
+        
+    } catch (error) {
+        console.error('Failed to fetch historical GPA data:', error);
+        return {};
     }
 }
 
