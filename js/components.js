@@ -2,15 +2,15 @@ import { supabase } from "/supabase.js";
 import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
 
 // Initialize session state - will be updated by components as needed
-let globalSession = null;
-let globalUser = null;
+window.globalSession = null;
+window.globalUser = null;
 
 // Initialize session asynchronously
 (async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    globalSession = session;
-    globalUser = session?.user || null;
+    window.globalSession = session;
+    window.globalUser = session?.user || null;
   } catch (error) {
     console.error('Error initializing global session:', error);
   }
@@ -20,7 +20,7 @@ const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
 
 // Keep for backward compatibility, but components should fetch fresh sessions
-const user = globalUser;
+const user = window.globalUser;
 
 class AppNavigation extends HTMLElement {
     constructor() {
@@ -77,6 +77,64 @@ class AppNavigation extends HTMLElement {
                 </ul>
             </nav>
         `;
+    }
+
+    connectedCallback() {
+        // Add event listener for logout link
+        const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleLogout();
+            });
+        }
+    }
+
+    async handleLogout() {
+        try {
+            // Show loading state on the logout link
+            const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+            if (logoutLink) {
+                logoutLink.textContent = 'Logging out...';
+                logoutLink.style.pointerEvents = 'none';
+            }
+
+            // Sign out from Supabase
+            const { error } = await supabase.auth.signOut();
+            
+            if (error) {
+                console.error('Error during logout:', error);
+                alert('Error during logout. Please try again.');
+                
+                // Reset logout link state
+                if (logoutLink) {
+                    logoutLink.textContent = 'Logout';
+                    logoutLink.style.pointerEvents = 'auto';
+                }
+                return;
+            }
+
+            // Clear any local storage if needed
+            localStorage.removeItem('token');
+            
+            // Update global session variables
+            window.globalSession = null;
+            window.globalUser = null;
+            
+            // Redirect to login page
+            window.location.href = 'login.html';
+
+        } catch (error) {
+            console.error('Unexpected error during logout:', error);
+            alert('An unexpected error occurred during logout.');
+            
+            // Reset logout link state
+            const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+            if (logoutLink) {
+                logoutLink.textContent = 'Logout';
+                logoutLink.style.pointerEvents = 'auto';
+            }
+        }
     }
 }
 

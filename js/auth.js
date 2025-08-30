@@ -97,12 +97,14 @@ class AuthManager {
                         <form id="modal-login-form" class="auth-form">
                             <div class="auth-input-group">
                                 <label for="login-email">Email</label>
-                                <input type="email" id="login-email" required>
+                                <input type="email" id="login-email">
+                                <div class="auth-field-error" id="login-email-error" style="display: none;"></div>
                             </div>
                             
                             <div class="auth-input-group">
                                 <label for="login-password">Password</label>
-                                <input type="password" id="login-password" required>
+                                <input type="password" id="login-password">
+                                <div class="auth-field-error" id="login-password-error" style="display: none;"></div>
                             </div>
                             
                             <div class="auth-error-message" id="login-error" style="display: none;"></div>
@@ -148,17 +150,20 @@ class AuthManager {
                         <form id="modal-register-form" class="auth-form">
                             <div class="auth-input-group">
                                 <label for="register-email">Email</label>
-                                <input type="email" id="register-email" required>
+                                <input type="email" id="register-email">
+                                <div class="auth-field-error" id="register-email-error" style="display: none;"></div>
                             </div>
                             
                             <div class="auth-input-group">
                                 <label for="register-password">Password</label>
-                                <input type="password" id="register-password" required minlength="6">
+                                <input type="password" id="register-password">
+                                <div class="auth-field-error" id="register-password-error" style="display: none;"></div>
                             </div>
                             
                             <div class="auth-input-group">
                                 <label for="register-password-confirm">Repeat Password</label>
-                                <input type="password" id="register-password-confirm" required minlength="6">
+                                <input type="password" id="register-password-confirm">
+                                <div class="auth-field-error" id="register-password-confirm-error" style="display: none;"></div>
                             </div>
                             
                             <div class="auth-error-message" id="register-error" style="display: none;"></div>
@@ -221,7 +226,15 @@ class AuthManager {
         const message = document.querySelector('#login-modal .auth-message');
         message.textContent = `Please log in to ${action}.`;
         
-        modal.classList.remove('hidden');
+        // For first-time creation, add a small delay to ensure proper animation
+        if (modal.classList.contains('hidden')) {
+            setTimeout(() => {
+                modal.classList.remove('hidden');
+            }, 10);
+        } else {
+            modal.classList.remove('hidden');
+        }
+        
         this.currentModal = 'login';
         
         // Focus on email input
@@ -242,7 +255,15 @@ class AuthManager {
             loginModal.classList.add('hidden');
         }
         
-        registerModal.classList.remove('hidden');
+        // For first-time creation, add a small delay to ensure proper animation
+        if (registerModal.classList.contains('hidden')) {
+            setTimeout(() => {
+                registerModal.classList.remove('hidden');
+            }, 10);
+        } else {
+            registerModal.classList.remove('hidden');
+        }
+        
         this.currentModal = 'register';
         
         // Focus on email input
@@ -267,7 +288,15 @@ class AuthManager {
             registerModal.classList.add('hidden');
         }
         
-        loginModal.classList.remove('hidden');
+        // For first-time creation, add a small delay to ensure proper animation
+        if (loginModal.classList.contains('hidden')) {
+            setTimeout(() => {
+                loginModal.classList.remove('hidden');
+            }, 10);
+        } else {
+            loginModal.classList.remove('hidden');
+        }
+        
         this.currentModal = 'login';
         
         setTimeout(() => {
@@ -294,8 +323,14 @@ class AuthManager {
         const loginForm = document.getElementById('modal-login-form');
         const registerForm = document.getElementById('modal-register-form');
         
-        if (loginForm) loginForm.reset();
-        if (registerForm) registerForm.reset();
+        if (loginForm) {
+            loginForm.reset();
+            this.clearFieldErrors('login');
+        }
+        if (registerForm) {
+            registerForm.reset();
+            this.clearFieldErrors('register');
+        }
         
         const loginError = document.getElementById('login-error');
         const registerError = document.getElementById('register-error');
@@ -330,6 +365,27 @@ class AuthManager {
         }
     }
 
+    showFieldError(fieldId, message) {
+        const errorElement = document.getElementById(`${fieldId}-error`);
+        if (errorElement) {
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+    }
+
+    clearFieldErrors(modalType) {
+        const fieldIds = modalType === 'login' 
+            ? ['login-email', 'login-password']
+            : ['register-email', 'register-password', 'register-password-confirm'];
+            
+        fieldIds.forEach(fieldId => {
+            const errorElement = document.getElementById(`${fieldId}-error`);
+            if (errorElement) {
+                errorElement.style.display = 'none';
+            }
+        });
+    }
+
     setButtonLoading(buttonId, isLoading) {
         const btn = document.getElementById(buttonId);
         if (!btn) return;
@@ -342,12 +398,52 @@ class AuthManager {
         if (loadingSpan) loadingSpan.style.display = isLoading ? 'inline' : 'none';
     }
 
+    async updateAuthState() {
+        try {
+            // Get fresh session to verify login was successful
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session && session.user) {
+                console.log('Login successful, reloading page to refresh all components');
+                
+                // Simply reload the current page - this ensures everything refreshes properly
+                // The course modal will be gone, but that's expected after login
+                window.location.reload();
+            }
+        } catch (error) {
+            console.error('Error updating auth state:', error);
+            // Still reload on error to ensure clean state
+            window.location.reload();
+        }
+    }
+
     async handleLogin() {
         const email = document.getElementById('login-email').value.trim();
         const password = document.getElementById('login-password').value;
         
-        if (!email || !password) {
-            this.showError('login', 'Please enter both email and password.');
+        // Clear previous errors
+        this.clearFieldErrors('login');
+        const loginError = document.getElementById('login-error');
+        if (loginError) loginError.style.display = 'none';
+        
+        let hasErrors = false;
+        
+        // Validate email
+        if (!email) {
+            this.showFieldError('login-email', 'Email is required.');
+            hasErrors = true;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.showFieldError('login-email', 'Please enter a valid email address.');
+            hasErrors = true;
+        }
+        
+        // Validate password
+        if (!password) {
+            this.showFieldError('login-password', 'Password is required.');
+            hasErrors = true;
+        }
+        
+        if (hasErrors) {
             return;
         }
 
@@ -366,9 +462,13 @@ class AuthManager {
             // Login successful
             this.closeCurrentModal();
             
+            // Update global session state and UI
+            await this.updateAuthState();
+            
             // Execute success callback if provided
             if (this.onSuccessCallback) {
-                this.onSuccessCallback();
+                await this.onSuccessCallback();
+                this.onSuccessCallback = null;
             }
 
         } catch (error) {
@@ -392,19 +492,41 @@ class AuthManager {
         const password = document.getElementById('register-password').value;
         const confirmPassword = document.getElementById('register-password-confirm').value;
         
-        // Validation
-        if (!email || !password || !confirmPassword) {
-            this.showError('register', 'Please fill in all fields.');
-            return;
+        // Clear previous errors
+        this.clearFieldErrors('register');
+        const registerError = document.getElementById('register-error');
+        if (registerError) registerError.style.display = 'none';
+        
+        let hasErrors = false;
+        
+        // Validate email
+        if (!email) {
+            this.showFieldError('register-email', 'Email is required.');
+            hasErrors = true;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.showFieldError('register-email', 'Please enter a valid email address.');
+            hasErrors = true;
         }
-
-        if (password !== confirmPassword) {
-            this.showError('register', 'Passwords do not match.');
-            return;
+        
+        // Validate password
+        if (!password) {
+            this.showFieldError('register-password', 'Password is required.');
+            hasErrors = true;
+        } else if (password.length < 6) {
+            this.showFieldError('register-password', 'Password must be at least 6 characters long.');
+            hasErrors = true;
         }
-
-        if (password.length < 6) {
-            this.showError('register', 'Password must be at least 6 characters long.');
+        
+        // Validate password confirmation
+        if (!confirmPassword) {
+            this.showFieldError('register-password-confirm', 'Please confirm your password.');
+            hasErrors = true;
+        } else if (password !== confirmPassword) {
+            this.showFieldError('register-password-confirm', 'Passwords do not match.');
+            hasErrors = true;
+        }
+        
+        if (hasErrors) {
             return;
         }
 
@@ -423,7 +545,7 @@ class AuthManager {
             // Registration successful
             this.closeCurrentModal();
             
-            // Show success message
+            // Show success message (keeping this as alert for now as it's a success message)
             alert('Registration successful! Please check your email to confirm your account, then try logging in.');
 
         } catch (error) {

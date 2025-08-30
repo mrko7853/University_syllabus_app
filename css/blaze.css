@@ -607,6 +607,15 @@ table#calendar-main {
     display: none !important;
 }
 
+/* Specific overrides for modals that need animations */
+.search-container.hidden {
+    opacity: 0;
+    visibility: hidden;
+    /* Override the generic .hidden rule */
+    display: block !important;
+    transform: none !important;
+}
+
 .search-container.hidden .search-modal {
     opacity: 0;
     visibility: hidden;
@@ -2245,14 +2254,17 @@ td p {
     width: 100%;
     height: 100vh;
     z-index: 10000;
-    opacity: 0;
-    visibility: hidden;
+    opacity: 1;
+    visibility: visible;
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.auth-modal:not(.hidden) {
-    opacity: 1;
-    visibility: visible;
+.auth-modal.hidden {
+    opacity: 0;
+    visibility: hidden;
+    /* Override the generic .hidden rule */
+    display: block !important;
+    transform: none !important;
 }
 
 .auth-modal-background {
@@ -2261,7 +2273,7 @@ td p {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
     cursor: pointer;
 }
 
@@ -2278,6 +2290,16 @@ td p {
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+}
+
+.auth-modal.hidden .auth-modal-content {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -60%);
 }
 
 .auth-modal-header {
@@ -2367,6 +2389,13 @@ td p {
     font-size: 14px;
     text-align: center;
     border: 1px solid #fcc;
+}
+
+.auth-field-error {
+    color: #c33;
+    font-size: 13px;
+    margin-top: 5px;
+    margin-bottom: 10px;
 }
 
 .auth-buttons {
@@ -2698,6 +2727,17 @@ td p {
     display: flex;
     justify-content: center;
     align-items: center;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.review-modal.hidden {
+    opacity: 0;
+    visibility: hidden;
+    /* Override the generic .hidden rule */
+    display: flex !important;
+    transform: none !important;
 }
 
 /* Review modal content */
@@ -2710,6 +2750,17 @@ td p {
     max-height: 80vh;
     overflow-y: auto;
     position: relative;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    opacity: 1;
+    visibility: visible;
+    transform: translate(0, 0);
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+}
+
+.review-modal.hidden .review-modal-content {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(0, -60px);
 }
 
 /* Review modal header */
@@ -2837,6 +2888,13 @@ td p {
     gap: 10px;
 }
 
+.review-field-error {
+    color: #c33;
+    font-size: 13px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+}
+
 /* Modal buttons */
 .cancel-review,
 .submit-review,
@@ -2900,11 +2958,22 @@ td p {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.conflict-modal.hidden {
+    opacity: 0;
+    visibility: hidden;
+    /* Override the generic .hidden rule */
+    display: flex !important;
+    transform: none !important;
 }
 
 /* Conflict modal content */
@@ -2917,6 +2986,17 @@ td p {
     overflow-y: auto;
     position: relative;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    opacity: 1;
+    visibility: visible;
+    transform: translate(0, 0);
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+}
+
+.conflict-modal.hidden .conflict-modal-content {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(0, -60px);
 }
 
 /* Conflict modal header */
@@ -3086,9 +3166,23 @@ td p {
     right: 0;
     bottom: 0;
     z-index: 10000;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.conflict-container.hidden {
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    /* Override the generic .hidden rule */
+    display: block !important;
+    transform: none !important;
+}
+
+.conflict-container.hidden .search-modal {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -60%);
 }
 
 .conflict-container.show {

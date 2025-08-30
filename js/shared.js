@@ -579,6 +579,42 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         return await window.checkTimeConflictExported(timeSlot, courseCode, academicYear);
     };
 
+    // Function to update course button state after authentication
+    const updateCourseButtonState = async (course, button) => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+            
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('courses_selection')
+                .eq('id', session.user.id)
+                .single();
+            
+            const currentSelection = profile?.courses_selection || [];
+            const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
+            const isCurrentlySelected = currentYearCourses.some(selected => 
+                selected.code === course.course_code
+            );
+            
+            if (isCurrentlySelected) {
+                button.textContent = "Remove Course";
+                button.style.background = "#dc3545";
+                button.style.color = "white";
+                button.style.cursor = "pointer";
+                button.disabled = false;
+            } else {
+                button.textContent = "Add Course";
+                button.style.background = "#28a745";
+                button.style.color = "white";
+                button.style.cursor = "pointer";
+                button.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error updating course button state:', error);
+        }
+    };
+
     classContent.innerHTML = `
         <div class="course-header">
             <h2>${course.title}</h2>
@@ -888,6 +924,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     // Get current user ID for edit functionality (using session already declared above)
     const currentUserId = session?.user?.id;
     
+    // Check if current user has already written a review for this course
+    const userHasReviewed = currentUserId && allReviews.some(review => review.user_id === currentUserId);
+    
     // Sort reviews to put user's own review first, then by creation date
     const sortedReviews = allReviews.sort((a, b) => {
         const aIsOwn = currentUserId && a.user_id === currentUserId;
@@ -908,12 +947,14 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     classReview.innerHTML = `
         <div class="class-subtitle-review">
             <p class="subtitle-opacity">Course Reviews</p>
-            <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
-                <div class="button-icon">
-                    <p>Write a Review</p>
-                    <div class="add-icon"></div>
-                </div>
-            </button>
+            ${!userHasReviewed ? `
+                <button class="add-review-btn" onclick="openAddReviewModal('${course.course_code}', ${course.academic_year}, '${course.term}', '${course.title}')">
+                    <div class="button-icon">
+                        <p>Write a Review</p>
+                        <div class="add-icon"></div>
+                    </div>
+                </button>
+            ` : ''}
         </div>
         
         ${stats.totalReviews > 0 ? `
@@ -1059,7 +1100,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 // Use authentication modal system
                 if (window.requireAuth) {
                     window.requireAuth('add this course to your schedule', async () => {
-                        // Re-trigger the add course action after authentication
+                        // After successful authentication, update the UI and check course status
+                        await updateCourseButtonState(course, newButton);
+                        // Then trigger the add course action
                         newButton.click();
                     });
                 } else {
@@ -1102,6 +1145,8 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                     }
                     
                     alert('Course removed successfully!');
+                    // Update button state after successful removal
+                    await updateCourseButtonState(course, newButton);
                 } else {
                     // Check for conflicts first
                     console.log('Checking for conflicts for course:', course.course_code, 'time:', course.time_slot);
@@ -1145,6 +1190,8 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                                 
                                 alert('Course replaced successfully!');
                                 await updateButton();
+                                // Also update the button state specifically
+                                await updateCourseButtonState(course, newButton);
                                 if (window.refreshCalendarComponent) {
                                     window.refreshCalendarComponent();
                                 }
@@ -1179,6 +1226,8 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 
                 // Update button and refresh calendar
                 await updateButton();
+                // Also update the button state specifically
+                await updateCourseButtonState(course, newButton);
                 if (window.refreshCalendarComponent) {
                     window.refreshCalendarComponent();
                 }
@@ -1452,6 +1501,7 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
                                 return options;
                             })()}
                         </select>
+                        <div class="review-field-error" id="course-year-error" style="display: none;"></div>
                     </div>
                     <div class="rating-input">
                         <label>Rating:</label>
@@ -1460,10 +1510,12 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
                                 `<span class="star-input" data-rating="${rating}" onclick="setRating(${rating})" onmouseover="hoverRating(${rating})" onmouseout="unhoverRating()">☆</span>`
                             ).join('')}
                         </div>
+                        <div class="review-field-error" id="star-rating-error" style="display: none;"></div>
                     </div>
                     <div class="review-text-input">
                         <label for="review-content">Your Review:</label>
                         <textarea id="review-content" placeholder="Share your experience with this course..." rows="6"></textarea>
+                        <div class="review-field-error" id="review-content-error" style="display: none;"></div>
                     </div>
                 </div>
                 <div class="review-modal-footer">
@@ -1474,8 +1526,14 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
         `;
 
         console.log('Adding modal to body');
+        modal.classList.add('hidden'); // Start hidden for animation
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
+        
+        // Trigger animation by removing hidden class (same as search modal pattern)
+        setTimeout(() => {
+            modal.classList.remove('hidden');
+        }, 10);
         
     } catch (error) {
         console.error('Error opening review modal:', error);
@@ -1487,7 +1545,13 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
 window.closeReviewModal = function() {
     const modal = document.querySelector('.review-modal');
     if (modal) {
-        modal.remove();
+        modal.classList.add('hidden');
+        
+        // Remove modal after animation completes (300ms to match CSS)
+        setTimeout(() => {
+            modal.remove();
+        }, 300);
+        
         // Only restore body overflow if the main course info modal is not open
         const classInfo = document.getElementById("class-info");
         if (!classInfo || !classInfo.classList.contains("show")) {
@@ -1495,6 +1559,25 @@ window.closeReviewModal = function() {
         }
     }
 };
+
+// Helper functions for review form validation
+function showReviewFieldError(fieldId, message) {
+    const errorElement = document.getElementById(`${fieldId}-error`);
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+}
+
+function clearReviewFieldErrors() {
+    const fieldIds = ['course-year', 'star-rating', 'review-content'];
+    fieldIds.forEach(fieldId => {
+        const errorElement = document.getElementById(`${fieldId}-error`);
+        if (errorElement) {
+            errorElement.style.display = 'none';
+        }
+    });
+}
 
 // Global function to open edit review modal
 window.openEditReviewModal = async function(reviewId, courseCode, term, currentRating, currentContent, currentYear) {
@@ -1555,8 +1638,14 @@ window.openEditReviewModal = async function(reviewId, courseCode, term, currentR
             </div>
         `;
 
+        modal.classList.add('hidden'); // Start hidden for animation  
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
+        
+        // Trigger animation by removing hidden class (same as search modal pattern)
+        setTimeout(() => {
+            modal.classList.remove('hidden');
+        }, 10);
         
     } catch (error) {
         console.error('Error opening edit review modal:', error);
@@ -1919,7 +2008,12 @@ window.submitReview = async function(courseCode, academicYear, term) {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!session) {
-            alert('Please log in to submit a review.');
+            // Use auth modal instead of alert
+            if (window.authManager) {
+                authManager.requireAuth('submit a review');
+            } else {
+                alert('Please log in to submit a review.');
+            }
             return;
         }
 
@@ -1931,13 +2025,26 @@ window.submitReview = async function(courseCode, academicYear, term) {
         const content = contentInput.value.trim();
         const selectedYear = parseInt(yearInput.value);
         
+        // Clear previous errors
+        clearReviewFieldErrors();
+        
+        let hasErrors = false;
+        
+        // Validate rating
         if (!rating) {
-            alert('Please select a rating.');
-            return;
+            showReviewFieldError('star-rating', 'Please select a rating.');
+            hasErrors = true;
         }
         
+        // Validate year
         if (!selectedYear) {
-            alert('Please select the year when you took this course.');
+            showReviewFieldError('course-year', 'Please select the year when you took this course.');
+            hasErrors = true;
+        }
+        
+        // Content is optional, so we don't validate it
+        
+        if (hasErrors) {
             return;
         }
 
@@ -2171,45 +2278,109 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                 .eq('term', currentTerm);
             
             console.log('Fetched courses data:', coursesData);
+            console.log('Looking for conflicts with new course:', courseCode, 'with time slot:', timeSlot);
             
             if (coursesData) {
                 console.log('Processing', coursesData.length, 'courses for conflicts');
                 // Check for time conflicts with fetched course data
                 conflictingCourseDetails = coursesData.filter(courseData => {
-                    console.log('Checking course:', courseData.course_code, 'with time:', courseData.time_slot);
+                    console.log('=== CHECKING COURSE FOR CONFLICT ===');
+                    console.log('Course being checked:', courseData.course_code, courseData.title);
+                    console.log('Course time slot:', courseData.time_slot);
+                    console.log('New course being added:', courseCode);
+                    console.log('New course time slot:', timeSlot);
                     
                     // Skip if it's the same course
                     if (courseData.course_code === courseCode) {
-                        console.log('Skipping same course:', courseData.course_code);
+                        console.log('✓ Skipping same course (codes match):', courseData.course_code);
                         return false;
                     }
                     
                     const existingTimeSlot = parseTimeSlot(courseData.time_slot);
-                    console.log('Parsed existing time slot:', existingTimeSlot);
-                    if (!existingTimeSlot) return false;
+                    console.log('Parsed existing time slot:', JSON.stringify(existingTimeSlot));
+                    console.log('Parsed new time slot:', JSON.stringify(newTimeSlot));
+                    
+                    if (!existingTimeSlot) {
+                        console.log('✗ Could not parse existing time slot');
+                        return false;
+                    }
                     
                     // Check for time conflicts
                     if (newTimeSlot.day && existingTimeSlot.day) {
                         console.log('Comparing days:', newTimeSlot.day, 'vs', existingTimeSlot.day);
                         if (newTimeSlot.day === existingTimeSlot.day) {
-                            console.log('Same day detected!');
+                            console.log('✓ Same day detected!');
                             // If both have periods, compare periods
                             if (newTimeSlot.period && existingTimeSlot.period) {
-                                console.log('Comparing periods:', newTimeSlot.period, 'vs', existingTimeSlot.period);
-                                return newTimeSlot.period === existingTimeSlot.period;
+                                const newPeriod = parseInt(newTimeSlot.period);
+                                const existingPeriod = parseInt(existingTimeSlot.period);
+                                console.log('Comparing periods (parsed):', newPeriod, 'vs', existingPeriod);
+                                const isConflict = newPeriod === existingPeriod;
+                                console.log('Period conflict result:', isConflict ? '❌ CONFLICT!' : '✓ No conflict');
+                                if (isConflict) {
+                                    console.log('🔍 CONFLICT DETAILS:');
+                                    console.log('  - Existing course:', courseData.title, '(' + courseData.course_code + ')');
+                                    console.log('  - Period:', existingPeriod);
+                                    console.log('  - New course period:', newPeriod);
+                                }
+                                return isConflict;
                             }
                             // If both have time ranges, they conflict (same day)
                             if (newTimeSlot.timeRange && existingTimeSlot.timeRange) {
-                                console.log('Both have time ranges, conflict detected');
+                                console.log('❌ Both have time ranges, conflict detected');
                                 return true;
                             }
-                            // If one has period and one has time range, assume conflict
-                            console.log('Mixed time formats, assuming conflict');
-                            return true;
+                            // If one has period and one has time range, we need to convert to compare
+                            if ((newTimeSlot.period && existingTimeSlot.timeRange) || (newTimeSlot.timeRange && existingTimeSlot.period)) {
+                                console.log('⚠️ Mixed time formats detected, attempting to convert for comparison');
+                                
+                                // Convert time ranges to periods for comparison
+                                const convertTimeRangeToPeriod = (timeRange) => {
+                                    if (!timeRange) return null;
+                                    // Extract start time
+                                    const startTimeMatch = timeRange.match(/(\d{2}):(\d{2})/);
+                                    if (!startTimeMatch) return null;
+                                    
+                                    const startHour = parseInt(startTimeMatch[1]);
+                                    const startMinute = parseInt(startTimeMatch[2]);
+                                    
+                                    // Convert to period based on typical Japanese university schedule
+                                    // Period 1: 09:00-10:30, Period 2: 10:45-12:15, Period 3: 13:15-14:45, Period 4: 15:00-16:30, Period 5: 16:45-18:15
+                                    if (startHour === 9) return 1;
+                                    if (startHour === 10 && startMinute >= 45) return 2;
+                                    if (startHour === 13) return 3;
+                                    if (startHour === 14 && startMinute >= 45) return 4;
+                                    if (startHour === 15) return 4;  // 14:55-16:25 would be period 4
+                                    if (startHour === 16 && startMinute >= 45) return 5;
+                                    
+                                    return null;
+                                };
+                                
+                                let newPeriod = newTimeSlot.period ? parseInt(newTimeSlot.period) : convertTimeRangeToPeriod(newTimeSlot.timeRange);
+                                let existingPeriod = existingTimeSlot.period ? parseInt(existingTimeSlot.period) : convertTimeRangeToPeriod(existingTimeSlot.timeRange);
+                                
+                                console.log('Converted periods - New:', newPeriod, 'Existing:', existingPeriod);
+                                
+                                if (newPeriod && existingPeriod) {
+                                    const isConflict = newPeriod === existingPeriod;
+                                    console.log('Mixed format conflict result:', isConflict ? '❌ CONFLICT!' : '✓ No conflict');
+                                    return isConflict;
+                                } else {
+                                    console.log('⚠️ Could not convert time formats, assuming no conflict');
+                                    return false;
+                                }
+                            }
+                            
+                            console.log('⚠️ Unknown time format combination, assuming no conflict');
+                            return false;
+                        } else {
+                            console.log('✓ Different days, no conflict');
                         }
+                    } else {
+                        console.log('⚠️ Missing day information');
                     }
                     
-                    console.log('No conflict found for course:', courseData.course_code);
+                    console.log('✓ No conflict found for course:', courseData.course_code);
                     return false;
                 });
                 
@@ -2297,7 +2468,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     
     // Create modal container
     const modalContainer = document.createElement('div');
-    modalContainer.className = 'conflict-container';
+    modalContainer.className = 'conflict-container hidden';
     
     modalContainer.innerHTML = `
         <div class="search-background">
@@ -2338,12 +2509,18 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     const background = modalContainer.querySelector('.search-background');
     
     function closeModal() {
-        modalContainer.remove();
+        modalContainer.classList.add('hidden');
+        setTimeout(() => {
+            modalContainer.remove();
+        }, 300);
         if (onResolve) onResolve(false);
     }
     
     function replaceAndAdd() {
-        modalContainer.remove();
+        modalContainer.classList.add('hidden');
+        setTimeout(() => {
+            modalContainer.remove();
+        }, 300);
         if (onResolve) onResolve(true, conflictingCourses);
     }
     
@@ -2357,6 +2534,6 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     
     // Show modal with animation
     setTimeout(() => {
-        modalContainer.classList.add('show');
+        modalContainer.classList.remove('hidden');
     }, 10);
 }
