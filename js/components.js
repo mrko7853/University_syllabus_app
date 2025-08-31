@@ -525,8 +525,8 @@ class CourseCalendar extends HTMLElement {
     this.clearCourseCells();
     this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
       const emptyDiv = document.createElement('div');
-      emptyDiv.textContent = 'EMPTY';
-      emptyDiv.classList.add('course-cell-main', 'empty-cell');
+      
+      emptyDiv.classList.add('course-cell-main');
       cell.appendChild(emptyDiv);
     });
   }

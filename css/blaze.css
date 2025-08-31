@@ -14,6 +14,9 @@ html, body {
     --h4: 18px;
     --p: 16px;
     --small-desktop: 14px;
+    --small-h1-desktop: 28px;
+    --small-h2-desktop: 18px;
+    --small-h3-desktop: 16px;
     --small-mobile: 18px;
     --icon-size-desktop: 28px;
     --icon-size-small-desktop: 20px;
@@ -312,11 +315,8 @@ term-box {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
-    /* Explicit height constraint for Safari compatibility */
     min-height: 0;
     max-height: fit-content;
-    /* Ensure grid items don't stretch unnecessarily */
-    align-items: start;
     grid-auto-rows: min-content;
 }
 
@@ -605,6 +605,34 @@ table#calendar-main {
     visibility: hidden;
     transform: scale(0);
     display: none !important;
+}
+
+/* Course list responsive */
+@media (max-width: 1000px) {
+    #calendar-main td p {
+        font-size: 10px !important;
+    }
+}
+
+@media (max-width: 975px) {
+    table {
+        width: auto !important;
+    }
+
+    .calendar-wrapper {
+        display: flex;
+        justify-content: center;
+    }
+
+    #calendar-main th p {
+        width: 20px !important;
+        height: 20px !important;
+        margin-bottom: 0px !important;
+    }
+
+    #calendar-main td, th {
+        padding: 5px 5px !important;
+    }
 }
 
 /* Specific overrides for modals that need animations */
@@ -1901,6 +1929,48 @@ td p {
 
     a {
         font-size: var(--small-desktop);
+    }
+
+    h1 {
+        font-size: var(--small-h1-desktop);
+    }
+
+    h2 {
+        font-size: var(--small-h2-desktop);
+    }
+
+    h3 {
+        font-size: var(--small-h3-desktop);
+    }
+
+    .course-main-title {
+        font-size: var(--small-h1-desktop) !important;
+    }
+
+    .total-text, #term-year-display, #search-btn, #sort-btn, #filter-btn {
+        font-size: var(--small-h3-desktop) !important;
+    }
+
+    .total-count {
+        font-size: var(--small-h1-desktop) !important;
+    }
+
+    #search-btn div {
+        background-size: 25px !important;
+    }
+
+    #sort-btn div {
+        background-size: 25px !important;
+    }
+
+    #search-btn, #sort-btn {
+        width: 60px;
+        height: 60px;
+    }
+
+    #filter-btn {
+        width: 150px;
+        height: 60px;
     }
 }
 
