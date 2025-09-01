@@ -369,6 +369,25 @@ class CourseCalendar extends HTMLElement {
         .calendar-wrapper {
           position: relative;
         }
+        
+        /* Calendar time format responsive display */
+        .time-short {
+          display: none;
+        }
+
+        .time-full {
+          display: block;
+        }
+
+        @media (max-width: 780px) {
+          .time-full {
+            display: none !important;
+          }
+          
+          .time-short {
+            display: block !important;
+          }
+        }
       </style>
       <div class="calendar-container-main">
         <div class="calendar-wrapper">
@@ -386,23 +405,38 @@ class CourseCalendar extends HTMLElement {
             </thead>
             <tbody>
               <tr>
-                <td id="calendar-period-1"><p>09:00 - 10:30</p></td>
+                <td id="calendar-period-1">
+                  <p class="time-full">09:00 - 10:30</p>
+                  <p class="time-short">1h</p>
+                </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
-                <td id="calendar-period-2"><p>10:45 - 12:15</p></td>
+                <td id="calendar-period-2">
+                  <p class="time-full">10:45 - 12:15</p>
+                  <p class="time-short">2h</p>
+                </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
-                <td id="calendar-period-3"><p>13:10 - 14:40</p></td>
+                <td id="calendar-period-3">
+                  <p class="time-full">13:10 - 14:40</p>
+                  <p class="time-short">3h</p>
+                </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
-                <td id="calendar-period-4"><p>14:55 - 16:25</p></td>
+                <td id="calendar-period-4">
+                  <p class="time-full">14:55 - 16:25</p>
+                  <p class="time-short">4h</p>
+                </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
-                <td id="calendar-period-5"><p>16:40 - 18:10</p></td>
+                <td id="calendar-period-5">
+                  <p class="time-full">16:40 - 18:10</p>
+                  <p class="time-short">5h</p>
+                </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
             </tbody>
@@ -683,8 +717,7 @@ class CourseCalendar extends HTMLElement {
       this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
         if (!cell.querySelector('.course-cell-main')) {
           const emptyDiv = document.createElement('div');
-          emptyDiv.textContent = 'EMPTY';
-          emptyDiv.classList.add('course-cell-main', 'empty-cell');
+          emptyDiv.classList.add('course-cell-main');
           cell.appendChild(emptyDiv);
         }
       });

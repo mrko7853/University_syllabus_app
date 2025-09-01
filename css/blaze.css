@@ -7,6 +7,15 @@ html, body {
     line-height: 1.5;
 }
 
+@media (max-width: 780px) {
+    :root {
+        --small-desktop: 12px !important;
+        --small-h1-desktop: 24px !important;
+        --small-h2-desktop: 16px !important;
+        --small-h3-desktop: 14px !important;
+    }
+}
+
 :root {
     --h1: 30px;
     --h2: 24px;
@@ -21,6 +30,7 @@ html, body {
     --icon-size-desktop: 28px;
     --icon-size-small-desktop: 20px;
     --size-mobile: 25px;
+    --phone-h1: 40px;
 }
 
 /* General style */
@@ -1540,11 +1550,58 @@ td p {
     display: none;
 }
 
+.course-main-paragraph {
+    display: block;
+}
+
 /* Mobile sticky container adjustments */
 @media (max-width: 780px) {
     .container-above {
         left: 0;
         padding: 10px 15px;
+        background-color: rgb(255 255 255 / 20%) !important;
+        border-radius: 0px;
+        align-items: center;
+    }
+
+    .container-above::before {
+        background-color: rgb(255 255 255 / 20%) !important;
+        border-radius: 0px;
+    }
+
+    .course-main-paragraph {
+        display: none;
+    }
+    
+    /* When container-above is moved outside main-container on mobile */
+    .main-content > .container-above {
+        background: white;
+        margin: 0;
+        padding: 20px 15px;
+        border-radius: 50px 50px 0px 0px;
+        position: sticky;
+        top: 0;
+        z-index: 999;
+    }
+
+    .main-container {
+        border-radius: 40px;
+    }
+
+    #course-main-div {
+        margin-top: 0px !important;
+        margin-left: 15px !important;
+        margin-right: 15px !important;
+        padding: 15px;
+    }
+
+    .course-main-title {
+        font-size: var(--phone-h1) !important;
+    }
+
+    #course-list {
+        grid-template-columns: 1fr 1fr !important;
+        margin-top: 0px !important;
     }
 }
 
@@ -1562,7 +1619,10 @@ td p {
 
 @media (max-width: 780px) {
 
-    button {
+    button#profile,
+    button#dashboard,
+    button#calendar-btn,
+    button#search {
         background-size: 35px !important;
         background-color: transparent !important;
         width: 40px !important;
@@ -1570,14 +1630,20 @@ td p {
         box-shadow: none !important;
     }
 
-    button:hover {
+    button#profile:hover,
+    button#dashboard:hover,
+    button#calendar-btn:hover,
+    button#search:hover {
         background-size: 35px !important;
         width: 40px !important;
         height: 45px !important;
         box-shadow: none !important;
     }
 
-    button:active {
+    button#profile:active,
+    button#dashboard:active,
+    button#calendar-btn:active,
+    button#search:active {
         background-size: 35px !important;
         width: 40px !important;
         height: 45px !important;
@@ -1715,9 +1781,8 @@ td p {
 /* Mobile calendar */
 
 @media (max-width: 780px) {
-
-    td, th {
-        padding: 0px !important;
+    #syllabus-main {
+        margin-bottom: 0px !important;
     }
 
     td p {
@@ -1848,6 +1913,120 @@ td p {
     .mobile-time {
         display: unset !important;
     }
+
+    /* Additional responsive layout improvements */
+    .top-content {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        margin: 0 15px !important;
+    }
+
+    .top-content .main-container {
+        padding: 15px !important;
+        margin: 0 !important;
+        border-radius: 40px !important;
+    }
+
+    .top-content-two {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    /* Main content mobile optimizations */
+    .main-content {
+        margin: 0 !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    /* General main-container mobile adjustments */
+    .main-container {
+        margin: 15px !important;
+        padding: 15px !important;
+        border-radius: 40px !important;
+    }
+
+    /* Course list mobile layout */
+    #course-list {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+        padding: 0 !important;
+    }
+
+    /* Filter and search modal mobile adjustments */
+    .filter-popup, .search-modal {
+        margin: 15px !important;
+        padding: 20px !important;
+        border-radius: 40px !important;
+        max-width: calc(100vw - 30px) !important;
+    }
+
+    /* Button adjustments for mobile */
+    .buttons-box {
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+    }
+
+    #course-code,
+    #course-professor-small,
+    #course-time-small {
+        display: none;
+    }
+
+    /* Mobile GPA bar styling */
+    .gpa-bar-mobile {
+        display: flex !important;
+        margin-top: 15px;
+        border-radius: 15px;
+        overflow: hidden;
+        height: 25px;
+    }
+
+    .gpa-bar-desktop {
+        display: none !important;
+    }
+
+    .gpa-fill-mobile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .gpa-fill-mobile:nth-child(1) {
+        background-color: #92ECB0;
+    }
+    .gpa-fill-mobile:nth-child(2) {
+        background-color: #D1E7C9;
+    }
+    .gpa-fill-mobile:nth-child(3) {
+        background-color: #F6EBC1;
+    }
+    .gpa-fill-mobile:nth-child(4) {
+        background-color: #FFDD55;
+    }
+    .gpa-fill-mobile:nth-child(5) {
+        background-color: #ED7F81;
+    }
+
+    .gpa-fill-mobile p {
+        margin: 0;
+        color: #333;
+        font-weight: bold;
+    }
+}
+
+/* Desktop GPA bar styling */
+@media (min-width: 781px) {
+    .gpa-bar-mobile {
+        display: none !important;
+    }
+
+    .gpa-bar-desktop {
+        display: grid !important;
+    }
 }
 
 .course-classroom {
@@ -1944,7 +2123,7 @@ td p {
     }
 
     .course-main-title {
-        font-size: var(--small-h1-desktop) !important;
+        font-size: var(--small-h1-desktop);
     }
 
     .total-text, #term-year-display, #search-btn, #sort-btn, #filter-btn {

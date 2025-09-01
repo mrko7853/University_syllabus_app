@@ -84,15 +84,25 @@ async function showCourse(year, term) {
             courseHTML += `
             <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
                 <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
-                    <p>${course.course_code}</p>
-                    <h2>${course.title}</h2>
-                    <p>Professor</p>
-                    <h3>${course.professor}</h3>
+                    <p id="course-code">${course.course_code}</p>
+                    <h2 id="course-title">${course.title}</h2>
+                    <p id="course-professor-small">Professor</p>
+                    <h3 id="course-professor">${course.professor}</h3>
                     <div class="class-space"></div>
-                    <p>Time</p>
-                    <h3>${course.time_slot}</h3>
+                    <p id="course-time-small">Time</p>
+                    <h3 id="course-time">${course.time_slot}</h3>
+                    
+                    <!-- Mobile GPA bar inside class-container -->
+                    <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                        <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent || 0}%"><p>A</p></div>
+                        <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent || 0}%"><p>B</p></div>
+                        <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent || 0}%"><p>C</p></div>
+                        <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent || 0}%"><p>D</p></div>
+                        <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent || 0}%"><p>F</p></div>
+                    </div>
                 </div>
-                <div class="gpa-bar ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                <!-- Desktop GPA bar outside class-container -->
+                <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
                     <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
                     <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
                     <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
@@ -661,10 +671,29 @@ saveBtn.addEventListener("click", async function() {
 });
 
 document.addEventListener("DOMContentLoaded", async function () {
+    // Handle responsive layout for all users (authenticated or not)
+    // Add a small delay to ensure all elements are rendered
+    setTimeout(handleResponsiveLayout, 100);
+    
+    // Listen for window resize to adjust layout  
+    window.addEventListener('resize', handleResponsiveLayout);
+    
     const { data: { session } } = await supabase.auth.getSession();
 
+    // Hide/show .top-content based on authentication status
+    const topContent = document.querySelector('.top-content');
+    
     if (!session) {
+        // Hide top-content for non-authenticated users
+        if (topContent) {
+            topContent.style.display = 'none';
+        }
         return;
+    }
+
+    // Show top-content for authenticated users with grid layout
+    if (topContent) {
+        topContent.style.display = 'grid';
     }
 
     const user = session.user;
@@ -683,6 +712,76 @@ document.addEventListener("DOMContentLoaded", async function () {
         profileText.textContent = `Welcome, ${user.email}`;
     }
 });
+
+// Function to handle responsive layout changes
+function handleResponsiveLayout() {
+    const containerAbove = document.querySelector('.container-above');
+    const mainContent = document.querySelector('.main-content');
+    
+    console.log('handleResponsiveLayout called');
+    console.log('containerAbove found:', !!containerAbove);
+    console.log('mainContent found:', !!mainContent);
+    
+    if (!containerAbove || !mainContent) {
+        console.log('Elements not found for responsive layout');
+        return;
+    }
+    
+    // Find the specific main-container that contains container-above
+    // Use the specific ID for reliable detection
+    const targetMainContainer = document.getElementById('course-main-div');
+    
+    console.log('targetMainContainer found:', !!targetMainContainer);
+    console.log('Current parent:', containerAbove.parentElement?.className);
+    console.log('Screen width:', window.innerWidth);
+    
+    if (!targetMainContainer) {
+        console.log('Target main container not found');
+        return;
+    }
+    
+    if (window.innerWidth <= 780) {
+        // Mobile: move container-above outside of main-container
+        if (containerAbove.parentElement === targetMainContainer) {
+            console.log('Moving container-above outside main-container for mobile');
+            // Insert before the main-container that used to contain it
+            mainContent.insertBefore(containerAbove, targetMainContainer);
+            console.log('After move - new parent:', containerAbove.parentElement?.className);
+        } else {
+            console.log('Container-above is already outside main-container');
+        }
+    } else {
+        // Desktop: move container-above back inside main-container
+        if (containerAbove.parentElement === mainContent) {
+            console.log('Moving container-above back inside main-container for desktop');
+            // Insert as first child of main-container (before course-list)
+            const courseList = document.getElementById('course-list');
+            targetMainContainer.insertBefore(containerAbove, courseList);
+            console.log('After move - new parent:', containerAbove.parentElement?.className);
+        } else {
+            console.log('Container-above is already inside main-container');
+        }
+    }
+}
+
+// Test function to manually trigger mobile layout - call testMobileLayout() in console
+window.testMobileLayout = function() {
+    const containerAbove = document.querySelector('.container-above');
+    const mainContent = document.querySelector('.main-content');
+    const mainContainer = containerAbove?.closest('.main-container');
+    
+    console.log('Manual test - elements found:', {
+        containerAbove: !!containerAbove,
+        mainContent: !!mainContent, 
+        mainContainer: !!mainContainer
+    });
+    
+    if (containerAbove && mainContent && mainContainer) {
+        console.log('Before move - parent:', containerAbove.parentElement?.className);
+        mainContent.insertBefore(containerAbove, mainContainer);
+        console.log('After move - parent:', containerAbove.parentElement?.className);
+    }
+};
 
 async function calendarSchedule(year, term) {
     displayedYear = year;
@@ -1448,8 +1547,18 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                 <div class="class-space"></div>
                 <p>Time</p>
                 <h3>${timeSlot}</h3>
+                
+                <!-- Mobile GPA bar inside class-container -->
+                <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent || 0}%"><p>A</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent || 0}%"><p>B</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent || 0}%"><p>C</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent || 0}%"><p>D</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent || 0}%"><p>F</p></div>
+                </div>
             </div>
-            <div class="gpa-bar ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+            <!-- Desktop GPA bar outside class-container -->
+            <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
                 <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
                 <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
                 <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
