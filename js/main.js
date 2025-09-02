@@ -1880,3 +1880,60 @@ document.addEventListener("click", (event) => {
         currentHighlightIndex = -1;
     }
 });
+
+// Mobile navigation positioning fix
+function ensureMobileNavigationPositioning() {
+    const appNavigation = document.querySelector('app-navigation');
+    if (!appNavigation) return;
+    
+    // Check if we're on mobile
+    const isMobile = window.innerWidth <= 780;
+    
+    if (isMobile) {
+        // Force bottom positioning with JavaScript
+        appNavigation.style.position = 'fixed';
+        appNavigation.style.bottom = '0';
+        appNavigation.style.left = '0';
+        appNavigation.style.right = '0';
+        appNavigation.style.width = '100%';
+        appNavigation.style.zIndex = '10000';
+        
+        // Force hardware acceleration
+        appNavigation.style.transform = 'translateZ(0)';
+        appNavigation.style.webkitTransform = 'translateZ(0)';
+        
+        // Ensure it stays at the bottom during scroll
+        const forceBottomPosition = () => {
+            if (window.innerWidth <= 780) {
+                appNavigation.style.bottom = '0px';
+                appNavigation.style.position = 'fixed';
+            }
+        };
+        
+        // Apply on scroll events
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(forceBottomPosition, 10);
+        }, { passive: true });
+        
+        // Apply on orientation change
+        window.addEventListener('orientationchange', () => {
+            setTimeout(forceBottomPosition, 100);
+        });
+        
+        // Apply on resize
+        window.addEventListener('resize', () => {
+            setTimeout(forceBottomPosition, 50);
+        });
+        
+        // Initial positioning
+        forceBottomPosition();
+    }
+}
+
+// Initialize mobile navigation positioning
+document.addEventListener('DOMContentLoaded', ensureMobileNavigationPositioning);
+
+// Also run after page load to catch any late-loaded elements
+window.addEventListener('load', ensureMobileNavigationPositioning);

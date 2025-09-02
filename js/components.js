@@ -168,7 +168,7 @@ class TotalCourses extends HTMLElement {
             <style>
                 @import url('/css/blaze.css');
             </style>
-            <div class="total-courses">
+            <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
                 <h2 class="total-count">0</h2>
                 <h2 class="total-text">Registered<br>Courses</h2>
@@ -195,7 +195,7 @@ class TotalCourses extends HTMLElement {
                     <style>
                       @import url('/css/blaze.css');
                     </style>
-                    <div class="total-courses">
+                    <div class="total-courses" id="total-registered-courses">
                       <div class="total-courses-container">
                       <h2 class="total-count">14</h2>
                       <h2 class="total-text">Registered<br>Courses</h2>
@@ -254,11 +254,9 @@ class TermBox extends HTMLElement {
         }
       </style>
       <div class="total-courses">
-        <div class="total-courses-container">
-          <div class="total-count" id="term-year-display"></div>
-          <div class="concentration-section">
-            <h2 class="total-text" id="concentration-text-id">Loading...</h2>
-          </div>
+        <div class="total-courses-container" id="#year-courses">
+          <h2 class="total-count" id="term-semester"></h2>
+          <h2 class="total-text" id="term-year"></h2>
         </div>
       </div>
     `;
@@ -276,7 +274,8 @@ class TermBox extends HTMLElement {
     // Attach listeners to keep display updated on changes
     this._ys = document.getElementById('year-select');
     this._ts = document.getElementById('term-select');
-    this._termYearDisplay = this.shadowRoot.getElementById('term-year-display');
+    this._termSemesterDisplay = this.shadowRoot.getElementById('term-semester');
+    this._termYearDisplay = this.shadowRoot.getElementById('term-year');
 
     if (this._ys) this._ys.addEventListener('change', this.handleSelectChange);
     if (this._ts) this._ts.addEventListener('change', this.handleSelectChange);
@@ -295,8 +294,9 @@ class TermBox extends HTMLElement {
   }
 
   updateDisplayTerm() {
-    const displayTermYear = this.shadowRoot.getElementById('term-year-display');
-    if (!displayTermYear) return;
+    const displayTermSemester = this.shadowRoot.getElementById('term-semester');
+    const displayTermYear = this.shadowRoot.getElementById('term-year');
+    if (!displayTermSemester || !displayTermYear) return;
 
     const ys = document.getElementById('year-select');
     const ts = document.getElementById('term-select');
@@ -313,50 +313,13 @@ class TermBox extends HTMLElement {
     }
 
     const term = this.translateTerm(termRaw);
-    displayTermYear.textContent = `${term} ${year}`;
+    displayTermSemester.textContent = term;
+    displayTermYear.textContent = year;
   }
 
   async initConcentration() {
     const concentrationText = this.shadowRoot.getElementById('concentration-text-id');
     const containerDiv = this.shadowRoot.querySelector('.total-courses');
-
-    try {
-      // Get fresh session data
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user || null;
-
-      if (!currentUser) {
-        concentrationText.textContent = 'Global Culture';
-        containerDiv.style.backgroundColor = "#C6E0B4";
-        return;
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('concentration')
-        .eq('id', currentUser.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      const userConcentration = profile?.concentration || 'Global Culture';
-      concentrationText.textContent = userConcentration;
-
-      // Apply background color based on concentration
-      if (userConcentration === "Global Culture") {
-        containerDiv.style.backgroundColor = "#C6E0B4";
-      } else if (userConcentration === "Economy") {
-        containerDiv.style.backgroundColor = "#FFE699";
-      } else if (userConcentration === "Politics") {
-        containerDiv.style.backgroundColor = "#FFCCCC";
-      } else {
-        containerDiv.style.backgroundColor = "#C6E0B4"; // Default to Global Culture color
-      }
-    } catch (error) {
-      console.error('Error fetching user concentration:', error);
-      concentrationText.textContent = 'Global Culture';
-      containerDiv.style.backgroundColor = "#C6E0B4";
-    }
   }
 }
 

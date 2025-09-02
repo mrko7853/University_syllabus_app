@@ -344,8 +344,7 @@ term-box {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
-    /* Ensure proper height behavior in Safari */
-    height: fit-content;
+    height: 100%;
     align-items: stretch;
 }
 
@@ -380,10 +379,6 @@ term-box {
     font-size: var(--h1);
     font-weight: 100;
     margin: 0;
-}
-
-#term-year-display {
-    font-size: var(--h3);
 }
 
 .total-text {
@@ -516,7 +511,7 @@ table#calendar-main {
     background: #E3D5E9;
     background: rgba(227, 213, 233, 0.85);
     /* Modern browsers with backdrop-filter support */
-    background: rgb(255 255 255 / 30%);
+    background: rgb(227 213 234 / 30%);
     transition: all 0.3s ease;
     z-index: -1;
     border-radius: 20px;
@@ -970,10 +965,6 @@ table#calendar-main {
     padding: 10px 20px;
     font-size: var(--p);
     font-family: 'Libre Bodoni', sans-serif;
-}
-
-#filter-year-term .custom-select-trigger:hover {
-    
 }
 
 #filter-year-term .custom-select-trigger:focus,
@@ -1626,6 +1617,38 @@ td p {
         grid-template-columns: 1fr 1fr !important;
         margin-top: 0px !important;
     }
+
+    .course-cell-box {
+        padding: 4px;
+        height: 4px;
+        width: 4px;
+        margin: 3px; /* Add margin instead of padding for proper centering */
+    }
+
+    #calendar-main td, th {
+        padding: 2px 3px !important;
+    }
+
+    #calendar-main th p {
+        width: 16px !important;
+        height: 16px !important;
+    }
+
+    #year-courses {
+        display: none;
+    }
+
+    .total-courses-container {
+        padding: 15px 15px;
+    }
+
+    total-courses {
+        border-radius: 15px;
+    }
+
+    term-box {
+        display: none;
+    }
 }
 
 /* Desktop sticky adjustments to account for sidebar */
@@ -1940,15 +1963,15 @@ td p {
 
     /* Additional responsive layout improvements */
     .top-content {
-        grid-template-columns: 1fr !important;
+        grid-template-columns: 1fr 1fr !important;
         gap: 10px !important;
-        margin: 0 15px !important;
+        margin: 15px 15px 0 15px !important;
     }
 
     .top-content .main-container {
         padding: 15px !important;
         margin: 0 !important;
-        border-radius: 40px !important;
+        border-radius: 30px !important;
     }
 
     .top-content-two {
