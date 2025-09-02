@@ -1,6 +1,27 @@
 import { supabase } from "/supabase.js";
 import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
 
+// Helper function to normalize course titles
+function normalizeCourseTitle(title) {
+    if (!title) return title;
+    
+    // Convert full-width characters to normal characters
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+    });
+    
+    // Convert full-width spaces to normal spaces
+    normalized = normalized.replace(/　/g, ' ');
+    
+    // Remove parentheses and their contents
+    normalized = normalized.replace(/[()（）]/g, '');
+    
+    // Clean up extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+    
+    return normalized;
+}
+
 // Initialize session state - will be updated by components as needed
 window.globalSession = null;
 window.globalUser = null;

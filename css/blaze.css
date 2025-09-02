@@ -30,7 +30,7 @@ html, body {
     --icon-size-desktop: 28px;
     --icon-size-small-desktop: 20px;
     --size-mobile: 25px;
-    --phone-h1: 40px;
+    --phone-h1: 30px;
 }
 
 /* General style */
@@ -135,6 +135,7 @@ button {
     box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
     filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
     cursor: pointer;
+    color: black !important;
     background-color: white;
     background-size: var(--icon-size-desktop);
 }
@@ -515,13 +516,13 @@ table#calendar-main {
     background: #E3D5E9;
     background: rgba(227, 213, 233, 0.85);
     /* Modern browsers with backdrop-filter support */
-    background: rgba(227, 213, 233, 0.2);
+    background: rgb(255 255 255 / 30%);
     transition: all 0.3s ease;
     z-index: -1;
     border-radius: 20px;
     /* Cross-browser backdrop filter support */
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
 }
 
 .buttons-box {
@@ -1250,10 +1251,16 @@ table#calendar-main {
 }
 
 .class-container {
-    padding: 20px;
-    border-top-left-radius: 30px;
-    border-top-right-radius: 30px;
+    padding: 15px;
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
     flex: 1;
+}
+
+/* Hide course icons on desktop by default */
+.course-professor-icon,
+.course-time-icon {
+    display: none;
 }
 
 #course-list p {
@@ -1572,13 +1579,27 @@ td p {
     .course-main-paragraph {
         display: none;
     }
+
+    #filter-btn {
+        width: 100px !important;
+        height: 50px !important;
+    }
+
+    #search-btn, #sort-btn {
+        width: 50px !important;
+        height: 50px !important;
+    }
+
+    #search-btn div, #sort-btn div {
+        background-size: 20px !important;
+    }
     
     /* When container-above is moved outside main-container on mobile */
     .main-content > .container-above {
         background: white;
         margin: 0;
         padding: 20px 15px;
-        border-radius: 50px 50px 0px 0px;
+        border-radius: 0px;
         position: sticky;
         top: 0;
         z-index: 999;
@@ -1592,7 +1613,9 @@ td p {
         margin-top: 0px !important;
         margin-left: 15px !important;
         margin-right: 15px !important;
+        margin-bottom: 95px !important;
         padding: 15px;
+        min-width: 330px;
     }
 
     .course-main-title {
@@ -1623,10 +1646,10 @@ td p {
     button#dashboard,
     button#calendar-btn,
     button#search {
-        background-size: 35px !important;
+        background-size: 25px !important;
         background-color: transparent !important;
-        width: 40px !important;
-        height: 45px !important;
+        width: 30px !important;
+        height: 30px !important;
         box-shadow: none !important;
     }
 
@@ -1634,9 +1657,9 @@ td p {
     button#dashboard:hover,
     button#calendar-btn:hover,
     button#search:hover {
-        background-size: 35px !important;
-        width: 40px !important;
-        height: 45px !important;
+        background-size: 25px !important;
+        width: 30px !important;
+        height: 30px !important;
         box-shadow: none !important;
     }
 
@@ -1644,9 +1667,9 @@ td p {
     button#dashboard:active,
     button#calendar-btn:active,
     button#search:active {
-        background-size: 35px !important;
-        width: 40px !important;
-        height: 45px !important;
+        background-size: 25px !important;
+        width: 30px !important;
+        height: 30px !important;
         box-shadow: none !important;
     }
 
@@ -1736,12 +1759,14 @@ td p {
 
     app-navigation {
         position: fixed;
-        height: 80px;
+        height: 65px;
         width: 100% !important;
         bottom: 0;
         left: 0;
-        background-color: white;
+        background: rgb(255 255 255 / 30%);
         z-index: 10000;
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
         border-top: 1px solid #E3E2E2;
     }
 
@@ -1772,7 +1797,6 @@ td p {
 
     section {
         flex: 1;
-        overflow-y: auto;
         margin-left: 0 !important;
         margin-bottom: 80px !important;
     }
@@ -1943,7 +1967,7 @@ td p {
     .main-container {
         margin: 15px !important;
         padding: 15px !important;
-        border-radius: 40px !important;
+        border-radius: 30px !important;
     }
 
     /* Course list mobile layout */
@@ -1957,7 +1981,7 @@ td p {
     .filter-popup, .search-modal {
         margin: 15px !important;
         padding: 20px !important;
-        border-radius: 40px !important;
+        border-radius: 30px !important;
         max-width: calc(100vw - 30px) !important;
     }
 
@@ -1973,13 +1997,63 @@ td p {
         display: none;
     }
 
+    /* Course icons for mobile */
+    .course-professor-icon {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        background-image: url('../assets/mobile/professor-mobile.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    .course-time-icon {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        background-image: url('../assets/mobile/time-mobile.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    #course-title {
+        max-width: fit-content;
+    }
+
+    #course-list h2 {
+        margin: 5px 0 20px 0 !important;
+    }
+
+    #course-list h3 {
+        font-weight: 100 !important;
+    }
+
+    #course-professor {
+        display: flex;
+        align-items: baseline;
+    }
+
+    #course-time {
+        display: flex;
+        align-items: center;
+    }
+
+    .class-space {
+        margin: 20px 0;
+    }
+
     /* Mobile GPA bar styling */
     .gpa-bar-mobile {
         display: flex !important;
-        margin-top: 15px;
-        border-radius: 15px;
+        border-radius: 0px 0px 15px 15px;
         overflow: hidden;
-        height: 25px;
+        height: 40px;
     }
 
     .gpa-bar-desktop {
@@ -2135,11 +2209,11 @@ td p {
     }
 
     #search-btn div {
-        background-size: 25px !important;
+        background-size: 25px;
     }
 
     #sort-btn div {
-        background-size: 25px !important;
+        background-size: 25px;
     }
 
     #search-btn, #sort-btn {

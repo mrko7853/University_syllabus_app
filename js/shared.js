@@ -1,4 +1,179 @@
 import { supabase } from "/supabase.js";
+import * as wanakana from 'wanakana';
+
+// Japanese name romanization mapping
+const japaneseNameMapping = {
+    // Common surnames
+    '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
+    '八木': 'Yagi', '木': 'Ki',
+    '和田': 'Wada', '田': 'Da', '和': 'Wa',
+    '張': 'Chou', 
+    '趙': 'Chou',
+    '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
+    '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
+    '陳': 'Chin',
+    '今西': 'Imanishi', '西': 'Nishi', '今': 'Ima',
+    '石井': 'Ishii', '石': 'Ishi', '井': 'Ii',
+    '小西': 'Konishi', '小': 'Ko',
+    '和泉': 'Izumi', '泉': 'Izumi',
+    '田中': 'Tanaka', '中': 'Naka',
+    '佐藤': 'Satou', '藤': 'Tou', '佐': 'Sa',
+    '山田': 'Yamada', '山': 'Yama',
+    '鈴木': 'Suzuki', '鈴': 'Suzu',
+    '伊藤': 'Itou', '伊': 'I',
+    '渡辺': 'Watanabe', '辺': 'Be', '渡': 'Wata',
+    '加藤': 'Katou', '加': 'Ka',
+    '吉田': 'Yoshida', '吉': 'Yoshi',
+    '山本': 'Yamamoto', '本': 'Moto',
+    '松本': 'Matsumoto', '松': 'Matsu',
+    '井上': 'Inoue', '上': 'Ue',
+    '木村': 'Kimura',
+    '林': 'Hayashi',
+    '森': 'Mori',
+    '池田': 'Ikeda', '池': 'Ike',
+    '橋本': 'Hashimoto', '橋': 'Hashi',
+    
+    // Common given names
+    '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
+    '匡': 'Tadashi',
+    '喜彦': 'Yoshihiko', '彦': 'Hiko', '喜': 'Yoshi',
+    '皓程': 'Koutei', '程': 'Tei', '皓': 'Kou',
+    '亮': 'Ryou',
+    '壮彦': 'Takehiko', '壮': 'Take',
+    '晴久': 'Haruhisa', '晴': 'Haru', '久': 'Hisa',
+    '依君': 'Ikun', '依': 'I', '君': 'Kun',
+    '尚実': 'Naomi', '尚': 'Nao', '実': 'Mi',
+    '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
+    '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
+    '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
+    
+    // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
+    'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
+    'なかま': 'Nakama', 'かわむら': 'Kawamura', 'いまにし': 'Imanishi',
+    'いしい': 'Ishii', 'こにし': 'Konishi', 'いずみ': 'Izumi',
+    'たなか': 'Tanaka', 'さとう': 'Satou', 'やまだ': 'Yamada',
+    'すずき': 'Suzuki', 'いとう': 'Itou', 'わたなべ': 'Watanabe',
+    
+    // Common Katakana names (these will mostly be handled by WanaKana, but added for completeness)
+    'タカハシ': 'Takahashi', 'ヤギ': 'Yagi', 'ワダ': 'Wada',
+    'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
+    'イシイ': 'Ishii', 'コニシ': 'Konishi', 'イズミ': 'Izumi',
+    'タナカ': 'Tanaka', 'サトウ': 'Satou', 'ヤマダ': 'Yamada',
+    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe'
+};
+
+// Cache for romanized professor names
+const romanizedProfessorCache = new Map();
+
+// Clear cache when page loads to ensure fresh romanization
+romanizedProfessorCache.clear();
+
+// Helper function to romanize Japanese professor names
+function romanizeProfessorName(name) {
+    if (!name) return name;
+    
+    // Check cache first
+    if (romanizedProfessorCache.has(name)) {
+        return romanizedProfessorCache.get(name);
+    }
+    
+    // Check if the name contains Japanese characters
+    const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
+    
+    if (!hasJapanese) {
+        // Capitalize non-Japanese names properly
+        const capitalized = name.toUpperCase();
+        romanizedProfessorCache.set(name, capitalized);
+        return capitalized;
+    }
+    
+    let romanized = name;
+    
+    try {
+        // Split the name and process each part
+        let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
+        let romanizedParts = [];
+        
+        for (let part of parts) {
+            let romanizedPart = part;
+            
+            // First, try WanaKana for Hiragana/Katakana conversion
+            const wanaKanaResult = wanakana.toRomaji(part);
+            
+            // If WanaKana converted it (no more Japanese characters), use that
+            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
+                romanizedPart = wanaKanaResult;
+            } else {
+                // Still has Kanji, try our custom mapping
+                
+                // Try exact match first
+                if (japaneseNameMapping[part]) {
+                    romanizedPart = japaneseNameMapping[part];
+                } else {
+                    // Try character by character mapping
+                    let characterMapped = '';
+                    for (let char of part) {
+                        if (japaneseNameMapping[char]) {
+                            characterMapped += japaneseNameMapping[char];
+                        } else {
+                            // Try WanaKana on individual character
+                            const charRomaji = wanakana.toRomaji(char);
+                            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(charRomaji)) {
+                                characterMapped += charRomaji;
+                            } else {
+                                characterMapped += char;
+                            }
+                        }
+                    }
+                    romanizedPart = characterMapped;
+                }
+            }
+            
+            romanizedParts.push(romanizedPart);
+        }
+        
+        romanized = romanizedParts.join(' ');
+        
+        // Clean up and capitalize properly
+        romanized = romanized.replace(/\s+/g, ' ').trim();
+        // Convert to full caps (uppercase)
+        romanized = romanized.toUpperCase();
+        
+    } catch (error) {
+        console.warn('Error romanizing name:', error);
+        romanized = name;
+    }
+    
+    // Cache the result
+    romanizedProfessorCache.set(name, romanized);
+    return romanized;
+}
+
+// Synchronous function to get romanized professor name from cache
+function getRomanizedProfessorName(name) {
+    return romanizedProfessorCache.get(name) || romanizeProfessorName(name);
+}
+
+// Helper function to normalize course titles
+function normalizeCourseTitle(title) {
+    if (!title) return title;
+    
+    // Convert full-width characters to normal characters
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+    });
+    
+    // Convert full-width spaces to normal spaces
+    normalized = normalized.replace(/　/g, ' ');
+    
+    // Remove parentheses and their contents
+    normalized = normalized.replace(/[()（）]/g, '');
+    
+    // Clean up extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+    
+    return normalized;
+}
 
 const courseCache = {};
 
@@ -617,13 +792,13 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     classContent.innerHTML = `
         <div class="course-header">
-            <h2>${course.title}</h2>
+            <h2>${normalizeCourseTitle(course.title)}</h2>
             ${!canModify ? `<div class="semester-status locked" style="background: #ffebcc; color: #d6620f; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 5px 0;" title="This semester is locked for modifications"><p style="margin: 0;">🔒 Semester Locked</p></div>` : ''}
             <button onclick="shareCourseURL()" title="Share this course"><div class="button-icon"><p>Share</p><div class="share-icon"></div></div></button>
         </div>
         <div class="class-info-container">
             <div class="class-info-1">
-                <div class="class-component"><p>Professor</p><h3>${course.professor}</h3></div>
+                <div class="class-component"><p>Professor</p><h3>${getRomanizedProfessorName(course.professor)}</h3></div>
                 <div class="class-component"><p>Course Code</p><h3>${course.course_code}</h3></div>
                 <div class="class-component"><p>Time</p><div class="class-component-label" style="background: ${timeBackgroundColor};">${formatTimeSlot(course.time_slot)}</div></div>
                 <div class="class-component"><p>Location</p><h3>${course.location || 'TBA'}</h3></div>
@@ -2475,15 +2650,15 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             <div class="search-modal">
                 <h2><div></div>Time Slot Conflict</h2>
                 <div class="conflict-content">
-                    <p>You are trying to add <strong>${newCourse.title}</strong> but there's already a course scheduled at the same time:</p>
+                    <p>You are trying to add <strong>${normalizeCourseTitle(newCourse.title)}</strong> but there's already a course scheduled at the same time:</p>
                     
                     ${conflictingCourses.map(course => `
                         <div class="conflicting-course">
                             <div class="course-details">
-                                <h3>${course.title}</h3>
+                                <h3>${normalizeCourseTitle(course.title)}</h3>
                                 <p><strong>Course Code:</strong> ${course.course_code}</p>
                                 <p><strong>Time:</strong> ${course.time_slot}</p>
-                                <p><strong>Professor:</strong> ${course.professor || 'TBA'}</p>
+                                <p><strong>Professor:</strong> ${getRomanizedProfessorName(course.professor || 'TBA')}</p>
                             </div>
                         </div>
                     `).join('')}

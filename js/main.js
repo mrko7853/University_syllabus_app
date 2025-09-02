@@ -1,6 +1,68 @@
 import { supabase } from "/supabase.js";
 import { fetchCourseData } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
+import * as wanakana from 'wanakana';
+
+// Japanese name romanization mapping
+const japaneseNameMapping = {
+    // Common surnames
+    '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
+    '八木': 'Yagi', '木': 'Ki',
+    '和田': 'Wada', '田': 'Da', '和': 'Wa',
+    '張': 'Chou', 
+    '趙': 'Chou',
+    '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
+    '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
+    '陳': 'Chin',
+    '今西': 'Imanishi', '西': 'Nishi', '今': 'Ima',
+    '石井': 'Ishii', '石': 'Ishi', '井': 'Ii',
+    '小西': 'Konishi', '小': 'Ko',
+    '和泉': 'Izumi', '泉': 'Izumi',
+    '田中': 'Tanaka', '中': 'Naka',
+    '佐藤': 'Satou', '藤': 'Tou', '佐': 'Sa',
+    '山田': 'Yamada', '山': 'Yama',
+    '鈴木': 'Suzuki', '鈴': 'Suzu', '木': 'Ki',
+    '伊藤': 'Itou', '伊': 'I',
+    '渡辺': 'Watanabe', '辺': 'Be', '渡': 'Wata',
+    '加藤': 'Katou', '加': 'Ka',
+    '吉田': 'Yoshida', '吉': 'Yoshi',
+    '山本': 'Yamamoto', '本': 'Moto',
+    '松本': 'Matsumoto', '松': 'Matsu',
+    '井上': 'Inoue', '上': 'Ue',
+    '木村': 'Kimura',
+    '林': 'Hayashi',
+    '森': 'Mori',
+    '池田': 'Ikeda', '池': 'Ike',
+    '橋本': 'Hashimoto', '橋': 'Hashi',
+    
+    // Common given names
+    '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
+    '匡': 'Tadashi',
+    '喜彦': 'Yoshihiko', '彦': 'Hiko', '喜': 'Yoshi',
+    '皓程': 'Koutei', '程': 'Tei', '皓': 'Kou',
+    '亮': 'Ryou',
+    '壮彦': 'Takehiko', '壮': 'Take',
+    '晴久': 'Haruhisa', '晴': 'Haru', '久': 'Hisa',
+    '依君': 'Ikun', '依': 'I', '君': 'Kun',
+    '尚実': 'Naomi', '尚': 'Nao', '実': 'Mi',
+    '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
+    '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
+    '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
+    
+    // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
+    'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
+    'なかま': 'Nakama', 'かわむら': 'Kawamura', 'いまにし': 'Imanishi',
+    'いしい': 'Ishii', 'こにし': 'Konishi', 'いずみ': 'Izumi',
+    'たなか': 'Tanaka', 'さとう': 'Satou', 'やまだ': 'Yamada',
+    'すずき': 'Suzuki', 'いとう': 'Itou', 'わたなべ': 'Watanabe',
+    
+    // Common Katakana names (these will mostly be handled by WanaKana, but added for completeness)
+    'タカハシ': 'Takahashi', 'ヤギ': 'Yagi', 'ワダ': 'Wada',
+    'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
+    'イシイ': 'Ishii', 'コニシ': 'Konishi', 'イズミ': 'Izumi',
+    'タナカ': 'Tanaka', 'サトウ': 'Satou', 'ヤマダ': 'Yamada',
+    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe'
+};
 
 // Helper function to refresh calendar component
 function refreshCalendarComponent() {
@@ -12,6 +74,129 @@ function refreshCalendarComponent() {
 
 // Make refreshCalendarComponent globally accessible
 window.refreshCalendarComponent = refreshCalendarComponent;
+
+// Cache for romanized professor names
+const romanizedProfessorCache = new Map();
+
+// Clear cache when page loads to ensure fresh romanization
+romanizedProfessorCache.clear();
+
+// Helper function to romanize Japanese professor names
+function romanizeProfessorName(name) {
+    if (!name) return name;
+    
+    // Check cache first
+    if (romanizedProfessorCache.has(name)) {
+        return romanizedProfessorCache.get(name);
+    }
+    
+    // Check if the name contains Japanese characters
+    const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
+    
+    if (!hasJapanese) {
+        // Capitalize non-Japanese names properly
+        const capitalized = name.toUpperCase();
+        romanizedProfessorCache.set(name, capitalized);
+        return capitalized;
+    }
+    
+    let romanized = name;
+    
+    try {
+        // Split the name and process each part
+        let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
+        let romanizedParts = [];
+        
+        for (let part of parts) {
+            let romanizedPart = part;
+            
+            // First, try WanaKana for Hiragana/Katakana conversion
+            const wanaKanaResult = wanakana.toRomaji(part);
+            
+            // If WanaKana converted it (no more Japanese characters), use that
+            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
+                romanizedPart = wanaKanaResult;
+            } else {
+                // Still has Kanji, try our custom mapping
+                
+                // Try exact match first
+                if (japaneseNameMapping[part]) {
+                    romanizedPart = japaneseNameMapping[part];
+                } else {
+                    // Try character by character mapping
+                    let characterMapped = '';
+                    for (let char of part) {
+                        if (japaneseNameMapping[char]) {
+                            characterMapped += japaneseNameMapping[char];
+                        } else {
+                            // Try WanaKana on individual character
+                            const charRomaji = wanakana.toRomaji(char);
+                            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(charRomaji)) {
+                                characterMapped += charRomaji;
+                            } else {
+                                characterMapped += char;
+                            }
+                        }
+                    }
+                    romanizedPart = characterMapped;
+                }
+            }
+            
+            romanizedParts.push(romanizedPart);
+        }
+        
+        romanized = romanizedParts.join(' ');
+        
+        // Clean up and capitalize properly
+        romanized = romanized.replace(/\s+/g, ' ').trim();
+        // Convert to full caps (uppercase)
+        romanized = romanized.toUpperCase();
+        
+    } catch (error) {
+        console.warn('Error romanizing name:', error);
+        romanized = name;
+    }
+    
+    // Cache the result
+    romanizedProfessorCache.set(name, romanized);
+    return romanized;
+}
+
+// Function to pre-romanize all professor names in course data
+async function preromanizeCourseData(courses) {
+    courses.forEach(course => {
+        if (course.professor) {
+            course.romanizedProfessor = romanizeProfessorName(course.professor);
+        }
+    });
+    return courses;
+}
+
+// Synchronous function to get romanized professor name from cache
+function getRomanizedProfessorName(name) {
+    return romanizedProfessorCache.get(name) || romanizeProfessorName(name);
+}
+
+// Helper function to normalize course titles
+function normalizeCourseTitle(title) {
+    if (!title) return title;
+    
+    // Convert full-width characters to normal characters
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+    });
+    
+    // Convert full-width spaces to normal spaces
+    normalized = normalized.replace(/　/g, ' ');
+    
+    // Remove parentheses and their contents
+    normalized = normalized.replace(/[()（）]/g, '');
+    
+    // Clean up extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim();
+    
+    return normalized;
+}
 
 const courseList = document.getElementById("course-list");
 const yearSelect = document.getElementById("year-select");
@@ -53,7 +238,10 @@ async function showCourse(year, term) {
             return;
         }
         
-        courses.sort((a, b) => a.title.localeCompare(b.title));
+        courses.sort((a, b) => normalizeCourseTitle(a.title).localeCompare(normalizeCourseTitle(b.title)));
+        
+        // Pre-romanize all professor names
+        preromanizeCourseData(courses);
         
         let courseHTML = "";
         courses.forEach(function(course) {
@@ -85,21 +273,20 @@ async function showCourse(year, term) {
             <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
                 <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
                     <p id="course-code">${course.course_code}</p>
-                    <h2 id="course-title">${course.title}</h2>
+                    <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
                     <p id="course-professor-small">Professor</p>
-                    <h3 id="course-professor">${course.professor}</h3>
+                    <h3 id="course-professor"><div class="course-professor-icon"></div>${getRomanizedProfessorName(course.professor)}</h3>
                     <div class="class-space"></div>
                     <p id="course-time-small">Time</p>
-                    <h3 id="course-time">${course.time_slot}</h3>
-                    
-                    <!-- Mobile GPA bar inside class-container -->
-                    <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                        <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent || 0}%"><p>A</p></div>
-                        <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent || 0}%"><p>B</p></div>
-                        <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent || 0}%"><p>C</p></div>
-                        <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent || 0}%"><p>D</p></div>
-                        <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent || 0}%"><p>F</p></div>
-                    </div>
+                    <h3 id="course-time"><div class="course-time-icon"></div>${course.time_slot}</h3>
+                </div>
+                <!-- Mobile GPA bar outside class-container -->
+                <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
+                    <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
                 </div>
                 <!-- Desktop GPA bar outside class-container -->
                 <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
@@ -332,13 +519,15 @@ async function applySearchAndFilters(searchQuery) {
         if (searchQuery && searchQuery.trim()) {
             const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
             
-            const title = (courseData.title || '').toLowerCase();
-            const professor = (courseData.professor || '').toLowerCase();
+            const title = normalizeCourseTitle(courseData.title || '').toLowerCase();
+            const professorOriginal = (courseData.professor || '').toLowerCase();
+            const professorRomanized = romanizeProfessorName(courseData.professor || '').toLowerCase();
             const courseCode = (courseData.course_code || '').toLowerCase();
             const query = searchQuery.toLowerCase().trim();
             
             const searchMatches = title.includes(query) || 
-                                 professor.includes(query) || 
+                                 professorOriginal.includes(query) ||
+                                 professorRomanized.includes(query) || 
                                  courseCode.includes(query);
             
             shouldShow = filterMatches && searchMatches;
@@ -616,59 +805,6 @@ currentSortMethod = 'title-az';
 
 yearSelect.addEventListener("change", updateCoursesAndFilters);
 termSelect.addEventListener("change", updateCoursesAndFilters);
-
-// Ignore
-const pushBtn = document.getElementById("push-button");
-pushBtn.addEventListener("click", async function() {
-    const courseCode = "12001311-000";
-    const courseYear = "2025";
-
-    const { error } = await supabase.rpc('add_course_to_selection', {
-        p_year: courseYear,
-        p_code: courseCode
-    });
-
-    if (error) {
-        console.error("Error:", error);
-        alert("Failed");
-    } else {
-        alert("Success");
-        // Use reliable loading with current year/term
-        try {
-            await showCourse(yearSelect.value, termSelect.value);
-        } catch (err) {
-            console.error("Error reloading courses:", err);
-        }
-        refreshCalendarComponent(); // Refresh calendar after course selection change
-    }
-});
-
-const saveBtn = document.getElementById("save-button");
-saveBtn.addEventListener("click", async function() {
-    const concentration = "Global Culture";
-
-    const { data: { session }, error } = await supabase.auth.getSession();
-
-    if (error) {
-        console.error("Error:", error);
-        alert("Failed to get session");
-        return;
-    }
-
-    const user = session.user;
-
-    const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ concentration })
-        .eq('id', user.id);
-
-    if (updateError) {
-        console.error("Error:", updateError);
-        alert("Failed to update concentration");
-    } else {
-        alert("Concentration updated successfully");
-    }
-});
 
 document.addEventListener("DOMContentLoaded", async function () {
     // Handle responsive layout for all users (authenticated or not)
@@ -1092,9 +1228,9 @@ function sortCourses(method) {
         
         switch(method) {
             case 'title-az':
-                return (courseA.title || '').localeCompare(courseB.title || '');
+                return normalizeCourseTitle(courseA.title || '').localeCompare(normalizeCourseTitle(courseB.title || ''));
             case 'title-za':
-                return (courseB.title || '').localeCompare(courseA.title || '');
+                return normalizeCourseTitle(courseB.title || '').localeCompare(normalizeCourseTitle(courseA.title || ''));
             case 'gpa-a-high':
                 return (courseB.gpa_a_percent || 0) - (courseA.gpa_a_percent || 0);
             case 'gpa-f-high':
@@ -1192,8 +1328,8 @@ function showAutocomplete(query) {
     
     // First, try exact substring matches
     let suggestions = allCourses.filter(course => {
-        const title = (course.title || '').toLowerCase();
-        const professor = (course.professor || '').toLowerCase();
+        const title = normalizeCourseTitle(course.title || '').toLowerCase();
+        const professor = romanizeProfessorName(course.professor || '').toLowerCase();
         const courseCode = (course.course_code || '').toLowerCase();
         
         return title.includes(normalizedQuery) || 
@@ -1232,7 +1368,7 @@ function showAutocomplete(query) {
             <div class="item-title">${highlightedTitle}</div>
             <div class="item-details">
                 <span class="item-code">${course.course_code}</span>
-                <span class="item-professor">${course.professor}</span>
+                <span class="item-professor">${romanizeProfessorName(course.professor)}</span>
             </div>
         `;
         
@@ -1419,21 +1555,27 @@ function calculateCourseRelevance(query, course) {
     if (!query.trim()) return 0;
     
     const normalizedQuery = query.toLowerCase().trim();
-    const title = (course.title || '').toLowerCase();
-    const professor = (course.professor || '').toLowerCase();
+    const title = normalizeCourseTitle(course.title || '').toLowerCase();
+    const professorOriginal = (course.professor || '').toLowerCase();
+    const professorRomanized = romanizeProfessorName(course.professor || '').toLowerCase();
     const courseCode = (course.course_code || '').toLowerCase();
     
     // Exact matches get bonus scores
     if (title.includes(normalizedQuery) || 
-        professor.includes(normalizedQuery) || 
+        professorOriginal.includes(normalizedQuery) ||
+        professorRomanized.includes(normalizedQuery) || 
         courseCode.includes(normalizedQuery)) {
         return 0.9;
     }
     
     // Calculate similarity for each field
     const titleSimilarity = calculateSimilarity(normalizedQuery, title);
-    const professorSimilarity = calculateSimilarity(normalizedQuery, professor);
+    const professorOriginalSimilarity = calculateSimilarity(normalizedQuery, professorOriginal);
+    const professorRomanizedSimilarity = calculateSimilarity(normalizedQuery, professorRomanized);
     const codeSimilarity = calculateSimilarity(normalizedQuery, courseCode);
+    
+    // Take the best professor similarity score (either original or romanized)
+    const professorSimilarity = Math.max(professorOriginalSimilarity, professorRomanizedSimilarity);
     
     // Special handling for course codes (they're often abbreviated)
     let codeBonus = 0;
@@ -1541,21 +1683,20 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                     </div>
                 </div>
                 <p>${course.course_code}</p>
-                <h2>${course.title}</h2>
+                <h2>${normalizeCourseTitle(course.title)}</h2>
                 <p>Professor</p>
-                <h3>${course.professor}</h3>
+                <h3>${romanizeProfessorName(course.professor)}</h3>
                 <div class="class-space"></div>
                 <p>Time</p>
                 <h3>${timeSlot}</h3>
-                
-                <!-- Mobile GPA bar inside class-container -->
-                <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent || 0}%"><p>A</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent || 0}%"><p>B</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent || 0}%"><p>C</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent || 0}%"><p>D</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent || 0}%"><p>F</p></div>
-                </div>
+            </div>
+            <!-- Mobile GPA bar outside class-container -->
+            <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
             </div>
             <!-- Desktop GPA bar outside class-container -->
             <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
