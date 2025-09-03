@@ -7,6 +7,12 @@ html, body {
     line-height: 1.5;
 }
 
+/* CSS Custom Properties for dynamic viewport height */
+:root {
+    --vh: 1vh;
+    --app-height: 100vh;
+}
+
 @media (max-width: 780px) {
     :root {
         --small-desktop: 12px !important;
@@ -17,6 +23,34 @@ html, body {
         --h2: 16px !important;
         --h3: 14px !important;
         --p: 12px !important;
+    }
+    
+    /* Use dynamic viewport height on mobile */
+    html, body {
+        height: var(--app-height);
+        height: 100dvh; /* Fallback for browsers that support dvh */
+        overflow-x: hidden;
+    }
+    
+    /* Handle virtual keyboard appearance */
+    body.keyboard-visible {
+        height: var(--app-height);
+        position: fixed;
+        width: 100%;
+    }
+    
+    body.keyboard-visible app-navigation {
+        position: fixed !important;
+        bottom: 0 !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+    }
+    
+    body.keyboard-visible .container-above {
+        position: sticky !important;
+        top: 0 !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
     }
 }
 
@@ -1593,6 +1627,13 @@ td p {
         background-color: rgb(255 255 255 / 20%) !important;
         border-radius: 0px;
         align-items: center;
+        /* Ensure proper sticky behavior */
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        will-change: transform;
     }
 
     .container-above::before {
@@ -1905,12 +1946,16 @@ td p {
         height: 65px;
         width: 100% !important;
         bottom: 0;
+        bottom: env(safe-area-inset-bottom, 0); /* Account for home indicator */
         left: 0;
         background: rgb(255 255 255 / 30%);
         z-index: 10000;
         -webkit-backdrop-filter: blur(20px);
         backdrop-filter: blur(20px);
         border-top: 1px solid #E3E2E2;
+        /* Ensure it stays at the bottom */
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
     }
 
     .navigation-text {
@@ -2120,12 +2165,101 @@ td p {
         padding: 0 !important;
     }
 
-    /* Filter and search modal mobile adjustments */
+    /* Filter and search modal mobile adjustments - Full screen with animations */
     .filter-popup, .search-modal {
-        margin: 15px !important;
-        padding: 20px !important;
-        border-radius: 30px !important;
-        max-width: calc(100vw - 30px) !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: var(--app-height) !important;
+        height: 100dvh !important; /* Dynamic viewport height for mobile */
+        max-width: 100vw !important;
+        max-height: var(--app-height) !important;
+        max-height: 100dvh !important; /* Dynamic viewport height for mobile */
+        margin: 0 !important;
+        padding: 0px !important;
+        border-radius: 0 !important;
+        transform: translate(0, 0) !important;
+        transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                    visibility 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        overflow-y: auto !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* Animation states for mobile modals */
+    .filter-popup:not(.show), .search-modal:not(.show) {
+        opacity: 0 !important;
+        transform: translateY(100vh) !important;
+        visibility: hidden !important;
+    }
+    
+    .filter-popup.show, .search-modal.show {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+        visibility: visible !important;
+    }
+    
+    /* Prevent background scrolling when modals are open on mobile */
+    body.modal-open {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        overscroll-behavior: none !important;
+        -webkit-overflow-scrolling: auto !important;
+    }
+
+    .search-modal {
+        min-width: unset !important;
+    }
+
+    .search-modal h2 {
+        padding: 15px;
+    }
+
+    .search-input-container {
+        padding: 0 15px 15px 15px;
+    }
+    
+    /* Prevent Safari mobile auto-zoom by ensuring font-size is at least 16px */
+    .search-input {
+        font-size: 16px !important;
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+    
+    /* Apply same treatment to all text inputs, textareas, and select elements to prevent zoom */
+    input[type="text"],
+    input[type="email"], 
+    input[type="password"],
+    input[type="search"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="number"],
+    textarea,
+    select {
+        font-size: 16px !important;
+        -webkit-text-size-adjust: 100%;
+        -moz-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    .search-buttons {
+        padding: 0 15px 15px 15px;
+        justify-content: space-between;
+    }
+
+    .search-submit, .search-cancel {
+        width: 100%;
     }
 
     /* Button adjustments for mobile */

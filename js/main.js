@@ -3,6 +3,69 @@ import { fetchCourseData } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 import * as wanakana from 'wanakana';
 
+// Handle dynamic viewport height for mobile browsers
+function setViewportHeight() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+}
+
+// Initialize viewport height and add listeners for changes
+setViewportHeight();
+window.addEventListener('resize', setViewportHeight);
+window.addEventListener('orientationchange', () => {
+    setTimeout(setViewportHeight, 500); // Delay to account for orientation change
+});
+
+// Additional mobile-specific viewport handling
+if (window.innerWidth <= 780) {
+    // Handle virtual keyboard appearance/disappearance
+    let initialViewportHeight = window.innerHeight;
+    
+    window.addEventListener('resize', () => {
+        const currentHeight = window.innerHeight;
+        const heightDifference = initialViewportHeight - currentHeight;
+        
+        // If height difference is significant (likely keyboard), maintain app positioning
+        if (heightDifference > 150) {
+            // Virtual keyboard is probably visible
+            document.body.classList.add('keyboard-visible');
+        } else {
+            // Virtual keyboard is probably hidden
+            document.body.classList.remove('keyboard-visible');
+            setTimeout(setViewportHeight, 100); // Recalculate after keyboard hides
+        }
+    });
+    
+    // Force proper positioning on focus/blur of input elements
+    document.addEventListener('focusin', (e) => {
+        if (e.target.matches('input, textarea, select')) {
+            setTimeout(() => {
+                // Ensure navigation stays at bottom during keyboard interaction
+                const nav = document.querySelector('app-navigation');
+                if (nav) {
+                    nav.style.position = 'fixed';
+                    nav.style.bottom = '0';
+                    nav.style.transform = 'translateZ(0)';
+                }
+            }, 100);
+        }
+    });
+    
+    document.addEventListener('focusout', (e) => {
+        if (e.target.matches('input, textarea, select')) {
+            setTimeout(() => {
+                setViewportHeight();
+                // Reset navigation positioning
+                const nav = document.querySelector('app-navigation');
+                if (nav) {
+                    nav.style.bottom = 'env(safe-area-inset-bottom, 0)';
+                }
+            }, 300);
+        }
+    });
+}
+
 // Japanese name romanization mapping
 const japaneseNameMapping = {
     // Common surnames
@@ -1162,27 +1225,114 @@ const searchCancel = document.getElementById("search-cancel");
 const searchAutocomplete = document.getElementById("search-autocomplete");
 const pageBody = document.body;
 
+// Function to handle mobile modal animations and scroll prevention
+let scrollPosition = 0;
+
+function lockBodyScroll() {
+    if (window.innerWidth <= 780) {
+        scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollPosition}px`;
+        
+        // Additional prevention for iOS
+        document.addEventListener('touchmove', preventBodyScroll, { passive: false });
+    } else {
+        document.body.style.overflow = "hidden";
+    }
+}
+
+function unlockBodyScroll() {
+    if (window.innerWidth <= 780) {
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        window.scrollTo(0, scrollPosition);
+        
+        // Remove iOS prevention
+        document.removeEventListener('touchmove', preventBodyScroll);
+    } else {
+        document.body.style.overflow = "auto";
+    }
+}
+
+function preventBodyScroll(e) {
+    // Allow scrolling inside modal elements
+    const target = e.target;
+    const modal = target.closest('.filter-popup, .search-modal');
+    
+    if (!modal) {
+        e.preventDefault();
+        return false;
+    }
+}
+
+function showModalWithMobileAnimation(modal, container, callback = null) {
+    const isMobile = window.innerWidth <= 780;
+    
+    if (isMobile) {
+        modal.classList.add('show');
+        lockBodyScroll();
+        if (callback) callback();
+    } else {
+        // Desktop animation logic
+        lockBodyScroll();
+        if (callback) callback();
+    }
+}
+
+function hideModalWithMobileAnimation(modal, container, callback = null) {
+    const isMobile = window.innerWidth <= 780;
+    
+    if (isMobile) {
+        modal.classList.remove('show');
+        setTimeout(() => {
+            unlockBodyScroll();
+            if (callback) callback();
+        }, 400); // Match the CSS transition duration
+    } else {
+        // Desktop animation logic
+        unlockBodyScroll();
+        if (callback) callback();
+    }
+}
+
 filterBtn.addEventListener("click", () => {
+    const filterPopup = filterContainer.querySelector('.filter-popup');
+    
     if (filterContainer.classList.contains("hidden")) {
         filterContainer.classList.remove("hidden");
-        filterContainer.style.opacity = "0";
-        filterContainer.style.transform = "translateY(-10px)";
-        pageBody.style.overflow = "hidden";
         
-        // Trigger animation
-        requestAnimationFrame(() => {
-            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-            filterContainer.style.opacity = "1";
-            filterContainer.style.transform = "translateY(0)";
-        });
+        if (window.innerWidth <= 780) {
+            // Mobile full-screen animation
+            showModalWithMobileAnimation(filterPopup, filterContainer);
+        } else {
+            // Desktop animation
+            filterContainer.style.opacity = "0";
+            filterContainer.style.transform = "translateY(-10px)";
+            lockBodyScroll();
+            
+            requestAnimationFrame(() => {
+                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                filterContainer.style.opacity = "1";
+                filterContainer.style.transform = "translateY(0)";
+            });
+        }
     } else {
-        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-        filterContainer.style.opacity = "0";
-        filterContainer.style.transform = "translateY(-10px)";
-        
-        setTimeout(() => {
-            filterContainer.classList.add("hidden");
-        }, 300);
+        if (window.innerWidth <= 780) {
+            // Mobile full-screen animation
+            hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                filterContainer.classList.add("hidden");
+            });
+        } else {
+            // Desktop animation
+            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+            filterContainer.style.opacity = "0";
+            filterContainer.style.transform = "translateY(-10px)";
+            
+            setTimeout(() => {
+                filterContainer.classList.add("hidden");
+                unlockBodyScroll();
+            }, 300);
+        }
     }
 });
 
@@ -1203,14 +1353,22 @@ document.addEventListener("click", (event) => {
     
     // Only close if click is NOT on the button and NOT inside the filter popup
     if (!isFilterButton && !isInsideFilterPopup) {
-        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-        filterContainer.style.opacity = "0";
-        filterContainer.style.transform = "translateY(-10px)";
-        pageBody.style.overflow = "auto";
-        
-        setTimeout(() => {
-            filterContainer.classList.add("hidden");
-        }, 300);
+        if (window.innerWidth <= 780) {
+            // Mobile full-screen animation
+            hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                filterContainer.classList.add("hidden");
+            });
+        } else {
+            // Desktop animation
+            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+            filterContainer.style.opacity = "0";
+            filterContainer.style.transform = "translateY(-10px)";
+            
+            setTimeout(() => {
+                filterContainer.classList.add("hidden");
+                unlockBodyScroll();
+            }, 300);
+        }
     }
 });
 
@@ -1726,17 +1884,23 @@ function performSearch(searchQuery) {
 searchBtn.addEventListener("click", async () => {
     if (searchContainer.classList.contains("hidden")) {
         searchContainer.classList.remove("hidden");
-        searchContainer.style.opacity = "0";
-        searchModal.style.transform = "translate(-50%, -60%)";
-        pageBody.style.overflow = "hidden";
         
-        // Trigger animation
-        requestAnimationFrame(() => {
-            searchContainer.style.transition = "opacity 0.3s ease";
-            searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-            searchContainer.style.opacity = "1";
-            searchModal.style.transform = "translate(-50%, -50%)";
-        });
+        if (window.innerWidth <= 780) {
+            // Mobile full-screen animation
+            showModalWithMobileAnimation(searchModal, searchContainer);
+        } else {
+            // Desktop animation
+            searchContainer.style.opacity = "0";
+            searchModal.style.transform = "translate(-50%, -60%)";
+            lockBodyScroll();
+            
+            requestAnimationFrame(() => {
+                searchContainer.style.transition = "opacity 0.3s ease";
+                searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                searchContainer.style.opacity = "1";
+                searchModal.style.transform = "translate(-50%, -50%)";
+            });
+        }
         
         // Load courses for autocomplete
         await getAllCourses();
@@ -1753,21 +1917,28 @@ searchSubmit.addEventListener("click", async () => {
     const searchQuery = searchInput.value;
     await performSearch(searchQuery);
     
-    // Close search modal with animation
-    searchContainer.style.transition = "opacity 0.3s ease";
-    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-    searchContainer.style.opacity = "0";
-    searchModal.style.transform = "translate(-50%, -60%)";
-    
-    setTimeout(() => {
-        searchContainer.classList.add("hidden");
-        pageBody.style.overflow = "auto";
-        // Reset styles
-        searchContainer.style.transition = "";
-        searchModal.style.transition = "";
-        searchContainer.style.opacity = "";
-        searchModal.style.transform = "";
-    }, 300);
+    if (window.innerWidth <= 780) {
+        // Mobile full-screen animation
+        hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+            searchContainer.classList.add("hidden");
+        });
+    } else {
+        // Desktop animation - Close search modal with animation
+        searchContainer.style.transition = "opacity 0.3s ease";
+        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+        searchContainer.style.opacity = "0";
+        searchModal.style.transform = "translate(-50%, -60%)";
+        
+        setTimeout(() => {
+            searchContainer.classList.add("hidden");
+            unlockBodyScroll();
+            // Reset styles
+            searchContainer.style.transition = "";
+            searchModal.style.transition = "";
+            searchContainer.style.opacity = "";
+            searchModal.style.transform = "";
+        }, 300);
+    }
 });
 
 // Search cancel handler
@@ -1776,21 +1947,28 @@ searchCancel.addEventListener("click", async () => {
     searchAutocomplete.style.display = 'none';
     currentHighlightIndex = -1;
     
-    // Close search modal with animation
-    searchContainer.style.transition = "opacity 0.3s ease";
-    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-    searchContainer.style.opacity = "0";
-    searchModal.style.transform = "translate(-50%, -60%)";
-    
-    setTimeout(() => {
-        searchContainer.classList.add("hidden");
-        pageBody.style.overflow = "auto";
-        // Reset styles
-        searchContainer.style.transition = "";
-        searchModal.style.transition = "";
-        searchContainer.style.opacity = "";
-        searchModal.style.transform = "";
-    }, 300);
+    if (window.innerWidth <= 780) {
+        // Mobile full-screen animation
+        hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+            searchContainer.classList.add("hidden");
+        });
+    } else {
+        // Desktop animation - Close search modal with animation
+        searchContainer.style.transition = "opacity 0.3s ease";
+        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+        searchContainer.style.opacity = "0";
+        searchModal.style.transform = "translate(-50%, -60%)";
+        
+        setTimeout(() => {
+            searchContainer.classList.add("hidden");
+            unlockBodyScroll();
+            // Reset styles
+            searchContainer.style.transition = "";
+            searchModal.style.transition = "";
+            searchContainer.style.opacity = "";
+            searchModal.style.transform = "";
+        }, 300);
+    }
     
     // Clear search state and restore filtered state
     currentSearchQuery = null;
