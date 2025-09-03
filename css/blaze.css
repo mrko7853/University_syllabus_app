@@ -13,6 +13,10 @@ html, body {
         --small-h1-desktop: 24px !important;
         --small-h2-desktop: 16px !important;
         --small-h3-desktop: 14px !important;
+        --h1: 24px !important;
+        --h2: 16px !important;
+        --h3: 14px !important;
+        --p: 12px !important;
     }
 }
 
@@ -1124,7 +1128,7 @@ table#calendar-main {
 /* Sort dropdown styles */
 .sort-wrapper {
     position: relative;
-    display: inline-block;
+    display: flex;
 }
 
 .sort-dropdown {
@@ -1192,6 +1196,7 @@ table#calendar-main {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     text-align: center;
+    position: relative; /* Enable absolute positioning for overlay */
 }
 
 .gpa-bar p {
@@ -1415,6 +1420,7 @@ table#calendar-main {
     gap: 20px;
     flex-direction: row;
     align-items: center;
+    position: relative; /* Enable absolute positioning for .gpa-null overlay */
 }
 
 #external-link-btn {
@@ -1552,6 +1558,33 @@ td p {
     display: block;
 }
 
+.gpa-null {
+    position: relative; /* Changed to relative positioning */
+    overflow: hidden; /* Hide overflow for clean blur effect */
+}
+
+.gpa-null::before {
+    content: 'GPA Not Available';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: var(--small);
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    z-index: 2;
+    border-radius: inherit;
+}
+
 /* Mobile sticky container adjustments */
 @media (max-width: 780px) {
     .container-above {
@@ -1649,6 +1682,93 @@ td p {
     term-box {
         display: none;
     }
+
+    .class-info-container {
+        flex-direction: column;
+    }
+
+    .class-info-1, .class-info-2 {
+        width: 100%;
+        gap: 15px;
+    }
+
+    .class-component-label {
+        width: fit-content;
+        height: 40px;
+    }
+    
+    .class-info {
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .class-header {
+        margin-bottom: 0px;
+    }
+
+    .class-info-container {
+        gap: 15px;
+        padding: 25px;
+    }
+
+    .class-component {
+        justify-content: space-between;
+    }
+
+    .course-header {
+        flex-direction: row !important;
+        margin: 25px 25px 0 25px !important;
+    }
+
+    .course-header h2 {
+        width: 80%;
+    }
+
+    .course-header button {
+        width: 20%;
+        height: 40px;
+    }
+
+    #external-link-btn, .edit-review-btn {
+        height: 40px;
+    }
+
+    .share-icon {
+        background-position: center -2px !important;
+        background-size: 25px !important;
+        height: 25px !important;
+        width: 25px !important;
+    }
+
+    .external-link-icon, .edit-icon {
+        background-size: 25px !important;
+        height: 25px !important;
+        width: 25px !important;
+    }
+
+    .gpa-bar-graph {
+        height: 40px;
+    }
+
+    .class-subtitle {
+        margin: 25px 25px 0 25px;
+    }
+
+    .class-subtitle-review {
+        margin: 25px 25px 0 25px;
+    }
+}
+
+.button-icon {
+    height: inherit;
+}
+
+#class-add-remove {
+    font-family: 'Libre Bodoni', sans-serif;
+    font-size: var(--h3);
+    font-weight: 400;
+    width: fit-content;
+    padding: 0 20px;
 }
 
 /* Desktop sticky adjustments to account for sidebar */
@@ -2077,6 +2197,7 @@ td p {
         border-radius: 0px 0px 15px 15px;
         overflow: hidden;
         height: 40px;
+        position: relative; /* Enable absolute positioning for overlay */
     }
 
     .gpa-bar-desktop {
@@ -2090,6 +2211,11 @@ td p {
         min-width: 20px;
         font-size: 12px;
         font-weight: bold;
+    }
+
+    /* Mobile GPA null overlay */
+    .gpa-null::before {
+        font-size: 11px; /* Smaller text for mobile */
     }
 
     .gpa-fill-mobile:nth-child(1) {
@@ -2843,6 +2969,10 @@ td p {
 /* ===== RESPONSIVE ADJUSTMENTS ===== */
 
 @media (max-width: 768px) {
+    #class-review {
+        margin-bottom: 65px;
+    }
+
     .review-modal-content {
         width: 95%;
         padding: 20px;
@@ -2851,8 +2981,13 @@ td p {
     
     .review-summary {
         flex-direction: column;
-        gap: 20px;
-        text-align: center;
+        gap: 15px;
+        text-align: left;
+        padding: 25px;
+    }
+
+    .reviews-container {
+        margin: 0 25px;
     }
     
     .rating-distribution {
@@ -2865,7 +3000,44 @@ td p {
     }
     
     .review-dates {
-        text-align: left;
+        height: 100%;
+        display: flex;
+        align-items: center;
+    }
+
+    .term-label {
+        margin-top: 0px;
+        width: 100%;
+    }
+    
+    /* Mobile wrapper for review-date and review-actions when moved outside review-header */
+    .review-mobile-date-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 10px;
+        margin: 5px 0 15px 0;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    
+    /* Mobile styling for review-date when inside mobile wrapper */
+    .review-mobile-date-actions .review-date {
+        font-size: var(--p);
+        opacity: 80%;
+    }
+    
+    /* Mobile styling for review-actions when inside mobile wrapper */
+    .review-mobile-date-actions .review-actions {
+        margin: 0;
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    /* Default styling for review-date when inside container */
+    .review-date:not([data-mobile-restructured="true"]) {
+        margin: 0;
+        font-size: var(--p);
+        opacity: 60%;
     }
     
     .course-header {
@@ -2873,7 +3045,58 @@ td p {
         gap: 15px;
         align-items: flex-start;
     }
-    
+
+    .star-large {
+        background-size: 30px;
+        height: 30px;
+        width: 30px;
+    }
+
+    .average-rating {
+        grid-template-columns: 60% 40%;
+        gap: 0px;
+    }
+
+    .average-rating div h3 {
+        margin-bottom: 15px;
+    }
+
+    .bar-container {
+        height: 15px;
+    }
+
+    .reviews-header {
+        padding-bottom: 15px;
+    }
+
+    .review-header {
+        display: grid;
+        grid-template-columns: 17% 1fr 1fr;
+        align-items: center;
+    }
+
+    .review-user-info {
+        padding-right: 0px;
+        border-right: 0px;
+    }
+
+    .review-rating {
+        margin-bottom: 0px;
+        display: flex;
+        height: inherit;
+        align-items: center;
+    }
+
+    .term-label {
+        font-size: var(--p);
+    }
+
+    .star-small {
+        background-size: 20px;
+        height: 20px;
+        width: 20px;
+    }
+
     #link-copied-notification {
         right: 10px;
         left: 10px;

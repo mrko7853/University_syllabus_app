@@ -774,13 +774,13 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             
             if (isCurrentlySelected) {
                 button.textContent = "Remove Course";
-                button.style.background = "#dc3545";
+                button.style.background = "#ED7F81";
                 button.style.color = "white";
                 button.style.cursor = "pointer";
                 button.disabled = false;
             } else {
                 button.textContent = "Add Course";
-                button.style.background = "#28a745";
+                button.style.background = "#92ECB0";
                 button.style.color = "white";
                 button.style.cursor = "pointer";
                 button.disabled = false;
@@ -792,7 +792,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     classContent.innerHTML = `
         <div class="course-header">
-            <h2>${normalizeCourseTitle(course.title)}</h2>
+            <div class="course-title"><h2>${normalizeCourseTitle(course.title)}</h2></div>
             ${!canModify ? `<div class="semester-status locked" style="background: #ffebcc; color: #d6620f; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 5px 0;" title="This semester is locked for modifications"><p style="margin: 0;">🔒 Semester Locked</p></div>` : ''}
             <button onclick="shareCourseURL()" title="Share this course"><div class="button-icon"><p>Share</p><div class="share-icon"></div></div></button>
         </div>
@@ -804,7 +804,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 <div class="class-component"><p>Location</p><h3>${course.location || 'TBA'}</h3></div>
             </div>
             <div class="class-info-2">
-                <div class="class-component"><p>Course type</p><div class="class-component-label" style="background: ${courseColor};">${courseType}</div></div>
+                <div class="class-component"><p>Course Type</p><div class="class-component-label" style="background: ${courseColor};">${courseType}</div></div>
                 <div class="class-component"><p>Syllabus Link</p><button id="external-link-btn" onclick="window.open('${course.url}', '_blank')">
                     <div class="button-icon">
                         <p>University Link</p>
@@ -1199,6 +1199,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     classInfo.classList.add("show");
     document.body.style.overflow = "hidden";
     
+    // Restructure review dates for mobile after modal content is loaded
+    if (typeof restructureReviewDatesForMobile === 'function') {
+        setTimeout(() => restructureReviewDatesForMobile(), 10);
+    }
+    
     // Show background with fade-in animation
     setTimeout(() => {
         classInfoBackground.style.opacity = "1";
@@ -1244,13 +1249,13 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 newButton.disabled = true;
             } else if (isSelected) {
                 newButton.textContent = "Remove Course";
-                newButton.style.background = "#dc3545";
+                newButton.style.background = "#ED7F81";
                 newButton.style.color = "white";
                 newButton.style.cursor = "pointer";
                 newButton.disabled = false;
             } else {
                 newButton.textContent = "Add Course";
-                newButton.style.background = "#28a745";
+                newButton.style.background = "#92ECB0";
                 newButton.style.color = "white";
                 newButton.style.cursor = "pointer";
                 newButton.disabled = false;

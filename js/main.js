@@ -1932,8 +1932,95 @@ function ensureMobileNavigationPositioning() {
     }
 }
 
+// Function to restructure review dates ONLY on mobile
+function restructureReviewDatesForMobile() {
+    if (window.innerWidth <= 780) {
+        const reviewContainers = document.querySelectorAll('.review-dates');
+        
+        reviewContainers.forEach(container => {
+            // Skip if already restructured
+            if (container.dataset.mobileRestructured === 'true') return;
+            
+            const reviewDate = container.querySelector('.review-date');
+            const reviewHeader = container.closest('.review-header');
+            const reviewActions = reviewHeader ? reviewHeader.querySelector('.review-actions') : null;
+            
+            if (reviewDate && reviewHeader) {
+                // Create a new wrapper div for mobile
+                const mobileWrapper = document.createElement('div');
+                mobileWrapper.className = 'review-mobile-date-actions';
+                mobileWrapper.dataset.mobileRestructured = 'true';
+                
+                // Clone the review-date element
+                const clonedReviewDate = reviewDate.cloneNode(true);
+                clonedReviewDate.dataset.mobileRestructured = 'true';
+                mobileWrapper.appendChild(clonedReviewDate);
+                
+                // If review-actions exists, clone and add it to the wrapper
+                if (reviewActions) {
+                    const clonedReviewActions = reviewActions.cloneNode(true);
+                    clonedReviewActions.dataset.mobileRestructured = 'true';
+                    mobileWrapper.appendChild(clonedReviewActions);
+                    
+                    // Remove original review-actions
+                    reviewActions.remove();
+                }
+                
+                // Insert the wrapper after the review-header
+                reviewHeader.parentNode.insertBefore(mobileWrapper, reviewHeader.nextSibling);
+                
+                // Remove the original review-date from inside the container
+                reviewDate.remove();
+                
+                // Mark as restructured
+                container.dataset.mobileRestructured = 'true';
+            }
+        });
+    } else {
+        // Restore original structure on desktop
+        const mobileWrappers = document.querySelectorAll('.review-mobile-date-actions[data-mobile-restructured="true"]');
+        
+        mobileWrappers.forEach(wrapper => {
+            const reviewDate = wrapper.querySelector('.review-date[data-mobile-restructured="true"]');
+            const reviewActions = wrapper.querySelector('.review-actions[data-mobile-restructured="true"]');
+            
+            // Find the corresponding review item
+            const reviewItem = wrapper.closest('.review-item') || wrapper.parentNode.closest('.review-item');
+            if (reviewItem) {
+                const reviewDatesContainer = reviewItem.querySelector('.review-dates[data-mobile-restructured="true"]');
+                const reviewHeader = reviewItem.querySelector('.review-header');
+                
+                if (reviewDate && reviewDatesContainer) {
+                    // Move the review-date back inside the review-dates container
+                    reviewDatesContainer.appendChild(reviewDate);
+                    delete reviewDate.dataset.mobileRestructured;
+                }
+                
+                if (reviewActions && reviewHeader) {
+                    // Move the review-actions back inside the review-header
+                    reviewHeader.appendChild(reviewActions);
+                    delete reviewActions.dataset.mobileRestructured;
+                }
+                
+                if (reviewDatesContainer) {
+                    delete reviewDatesContainer.dataset.mobileRestructured;
+                }
+                
+                // Remove the mobile wrapper
+                wrapper.remove();
+            }
+        });
+    }
+}
+
+// Make function globally available
+window.restructureReviewDatesForMobile = restructureReviewDatesForMobile;
+
 // Initialize mobile navigation positioning
 document.addEventListener('DOMContentLoaded', ensureMobileNavigationPositioning);
 
 // Also run after page load to catch any late-loaded elements
 window.addEventListener('load', ensureMobileNavigationPositioning);
+
+// Handle window resize to restructure when switching between mobile/desktop
+window.addEventListener('resize', restructureReviewDatesForMobile);
