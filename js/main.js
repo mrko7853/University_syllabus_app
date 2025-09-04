@@ -3,6 +3,9 @@ import { fetchCourseData } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 import * as wanakana from 'wanakana';
 
+// Import components to ensure web components are defined
+import '/js/components.js';
+
 // Handle dynamic viewport height for mobile browsers
 function setViewportHeight() {
     const vh = window.innerHeight * 0.01;
@@ -687,19 +690,29 @@ const clearAllBtn = document.getElementById("clear-all-btn");
 // See Results button - close filter menu
 seeResultsBtn.addEventListener("click", () => {
     const filterContainer = document.querySelector(".filter-container");
-    const pageBody = document.body;
     
-    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-    filterContainer.style.opacity = "0";
-    filterContainer.style.transform = "translateY(-10px)";
-    pageBody.style.overflow = "auto";
-    
-    setTimeout(() => {
-        filterContainer.classList.add("hidden");
-        filterContainer.style.transition = "";
-        filterContainer.style.opacity = "";
-        filterContainer.style.transform = "";
-    }, 300);
+    if (window.innerWidth <= 780) {
+        // Mobile handling
+        const filterPopup = filterContainer.querySelector('.filter-popup');
+        hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+            filterContainer.classList.add("hidden");
+        });
+    } else {
+        // Desktop handling
+        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+        filterContainer.style.opacity = "0";
+        filterContainer.style.transform = "translateY(-10px)";
+        
+        setTimeout(() => {
+            filterContainer.classList.add("hidden");
+            filterContainer.style.transition = "";
+            filterContainer.style.opacity = "";
+            filterContainer.style.transform = "";
+            // Restore body overflow
+            document.body.style.overflow = "";
+            console.log('See results button clicked, body overflow restored');
+        }, 300);
+    }
 });
 
 const filterDaysDiv = document.getElementById("filter-by-days");
@@ -1227,30 +1240,59 @@ const pageBody = document.body;
 
 // Function to handle mobile modal animations and scroll prevention
 let scrollPosition = 0;
+let modalCount = 0; // Track how many modals are open
 
 function lockBodyScroll() {
+    modalCount++;
+    console.log('Lock body scroll called, modal count:', modalCount);
+    
     if (window.innerWidth <= 780) {
-        scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
-        document.body.classList.add('modal-open');
-        document.body.style.top = `-${scrollPosition}px`;
-        
-        // Additional prevention for iOS
-        document.addEventListener('touchmove', preventBodyScroll, { passive: false });
+        if (modalCount === 1) { // Only lock on first modal
+            scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+            document.body.classList.add('modal-open');
+            document.body.style.top = `-${scrollPosition}px`;
+            
+            // Additional prevention for iOS
+            document.addEventListener('touchmove', preventBodyScroll, { passive: false });
+        }
     } else {
-        document.body.style.overflow = "hidden";
+        if (modalCount === 1) { // Only lock on first modal
+            document.body.style.overflow = "hidden";
+        }
     }
 }
 
 function unlockBodyScroll() {
+    modalCount = Math.max(0, modalCount - 1);
+    console.log('Unlock body scroll called, modal count:', modalCount);
+    
+    if (modalCount > 0) return; // Don't unlock if other modals are open
+    
     if (window.innerWidth <= 780) {
         document.body.classList.remove('modal-open');
         document.body.style.top = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
+        document.body.style.overflow = '';
+        
+        // Restore scroll position
         window.scrollTo(0, scrollPosition);
         
         // Remove iOS prevention
         document.removeEventListener('touchmove', preventBodyScroll);
+        
+        // Force a repaint to ensure styles are applied
+        document.body.offsetHeight;
     } else {
-        document.body.style.overflow = "auto";
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.width = "";
+        document.body.style.height = "";
+        
+        // Force style recalculation
+        document.body.offsetHeight;
+        console.log('Body overflow reset to:', document.body.style.overflow);
     }
 }
 
@@ -1308,7 +1350,9 @@ filterBtn.addEventListener("click", () => {
             // Desktop animation
             filterContainer.style.opacity = "0";
             filterContainer.style.transform = "translateY(-10px)";
-            lockBodyScroll();
+            
+            // Simple direct overflow lock for filter modal
+            document.body.style.overflow = "hidden";
             
             requestAnimationFrame(() => {
                 filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
@@ -1330,7 +1374,9 @@ filterBtn.addEventListener("click", () => {
             
             setTimeout(() => {
                 filterContainer.classList.add("hidden");
-                unlockBodyScroll();
+                // Simple direct overflow unlock for filter modal
+                document.body.style.overflow = "";
+                console.log('Filter modal closed, body overflow restored');
             }, 300);
         }
     }
@@ -1366,7 +1412,9 @@ document.addEventListener("click", (event) => {
             
             setTimeout(() => {
                 filterContainer.classList.add("hidden");
-                unlockBodyScroll();
+                // Simple direct overflow unlock for filter modal
+                document.body.style.overflow = "";
+                console.log('Filter modal closed by outside click, body overflow restored');
             }, 300);
         }
     }

@@ -46,11 +46,9 @@ const user = window.globalUser;
 class AppNavigation extends HTMLElement {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
-        this.shadowRoot.innerHTML = `
-            <style>
-                @import url('/css/blaze.css');
-            </style>
+        
+        // Use regular DOM instead of Shadow DOM to avoid CSS import issues
+        this.innerHTML = `
             <nav class="test">
                 <ul>
                     <div class="profile-menu-container">
@@ -102,7 +100,7 @@ class AppNavigation extends HTMLElement {
 
     connectedCallback() {
         // Add event listener for logout link
-        const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+        const logoutLink = this.querySelector('a[href="#logout"]');
         if (logoutLink) {
             logoutLink.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -114,7 +112,7 @@ class AppNavigation extends HTMLElement {
     async handleLogout() {
         try {
             // Show loading state on the logout link
-            const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+            const logoutLink = this.querySelector('a[href="#logout"]');
             if (logoutLink) {
                 logoutLink.textContent = 'Logging out...';
                 logoutLink.style.pointerEvents = 'none';
@@ -150,7 +148,7 @@ class AppNavigation extends HTMLElement {
             alert('An unexpected error occurred during logout.');
             
             // Reset logout link state
-            const logoutLink = this.shadowRoot.querySelector('a[href="#logout"]');
+            const logoutLink = this.querySelector('a[href="#logout"]');
             if (logoutLink) {
                 logoutLink.textContent = 'Logout';
                 logoutLink.style.pointerEvents = 'auto';
@@ -164,9 +162,8 @@ class TotalCourses extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
 
-        this.shadowRoot.innerHTML = `
+        this.innerHTML = `
             <style>
-                @import url('/css/blaze.css');
             </style>
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
@@ -182,7 +179,7 @@ class TotalCourses extends HTMLElement {
     }
 
     async updateTotalCourses() {
-        const totalCountEl = this.shadowRoot.querySelector('.total-count');
+        const totalCountEl = this.querySelector('.total-count');
 
         const fetchTotalCourses = async () => {
             try {
@@ -191,9 +188,8 @@ class TotalCourses extends HTMLElement {
                 const currentUser = session?.user || null;
 
                 if (!currentUser) {
-                  return (this.shadowRoot.innerHTML = `
+                  return (this.innerHTML = `
                     <style>
-                      @import url('/css/blaze.css');
                     </style>
                     <div class="total-courses" id="total-registered-courses">
                       <div class="total-courses-container">
@@ -245,9 +241,8 @@ class TermBox extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
 
-    this.shadowRoot.innerHTML = `
+    this.innerHTML = `
       <style>
-        @import url('/css/blaze.css');
         .concentration-section {
           margin-top: 15px;
           padding-top: 15px;
@@ -274,8 +269,8 @@ class TermBox extends HTMLElement {
     // Attach listeners to keep display updated on changes
     this._ys = document.getElementById('year-select');
     this._ts = document.getElementById('term-select');
-    this._termSemesterDisplay = this.shadowRoot.getElementById('term-semester');
-    this._termYearDisplay = this.shadowRoot.getElementById('term-year');
+    this._termSemesterDisplay = this.querySelector('#term-semester');
+    this._termYearDisplay = this.querySelector('#term-year');
 
     if (this._ys) this._ys.addEventListener('change', this.handleSelectChange);
     if (this._ts) this._ts.addEventListener('change', this.handleSelectChange);
@@ -294,8 +289,8 @@ class TermBox extends HTMLElement {
   }
 
   updateDisplayTerm() {
-    const displayTermSemester = this.shadowRoot.getElementById('term-semester');
-    const displayTermYear = this.shadowRoot.getElementById('term-year');
+    const displayTermSemester = this.querySelector('#term-semester');
+    const displayTermYear = this.querySelector('#term-year');
     if (!displayTermSemester || !displayTermYear) return;
 
     const ys = document.getElementById('year-select');
@@ -318,8 +313,8 @@ class TermBox extends HTMLElement {
   }
 
   async initConcentration() {
-    const concentrationText = this.shadowRoot.getElementById('concentration-text-id');
-    const containerDiv = this.shadowRoot.querySelector('.total-courses');
+    const concentrationText = this.querySelector('#concentration-text-id');
+    const containerDiv = this.querySelector('.total-courses');
   }
 }
 
@@ -334,9 +329,8 @@ class CourseCalendar extends HTMLElement {
     this.retryCount = 0;
     this.maxRetries = 5;
 
-    this.shadowRoot.innerHTML = `
+    this.innerHTML = `
       <style>
-        @import url('/css/blaze.css');
         .loading-indicator {
           position: absolute;
           top: 50%;
@@ -429,10 +423,10 @@ class CourseCalendar extends HTMLElement {
       </div>
     `;
 
-    this.shadow = this.shadowRoot;
-    this.calendar = this.shadow.getElementById("calendar-main");
+    this.shadow = this;
+    this.calendar = this.querySelector("#calendar-main");
     this.calendarHeader = this.calendar.querySelectorAll("thead th");
-    this.loadingIndicator = this.shadow.getElementById("loading-indicator");
+    this.loadingIndicator = this.querySelector("#loading-indicator");
 
     this.displayedYear = null;
     this.displayedTerm = null;
@@ -529,7 +523,7 @@ class CourseCalendar extends HTMLElement {
   getColIndexByDayEN(dayEN) {
     const id = this.dayIdByEN[dayEN];
     if (!id) return -1;
-    const el = this.shadow.getElementById(id);
+    const el = this.querySelector(`#${id}`);
     if (!el) return -1;
     return Array.from(this.calendarHeader).indexOf(el);
   }

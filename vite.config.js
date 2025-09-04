@@ -12,6 +12,9 @@ export default defineConfig({
     historyApiFallback: true,
   },
   
+  // Ensure assets are copied to build
+  publicDir: 'assets',
+  
   build: {
     rollupOptions: {
       input: {
@@ -21,6 +24,21 @@ export default defineConfig({
         profile: resolve(__dirname, 'profile.html'),
         calendar: resolve(__dirname, 'calendar.html'),
       },
+      output: {
+        // Ensure proper chunking for components
+        manualChunks: (id) => {
+          // Keep components together with shared utilities
+          if (id.includes('components.js') || id.includes('shared.js')) {
+            return 'app-core';
+          }
+          // External libraries
+          if (id.includes('node_modules')) {
+            if (id.includes('@supabase')) return 'supabase';
+            if (id.includes('wanakana')) return 'wanakana';
+            return 'vendor';
+          }
+        }
+      }
     },
   },
 });

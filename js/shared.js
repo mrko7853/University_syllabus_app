@@ -1176,7 +1176,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             // Count only non-user reviews for Student numbering
             const nonUserReviewsBeforeThis = reviewsToShow.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
             const anonymousName = isOwnReview ? "Your review" : `Student ${nonUserReviewsBeforeThis + 1}`;
-            const avatarSrc = "/assets/user.svg";  // Use user icon for all reviews
+            const avatarSrc = "/user.svg";  // Use user icon for all reviews
             
             return renderReview(review, currentUserId, anonymousName, avatarSrc);
         }).join('')}
@@ -1586,7 +1586,7 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
                 const nonUserReviewsInBatchBeforeThis = nextBatch.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
                 const studentNumber = nonUserReviewsShownSoFar + nonUserReviewsInBatchBeforeThis + 1;
                 const anonymousName = isOwnReview ? "Your review" : `Student ${studentNumber}`;
-                const avatarSrc = "/assets/user.svg";
+                const avatarSrc = "/user.svg";
                 
                 const reviewElement = document.createElement('div');
                 reviewElement.innerHTML = renderReview(review, currentUserId, anonymousName, avatarSrc);
