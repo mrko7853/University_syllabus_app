@@ -20,6 +20,7 @@
                     <div class="filter-container hidden">
                         <div class="filter-background">
                         <div class="filter-popup">
+                            <div class="swipe-indicator"></div>
                             <div class="filter-buttons">
                                 <button id="see-results-btn">See Results</button>
                                 <button id="clear-all-btn">Clear All</button>
@@ -139,6 +140,7 @@
                     <div class="search-container hidden">
                         <div class="search-background">
                             <div class="search-modal">
+                                <div class="swipe-indicator"></div>
                                 <h2><div></div>Search Courses</h2>
                                 <div class="search-input-container">
                                     <input type="text" class="search-input" id="search-input" placeholder="Enter course title, professor name, or course code..." autocomplete="off">
@@ -191,19 +193,24 @@
                 </div>
             </div>
             <div class="class-info" id="class-info">
-                <div class="class-header">
-                    <button id="class-close">x</button>
-                    <h2>Class Info</h2>
-                    <button id="class-add-remove"></button>
+                <div class="class-info-header">
+                    <div class="swipe-indicator"></div>
+                    <div class="class-header">
+                        <button id="class-close">x</button>
+                        <h2>Class Info</h2>
+                        <button id="class-add-remove"></button>
+                    </div>
                 </div>
 
-                <div class="class-content" id="class-content">
-                </div>
+                <div class="class-content-wrapper">
+                    <div class="class-content" id="class-content">
+                    </div>
 
-                <div class="class-content" id="class-gpa-graph">
-                </div>
-                
-                <div class="class-content" id="class-review">
+                    <div class="class-content" id="class-gpa-graph">
+                    </div>
+                    
+                    <div class="class-content" id="class-review">
+                    </div>
                 </div>
             </div>
         </div>

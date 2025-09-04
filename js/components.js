@@ -160,11 +160,8 @@ class AppNavigation extends HTMLElement {
 class TotalCourses extends HTMLElement {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
 
         this.innerHTML = `
-            <style>
-            </style>
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
                 <h2 class="total-count">0</h2>
@@ -189,8 +186,6 @@ class TotalCourses extends HTMLElement {
 
                 if (!currentUser) {
                   return (this.innerHTML = `
-                    <style>
-                    </style>
                     <div class="total-courses" id="total-registered-courses">
                       <div class="total-courses-container">
                       <h2 class="total-count">14</h2>
@@ -239,15 +234,8 @@ class TotalCourses extends HTMLElement {
 class TermBox extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
 
     this.innerHTML = `
-      <style>
-        .concentration-section {
-          margin-top: 15px;
-          padding-top: 15px;
-        }
-      </style>
       <div class="total-courses">
         <div class="total-courses-container" id="#year-courses">
           <h2 class="total-count" id="term-semester"></h2>
@@ -323,50 +311,12 @@ class TermBox extends HTMLElement {
 class CourseCalendar extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
     this.isInitialized = false;
     this.currentUser = null;
     this.retryCount = 0;
     this.maxRetries = 5;
 
     this.innerHTML = `
-      <style>
-        .loading-indicator {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 100%;
-          text-align: center;
-          height: 100%;
-          backdrop-filter: blur(3px);
-          transform: translate(-50%, -50%);
-          font-size: 14px;
-          color: #666;
-          z-index: 10;
-        }
-        .calendar-wrapper {
-          position: relative;
-        }
-        
-        /* Calendar time format responsive display */
-        .time-short {
-          display: none;
-        }
-
-        .time-full {
-          display: block;
-        }
-
-        @media (max-width: 780px) {
-          .time-full {
-            display: none !important;
-          }
-          
-          .time-short {
-            display: block !important;
-          }
-        }
-      </style>
       <div class="calendar-container-main">
         <div class="calendar-wrapper">
           <div class="loading-indicator" id="loading-indicator" style="display: none;"></div>

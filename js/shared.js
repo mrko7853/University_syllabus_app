@@ -655,18 +655,23 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         
         // Close menu when clicking background
         classInfoBackground.addEventListener("click", function() {
+            // Use smooth closing animation by removing show class
             classInfo.classList.remove("show");
-            classInfoBackground.style.opacity = "0";
-            document.body.style.overflow = "auto";
-            
-            // Clear URL when closing - go back to home
-            window.history.pushState({}, '', '/');
             
             setTimeout(() => {
+                document.body.style.overflow = "auto";
+                // Clear URL when closing - go back to home
+                window.history.pushState({}, '', '/');
+                
+                // Reset any inline styles before removing
+                classInfo.style.transform = '';
+                classInfo.style.transition = '';
+                classInfo.style.opacity = '';
+                
                 if (classInfoBackground.parentNode) {
                     classInfoBackground.parentNode.removeChild(classInfoBackground);
                 }
-            }, 300);
+            }, 400); // Match the CSS transition duration
         });
     }
 
@@ -1197,7 +1202,24 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     `;
 
     classInfo.classList.add("show");
+    
+    // On mobile, start in semi-open state; on desktop, no change needed
+    if (window.innerWidth <= 780) {
+        // Remove fully-open class in case it was set previously
+        classInfo.classList.remove("fully-open");
+    }
+    
     document.body.style.overflow = "hidden";
+    
+    // Reset any leftover inline styles from previous interactions
+    classInfo.style.transform = '';
+    classInfo.style.transition = '';
+    classInfo.style.opacity = '';
+    
+    // Add mobile swipe-to-close functionality
+    if (window.innerWidth <= 780) {
+        addSwipeToClose(classInfo, classInfoBackground);
+    }
     
     // Restructure review dates for mobile after modal content is loaded
     if (typeof restructureReviewDatesForMobile === 'function') {
@@ -1422,21 +1444,24 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     if (!classClose.dataset.listenerAttached) {
         classClose.addEventListener("click", function() {
             const currentBackground = document.getElementById("class-info-background");
+            
+            // Use smooth closing animation by removing show class
             classInfo.classList.remove("show");
-            document.body.style.overflow = "auto";
             
-            // Clear URL when closing - go back to home
-            window.history.pushState({}, '', '/');
-            
-            if (currentBackground) {
-                currentBackground.style.opacity = "0";
-                // Remove background after animation
-                setTimeout(() => {
-                    if (currentBackground.parentNode) {
-                        currentBackground.parentNode.removeChild(currentBackground);
-                    }
-                }, 300);
-            }
+            setTimeout(() => {
+                document.body.style.overflow = "auto";
+                // Clear URL when closing - go back to home
+                window.history.pushState({}, '', '/');
+                
+                // Reset any inline styles before removing
+                classInfo.style.transform = '';
+                classInfo.style.transition = '';
+                classInfo.style.opacity = '';
+                
+                if (currentBackground && currentBackground.parentNode) {
+                    currentBackground.parentNode.removeChild(currentBackground);
+                }
+            }, 400); // Match the CSS transition duration
         });
         classClose.dataset.listenerAttached = "true";
     }
@@ -2711,9 +2736,452 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             closeModal();
         }
     });
-    
-    // Show modal with animation
-    setTimeout(() => {
-        modalContainer.classList.remove('hidden');
-    }, 10);
 }
+
+// Instagram-style modal functionality for class-info modal
+function addSwipeToClose(modal, background) {
+    let startY = 0;
+    let currentY = 0;
+    let startTime = 0;
+    let isDragging = false;
+    let modalState = 'semi-open'; // 'semi-open', 'fully-open', 'closed'
+    let dragStarted = false;
+    
+    const threshold = 80; // Reduced threshold for more responsive feel
+    const velocityThreshold = 0.3; // Minimum velocity for gesture recognition
+    
+    // Get the content wrapper for scroll detection
+    const contentWrapper = modal.querySelector('.class-content-wrapper');
+    
+    // Check if we're on mobile
+    const isMobile = () => window.innerWidth <= 780;
+    
+    function handleTouchStart(e) {
+        if (!isMobile()) return;
+        
+        startY = e.touches[0].clientY;
+        currentY = startY;
+        startTime = Date.now();
+        isDragging = false;
+        dragStarted = false;
+        
+        // Determine current modal state
+        if (modal.classList.contains('fully-open')) {
+            modalState = 'fully-open';
+        } else if (modal.classList.contains('show')) {
+            modalState = 'semi-open';
+        }
+        
+        console.log('Touch start, modalState:', modalState);
+    }
+    
+    function handleTouchMove(e) {
+        if (!isMobile()) return;
+        
+        currentY = e.touches[0].clientY;
+        const deltaY = currentY - startY;
+        const absDeltaY = Math.abs(deltaY);
+        
+        // Check if content can scroll
+        const isAtTop = contentWrapper ? contentWrapper.scrollTop <= 0 : true;
+        const isAtBottom = contentWrapper ? 
+            contentWrapper.scrollTop + contentWrapper.clientHeight >= contentWrapper.scrollHeight - 1 : true;
+        const hasScrollableContent = contentWrapper ? 
+            contentWrapper.scrollHeight > contentWrapper.clientHeight : false;
+        
+        // Determine if we should handle this gesture
+        let shouldHandleGesture = false;
+        
+        if (deltaY < 0) {
+            // Swiping up
+            if (modalState === 'semi-open' && isAtTop) {
+                // Can expand to fully open
+                shouldHandleGesture = true;
+            } else if (modalState === 'fully-open' && !hasScrollableContent) {
+                // No content to scroll, allow rubber band effect
+                shouldHandleGesture = true;
+            }
+        } else if (deltaY > 0) {
+            // Swiping down
+            if (modalState === 'fully-open' && isAtTop) {
+                // Can collapse to semi-open or close
+                shouldHandleGesture = true;
+            } else if (modalState === 'semi-open' && isAtTop) {
+                // Can close modal
+                shouldHandleGesture = true;
+            } else if (!hasScrollableContent) {
+                // No content to scroll
+                shouldHandleGesture = true;
+            }
+        }
+        
+        if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
+            if (!dragStarted) {
+                dragStarted = true;
+                isDragging = true;
+                modal.classList.add('swiping');
+                console.log('Started gesture, direction:', deltaY < 0 ? 'up' : 'down');
+            }
+            
+            // Prevent scrolling when we're handling the gesture
+            e.preventDefault();
+            
+            // Apply transform based on gesture using CSS custom properties
+            if (deltaY < 0 && modalState === 'semi-open') {
+                // Expanding from semi-open to fully-open
+                const progress = Math.min(Math.abs(deltaY) / 200, 1);
+                const translateY = 20 - (20 * progress);
+                modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
+                modal.style.transition = 'none';
+                
+            } else if (deltaY > 0) {
+                // Collapsing or closing - use consistent maxDrag like search-modal
+                const maxDrag = 300; // Same as search-modal for consistent velocity
+                const progress = Math.min(deltaY / maxDrag, 1);
+                
+                if (modalState === 'fully-open') {
+                    // From fully-open to semi-open - NO fading, just transform
+                    const translateY = 0 + (20 * progress);
+                    modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
+                    
+                } else if (modalState === 'semi-open') {
+                    // From semi-open to closing - fade the MODAL itself like search-modal
+                    const translateY = 20 + (80 * progress);
+                    modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
+                    
+                    // Fade the modal itself (not background) - same calculation as search-modal
+                    const opacity = Math.max(0.2, 1 - progress * 0.8);
+                    modal.style.opacity = opacity;
+                }
+                modal.style.transition = 'none';
+            }
+        } else if (dragStarted && !shouldHandleGesture) {
+            // User started gesture but now content should scroll - release gesture
+            isDragging = false;
+            dragStarted = false;
+            modal.classList.remove('swiping');
+            
+            // Snap back to current state using CSS custom properties
+            modal.style.transition = 'transform 0.3s ease-out';
+            if (modalState === 'fully-open') {
+                modal.style.setProperty('--modal-translate-y', '0');
+            } else if (modalState === 'semi-open') {
+                modal.style.setProperty('--modal-translate-y', '20vh');
+            }
+            modal.style.opacity = '1'; // Reset modal opacity
+            
+            console.log('Released gesture, allowing content scroll');
+        }
+        
+        // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
+    }
+    
+    function handleTouchEnd(e) {
+        if (!isMobile() || !dragStarted) return;
+        
+        const deltaY = currentY - startY;
+        const duration = Date.now() - startTime;
+        const velocity = Math.abs(deltaY) / duration; // pixels per ms
+        
+        modal.classList.remove('swiping');
+        modal.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)'; // Instagram-like easing
+        
+        console.log('Touch end - deltaY:', deltaY, 'velocity:', velocity, 'modalState:', modalState);
+        
+        // Determine final state based on distance and velocity using CSS custom properties
+        if (deltaY < 0 && modalState === 'semi-open') {
+            // Swiping up from semi-open
+            if (Math.abs(deltaY) > threshold || velocity > velocityThreshold) {
+                // Expand to fully open
+                modal.classList.add('fully-open');
+                modal.style.setProperty('--modal-translate-y', '0');
+                modalState = 'fully-open';
+                console.log('Expanded to fully open');
+            } else {
+                // Snap back to semi-open
+                modal.style.setProperty('--modal-translate-y', '20vh');
+                modal.style.opacity = '1'; // Reset opacity when snapping back
+                console.log('Snapped back to semi-open');
+            }
+            
+        } else if (deltaY > 0) {
+            // Swiping down
+            if (modalState === 'fully-open') {
+                if (deltaY > threshold || velocity > velocityThreshold) {
+                    // Collapse to semi-open
+                    modal.classList.remove('fully-open');
+                    modal.style.setProperty('--modal-translate-y', '20vh');
+                    modalState = 'semi-open';
+                    console.log('Collapsed to semi-open');
+                } else {
+                    // Snap back to fully open
+                    modal.style.setProperty('--modal-translate-y', '0');
+                    console.log('Snapped back to fully open');
+                }
+                
+            } else if (modalState === 'semi-open') {
+                if (deltaY > threshold || velocity > velocityThreshold) {
+                    // Close modal with same animation as search-modal
+                    modal.style.setProperty('--modal-translate-y', '100vh');
+                    background.style.opacity = '0';
+                    background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    
+                    setTimeout(() => {
+                        document.body.style.overflow = "auto";
+                        window.history.pushState({}, '', '/');
+                        
+                        if (background.parentNode) {
+                            background.parentNode.removeChild(background);
+                        }
+                        
+                        // Reset all styles after closing
+                        modal.style.removeProperty('--modal-translate-y');
+                        modal.style.transition = '';
+                        modal.style.transform = '';
+                        background.style.opacity = '';
+                        background.style.transition = '';
+                        modal.classList.remove('show', 'fully-open');
+                    }, 400);
+                    
+                    console.log('Closed class-info modal with swipe');
+                    return;
+                } else {
+                    // Snap back to semi-open
+                    modal.style.setProperty('--modal-translate-y', '20vh');
+                    modal.style.opacity = '1'; // Reset opacity when snapping back
+                    console.log('Snapped back to semi-open');
+                }
+            }
+        }
+        
+        // Reset modal opacity and clear inline styles after animation
+        modal.style.opacity = '1';
+        setTimeout(() => {
+            if (modal.style.transition) {
+                modal.style.transition = '';
+            }
+            // Clean up any inline custom property overrides
+            if (modal.style.getPropertyValue('--modal-translate-y')) {
+                modal.style.removeProperty('--modal-translate-y');
+            }
+        }, 400);
+        
+        isDragging = false;
+        dragStarted = false;
+    }
+    
+    function closeModal() {
+        console.log('Closing class-info modal');
+        const isMobile = window.innerWidth <= 780;
+        
+        if (isMobile) {
+            // Use same closing animation as search-modal - apply CSS custom property for smooth exit
+            modal.style.setProperty('--modal-translate-y', '100vh');
+            background.style.opacity = '0';
+            background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            
+            setTimeout(() => {
+                document.body.style.overflow = "auto";
+                window.history.pushState({}, '', '/');
+                
+                if (background.parentNode) {
+                    background.parentNode.removeChild(background);
+                }
+                
+                // Reset all styles after closing
+                modal.style.removeProperty('--modal-translate-y');
+                modal.style.transition = '';
+                modal.style.transform = '';
+                background.style.opacity = '';
+                background.style.transition = '';
+                modal.classList.remove('show', 'fully-open');
+            }, 400);
+        } else {
+            // Desktop close
+            modal.classList.remove("show");
+            
+            setTimeout(() => {
+                document.body.style.overflow = "auto";
+                window.history.pushState({}, '', '/');
+                
+                if (background.parentNode) {
+                    background.parentNode.removeChild(background);
+                }
+                
+                // Clean up all styles
+                modal.style.removeProperty('--modal-translate-y');
+                modal.style.transform = '';
+                modal.style.transition = '';
+                modal.style.opacity = '';
+                background.style.opacity = '';
+                background.style.transition = '';
+                modal.classList.remove('fully-open');
+            }, 400);
+        }
+    }
+    
+    // Add touch event listeners
+    modal.addEventListener('touchstart', handleTouchStart, { passive: false });
+    modal.addEventListener('touchmove', handleTouchMove, { passive: false });
+    modal.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    // Clean up listeners when modal is removed
+    const originalRemove = background.remove || background.parentNode?.removeChild?.bind(background.parentNode);
+    if (originalRemove) {
+        background.remove = function() {
+            modal.removeEventListener('touchstart', handleTouchStart);
+            modal.removeEventListener('touchmove', handleTouchMove);
+            modal.removeEventListener('touchend', handleTouchEnd);
+            return originalRemove.call(this);
+        };
+    }
+}
+
+// Instagram-style modal functionality for simple modals (filter, search)
+function addSwipeToCloseSimple(modal, background, closeCallback) {
+    console.log('addSwipeToCloseSimple called for modal:', modal.className);
+    let startY = 0;
+    let currentY = 0;
+    let startTime = 0;
+    let isDragging = false;
+    let dragStarted = false;
+    
+    const threshold = 80; // Threshold for closing
+    const velocityThreshold = 0.3; // Minimum velocity for gesture recognition
+    
+    // Check if we're on mobile
+    const isMobile = () => window.innerWidth <= 780;
+    
+    function handleTouchStart(e) {
+        if (!isMobile()) return;
+        
+        startY = e.touches[0].clientY;
+        currentY = startY;
+        startTime = Date.now();
+        isDragging = false;
+        dragStarted = false;
+        
+        console.log('Simple modal touch start on:', modal.className);
+    }
+    
+    function handleTouchMove(e) {
+        if (!isMobile()) return;
+        
+        currentY = e.touches[0].clientY;
+        const deltaY = currentY - startY;
+        const absDeltaY = Math.abs(deltaY);
+        
+        // Check if modal content can scroll
+        const hasScrollableContent = modal.scrollHeight > modal.clientHeight;
+        const isAtTop = modal.scrollTop <= 0;
+        
+        // Only handle downward swipes when at top or no scrollable content
+        let shouldHandleGesture = false;
+        if (deltaY > 0) {
+            // Swiping down - can close modal
+            shouldHandleGesture = isAtTop || !hasScrollableContent;
+        }
+        
+        console.log('Touch move - deltaY:', deltaY, 'shouldHandle:', shouldHandleGesture, 'isAtTop:', isAtTop, 'hasScrollable:', hasScrollableContent);
+        
+        if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
+            if (!dragStarted) {
+                dragStarted = true;
+                isDragging = true;
+                modal.classList.add('swiping');
+                console.log('Started simple modal gesture');
+            }
+            
+            // Prevent scrolling when we're handling the gesture
+            e.preventDefault();
+            
+            // Apply transform using CSS custom property to bypass !important
+            const translateY = `${deltaY}px`;
+            modal.style.setProperty('--modal-translate-y', translateY);
+            
+            // Fade background
+            const maxDrag = 300;
+            const progress = Math.min(deltaY / maxDrag, 1);
+            const opacity = Math.max(0.2, 1 - progress * 0.8);
+            background.style.opacity = opacity;
+            
+        } else if (dragStarted && !shouldHandleGesture) {
+            // User started gesture but now content should scroll - release gesture
+            isDragging = false;
+            dragStarted = false;
+            modal.classList.remove('swiping');
+            
+            // Snap back to normal position using CSS custom property
+            modal.style.setProperty('--modal-translate-y', '0');
+            background.style.opacity = '1';
+            
+            console.log('Released simple modal gesture, allowing content scroll');
+        }
+        
+        // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
+    }
+    
+    function handleTouchEnd(e) {
+        if (!isMobile() || !dragStarted) return;
+        
+        const deltaY = currentY - startY;
+        const duration = Date.now() - startTime;
+        const velocity = Math.abs(deltaY) / duration; // pixels per ms
+        
+        modal.classList.remove('swiping');
+        
+        console.log('Simple modal touch end - deltaY:', deltaY, 'velocity:', velocity);
+        
+        // Determine if should close based on distance and velocity
+        if (deltaY > threshold || velocity > velocityThreshold) {
+            // Close the modal with swipe animation - use CSS custom property
+            modal.style.setProperty('--modal-translate-y', '100vh');
+            background.style.opacity = '0';
+            background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            
+            setTimeout(() => {
+                // Call the callback directly to avoid double animation
+                closeCallback();
+                // Reset styles after closing
+                modal.style.removeProperty('--modal-translate-y');
+                background.style.opacity = '';
+                background.style.transition = '';
+                modal.classList.remove('show');
+            }, 400);
+            
+            console.log('Closed simple modal');
+        } else {
+            // Snap back to normal position using CSS custom property
+            modal.style.setProperty('--modal-translate-y', '0');
+            background.style.opacity = '1';
+            
+            console.log('Snapped simple modal back');
+        }
+        
+        // Clear transition after animation
+        setTimeout(() => {
+            if (modal.style.transition) {
+                modal.style.transition = '';
+            }
+        }, 400);
+        
+        isDragging = false;
+        dragStarted = false;
+    }
+    
+    // Attach event listeners
+    console.log('Attaching touch event listeners to modal:', modal.className);
+    modal.addEventListener('touchstart', handleTouchStart, { passive: false });
+    modal.addEventListener('touchmove', handleTouchMove, { passive: false });
+    modal.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    // Store references for cleanup if needed
+    modal._swipeHandlers = {
+        touchstart: handleTouchStart,
+        touchmove: handleTouchMove,
+        touchend: handleTouchEnd
+    };
+}
+
+// Make it globally available
+window.addSwipeToCloseSimple = addSwipeToCloseSimple;

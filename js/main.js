@@ -919,10 +919,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
     }
 
-    const profileText = document.querySelector(".navigation-text");
-    if (profileText) {
-        profileText.textContent = `Welcome, ${user.email}`;
-    }
+    // Keep navigation text as "Profile" - don't change it to show email
 });
 
 // Function to handle responsive layout changes
@@ -1313,6 +1310,34 @@ function showModalWithMobileAnimation(modal, container, callback = null) {
     if (isMobile) {
         modal.classList.add('show');
         lockBodyScroll();
+        
+        // Add swipe functionality for filter and search modals
+        if (modal.classList.contains('filter-popup')) {
+            console.log('Adding swipe to filter modal');
+            const background = container.querySelector('.filter-background');
+            if (typeof addSwipeToCloseSimple === 'function') {
+                addSwipeToCloseSimple(modal, background, () => {
+                    // Direct close without animation to avoid conflict
+                    container.classList.add('hidden');
+                    unlockBodyScroll();
+                });
+            } else {
+                console.error('addSwipeToCloseSimple function not found');
+            }
+        } else if (modal.classList.contains('search-modal')) {
+            console.log('Adding swipe to search modal');
+            const background = container.querySelector('.search-background');
+            if (typeof addSwipeToCloseSimple === 'function') {
+                addSwipeToCloseSimple(modal, background, () => {
+                    // Direct close without animation to avoid conflict
+                    container.classList.add('hidden');
+                    unlockBodyScroll();
+                });
+            } else {
+                console.error('addSwipeToCloseSimple function not found');
+            }
+        }
+        
         if (callback) callback();
     } else {
         // Desktop animation logic
