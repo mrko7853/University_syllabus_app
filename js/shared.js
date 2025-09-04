@@ -2747,8 +2747,8 @@ function addSwipeToClose(modal, background) {
     let modalState = 'semi-open'; // 'semi-open', 'fully-open', 'closed'
     let dragStarted = false;
     
-    const threshold = 80; // Reduced threshold for more responsive feel
-    const velocityThreshold = 0.3; // Minimum velocity for gesture recognition
+    const threshold = 200; // Much higher threshold - user must swipe almost all the way down
+    const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
     
     // Get the content wrapper for scroll detection
     const contentWrapper = modal.querySelector('.class-content-wrapper');
@@ -3046,8 +3046,8 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     let isDragging = false;
     let dragStarted = false;
     
-    const threshold = 80; // Threshold for closing
-    const velocityThreshold = 0.3; // Minimum velocity for gesture recognition
+    const threshold = 200; // Much higher threshold - user must swipe almost all the way down
+    const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
     
     // Check if we're on mobile
     const isMobile = () => window.innerWidth <= 780;
@@ -3071,16 +3071,21 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         const deltaY = currentY - startY;
         const absDeltaY = Math.abs(deltaY);
         
-        // Check if modal content can scroll
-        const hasScrollableContent = modal.scrollHeight > modal.clientHeight;
-        const isAtTop = modal.scrollTop <= 0;
+        // Find the scrollable content element - for filter modal it's .filter-content
+        let scrollableElement = modal.querySelector('.filter-content') || modal;
         
-        // Only handle downward swipes when at top or no scrollable content
+        // Check if modal content can scroll
+        const hasScrollableContent = scrollableElement.scrollHeight > scrollableElement.clientHeight;
+        const isAtTop = scrollableElement.scrollTop <= 0;
+        const isAtBottom = scrollableElement.scrollTop + scrollableElement.clientHeight >= scrollableElement.scrollHeight - 1;
+        
+        // Only handle gestures appropriately based on scroll position and direction
         let shouldHandleGesture = false;
         if (deltaY > 0) {
-            // Swiping down - can close modal
+            // Swiping down - can close modal only when at top or no scrollable content
             shouldHandleGesture = isAtTop || !hasScrollableContent;
         }
+        // Note: Upward swipes (deltaY < 0) are never handled - let content scroll naturally
         
         console.log('Touch move - deltaY:', deltaY, 'shouldHandle:', shouldHandleGesture, 'isAtTop:', isAtTop, 'hasScrollable:', hasScrollableContent);
         
