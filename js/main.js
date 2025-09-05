@@ -1905,12 +1905,9 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         suggestionsHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${course.color}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
             <div class="class-container" style="background-color: ${course.color}; position: relative;" data-course='${JSON.stringify(course)}'>
-                <div style="position: absolute; top: 10px; right: 15px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                    <div style="background: rgba(255,255,255,0.9); border-radius: 15px; padding: 4px 12px; font-size: 12px; color: #666; font-weight: 500;">
+                <div class="class-suggestion">
+                    <div class="class-suggestion-label">
                         Suggested
-                    </div>
-                    <div style="background: ${matchColor}; color: white; border-radius: 12px; padding: 2px 8px; font-size: 10px; font-weight: 600;">
-                        ${matchQuality} Match
                     </div>
                 </div>
                 <p>${course.course_code}</p>

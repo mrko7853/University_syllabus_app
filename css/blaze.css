@@ -162,6 +162,22 @@ section {
     position: relative;
 }
 
+.class-suggestion {
+    position: relative;
+    margin-bottom: 15px;
+    display: flex;
+    text-align: center;
+    flex-direction: column;
+}
+
+.class-suggestion-label {
+    background: rgba(255,255,255,0.9);
+    border-radius: 15px;
+    padding: 4px 12px;
+    font-size: var(--p);
+    font-weight: 900;
+}
+
 /* Buttons style */
 
 button {
@@ -616,10 +632,9 @@ table#calendar-main {
     flex-direction: column;
     width: 400px;
     height: 100%;
-    padding: 0 20px;
+    padding: 0;
     z-index: 1002;
-    overflow-y: auto;
-    overflow-x: visible;
+    overflow: hidden;
     filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
 }
 
@@ -641,9 +656,11 @@ table#calendar-main {
 }
 
 .filter-content {
-    padding: 0 0 1em 0;
     flex: 1;
     overflow-y: auto;
+    padding: 0 20px 20px 20px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .hidden {
@@ -1069,7 +1086,7 @@ table#calendar-main {
 }
 
 #filter-year-term .custom-select-option:hover {
-    background-color: #E3E2E2;
+    background-color: #f8f5ff;
 }
 
 #filter-year-term .custom-select-option.selected {
@@ -1207,13 +1224,10 @@ table#calendar-main {
 
 .sort-option:hover {
     background-color: #f8f5ff;
-    color: #7B68EE;
 }
 
 .sort-option.selected {
     background-color: #E3D5E9;
-    color: #7B68EE;
-    font-weight: 500;
 }
 
 /* Course list style */
@@ -2090,9 +2104,26 @@ td p {
     }
 
     .filter-content {
-        padding: 0 20px 85px 20px;
+        flex: 1;
         overflow-y: auto;
-    }
+        padding: 0 20px 0 20px;
+        /* Use a more reliable bottom spacing calculation */
+        padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px));
+        /* Alternative: use margin-bottom instead of padding for better scroll behavior */
+        margin-bottom: 0;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        /* Prevent pull-to-refresh on Safari */
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        box-sizing: border-box;
+        /* Ensure content is never cut off */
+        min-height: 0; /* Important for flexbox scrolling */
+    }    
 }
 
 /* Mobile calendar */
@@ -2278,11 +2309,13 @@ td p {
         right: 0 !important;
         width: 100% !important;
         top: 0;
-        height: 100vh !important;
-        max-height: 100vh !important;
+        height: 100dvh !important; /* Dynamic viewport height for better mobile support */
+        height: var(--app-height, 100vh) !important; /* Fallback to custom property */
+        max-height: 100dvh !important;
+        max-height: var(--app-height, 100vh) !important;
         margin: 0 !important;
         padding: 0px !important;
-        border-radius: 12px 12px 0 0 !important;
+        border-radius: 0 !important;
         transform: translateY(var(--modal-translate-y, 100vh)) !important;
         transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
         will-change: transform !important;
@@ -2292,6 +2325,8 @@ td p {
         touch-action: pan-y !important;
         user-select: none !important;
         -webkit-user-select: none !important;
+        /* Prevent Safari pull-to-refresh */
+        -webkit-touch-callout: none !important;
     }
     
     /* Animation states for mobile modals */
@@ -2409,25 +2444,23 @@ td p {
     /* Course icons for mobile */
     .course-professor-icon {
         display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 15px;
+        height: 15px;
         background-image: url('../assets/mobile/professor-mobile.svg');
-        background-size: contain;
+        background-size: cover;
         background-repeat: no-repeat;
         background-position: center;
-        margin-right: 8px;
         vertical-align: middle;
     }
 
     .course-time-icon {
         display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 15px;
+        height: 15px;
         background-image: url('../assets/mobile/time-mobile.svg');
-        background-size: contain;
+        background-size: cover;
         background-repeat: no-repeat;
         background-position: center;
-        margin-right: 8px;
         vertical-align: middle;
     }
 
@@ -2445,12 +2478,16 @@ td p {
 
     #course-professor {
         display: flex;
-        align-items: baseline;
+        gap: 10px;
+        align-items: center;
+        font-size: var(--p);
     }
 
     #course-time {
         display: flex;
+        gap: 10px;
         align-items: center;
+        font-size: var(--p);
     }
 
     .class-space {
