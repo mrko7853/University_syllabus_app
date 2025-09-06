@@ -20,6 +20,9 @@ class SimpleRouter {
     this.isInitialized = false
     this.componentCleanupFunctions = []
     
+    // Initialize global year/term variables
+    this.initializeGlobalYearTerm()
+    
     // Load styles immediately
     this.addLockedPageStyles()
     
@@ -27,6 +30,13 @@ class SimpleRouter {
     this.createLoadingBar()
     
     this.init()
+  }
+
+  initializeGlobalYearTerm() {
+    // Set default global year/term values
+    const currentMonth = new Date().getMonth() + 1
+    window.globalCurrentYear = new Date().getFullYear()
+    window.globalCurrentTerm = currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring"
   }
 
   init() {
@@ -138,6 +148,9 @@ class SimpleRouter {
       window.refreshInterval = null
     }
 
+    // Clear mobile state
+    window.currentDay = null
+
     // Clear event listeners that might interfere
     const oldSelects = document.querySelectorAll('#year-select, #term-select')
     oldSelects.forEach(select => {
@@ -198,10 +211,19 @@ class SimpleRouter {
       // Extract the content we want (everything except navigation)
       const newContent = doc.querySelector('#app-content') || doc.querySelector('section') || doc.body
       
-      // Update the page content
+      // Update the page content - PROPERLY for custom elements
       const mainContent = document.querySelector('#app-content') || document.querySelector('section') || document.body
       if (newContent && mainContent) {
-        mainContent.innerHTML = newContent.innerHTML
+        // Clear existing content first
+        mainContent.replaceChildren()
+        
+        // Clone and append nodes to ensure custom elements are properly connected
+        Array.from(newContent.childNodes).forEach(node => {
+          const clonedNode = node.cloneNode(true)
+          mainContent.appendChild(clonedNode)
+        })
+        
+        console.log('Router: Page content updated with proper DOM methods for custom elements')
       }
       
       // Update the page title
@@ -310,6 +332,9 @@ class SimpleRouter {
       // Initialize dashboard-specific components
       this.initializeDashboardComponents()
       
+      // Set up global year/term tracking
+      this.setupGlobalYearTermTracking()
+      
     } catch (error) {
       console.error('Error initializing dashboard:', error)
     }
@@ -317,16 +342,42 @@ class SimpleRouter {
 
   async initializeCalendar() {
     try {
-      // Re-import calendar.js to get fresh instances
-      const calendarModule = await import('/js/calendar.js?' + Date.now())
+      // Initialize calendar-specific functionality using web component
+      this.initializeCalendarComponents()
       
-      // Call the initialization function
-      if (calendarModule.initializeCalendar) {
-        calendarModule.initializeCalendar()
+      // Initialize the course-calendar web component
+      const calendarComponent = document.querySelector('course-calendar')
+      if (calendarComponent) {
+        // Trigger a refresh of the calendar component
+        if (calendarComponent.refreshCalendar) {
+          calendarComponent.refreshCalendar()
+        }
+        // Or if it has a showCourse method, call it
+        else if (calendarComponent.showCourse) {
+          const currentYear = window.globalCurrentYear || new Date().getFullYear()
+          const currentTerm = window.globalCurrentTerm || (new Date().getMonth() >= 7 ? "秋学期/Fall" : "春学期/Spring")
+          calendarComponent.showCourse(currentYear, currentTerm)
+        }
       }
       
-      // Initialize calendar-specific functionality
-      this.initializeCalendarComponents()
+      // Check for calendar-page component 
+      const calendarPageComponent = document.querySelector('calendar-page')
+      if (calendarPageComponent) {
+        console.log('Calendar page component found - it should auto-initialize')
+      } else {
+        console.log('No calendar page component found in DOM')
+        
+        // If we're on calendar page but component isn't found, try dynamic import
+        if (basePath === '/calendar') {
+          console.log('Attempting dynamic import of calendar page component...')
+          try {
+            await import('/js/calendar-page-component.js')
+            console.log('Calendar page component imported successfully')
+          } catch (error) {
+            console.error('Failed to import calendar page component:', error)
+          }
+        }
+      }
       
     } catch (error) {
       console.error('Error initializing calendar:', error)
@@ -346,6 +397,9 @@ class SimpleRouter {
       // Initialize profile-specific functionality
       this.initializeProfileComponents()
       
+      // Set up global year/term tracking (needed for navigation to work)
+      this.setupGlobalYearTermTracking()
+      
     } catch (error) {
       console.error('Error initializing profile:', error)
     }
@@ -358,6 +412,9 @@ class SimpleRouter {
       
       // Initialize shared functionality
       this.initializeSharedComponents()
+      
+      // Set up global year/term tracking for all pages as fallback
+      this.setupGlobalYearTermTracking()
       
     } catch (error) {
       console.error('Error initializing shared:', error)
@@ -406,16 +463,42 @@ class SimpleRouter {
     // Dashboard-specific initialization
   }
 
-  initializeCalendarComponents() {
-    // Calendar-specific initialization
+  setupGlobalYearTermTracking() {
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+    
+    if (yearSelect && termSelect) {
+      // Initialize global variables with current values
+      window.globalCurrentYear = parseInt(yearSelect.value)
+      window.globalCurrentTerm = termSelect.value
+      
+      // Add listeners to update global variables when selectors change
+      const updateGlobals = () => {
+        window.globalCurrentYear = parseInt(yearSelect.value)
+        window.globalCurrentTerm = termSelect.value
+      }
+      
+      yearSelect.addEventListener('change', updateGlobals)
+      termSelect.addEventListener('change', updateGlobals)
+      
+      // Store cleanup for these listeners
+      this.componentCleanupFunctions.push(() => {
+        yearSelect.removeEventListener('change', updateGlobals)
+        termSelect.removeEventListener('change', updateGlobals)
+      })
+    }
   }
 
-  initializeProfileComponents() {
-    // Profile-specific initialization
+  initializeCalendarComponents() {
+    // Calendar-specific initialization - the CourseCalendar web component handles most functionality
   }
 
   initializeSharedComponents() {
     // Shared component initialization
+  }
+
+  initializeProfileComponents() {
+    // Profile-specific initialization
   }
 
   forceComponentReinitialization() {
@@ -1016,6 +1099,11 @@ class SimpleRouter {
     if (window.performSearch) {
       console.log('Using window.performSearch')
       window.performSearch(query)
+      
+      // Update the course filter paragraph
+      if (window.updateCourseFilterParagraph) {
+        setTimeout(() => window.updateCourseFilterParagraph(), 100)
+      }
       return
     }
     
@@ -1023,6 +1111,11 @@ class SimpleRouter {
     if (window.applySearchAndFilters) {
       console.log('Using window.applySearchAndFilters directly')
       window.applySearchAndFilters(query)
+      
+      // Update the course filter paragraph
+      if (window.updateCourseFilterParagraph) {
+        setTimeout(() => window.updateCourseFilterParagraph(), 100)
+      }
       return
     }
     
@@ -1048,6 +1141,11 @@ class SimpleRouter {
         // Submit the search
         setTimeout(() => {
           searchSubmit.click()
+          
+          // Update the course filter paragraph after search
+          if (window.updateCourseFilterParagraph) {
+            setTimeout(() => window.updateCourseFilterParagraph(), 200)
+          }
         }, 100)
       }, 200)
       return
@@ -1063,7 +1161,14 @@ class SimpleRouter {
       // Try to find and click search submit
       const directSearchSubmit = document.getElementById('search-submit')
       if (directSearchSubmit) {
-        setTimeout(() => directSearchSubmit.click(), 100)
+        setTimeout(() => {
+          directSearchSubmit.click()
+          
+          // Update the course filter paragraph
+          if (window.updateCourseFilterParagraph) {
+            setTimeout(() => window.updateCourseFilterParagraph(), 200)
+          }
+        }, 100)
       }
       return
     }
@@ -1573,15 +1678,28 @@ class SimpleRouter {
 // Utility functions for components to use
 window.getCurrentYear = () => {
   const yearSelect = document.getElementById('year-select')
-  return yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
+  if (yearSelect) {
+    // Store the current year selection globally
+    window.globalCurrentYear = parseInt(yearSelect.value)
+    return window.globalCurrentYear
+  }
+  // Return stored global year or default to current year
+  return window.globalCurrentYear || new Date().getFullYear()
 }
 
 window.getCurrentTerm = () => {
   const termSelect = document.getElementById('term-select')
-  return termSelect ? termSelect.value : (() => {
-    const currentMonth = new Date().getMonth() + 1
-    return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring"
-  })()
+  if (termSelect) {
+    // Store the current term selection globally
+    window.globalCurrentTerm = termSelect.value
+    return window.globalCurrentTerm
+  }
+  // Return stored global term or default based on current month
+  if (window.globalCurrentTerm) {
+    return window.globalCurrentTerm
+  }
+  const currentMonth = new Date().getMonth() + 1
+  return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring"
 }
 
 // Initialize router

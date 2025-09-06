@@ -717,16 +717,321 @@ class CourseCalendar extends HTMLElement {
   }
 }
 
+class WeeklyCalendar extends HTMLElement {
+  constructor() {
+    super();
+    this.currentUser = null;
+    this.retryCount = 0;
+    this.maxRetries = 3;
+  }
+
+  async connectedCallback() {
+    await this.render();
+    this.setupMobile();
+    await this.loadCourses();
+  }
+
+  async render() {
+    this.innerHTML = `
+      <table id="calendar">
+        <thead>
+          <tr>
+            <th style="text-align: left;"><button id="previous"></button></th>
+            <th>Mon</th>
+            <th>Tue</th>
+            <th>Wed</th>
+            <th>Thu</th>
+            <th>Fri</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><p id="smaller-text">period 1</p><p>09:00<span class="mobile-time"></span>10:30</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><p id="smaller-text">period 2</p><p>10:45<span class="mobile-time"></span>12:15</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><p id="smaller-text">period 3</p><p>13:10<span class="mobile-time"></span>14:40</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><p id="smaller-text">period 4</p><p>14:55<span class="mobile-time"></span>16:25</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td><p id="smaller-text">period 5</p><p>16:40<span class="mobile-time"></span>18:10</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+    // Add event listeners
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    const previousBtn = this.querySelector('#previous');
+    if (previousBtn) {
+      previousBtn.addEventListener('click', () => {
+        // Navigate to previous week or refresh
+        this.loadCourses();
+      });
+    }
+
+    // Set up mobile resize listener
+    window.addEventListener('resize', () => this.checkMobile());
+    this.checkMobile();
+  }
+
+  checkMobile() {
+    window.isMobile = window.innerWidth <= 780;
+    if (window.isMobile) {
+      this.generateMobileButtons();
+    }
+  }
+
+  generateMobileButtons() {
+    const mobileButtonsContainer = document.querySelector(".mobile-day-buttons");
+    if (!mobileButtonsContainer) return;
+
+    mobileButtonsContainer.innerHTML = "";
+
+    const dayHeaders = this.querySelectorAll("#calendar thead th");
+    dayHeaders.forEach((header, index) => {
+        if (index === 0) return; // Skip the first column (time)
+        
+        const button = document.createElement("div");
+        button.className = "day-button";
+        button.textContent = header.textContent.trim().substring(0, 1);
+        button.dataset.day = header.textContent.trim();
+        mobileButtonsContainer.appendChild(button);
+
+        button.addEventListener("click", () => this.showDay(header.textContent.trim()));
+    });
+  }
+
+  showDay(day) {
+    if (!window.isMobile) return;
+
+    const dayHeaders = this.querySelectorAll("#calendar thead th");
+    const dayButtons = document.querySelectorAll(".day-button");
+
+    let columnIndexToShow = -1;
+
+    dayHeaders.forEach((header, index) => {
+        if (header.textContent.trim() === day) {
+            columnIndexToShow = index;
+        }
+    });
+
+    if (columnIndexToShow === -1) return;
+
+    this.querySelectorAll("#calendar tr").forEach(row => {
+        const cells = row.children;
+        for (let i = 0; i < cells.length; i++) {
+            if (i === 0 || i === columnIndexToShow) {
+                cells[i].style.display = "";
+            } else {
+                cells[i].style.display = "none";
+            }
+        }
+    });
+
+    // Update day button styles
+    dayButtons.forEach((button, index) => {
+        if (button.textContent === day.substring(0, 1)) {
+            button.classList.add("active");
+        } else {
+            button.classList.remove("active");
+        }
+    });
+
+    // Update header highlighting
+    dayHeaders.forEach((header, index) => {
+        if (index === columnIndexToShow) {
+            header.classList.add("highlight-day");
+        } else {
+            header.classList.remove("highlight-day");
+        }
+    });
+
+    window.currentDay = day;
+  }
+
+  setupMobile() {
+    this.checkMobile();
+  }
+
+  async getCurrentUser() {
+    if (this.currentUser) return this.currentUser;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      this.currentUser = session?.user || null;
+      return this.currentUser;
+    } catch (error) {
+      console.error('Error getting session:', error);
+      return null;
+    }
+  }
+
+  async loadCourses() {
+    try {
+      const user = await this.getCurrentUser();
+      if (!user) {
+        console.log('No user session found for weekly calendar');
+        return;
+      }
+
+      // Get current year and term from global state
+      const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+      const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
+        const currentMonth = new Date().getMonth() + 1;
+        return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+      })();
+
+      console.log(`Loading courses for weekly calendar: ${currentYear} ${currentTerm} for user ${user.id}`);
+
+      const courses = await fetchCourseData(currentYear, currentTerm);
+      console.log('Courses fetched for weekly calendar:', courses);
+      
+      if (courses && courses.length > 0) {
+        this.renderCourses(courses);
+        this.retryCount = 0; // Reset retry count on success
+      } else {
+        console.log('No courses found for weekly calendar');
+        this.clearCalendar();
+      }
+    } catch (error) {
+      console.error('Error loading courses for weekly calendar:', error);
+      
+      // Retry logic
+      if (this.retryCount < this.maxRetries) {
+        this.retryCount++;
+        console.log(`Retrying weekly calendar load (attempt ${this.retryCount}/${this.maxRetries})`);
+        setTimeout(() => this.loadCourses(), 1000 * this.retryCount);
+      } else {
+        console.error('Max retries reached for weekly calendar');
+        this.clearCalendar();
+      }
+    }
+  }
+
+  renderCourses(courses) {
+    // Clear existing courses
+    this.clearCalendar();
+
+    // Day mapping
+    const dayMap = {
+      'Mon': 1, 'Monday': 1, '月': 1,
+      'Tue': 2, 'Tuesday': 2, '火': 2,
+      'Wed': 3, 'Wednesday': 3, '水': 3,
+      'Thu': 4, 'Thursday': 4, '木': 4,
+      'Fri': 5, 'Friday': 5, '金': 5
+    };
+
+    courses.forEach(course => {
+      if (!course.day || !course.period) return;
+
+      const dayIndex = dayMap[course.day];
+      if (!dayIndex) return;
+
+      const period = parseInt(course.period);
+      if (isNaN(period) || period < 1 || period > 5) return;
+
+      // Find the cell (row = period, column = day)
+      const table = this.querySelector('#calendar tbody');
+      const row = table.rows[period - 1]; // 0-indexed
+      const cell = row.cells[dayIndex]; // day index is already 1-based, so this works
+
+      if (cell) {
+        // Create course element
+        const courseElement = document.createElement('div');
+        courseElement.className = 'course-cell-main';
+        courseElement.innerHTML = `
+          <div class="course-cell-box" style="background-color: ${course.color || '#E3D5E9'};">
+            <span style="display: none;">${normalizeCourseTitle(course.title)}</span>
+          </div>
+        `;
+
+        // Add click handler
+        courseElement.addEventListener('click', () => {
+          openCourseInfoMenu(course);
+        });
+
+        cell.appendChild(courseElement);
+      }
+    });
+  }
+
+  clearCalendar() {
+    // Remove all course elements from table cells
+    const cells = this.querySelectorAll('#calendar tbody td:not(:first-child)');
+    cells.forEach(cell => {
+      // Keep the time info, remove course elements
+      const courseElements = cell.querySelectorAll('.course-cell-main');
+      courseElements.forEach(el => el.remove());
+    });
+  }
+
+  // Public method to refresh calendar
+  async refresh() {
+    console.log('Refreshing weekly calendar...');
+    this.currentUser = null; // Force fresh session fetch
+    await this.loadCourses();
+  }
+
+  // Public method to show specific term
+  async showTerm(year, term) {
+    console.log(`Showing weekly calendar for: ${year} ${term}`);
+    this.currentUser = null; // Force fresh session fetch
+    await this.loadCourses();
+  }
+}
+
 customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
 customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
+customElements.define('weekly-calendar', WeeklyCalendar);
 
 window.refreshCalendar = () => {
   const calendar = document.querySelector('course-calendar');
+  const weeklyCalendar = document.querySelector('weekly-calendar');
+  
   if (calendar) {
     calendar.forceReinit();
-  } else {
-    console.log('No course-calendar component found');
+  }
+  
+  if (weeklyCalendar) {
+    weeklyCalendar.refresh();
+  }
+  
+  if (!calendar && !weeklyCalendar) {
+    console.log('No calendar components found');
   }
 };

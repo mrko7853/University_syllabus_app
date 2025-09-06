@@ -8,7 +8,9 @@
     <!-- Import components first to ensure web components are defined -->
     <script type="module" src="/js/components.js"></script>
     <script type="module" src="/js/shared.js"></script>
-    <script type="module" src="/js/calendar.js"></script>
+    <script type="module" src="/js/calendar-page-component.js"></script>
+    <!-- Simple Router -->
+    <script type="module" src="/js/router.js"></script>
 </head>
 
 <body>
@@ -16,90 +18,33 @@
   <app-navigation></app-navigation>
 
   <div id="app-content">
-    <div class="mobile-day-buttons"></div>
-
     <section id="course-summary">
       <div class="main-content">
         <div class="main-container calendar-container">
-        
-        <table id="calendar">
-         <thead>
-           <tr>
-            <th style="text-align: left;"><button id="previous"></button></th>
-            <th>Mon</th>
-            <th>Tue</th>
-            <th>Wed</th>
-            <th>Thu</th>
-            <th>Fri</th>
-           </tr>
-         </thead>
-         <tbody>
-           <tr>
-            <td><p id="smaller-text">period 1</p><p>09:00<span class="mobile-time"></span>10:30</p></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-           </tr>
-           <tr>
-            <td><p id="smaller-text">period 2</p><p>10:45<span class="mobile-time"></span>12:15</p></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-           </tr>
-           <tr>
-            <td><p id="smaller-text">period 3</p><p>13:10<span class="mobile-time"></span>14:40</p></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-           </tr>
-           <tr>
-            <td><p id="smaller-text">period 4</p><p>14:55<span class="mobile-time"></span>16:25</p></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-           </tr>
-           <tr>
-            <td><p id="smaller-text">period 5</p><p>16:40<span class="mobile-time"></span>18:10</p></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-           </tr>
-         </tbody>
-        </table>
+          <div class="main-container" id="calendar-container">
+            <calendar-page></calendar-page>
+          </div>
         </div>
       </div>
     </section>
 
-            <div class="class-info" id="class-info">
-                <div class="swipe-indicator"></div>
-                <div class="class-header">
-                    <button id="class-close">x</button>
-                    <h2>Class Info</h2>
-                </div>
-                
-                <div class="class-content-wrapper">
-                    <div class="class-content" id="class-content">
-                    </div>
-                </div>
+    <div class="class-info" id="class-info">
+        <div class="swipe-indicator"></div>
+        <div class="class-header">
+            <button id="class-close">x</button>
+            <h2>Class Info</h2>
+        </div>
+        
+        <div class="class-content-wrapper">
+            <div class="class-content" id="class-content">
+            </div>
+            <div class="class-gpa-graph" id="class-gpa-graph">
+            </div>
+            <div class="class-review" id="class-review">
             </div>
         </div>
-    </section>
+    </div>
   </div>
 
-    <script type="module" src="js/shared.js"></script>
-    <script type="module" src="js/calendar.js"></script>
-
-</body>
-</html>
 </body>
 </html>

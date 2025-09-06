@@ -136,6 +136,12 @@ function refreshCalendarComponent() {
     if (calendarComponent && calendarComponent.refreshCalendar) {
         calendarComponent.refreshCalendar();
     }
+    
+    // Also handle the new calendar-page component
+    const calendarPageComponent = document.querySelector('calendar-page');
+    if (calendarPageComponent && calendarPageComponent.refreshCalendar) {
+        calendarPageComponent.refreshCalendar();
+    }
 }
 
 // Make refreshCalendarComponent globally accessible
@@ -652,6 +658,9 @@ async function applySearchAndFilters(searchQuery) {
             noResults.style.display = "block";
         }
     }
+    
+    // Update the course filter paragraph after applying filters
+    updateCourseFilterParagraph();
 }
 
 async function updateCoursesAndFilters() {
@@ -719,7 +728,7 @@ const filterDaysDiv = document.getElementById("filter-by-days");
 const value = [];
 const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
 const courseFilterParagraph = document.getElementById("course-filter-paragraph");
-courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+updateCourseFilterParagraph(); // Initialize the paragraph
 inputElements.forEach((input) => {
     input.addEventListener("change", () => {
         value.length = 0; // Clear the array
@@ -743,7 +752,7 @@ inputElements.forEach((input) => {
                 }
             }
         });
-        courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+        updateCourseFilterParagraph(); // Use the new function
     });
 });
 
@@ -763,7 +772,7 @@ clearAllBtn.addEventListener("click", async () => {
 
     // Reset course filter paragraph
     value.length = 0;
-    courseFilterParagraph.innerHTML = `Showing ${value.join(", ") || "All Days"} Courses`;
+    updateCourseFilterParagraph(); // Use the new function
     
     // Reset custom dropdowns to default values
     const termSelect = document.getElementById("term-select");
@@ -1946,6 +1955,9 @@ function performSearch(searchQuery) {
     // Update the global search state
     currentSearchQuery = searchQuery && searchQuery.trim() ? searchQuery : null;
     
+    // Update the course filter paragraph to show search status
+    updateCourseFilterParagraph();
+    
     // Use the unified search and filter function
     return applySearchAndFilters(currentSearchQuery);
 }
@@ -2042,6 +2054,7 @@ searchCancel.addEventListener("click", async () => {
     
     // Clear search state and restore filtered state
     currentSearchQuery = null;
+    updateCourseFilterParagraph(); // Update paragraph when search is cleared
     await applySearchAndFilters(null);
 });
 
@@ -2279,6 +2292,9 @@ export function initializeDashboard() {
   ensureMobileNavigationPositioning();
   restructureReviewDatesForMobile();
   setViewportHeight();
+  
+  // Handle responsive layout for container-above positioning
+  setTimeout(handleResponsiveLayout, 100);
 }
 
 export function reinitializeMainJS() {
@@ -2299,3 +2315,60 @@ Object.defineProperty(window, 'currentSearchQuery', {
   enumerable: true,
   configurable: true
 });
+
+// Function to update the course filter paragraph with search/filter info
+function updateCourseFilterParagraph() {
+  const courseFilterParagraph = document.getElementById("course-filter-paragraph");
+  if (!courseFilterParagraph) return;
+  
+  let message = "";
+  
+  // Check if there's an active search
+  if (currentSearchQuery && currentSearchQuery.trim()) {
+    const searchTerm = currentSearchQuery.trim();
+    
+    // Check if there are active day filters
+    const filterDaysDiv = document.getElementById("filter-by-days");
+    const activeDays = [];
+    
+    if (filterDaysDiv) {
+      const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
+      checkedInputs.forEach((input) => {
+        if (input.value === "Mon") activeDays.push("Monday");
+        else if (input.value === "Tue") activeDays.push("Tuesday");
+        else if (input.value === "Wed") activeDays.push("Wednesday");
+        else if (input.value === "Thu") activeDays.push("Thursday");
+        else if (input.value === "Fri") activeDays.push("Friday");
+      });
+    }
+    
+    // Construct message for search results
+    if (activeDays.length > 0) {
+      message = `Showing searched courses for "${searchTerm}" on ${activeDays.join(", ")}`;
+    } else {
+      message = `Showing searched courses for "${searchTerm}"`;
+    }
+  } else {
+    // No search, show filter info
+    const filterDaysDiv = document.getElementById("filter-by-days");
+    const activeDays = [];
+    
+    if (filterDaysDiv) {
+      const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
+      checkedInputs.forEach((input) => {
+        if (input.value === "Mon") activeDays.push("Monday");
+        else if (input.value === "Tue") activeDays.push("Tuesday");
+        else if (input.value === "Wed") activeDays.push("Wednesday");
+        else if (input.value === "Thu") activeDays.push("Thursday");
+        else if (input.value === "Fri") activeDays.push("Friday");
+      });
+    }
+    
+    message = `Showing ${activeDays.join(", ") || "All Days"} Courses`;
+  }
+  
+  courseFilterParagraph.innerHTML = message;
+}
+
+// Export the update function globally
+window.updateCourseFilterParagraph = updateCourseFilterParagraph;
