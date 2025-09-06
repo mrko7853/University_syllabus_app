@@ -12,7 +12,6 @@ class SimpleRouter {
       '/profile': '/profile.html',
       '/login': '/login.html',
       '/register': '/register.html',
-      '/search': '/index.html', // For now, search stays on dashboard
       '/settings': '/profile.html', // For now, settings goes to profile
       '/help': '/profile.html' // For now, help goes to profile
     }
@@ -50,6 +49,13 @@ class SimpleRouter {
       const button = e.target.closest('button[data-route]')
       if (button) {
         e.preventDefault()
+        
+        // Special handling for search button - open modal instead of navigating
+        if (button.dataset.route === '/search') {
+          this.openSearchModal()
+          return
+        }
+        
         this.navigate(button.dataset.route)
       }
     })
@@ -718,6 +724,849 @@ class SimpleRouter {
       // Remove guest class if user is authenticated
       mainContent.classList.remove('guest-dashboard')
     }
+  }
+
+  // Open search modal
+  openSearchModal() {
+    this.createSearchModal()
+    const modal = document.getElementById('global-search-modal')
+    if (modal) {
+      modal.style.display = 'flex'
+      // Focus on search input
+      const searchInput = modal.querySelector('#global-search-input')
+      if (searchInput) {
+        setTimeout(() => searchInput.focus(), 100)
+      }
+    }
+  }
+
+  // Close search modal
+  closeSearchModal() {
+    const modal = document.getElementById('global-search-modal')
+    if (modal) {
+      modal.style.display = 'none'
+      // Clear search input
+      const searchInput = modal.querySelector('#global-search-input')
+      if (searchInput) {
+        searchInput.value = ''
+      }
+    }
+  }
+
+  // Create search modal
+  createSearchModal() {
+    // Remove existing modal if present
+    const existingModal = document.getElementById('global-search-modal')
+    if (existingModal) {
+      existingModal.remove()
+    }
+
+    // Get current year and term for defaults
+    const currentYear = new Date().getFullYear()
+    const currentMonth = new Date().getMonth() + 1
+    const defaultTerm = (currentMonth >= 8 || currentMonth <= 2) ? "秋学期/Fall" : "春学期/Spring"
+
+    // Create modal HTML
+    const modal = document.createElement('div')
+    modal.id = 'global-search-modal'
+    modal.className = 'global-search-modal'
+    modal.innerHTML = `
+      <div class="search-modal-overlay" onclick="window.router.closeSearchModal()"></div>
+      <div class="search-modal-content">
+        <div class="search-modal-header">
+          <h2>Search Courses</h2>
+          <button class="search-modal-close" onclick="window.router.closeSearchModal()">×</button>
+        </div>
+        
+        <div class="search-modal-body">
+          <div class="search-input-container">
+            <input 
+              type="text" 
+              id="global-search-input" 
+              placeholder="Search for courses..." 
+              autocomplete="off"
+            />
+            <div id="global-search-autocomplete" class="global-search-autocomplete"></div>
+          </div>
+          
+          <div class="search-filters">
+            <div class="filter-group">
+              <label for="search-year-select">Year:</label>
+              <select id="search-year-select">
+                <option value="${currentYear - 1}">${currentYear - 1}</option>
+                <option value="${currentYear}" selected>${currentYear}</option>
+                <option value="${currentYear + 1}">${currentYear + 1}</option>
+              </select>
+            </div>
+            
+            <div class="filter-group">
+              <label for="search-term-select">Semester:</label>
+              <select id="search-term-select">
+                <option value="春学期/Spring" ${defaultTerm === "春学期/Spring" ? 'selected' : ''}>春学期/Spring</option>
+                <option value="秋学期/Fall" ${defaultTerm === "秋学期/Fall" ? 'selected' : ''}>秋学期/Fall</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="search-actions">
+            <button id="global-search-submit" class="search-submit-btn">Search</button>
+            <button onclick="window.router.closeSearchModal()" class="search-cancel-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `
+
+    // Add modal to body
+    document.body.appendChild(modal)
+
+    // Initialize autocomplete data and event listeners
+    this.initializeGlobalSearchAutocomplete()
+
+    // Add event listeners
+    this.setupSearchModalEventListeners()
+
+    // Add modal styles
+    this.addSearchModalStyles()
+  }
+
+  // Setup event listeners for search modal
+  setupSearchModalEventListeners() {
+    const modal = document.getElementById('global-search-modal')
+    if (!modal) return
+
+    const searchInput = modal.querySelector('#global-search-input')
+    const searchSubmit = modal.querySelector('#global-search-submit')
+    const yearSelect = modal.querySelector('#search-year-select')
+    const termSelect = modal.querySelector('#search-term-select')
+
+    // Handle Enter key in search input
+    if (searchInput) {
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.performGlobalSearch()
+        }
+      })
+
+      // Handle input for autocomplete
+      searchInput.addEventListener('input', (e) => {
+        this.showGlobalAutocomplete(e.target.value)
+      })
+
+      // Handle keyboard navigation in autocomplete
+      searchInput.addEventListener('keydown', (e) => {
+        this.handleGlobalAutocompleteNavigation(e)
+      })
+
+      // Hide autocomplete when input loses focus (with delay for click handling)
+      searchInput.addEventListener('blur', () => {
+        setTimeout(() => this.hideGlobalAutocomplete(), 200)
+      })
+    }
+
+    // Handle search submit button
+    if (searchSubmit) {
+      searchSubmit.addEventListener('click', () => {
+        this.performGlobalSearch()
+      })
+    }
+
+    // Handle year/term change to reload autocomplete data
+    if (yearSelect) {
+      yearSelect.addEventListener('change', () => {
+        this.loadGlobalAutocompleteData()
+      })
+    }
+
+    if (termSelect) {
+      termSelect.addEventListener('change', () => {
+        this.loadGlobalAutocompleteData()
+      })
+    }
+
+    // Handle Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeSearchModal()
+      }
+    })
+  }
+
+  // Perform global search
+  async performGlobalSearch() {
+    const modal = document.getElementById('global-search-modal')
+    if (!modal) return
+
+    const searchInput = modal.querySelector('#global-search-input')
+    const yearSelect = modal.querySelector('#search-year-select')
+    const termSelect = modal.querySelector('#search-term-select')
+
+    const searchQuery = searchInput ? searchInput.value.trim() : ''
+    const selectedYear = yearSelect ? parseInt(yearSelect.value) : new Date().getFullYear()
+    const selectedTerm = termSelect ? termSelect.value : 'Spring'
+
+    if (!searchQuery) {
+      alert('Please enter a search term')
+      return
+    }
+
+    // Close modal
+    this.closeSearchModal()
+
+    // Navigate to dashboard if not already there
+    if (this.currentPath !== '/dashboard' && this.currentPath !== '/') {
+      await this.navigate('/dashboard')
+      
+      // Wait for dashboard to load completely
+      await new Promise(resolve => setTimeout(resolve, 800))
+    }
+
+    // Set the year and term selectors on dashboard
+    this.setDashboardYearTerm(selectedYear, selectedTerm)
+
+    // Wait for selectors to update and components to refresh
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    // Perform the search on dashboard
+    this.performDashboardSearch(searchQuery)
+  }
+
+  // Set year and term on dashboard
+  setDashboardYearTerm(year, term) {
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+
+    if (yearSelect && yearSelect.value !== year.toString()) {
+      yearSelect.value = year.toString()
+      // Trigger change event
+      yearSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    if (termSelect && termSelect.value !== term) {
+      termSelect.value = term
+      // Trigger change event
+      termSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+
+    // Also update the filter menu selectors
+    this.updateFilterMenuYearTerm(year, term)
+  }
+
+  // Update filter menu year and term
+  updateFilterMenuYearTerm(year, term) {
+    // The filter menu uses the same selectors as the main dashboard
+    // year-select and term-select (without -filter suffix)
+    
+    // Update custom dropdowns in filter menu
+    this.updateFilterCustomDropdowns(year, term)
+  }
+
+  // Update custom dropdowns in filter menu
+  updateFilterCustomDropdowns(year, term) {
+    // Update term custom dropdown
+    const termCustomSelect = document.querySelector('.custom-select[data-target="term-select"]')
+    if (termCustomSelect) {
+      const termValue = termCustomSelect.querySelector('.custom-select-value')
+      const termOptions = termCustomSelect.querySelectorAll('.custom-select-option')
+      
+      // Remove existing selection
+      termOptions.forEach(option => option.classList.remove('selected'))
+      
+      // Find and select the correct option
+      const targetOption = Array.from(termOptions).find(option => option.dataset.value === term)
+      if (targetOption) {
+        targetOption.classList.add('selected')
+        if (termValue) {
+          termValue.textContent = targetOption.textContent
+        }
+      }
+    }
+
+    // Update year custom dropdown  
+    const yearCustomSelect = document.querySelector('.custom-select[data-target="year-select"]')
+    if (yearCustomSelect) {
+      const yearValue = yearCustomSelect.querySelector('.custom-select-value')
+      const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option')
+      
+      // Remove existing selection
+      yearOptions.forEach(option => option.classList.remove('selected'))
+      
+      // Find and select the correct option
+      const targetOption = Array.from(yearOptions).find(option => option.dataset.value === year.toString())
+      if (targetOption) {
+        targetOption.classList.add('selected')
+        if (yearValue) {
+          yearValue.textContent = targetOption.textContent
+        }
+      }
+    }
+  }
+
+  // Perform search on dashboard
+  performDashboardSearch(query) {
+    console.log('Performing dashboard search for:', query)
+    
+    // Set the global search query variable if available
+    if (typeof window.currentSearchQuery !== 'undefined') {
+      window.currentSearchQuery = query
+    }
+    
+    // Try multiple approaches to ensure search works
+    
+    // Method 1: Use the global performSearch function if available
+    if (window.performSearch) {
+      console.log('Using window.performSearch')
+      window.performSearch(query)
+      return
+    }
+    
+    // Method 2: Try applySearchAndFilters directly with the query
+    if (window.applySearchAndFilters) {
+      console.log('Using window.applySearchAndFilters directly')
+      window.applySearchAndFilters(query)
+      return
+    }
+    
+    // Method 3: Use the search modal functionality
+    const searchBtn = document.getElementById('search-btn')
+    const searchInput = document.getElementById('search-input')
+    const searchSubmit = document.getElementById('search-submit')
+    
+    if (searchBtn && searchInput && searchSubmit) {
+      console.log('Using search modal approach')
+      
+      // Open the search modal
+      searchBtn.click()
+      
+      // Wait a bit for modal to open
+      setTimeout(() => {
+        // Set the search query
+        searchInput.value = query
+        
+        // Trigger input event for autocomplete/validation
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        
+        // Submit the search
+        setTimeout(() => {
+          searchSubmit.click()
+        }, 100)
+      }, 200)
+      return
+    }
+    
+    // Method 4: Direct search input fallback
+    const directSearchInput = document.getElementById('search-course')
+    if (directSearchInput) {
+      console.log('Using direct search input')
+      directSearchInput.value = query
+      directSearchInput.dispatchEvent(new Event('input', { bubbles: true }))
+      
+      // Try to find and click search submit
+      const directSearchSubmit = document.getElementById('search-submit')
+      if (directSearchSubmit) {
+        setTimeout(() => directSearchSubmit.click(), 100)
+      }
+      return
+    }
+    
+    console.warn('No search method available, query:', query)
+  }
+
+  // Initialize global search autocomplete
+  async initializeGlobalSearchAutocomplete() {
+    this.globalSearchCourses = []
+    this.globalSearchHighlightIndex = -1
+    await this.loadGlobalAutocompleteData()
+  }
+
+  // Load autocomplete data for current year/term selection
+  async loadGlobalAutocompleteData() {
+    try {
+      const modal = document.getElementById('global-search-modal')
+      if (!modal) return
+
+      const yearSelect = modal.querySelector('#search-year-select')
+      const termSelect = modal.querySelector('#search-term-select')
+      
+      const year = yearSelect ? yearSelect.value : new Date().getFullYear()
+      const term = termSelect ? termSelect.value : 'Fall'
+
+      // Import shared functions
+      const { fetchCourseData } = await import('/js/shared.js')
+      
+      // Fetch courses for the selected year/term
+      this.globalSearchCourses = await fetchCourseData(year, term)
+    } catch (error) {
+      console.error('Error loading autocomplete data:', error)
+      this.globalSearchCourses = []
+    }
+  }
+
+  // Show autocomplete suggestions
+  showGlobalAutocomplete(query) {
+    const autocompleteContainer = document.getElementById('global-search-autocomplete')
+    if (!autocompleteContainer) return
+
+    if (!query.trim() || query.length < 2) {
+      this.hideGlobalAutocomplete()
+      return
+    }
+
+    const normalizedQuery = query.toLowerCase().trim()
+    
+    // First, try exact substring matches
+    let suggestions = this.globalSearchCourses.filter(course => {
+      const title = this.normalizeCourseTitle(course.title || '').toLowerCase()
+      const professor = this.romanizeProfessorName(course.professor || '').toLowerCase()
+      const courseCode = (course.course_code || '').toLowerCase()
+      
+      return title.includes(normalizedQuery) || 
+             professor.includes(normalizedQuery) || 
+             courseCode.includes(normalizedQuery)
+    }).slice(0, 5)
+
+    // If no exact matches found, use fuzzy matching
+    if (suggestions.length === 0) {
+      const coursesWithRelevance = this.globalSearchCourses.map(course => {
+        const relevance = this.calculateCourseRelevance(normalizedQuery, course)
+        return { course, relevance }
+      })
+      .filter(item => item.relevance > 0.15)
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, 6)
+      
+      suggestions = coursesWithRelevance.map(item => item.course)
+    }
+
+    if (suggestions.length === 0) {
+      this.hideGlobalAutocomplete()
+      return
+    }
+
+    // Build autocomplete HTML
+    autocompleteContainer.innerHTML = ''
+    suggestions.forEach((course, index) => {
+      const item = document.createElement('div')
+      item.className = 'global-autocomplete-item'
+      
+      const title = course.title || ''
+      const highlightedTitle = this.highlightMatches(title, query)
+      
+      item.innerHTML = `
+        <div class="item-title">${highlightedTitle}</div>
+        <div class="item-details">
+          <span class="item-code">${course.course_code}</span>
+          <span class="item-professor">${this.romanizeProfessorName(course.professor)}</span>
+        </div>
+      `
+      
+      item.addEventListener('click', () => {
+        const searchInput = document.getElementById('global-search-input')
+        if (searchInput) {
+          searchInput.value = course.title
+        }
+        this.hideGlobalAutocomplete()
+        this.globalSearchHighlightIndex = -1
+      })
+      
+      autocompleteContainer.appendChild(item)
+    })
+
+    autocompleteContainer.style.display = 'block'
+    this.globalSearchHighlightIndex = -1
+  }
+
+  // Hide autocomplete
+  hideGlobalAutocomplete() {
+    const autocompleteContainer = document.getElementById('global-search-autocomplete')
+    if (autocompleteContainer) {
+      autocompleteContainer.style.display = 'none'
+    }
+  }
+
+  // Handle keyboard navigation in autocomplete
+  handleGlobalAutocompleteNavigation(event) {
+    const autocompleteContainer = document.getElementById('global-search-autocomplete')
+    if (!autocompleteContainer || autocompleteContainer.style.display === 'none') return
+
+    const items = autocompleteContainer.querySelectorAll('.global-autocomplete-item')
+    if (items.length === 0) return
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      this.globalSearchHighlightIndex = Math.min(this.globalSearchHighlightIndex + 1, items.length - 1)
+      this.updateGlobalAutocompleteHighlight(items)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      this.globalSearchHighlightIndex = Math.max(this.globalSearchHighlightIndex - 1, -1)
+      this.updateGlobalAutocompleteHighlight(items)
+    } else if (event.key === 'Enter' && this.globalSearchHighlightIndex >= 0) {
+      event.preventDefault()
+      items[this.globalSearchHighlightIndex].click()
+    } else if (event.key === 'Escape') {
+      this.hideGlobalAutocomplete()
+    }
+  }
+
+  // Update highlight in autocomplete
+  updateGlobalAutocompleteHighlight(items) {
+    items.forEach((item, index) => {
+      if (index === this.globalSearchHighlightIndex) {
+        item.classList.add('highlighted')
+      } else {
+        item.classList.remove('highlighted')
+      }
+    })
+  }
+
+  // Helper functions for autocomplete
+  normalizeCourseTitle(title) {
+    if (!title) return title
+    
+    // Convert full-width characters to normal characters
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+      return String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
+    })
+    
+    // Convert full-width spaces to normal spaces
+    normalized = normalized.replace(/　/g, ' ')
+    
+    // Remove parentheses and their contents
+    normalized = normalized.replace(/[()（）]/g, '')
+    
+    // Clean up extra spaces
+    normalized = normalized.replace(/\s+/g, ' ').trim()
+    
+    return normalized
+  }
+
+  romanizeProfessorName(name) {
+    if (!name) return ''
+    
+    // Basic romanization mapping (extend as needed)
+    const romanizationMap = {
+      'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+      'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
+      'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
+      'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
+      'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
+      'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
+      'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
+      'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
+      'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
+      'わ': 'wa', 'ゐ': 'wi', 'ゑ': 'we', 'を': 'wo', 'ん': 'n'
+    }
+    
+    let romanized = name
+    for (const [hiragana, romaji] of Object.entries(romanizationMap)) {
+      romanized = romanized.replace(new RegExp(hiragana, 'g'), romaji)
+    }
+    
+    return romanized
+  }
+
+  calculateCourseRelevance(query, course) {
+    const title = this.normalizeCourseTitle(course.title || '').toLowerCase()
+    const professor = this.romanizeProfessorName(course.professor || '').toLowerCase()
+    const courseCode = (course.course_code || '').toLowerCase()
+    
+    let score = 0
+    
+    // Exact matches get highest score
+    if (title.includes(query)) score += 1.0
+    if (professor.includes(query)) score += 0.8
+    if (courseCode.includes(query)) score += 0.9
+    
+    // Fuzzy matching for partial matches
+    const titleWords = title.split(' ')
+    const queryWords = query.split(' ')
+    
+    for (const queryWord of queryWords) {
+      for (const titleWord of titleWords) {
+        if (titleWord.includes(queryWord) || queryWord.includes(titleWord)) {
+          score += 0.3
+        }
+      }
+    }
+    
+    return Math.min(score, 1.0)
+  }
+
+  highlightMatches(text, query) {
+    if (!query.trim()) return text
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+    return text.replace(regex, '<mark>$1</mark>')
+  }
+
+  // Add search modal styles
+  addSearchModalStyles() {
+    const existingStyles = document.getElementById('search-modal-styles')
+    if (existingStyles) return
+
+    const styles = document.createElement('style')
+    styles.id = 'search-modal-styles'
+    styles.textContent = `
+      .global-search-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .search-modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+      }
+
+      .search-modal-content {
+        position: relative;
+        background: white;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        animation: modalSlideIn 0.3s ease;
+      }
+
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .search-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e0e0e0;
+        background: #f8f9fa;
+      }
+
+      .search-modal-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .search-modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #666;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background-color 0.2s ease;
+      }
+
+      .search-modal-close:hover {
+        background: #e0e0e0;
+        color: #333;
+      }
+
+      .search-modal-body {
+        padding: 1.5rem;
+      }
+
+      .search-input-container {
+        margin-bottom: 1.5rem;
+        position: relative;
+      }
+
+      #global-search-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.2s ease;
+        box-sizing: border-box;
+      }
+
+      #global-search-input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+      }
+
+      .global-search-autocomplete {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .global-autocomplete-item {
+        padding: 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s ease;
+      }
+
+      .global-autocomplete-item:hover,
+      .global-autocomplete-item.highlighted {
+        background-color: #f8f9fa;
+      }
+
+      .global-autocomplete-item:last-child {
+        border-bottom: none;
+      }
+
+      .global-autocomplete-item .item-title {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 0.25rem;
+        line-height: 1.3;
+      }
+
+      .global-autocomplete-item .item-title mark {
+        background: #fff3cd;
+        color: #856404;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+
+      .global-autocomplete-item .item-details {
+        display: flex;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+        color: #666;
+      }
+
+      .global-autocomplete-item .item-code {
+        font-weight: 500;
+        color: #007bff;
+      }
+
+      .global-autocomplete-item .item-professor {
+        color: #6c757d;
+      }
+
+      .search-filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .filter-group label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        color: #555;
+        font-size: 0.9rem;
+      }
+
+      .filter-group select {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        background: white;
+        cursor: pointer;
+      }
+
+      .filter-group select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+      }
+
+      .search-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+      }
+
+      .search-submit-btn, .search-cancel-btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+
+      .search-submit-btn {
+        background: #007bff;
+        color: white;
+      }
+
+      .search-submit-btn:hover {
+        background: #0056b3;
+        transform: translateY(-1px);
+      }
+
+      .search-cancel-btn {
+        background: #f8f9fa;
+        color: #666;
+        border: 1px solid #ddd;
+      }
+
+      .search-cancel-btn:hover {
+        background: #e9ecef;
+        color: #333;
+      }
+
+      @media (max-width: 480px) {
+        .search-modal-content {
+          width: 95%;
+          margin: 1rem;
+        }
+
+        .search-modal-header,
+        .search-modal-body {
+          padding: 1rem;
+        }
+
+        .search-filters {
+          grid-template-columns: 1fr;
+        }
+
+        .search-actions {
+          flex-direction: column;
+        }
+      }
+    `
+    document.head.appendChild(styles)
   }
 }
 

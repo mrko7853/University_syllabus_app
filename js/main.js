@@ -2287,3 +2287,15 @@ export function reinitializeMainJS() {
   ensureMobileNavigationPositioning();
   restructureReviewDatesForMobile();
 }
+
+// Export search function for global use
+window.performSearch = performSearch;
+window.applySearchAndFilters = applySearchAndFilters;
+
+// Export search state for global access
+Object.defineProperty(window, 'currentSearchQuery', {
+  get: () => currentSearchQuery,
+  set: (value) => { currentSearchQuery = value; },
+  enumerable: true,
+  configurable: true
+});
