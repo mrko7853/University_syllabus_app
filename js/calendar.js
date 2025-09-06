@@ -306,3 +306,21 @@ async function showCourse(year, term) {
     clearCourseCells();
     showCourse(currentYear, currentTerm);
 });
+
+// Export initialization functions for the router
+export function initializeCalendar() {
+    checkMobile();
+    generateMobileButtons();
+    
+    const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
+        const currentMonth = new Date().getMonth() + 1;
+        return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+    })();
+    
+    // Force refresh of course-calendar component
+    const calendarComponent = document.querySelector('course-calendar');
+    if (calendarComponent && calendarComponent.refreshCalendar) {
+        calendarComponent.refreshCalendar();
+    }
+}

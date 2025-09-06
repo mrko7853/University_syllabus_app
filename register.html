@@ -1,30 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Blaze Studio | Coming Soon</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, target-densitydpi=device-dpi">
+    <title>Register - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
 </head>
 
 <body>
+    <app-navigation></app-navigation>
 
-    <section id="auth-main">
+    <div id="app-content">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h1>Create Account</h1>
+                    <p>Join BlazeArchive today</p>
+                </div>
+                
+                <div id="message"></div>
 
-        <div id="message"></div>
+                <form id="register-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="register-name">Full Name</label>
+                        <input type="text" id="register-name" name="name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="register-student-id">Student ID</label>
+                        <input type="text" id="register-student-id" name="student-id" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="register-confirm-password">Confirm Password</label>
+                        <input type="password" id="register-confirm-password" name="confirm-password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary auth-btn">Create Account</button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p>Already have an account? <a href="/login">Sign in</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <form id="register-form" method="post">
-            <label for="email">Email</label>
-            <input type="text" name="email" id="email">
-
-            <select name="email-domain" id="email-domain">
-              <option value="@mail2.doshisha.ac.jp" selected>@mail2.doshisha.ac.jp</option>
-            </select>
-
-            <label for="password">Password</label>
-            <input type="password" name="password" id="password">
-            <input type="submit" value="Submit">
-        </form>
-    </section>
-
+    <script type="module" src="/js/components.js"></script>
+    <script type="module" src="/js/shared.js"></script>
     <script type="module" src="js/auth.js"></script>
 </body>
 </html>

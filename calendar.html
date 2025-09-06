@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Calendar Test</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, target-densitydpi=device-dpi">
+    <title>Calendar - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
     <!-- Import components first to ensure web components are defined -->
     <script type="module" src="/js/components.js"></script>
@@ -14,7 +15,8 @@
 
   <app-navigation></app-navigation>
 
-  <div class="mobile-day-buttons"></div>
+  <div id="app-content">
+    <div class="mobile-day-buttons"></div>
 
     <section id="course-summary">
       <div class="main-content">
@@ -90,8 +92,14 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
+  </div>
 
     <script type="module" src="js/shared.js"></script>
     <script type="module" src="js/calendar.js"></script>
+
+</body>
+</html>
 </body>
 </html>

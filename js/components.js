@@ -52,7 +52,7 @@ class AppNavigation extends HTMLElement {
             <nav class="test">
                 <ul>
                     <div class="profile-menu-container">
-                    <li><button class="${document.title.includes('Profile') && 'active'}" id="profile"></button>
+                    <li><button class="${document.title.includes('Profile') && 'active'}" id="profile" data-route="/profile"></button>
                         <p class="navigation-text">Profile</p></li>
                       <div class="profile-dropdown-menu">
                         <a href="#view-profile">View Profile</a>
@@ -61,34 +61,34 @@ class AppNavigation extends HTMLElement {
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Dashboard') && 'active'}" id="dashboard"></button>
+                    <li><button class="${document.title.includes('Dashboard') && 'active'}" id="dashboard" data-route="/dashboard"></button>
                         <p class="navigation-text">Dashboard</p></li>
                       <div class="accessibility-dropdown">
                         <p>Dashboard</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Calendar') && 'active'}" id="calendar-btn"></button>
+                    <li><button class="${document.title.includes('Calendar') && 'active'}" id="calendar-btn" data-route="/calendar"></button>
                       <p class="navigation-text">Calendar</p></li>
                     <div class="accessibility-dropdown">
                         <p>Calendar</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Search') && 'active'}" id="search"></button>
+                    <li><button class="${document.title.includes('Search') && 'active'}" id="search" data-route="/search"></button>
                         <p class="navigation-text">Search</p></li>
                       <div class="accessibility-dropdown">
                         <p>Search</p>
                       </div>
                     </div>
                     <div class="accessibility-container accessibility-down">
-                    <li><button class="${document.title.includes('Settings') && 'active'}" id="settings"></button></li>
+                    <li><button class="${document.title.includes('Settings') && 'active'}" id="settings" data-route="/settings"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Settings</p>
                       </div>
                     </div>
                     <div class="accessibility-container accessibility-down">
-                    <li><button class="${document.title.includes('Help') && 'active'}" id="help"></button></li>
+                    <li><button class="${document.title.includes('Help') && 'active'}" id="help" data-route="/help"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Help</p>
                       </div>
@@ -171,11 +171,15 @@ class TotalCourses extends HTMLElement {
         `;
     }
 
-    connectedCallback() {
-        this.updateTotalCourses();
-    }
-
-    async updateTotalCourses() {
+  connectedCallback() {
+    // Always reinitialize when connected
+    this.updateTotalCourses();
+    
+    // Set up refresh on router navigation
+    document.addEventListener('pageLoaded', () => {
+      setTimeout(() => this.updateTotalCourses(), 100);
+    });
+  }    async updateTotalCourses() {
         const totalCountEl = this.querySelector('.total-count');
 
         const fetchTotalCourses = async () => {
@@ -185,10 +189,11 @@ class TotalCourses extends HTMLElement {
                 const currentUser = session?.user || null;
 
                 if (!currentUser) {
+                  // For guest users, show a placeholder instead of error
                   return (this.innerHTML = `
                     <div class="total-courses" id="total-registered-courses">
                       <div class="total-courses-container">
-                      <h2 class="total-count">14</h2>
+                      <h2 class="total-count">--</h2>
                       <h2 class="total-text">Registered<br>Courses</h2>
                       </div>
                     </div>
@@ -223,10 +228,12 @@ class TotalCourses extends HTMLElement {
 
         try {
             const count = await fetchTotalCourses();
-            totalCountEl.textContent = String(count);
+            if (typeof count === 'number') {
+                totalCountEl.textContent = String(count);
+            }
         } catch (error) {
             console.error('Error updating total courses display:', error);
-            totalCountEl.textContent = '0';
+            totalCountEl.textContent = '--';
         }
     }
 }
@@ -248,11 +255,17 @@ class TermBox extends HTMLElement {
   }
 
   connectedCallback() {
-    // Set initial term/year display
+    // Always reinitialize when connected
     this.updateDisplayTerm();
-    
-    // Initialize concentration text
     this.initConcentration();
+
+    // Set up refresh on router navigation
+    document.addEventListener('pageLoaded', () => {
+      setTimeout(() => {
+        this.updateDisplayTerm();
+        this.initConcentration();
+      }, 100);
+    });
 
     // Attach listeners to keep display updated on changes
     this._ys = document.getElementById('year-select');
@@ -394,8 +407,13 @@ class CourseCalendar extends HTMLElement {
   }
 
   connectedCallback() {
-    // Initialize when connected to DOM
+    // Always reinitialize when connected
     this.initializeCalendar();
+    
+    // Set up refresh on router navigation
+    document.addEventListener('pageLoaded', () => {
+      setTimeout(() => this.initializeCalendar(), 100);
+    });
   }
 
   disconnectedCallback() {
@@ -544,8 +562,8 @@ class CourseCalendar extends HTMLElement {
 
       this.clearCourseCells();
 
-      // If no selected courses for current year/term, fill with EMPTY placeholders
-      if (!selectedCourses.length) {
+      // If no user or no selected courses for current year/term, fill with EMPTY placeholders
+      if (!this.currentUser || !selectedCourses.length) {
         this.showEmptyCalendar();
         return;
       }

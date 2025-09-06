@@ -1,33 +1,59 @@
 import { supabase } from "/supabase.js";
 
-document.addEventListener("DOMContentLoaded", async function() {
+async function initializeProfile() {
     const { data: { session } } = await supabase.auth.getSession();
 
     if (session) {
-        document.getElementById("user-test-message").textContent = `Your email is: ${session.user.email}`;
-    } else {
-        window.location.href = "login.html";
-    }
-});
-
-document.getElementById("logout-button").addEventListener("click", async function() {
-    try {
-        // Sign out from Supabase
-        const { error } = await supabase.auth.signOut();
-        
-        if (error) {
-            console.error('Error during logout:', error);
-            alert('Error during logout. Please try again.');
-            return;
+        const userTestMessage = document.getElementById("user-test-message");
+        if (userTestMessage) {
+            userTestMessage.textContent = `Your email is: ${session.user.email}`;
         }
-
-        // Clear any local storage if needed
-        localStorage.removeItem("token");
+    }
+    // Don't redirect - let the router handle showing the locked page
+    
+    // Set up logout button
+    const logoutButton = document.getElementById("logout-button");
+    if (logoutButton) {
+        // Remove any existing listeners
+        logoutButton.replaceWith(logoutButton.cloneNode(true));
+        const newLogoutButton = document.getElementById("logout-button");
         
-        // Redirect to login page
-        window.location.href = "login.html";
-    } catch (error) {
-        console.error('Unexpected error during logout:', error);
-        alert('An unexpected error occurred during logout.');
+        newLogoutButton.addEventListener("click", async function() {
+            try {
+                // Sign out from Supabase
+                const { error } = await supabase.auth.signOut();
+                
+                if (error) {
+                    console.error('Error during logout:', error);
+                    alert('Error during logout. Please try again.');
+                    return;
+                }
+
+                // Clear any local storage if needed
+                localStorage.removeItem("token");
+                
+                // Navigate to login via router instead of direct redirect
+                if (window.router) {
+                    window.router.navigate('/login');
+                } else {
+                    window.location.href = "login.html";
+                }
+            } catch (error) {
+                console.error('Unexpected error during logout:', error);
+                alert('An unexpected error occurred during logout.');
+            }
+        });
+    }
+}
+
+document.addEventListener("DOMContentLoaded", initializeProfile);
+
+// Listen for router navigation
+document.addEventListener('pageLoaded', (e) => {
+    if (e.detail.path === '/profile' || window.location.pathname === '/profile') {
+        setTimeout(initializeProfile, 100);
     }
 });
+
+// Export for router use
+export { initializeProfile };

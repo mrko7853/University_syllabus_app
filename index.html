@@ -5,17 +5,21 @@
     
 <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, target-densitydpi=device-dpi">
 
-    <title>Dashboard</title>
+    <title>Dashboard - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
     <!-- Import components first to ensure web components are defined -->
     <script type="module" src="/js/components.js"></script>
     <script type="module" src="/js/shared.js"></script>
     <script type="module" src="/js/main.js"></script>
+    <!-- Simple Router -->
+    <script type="module" src="/js/router.js"></script>
 </head>
 
 <body>
 
     <app-navigation></app-navigation>
+
+    <div id="app-content">
 
                     <div class="filter-container hidden">
                         <div class="filter-background">
@@ -219,6 +223,8 @@
     <script type="module" src="js/shared.js"></script>
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/main.js"></script>
+
+    </div>
 
 </body>
 </html>

@@ -2272,3 +2272,18 @@ window.addEventListener('load', ensureMobileNavigationPositioning);
 
 // Handle window resize to restructure when switching between mobile/desktop
 window.addEventListener('resize', restructureReviewDatesForMobile);
+
+// Export initialization functions for the router
+export function initializeDashboard() {
+  // Re-run mobile navigation positioning
+  ensureMobileNavigationPositioning();
+  restructureReviewDatesForMobile();
+  setViewportHeight();
+}
+
+export function reinitializeMainJS() {
+  // Re-run all main initialization
+  setViewportHeight();
+  ensureMobileNavigationPositioning();
+  restructureReviewDatesForMobile();
+}

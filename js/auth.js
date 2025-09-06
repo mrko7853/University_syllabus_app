@@ -1,55 +1,62 @@
 import { supabase } from "/supabase.js";
 
-// Legacy form handlers (keep for backward compatibility with existing pages)
-const loginForm = document.getElementById("login-form");
-const registerForm = document.getElementById("register-form");
+// Setup auth form handlers that work with the router
+function setupAuthHandlers() {
+    const loginForm = document.getElementById("login-form");
+    const registerForm = document.getElementById("register-form");
 
-if (loginForm) {
-    loginForm.addEventListener("submit", async function(e) {
-        e.preventDefault();
+    if (loginForm) {
+        loginForm.addEventListener("submit", async function(e) {
+            e.preventDefault();
 
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
+            const email = document.getElementById("login-email")?.value || document.getElementById("email")?.value;
+            const password = document.getElementById("login-password")?.value || document.getElementById("password")?.value;
 
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                alert(error.message);
+                console.log(error.message);
+            } else {
+                // Use router if available, otherwise fallback
+                if (window.router) {
+                    window.router.navigate('/dashboard');
+                } else {
+                    window.location.href = "/";
+                }
+            }
         });
+    }
 
-        if (error) {
-            alert(error.message);
-            console.log(error.message);
-        } else {
-            window.location.href = "profile.html";
-        }
-    });
-}
+    if (registerForm) {
+        registerForm.addEventListener("submit", async function(e) {
+            e.preventDefault();
 
-if (registerForm) {
-    registerForm.addEventListener("submit", async function(e) {
-        e.preventDefault();
+            const messageDisplay = document.getElementById("message");
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
 
-        const messageDisplay = document.getElementById("message");
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
+            const { data, error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+            });
 
-        const { data, error } = await supabase.auth.signUp({
-            email: email,
-            password: password,
+            if (error) {
+                messageDisplay.textContent = error.message;
+                messageDisplay.className = "error";
+                return;
+            }
+
+            if (data.user) {
+                messageDisplay.textContent = "Registration successful! Please check your email to verify your account.";
+                messageDisplay.className = "success";
+                registerForm.reset();
+            }
         });
-
-        if (error) {
-            messageDisplay.textContent = error.message;
-            messageDisplay.className = "error";
-            return;
-        }
-
-        if (data.user) {
-            messageDisplay.textContent = "Registration successful! Please check your email to verify your account.";
-            messageDisplay.className = "success";
-            registerForm.reset();
-        }
-    });
+    }
 }
 
 // =============================================================================
@@ -567,7 +574,20 @@ class AuthManager {
     }
 }
 
+// Initialize auth handlers on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupAuthHandlers);
+} else {
+    setupAuthHandlers();
+}
+
+// Re-initialize when pages are loaded via router
+document.addEventListener('pageLoaded', setupAuthHandlers);
+
 // Global instance - only create if not on dedicated login/register pages
+const loginForm = document.getElementById("login-form");
+const registerForm = document.getElementById("register-form");
+
 if (!loginForm && !registerForm) {
     window.authManager = new AuthManager();
     
