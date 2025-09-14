@@ -52,7 +52,7 @@ class AppNavigation extends HTMLElement {
             <nav class="test">
                 <ul>
                     <div class="profile-menu-container">
-                    <li><button class="${document.title.includes('Profile') && 'active'}" id="profile" data-route="/profile"></button>
+                    <li><button class="false" id="profile" data-route="/profile"></button>
                         <p class="navigation-text">Profile</p></li>
                       <div class="profile-dropdown-menu">
                         <a href="#view-profile">View Profile</a>
@@ -61,34 +61,34 @@ class AppNavigation extends HTMLElement {
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Dashboard') && 'active'}" id="dashboard" data-route="/dashboard"></button>
+                    <li><button class="false" id="dashboard" data-route="/dashboard"></button>
                         <p class="navigation-text">Dashboard</p></li>
                       <div class="accessibility-dropdown">
                         <p>Dashboard</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Calendar') && 'active'}" id="calendar-btn" data-route="/calendar"></button>
+                    <li><button class="false" id="calendar-btn" data-route="/calendar"></button>
                       <p class="navigation-text">Calendar</p></li>
                     <div class="accessibility-dropdown">
                         <p>Calendar</p>
                       </div>
                     </div>
                     <div class="accessibility-container">
-                    <li><button class="${document.title.includes('Search') && 'active'}" id="search" data-route="/search"></button>
+                    <li><button class="false" id="search" data-route="/search"></button>
                         <p class="navigation-text">Search</p></li>
                       <div class="accessibility-dropdown">
                         <p>Search</p>
                       </div>
                     </div>
                     <div class="accessibility-container accessibility-down">
-                    <li><button class="${document.title.includes('Settings') && 'active'}" id="settings" data-route="/settings"></button></li>
+                    <li><button class="false" id="settings" data-route="/settings"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Settings</p>
                       </div>
                     </div>
                     <div class="accessibility-container accessibility-down">
-                    <li><button class="${document.title.includes('Help') && 'active'}" id="help" data-route="/help"></button></li>
+                    <li><button class="false" id="help" data-route="/help"></button></li>
                       <div class="accessibility-dropdown">
                         <p>Help</p>
                       </div>

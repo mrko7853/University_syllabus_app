@@ -260,15 +260,17 @@ class SimpleRouter {
   }
 
   updateActiveNav(currentPath) {
-    // Remove active class from all nav buttons
+    // Remove active class and add false class to all nav buttons
     document.querySelectorAll('[data-route]').forEach(el => {
       el.classList.remove('active')
+      el.classList.add('false')
     })
     
-    // Add active class to current page button
+    // Add active class and remove false class from current page button
     const activeButton = document.querySelector(`[data-route="${currentPath}"]`)
     if (activeButton) {
       activeButton.classList.add('active')
+      activeButton.classList.remove('false')
     }
   }
 
