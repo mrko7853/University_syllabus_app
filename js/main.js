@@ -270,13 +270,6 @@ function normalizeCourseTitle(title) {
     return normalized;
 }
 
-const courseList = document.getElementById("course-list");
-const yearSelect = document.getElementById("year-select");
-const termSelect = document.getElementById("term-select");
-const filterByDays = document.getElementById("filter-by-days");
-const filterByTime = document.getElementById("filter-by-time");
-const filterByConcentration = document.getElementById("filter-by-concentration");
-
 // Global sorting state
 let currentSortMethod = null;
 
@@ -291,6 +284,9 @@ const MAX_COURSE_LOAD_RETRIES = 3;
 
 async function showCourse(year, term) {
     try {
+        // Get courseList element dynamically to ensure it exists
+        const courseList = document.getElementById("course-list");
+        
         // Check if courseList element exists
         if (!courseList) {
             console.error('Course list element not found');
@@ -441,6 +437,10 @@ function showCourseLoadingState() {
     
     isLoadingCourses = true;
     
+    // Get courseList element dynamically
+    const courseList = document.getElementById("course-list");
+    if (!courseList) return;
+    
     // Create multiple skeleton courses as direct children for grid layout
     let skeletonHTML = '';
     for (let i = 0; i < 6; i++) {
@@ -455,6 +455,9 @@ function hideCourseLoadingState() {
 }
 
 function showCourseLoadError() {
+    const courseList = document.getElementById("course-list");
+    if (!courseList) return;
+    
     courseList.innerHTML = `
         <div class="course-error-state">
             <div>
@@ -467,9 +470,13 @@ function showCourseLoadError() {
 
 // Global retry function
 window.retryLoadCourses = function() {
-    const year = yearSelect.value;
-    const term = termSelect.value;
-    showCourse(year, term);
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+    if (yearSelect && termSelect) {
+        const year = yearSelect.value;
+        const term = termSelect.value;
+        showCourse(year, term);
+    }
 };
 
 // Helper function to convert course time slot to container ID format
@@ -503,6 +510,13 @@ function convertTimeSlotToContainerFormat(timeSlot) {
 
 // Helper function to check if a container matches current filters
 function containerMatchesFilters(container) {
+    // Get filter elements dynamically
+    const filterByDays = document.getElementById("filter-by-days");
+    const filterByTime = document.getElementById("filter-by-time");  
+    const filterByConcentration = document.getElementById("filter-by-concentration");
+    
+    if (!filterByDays || !filterByTime || !filterByConcentration) return true;
+    
     // Days filter
     const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
     const selectedDays = Array.from(dayCheckboxes)
@@ -563,6 +577,15 @@ function applyFilters() {
 
 // Unified function that applies both search and filter criteria
 async function applySearchAndFilters(searchQuery) {
+    // Get courseList element dynamically
+    const courseList = document.getElementById("course-list");
+    if (!courseList) return;
+    
+    // Get yearSelect and termSelect dynamically
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+    if (!yearSelect || !termSelect) return;
+    
     // If suggestions are currently displayed, reload the courses first
     if (suggestionsDisplayed) {
         await showCourse(yearSelect.value, termSelect.value);
@@ -671,6 +694,14 @@ async function updateCoursesAndFilters() {
             return;
         }
         
+        // Get selectors dynamically
+        const yearSelect = document.getElementById("year-select");
+        const termSelect = document.getElementById("term-select");
+        if (!yearSelect || !termSelect) {
+            console.error('Year or term selector not found');
+            return;
+        }
+        
         await showCourse(yearSelect.value, termSelect.value);
         
         // Re-apply current sort if one is selected
@@ -688,145 +719,20 @@ async function updateCoursesAndFilters() {
     }
 }
 
-filterByDays.addEventListener("change", applyFilters);
-filterByTime.addEventListener("change", applyFilters);
-filterByConcentration.addEventListener("change", applyFilters);
-
-// Filter action buttons functionality
-const seeResultsBtn = document.getElementById("see-results-btn");
-const clearAllBtn = document.getElementById("clear-all-btn");
-
-// See Results button - close filter menu
-seeResultsBtn.addEventListener("click", () => {
-    const filterContainer = document.querySelector(".filter-container");
-    
-    if (window.innerWidth <= 780) {
-        // Mobile handling
-        const filterPopup = filterContainer.querySelector('.filter-popup');
-        hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-            filterContainer.classList.add("hidden");
-        });
-    } else {
-        // Desktop handling
-        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-        filterContainer.style.opacity = "0";
-        filterContainer.style.transform = "translateY(-10px)";
-        
-        setTimeout(() => {
-            filterContainer.classList.add("hidden");
-            filterContainer.style.transition = "";
-            filterContainer.style.opacity = "";
-            filterContainer.style.transform = "";
-            // Restore body overflow
-            document.body.style.overflow = "";
-            console.log('See results button clicked, body overflow restored');
-        }, 300);
-    }
-});
-
-const filterDaysDiv = document.getElementById("filter-by-days");
-const value = [];
-const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
-const courseFilterParagraph = document.getElementById("course-filter-paragraph");
-updateCourseFilterParagraph(); // Initialize the paragraph
-inputElements.forEach((input) => {
-    input.addEventListener("change", () => {
-        value.length = 0; // Clear the array
-        inputElements.forEach((el) => {
-            if (el.checked) {
-                if (el.value === "Mon") {
-                    const newValue = "Monday";
-                    value.push(newValue);
-                } else if (el.value === "Tue") {
-                    const newValue = "Tuesday";
-                    value.push(newValue);
-                } else if (el.value === "Wed") {
-                    const newValue = "Wednesday";
-                    value.push(newValue);
-                } else if (el.value === "Thu") {
-                    const newValue = "Thursday";
-                    value.push(newValue);
-                } else if (el.value === "Fri") {
-                    const newValue = "Friday";
-                    value.push(newValue);
-                }
+// Set up course list click event listener dynamically
+function setupCourseListClickListener() {
+    const courseList = document.getElementById("course-list");
+    if (courseList) {
+        courseList.addEventListener("click", function(event) {
+            const clickedContainer = event.target.closest(".class-container");
+            if (clickedContainer) {
+                // Parse the course data and open the shared menu
+                const courseData = JSON.parse(clickedContainer.dataset.course);
+                openCourseInfoMenu(courseData);
             }
         });
-        updateCourseFilterParagraph(); // Use the new function
-    });
-});
-
-// Clear All button - reset all filters
-clearAllBtn.addEventListener("click", async () => {
-    // Clear day checkboxes
-    const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
-    dayCheckboxes.forEach(checkbox => checkbox.checked = false);
-    
-    // Clear time checkboxes
-    const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
-    timeCheckboxes.forEach(checkbox => checkbox.checked = false);
-    
-    // Clear concentration checkboxes
-    const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
-    concCheckboxes.forEach(checkbox => checkbox.checked = false);
-
-    // Reset course filter paragraph
-    value.length = 0;
-    updateCourseFilterParagraph(); // Use the new function
-    
-    // Reset custom dropdowns to default values
-    const termSelect = document.getElementById("term-select");
-    const yearSelect = document.getElementById("year-select");
-    const termCustomSelect = document.querySelector('[data-target="term-select"]');
-    const yearCustomSelect = document.querySelector('[data-target="year-select"]');
-    
-    if (termCustomSelect) {
-        const termValue = termCustomSelect.querySelector('.custom-select-value');
-        const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
-        termOptions.forEach(option => option.classList.remove('selected'));
-        const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
-        if (fallOption) {
-            fallOption.classList.add('selected');
-            termValue.textContent = 'Fall';
-            termSelect.value = '秋学期/Fall';
-        }
     }
-    
-    if (yearCustomSelect) {
-        const yearValue = yearCustomSelect.querySelector('.custom-select-value');
-        const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
-        yearOptions.forEach(option => option.classList.remove('selected'));
-        const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
-        if (currentYearOption) {
-            currentYearOption.classList.add('selected');
-            yearValue.textContent = '2025';
-            yearSelect.value = '2025';
-        }
-    }
-    
-    // Reset sorting
-    currentSortMethod = null;
-    const sortOptions = document.querySelectorAll('.sort-option');
-    sortOptions.forEach(option => option.classList.remove('selected'));
-    
-    // Reset search
-    currentSearchQuery = null;
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) searchInput.value = '';
-    
-    // Apply filters to update the display
-    await applyFilters();
-    await updateCoursesAndFilters();
-});
-
-courseList.addEventListener("click", function(event) {
-    const clickedContainer = event.target.closest(".class-container");
-    if (clickedContainer) {
-        // Parse the course data and open the shared menu
-        const courseData = JSON.parse(clickedContainer.dataset.course);
-        openCourseInfoMenu(courseData);
-    }
-});
+}
 
 // Initialize the application
 // Initialize courses with robust loading
@@ -844,31 +750,37 @@ courseList.addEventListener("click", function(event) {
         // Additional delay to ensure all components and custom elements are mounted
         await new Promise(resolve => setTimeout(resolve, 200));
         
+        // Find elements dynamically  
+        let yearSelect = document.getElementById("year-select");
+        let termSelect = document.getElementById("term-select");
+        let courseList = document.getElementById("course-list");
+        
         // Check if required elements exist
         if (!yearSelect || !termSelect || !courseList) {
-            console.error('Required DOM elements not found:', {
+            console.error('Required DOM elements not found on first try:', {
                 yearSelect: !!yearSelect,
                 termSelect: !!termSelect, 
                 courseList: !!courseList
             });
             
-            // Try to find them again
-            const yearSelectFallback = document.getElementById("year-select");
-            const termSelectFallback = document.getElementById("term-select");
-            const courseListFallback = document.getElementById("course-list");
+            // Try to find them again with a longer delay
+            await new Promise(resolve => setTimeout(resolve, 500));
+            yearSelect = document.getElementById("year-select");
+            termSelect = document.getElementById("term-select");
+            courseList = document.getElementById("course-list");
             
-            console.log('Fallback element search:', {
-                yearSelect: !!yearSelectFallback,
-                termSelect: !!termSelectFallback,
-                courseList: !!courseListFallback
+            console.log('Second element search:', {
+                yearSelect: !!yearSelect,
+                termSelect: !!termSelect,
+                courseList: !!courseList
             });
             
-            if (!yearSelectFallback || !termSelectFallback || !courseListFallback) {
-                throw new Error('Critical DOM elements missing');
+            if (!yearSelect || !termSelect || !courseList) {
+                throw new Error('Critical DOM elements missing after retry');
             }
         }
         
-        const default_year = yearSelect.value || "2025"; // Back to 2025 as default
+        const default_year = yearSelect.value || "2025";
         const default_term = termSelect.value || "秋学期/Fall";
         
         console.log('Loading courses for:', { year: default_year, term: default_term });
@@ -888,10 +800,923 @@ courseList.addEventListener("click", function(event) {
 // Set default sort to Course A-Z
 currentSortMethod = 'title-az';
 
-yearSelect.addEventListener("change", updateCoursesAndFilters);
-termSelect.addEventListener("change", updateCoursesAndFilters);
+// Function to set up all dashboard event listeners
+function setupDashboardEventListeners() {
+    // Set up event listeners dynamically
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+
+    if (yearSelect && termSelect) {
+        yearSelect.addEventListener("change", updateCoursesAndFilters);
+        termSelect.addEventListener("change", updateCoursesAndFilters);
+    }
+    
+    // Set up button event listeners
+    const filterBtn = document.getElementById("filter-btn");
+    const filterContainer = document.querySelector(".filter-container");
+    const filterBackground = document.querySelector(".filter-background");
+    const searchBtn = document.getElementById("search-btn");
+    const searchContainer = document.querySelector(".search-container");
+    const searchBackground = document.querySelector(".search-background");
+    const searchModal = document.querySelector(".search-modal");
+    const sortBtn = document.getElementById("sort-btn");
+    const sortDropdown = document.getElementById("sort-dropdown");
+    
+    // Sort button click handler
+    if (sortBtn && filterContainer) {
+        sortBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Close other dropdowns/modals
+            if (!filterContainer.classList.contains("hidden")) {
+                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                filterContainer.style.opacity = "0";
+                filterContainer.style.transform = "translateY(-10px)";
+                setTimeout(() => {
+                    filterContainer.classList.add("hidden");
+                }, 300);
+            }
+            
+            // Close any open custom selects
+            const customSelects = document.querySelectorAll('.custom-select');
+            customSelects.forEach(customSelect => {
+                customSelect.classList.remove('open');
+            });
+            
+            // Toggle sort dropdown
+            const sortWrapper = sortBtn.closest('.sort-wrapper');
+            sortWrapper.classList.toggle("open");
+        });
+    }
+    
+    // Sort option selection
+    if (sortDropdown && sortBtn) {
+        sortDropdown.addEventListener("click", (event) => {
+            const option = event.target.closest('.sort-option');
+            if (!option) return;
+            
+            const sortMethod = option.dataset.sort;
+            
+            // Update selected state
+            sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            option.classList.add('selected');
+            
+            // Apply sorting
+            currentSortMethod = sortMethod;
+            sortCourses(sortMethod);
+            
+            // Close dropdown
+            const sortWrapper = sortBtn.closest('.sort-wrapper');
+            sortWrapper.classList.remove("open");
+        });
+    }
+    
+    // Filter button click handler
+    if (filterBtn && filterContainer) {
+        filterBtn.addEventListener("click", () => {
+            const filterPopup = filterContainer.querySelector('.filter-popup');
+            
+            if (filterContainer.classList.contains("hidden")) {
+                filterContainer.classList.remove("hidden");
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    showModalWithMobileAnimation(filterPopup, filterContainer);
+                } else {
+                    // Desktop animation
+                    filterContainer.style.opacity = "0";
+                    filterContainer.style.transform = "translateY(-10px)";
+                    
+                    // Simple direct overflow lock for filter modal
+                    document.body.style.overflow = "hidden";
+                    
+                    requestAnimationFrame(() => {
+                        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                        filterContainer.style.opacity = "1";
+                        filterContainer.style.transform = "translateY(0)";
+                    });
+                }
+            }
+        });
+        
+        // Close filter modal when clicking outside
+        filterBackground.addEventListener("click", (event) => {
+            if (event.target === filterBackground) {
+                if (window.innerWidth <= 780) {
+                    // Mobile handling
+                    const filterPopup = filterContainer.querySelector('.filter-popup');
+                    hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                        filterContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop handling
+                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                    filterContainer.style.opacity = "0";
+                    filterContainer.style.transform = "translateY(-10px)";
+                    
+                    setTimeout(() => {
+                        filterContainer.classList.add("hidden");
+                        // Simple direct overflow unlock for filter modal
+                        document.body.style.overflow = "";
+                        console.log('Filter modal closed by outside click, body overflow restored');
+                    }, 300);
+                }
+            }
+        });
+    }
+    
+    // Set up filter action buttons
+    const seeResultsBtn = document.getElementById("see-results-btn");
+    const clearAllBtn = document.getElementById("clear-all-btn");
+    
+    if (seeResultsBtn && filterContainer) {
+        seeResultsBtn.addEventListener("click", () => {
+            if (window.innerWidth <= 780) {
+                // Mobile handling
+                const filterPopup = filterContainer.querySelector('.filter-popup');
+                hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                    filterContainer.classList.add("hidden");
+                });
+            } else {
+                // Desktop handling
+                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                filterContainer.style.opacity = "0";
+                filterContainer.style.transform = "translateY(-10px)";
+                
+                setTimeout(() => {
+                    filterContainer.classList.add("hidden");
+                    filterContainer.style.transition = "";
+                    filterContainer.style.opacity = "";
+                    filterContainer.style.transform = "";
+                    // Restore body overflow
+                    document.body.style.overflow = "";
+                    console.log('See results button clicked, body overflow restored');
+                }, 300);
+            }
+        });
+    }
+    
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", async () => {
+            // Get filter elements dynamically
+            const filterByDays = document.getElementById("filter-by-days");
+            const filterByTime = document.getElementById("filter-by-time");
+            const filterByConcentration = document.getElementById("filter-by-concentration");
+            
+            // Clear day filters
+            if (filterByDays) {
+                const dayCheckboxes = filterByDays.querySelectorAll("input[type='checkbox']");
+                dayCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
+            // Clear time filters  
+            if (filterByTime) {
+                const timeCheckboxes = filterByTime.querySelectorAll("input[type='checkbox']");
+                timeCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
+            // Clear concentration filters
+            if (filterByConcentration) {
+                const concentrationCheckboxes = filterByConcentration.querySelectorAll("input[type='checkbox']");
+                concentrationCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
+            // Reset custom dropdowns to default values
+            const termSelect = document.getElementById("term-select");
+            const yearSelect = document.getElementById("year-select");
+            const termCustomSelect = document.querySelector('[data-target="term-select"]');
+            const yearCustomSelect = document.querySelector('[data-target="year-select"]');
+            
+            if (termCustomSelect) {
+                const termValue = termCustomSelect.querySelector('.custom-select-value');
+                const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
+                termOptions.forEach(option => option.classList.remove('selected'));
+                
+                // Set default to Fall
+                const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
+                if (fallOption) {
+                    fallOption.classList.add('selected');
+                    if (termValue) termValue.textContent = 'Fall';
+                    termSelect.value = '秋学期/Fall';
+                }
+            }
+            
+            if (yearCustomSelect) {
+                const yearValue = yearCustomSelect.querySelector('.custom-select-value');
+                const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
+                yearOptions.forEach(option => option.classList.remove('selected'));
+                
+                // Set default to current year (2025)
+                const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
+                if (currentYearOption) {
+                    currentYearOption.classList.add('selected');
+                    if (yearValue) yearValue.textContent = '2025';
+                    yearSelect.value = '2025';
+                }
+            }
+            
+            // Reset sorting to default (Course A-Z)
+            currentSortMethod = 'title-az';
+            const sortOptions = document.querySelectorAll('.sort-option');
+            sortOptions.forEach(option => option.classList.remove('selected'));
+            const defaultSortOption = document.querySelector('.sort-option[data-sort="title-az"]');
+            if (defaultSortOption) {
+                defaultSortOption.classList.add('selected');
+            }
+            
+            // Clear search input and search state
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = "";
+            }
+            
+            // Clear global search state
+            currentSearchQuery = null;
+            
+            // Update course filter paragraph to show default text
+            updateCourseFilterParagraph();
+            
+            // Apply filters (this will show all courses since no filters are active and search is cleared)
+            await applySearchAndFilters();
+        });
+    }
+    
+    // Search button and modal setup
+    if (searchBtn && searchContainer && searchModal) {
+        searchBtn.addEventListener("click", async () => {
+            if (searchContainer.classList.contains("hidden")) {
+                searchContainer.classList.remove("hidden");
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    showModalWithMobileAnimation(searchModal, searchContainer);
+                } else {
+                    // Desktop animation
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    lockBodyScroll();
+                    
+                    requestAnimationFrame(() => {
+                        searchContainer.style.transition = "opacity 0.3s ease";
+                        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                        searchContainer.style.opacity = "1";
+                        searchModal.style.transform = "translate(-50%, -50%)";
+                    });
+                }
+                
+                // Load courses for autocomplete
+                await getAllCourses();
+                
+                // Focus on search input after animation
+                setTimeout(() => {
+                    const searchInput = document.getElementById('search-input');
+                    if (searchInput) searchInput.focus();
+                }, 100);
+            }
+        });
+        
+        // Set up additional search event listeners
+        const searchSubmit = document.getElementById('search-submit');
+        const searchCancel = document.getElementById('search-cancel');
+        const searchInput = document.getElementById('search-input');
+        const searchAutocomplete = document.getElementById('search-autocomplete');
+        
+        if (searchSubmit) {
+            searchSubmit.addEventListener("click", async () => {
+                const searchQuery = searchInput ? searchInput.value : '';
+                await performSearch(searchQuery);
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                        searchContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation - Close search modal with animation
+                    searchContainer.style.transition = "opacity 0.3s ease";
+                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    
+                    setTimeout(() => {
+                        searchContainer.classList.add("hidden");
+                        unlockBodyScroll();
+                    }, 300);
+                }
+            });
+        }
+        
+        if (searchCancel) {
+            searchCancel.addEventListener("click", () => {
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                        searchContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation - Close search modal with animation
+                    searchContainer.style.transition = "opacity 0.3s ease";
+                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    
+                    setTimeout(() => {
+                        searchContainer.classList.add("hidden");
+                        unlockBodyScroll();
+                    }, 300);
+                }
+            });
+        }
+        
+        // Close search modal when clicking outside
+        if (searchBackground) {
+            searchBackground.addEventListener("click", (event) => {
+                if (event.target === searchBackground) {
+                    if (window.innerWidth <= 780) {
+                        // Mobile handling
+                        hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                            searchContainer.classList.add("hidden");
+                        });
+                    } else {
+                        // Desktop handling
+                        searchContainer.style.transition = "opacity 0.3s ease";
+                        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                        searchContainer.style.opacity = "0";
+                        searchModal.style.transform = "translate(-50%, -60%)";
+                        
+                        setTimeout(() => {
+                            searchContainer.classList.add("hidden");
+                            unlockBodyScroll();
+                        }, 300);
+                    }
+                }
+            });
+        }
+        
+        // Search input and autocomplete
+        if (searchInput && searchAutocomplete) {
+            setupSearchAutocomplete(searchInput, searchAutocomplete);
+        }
+    }
+    
+    // Initialize custom select dropdowns and filter checkboxes
+    initializeCustomSelects();
+    initializeFilterCheckboxes();
+}
+
+// Function to set up search autocomplete event listeners
+function setupSearchAutocomplete(searchInput, searchAutocomplete) {
+    if (!searchInput || !searchAutocomplete) return;
+    
+    // Search input event handlers for autocomplete
+    searchInput.addEventListener("input", (event) => {
+        showAutocomplete(event.target.value, searchAutocomplete);
+    });
+
+    // Show autocomplete when clicking in search input (if there's content)
+    searchInput.addEventListener("click", (event) => {
+        if (event.target.value.trim() && event.target.value.length >= 2) {
+            showAutocomplete(event.target.value, searchAutocomplete);
+        }
+    });
+
+    // Focus event to show autocomplete when tabbing into input
+    searchInput.addEventListener("focus", (event) => {
+        if (event.target.value.trim() && event.target.value.length >= 2) {
+            showAutocomplete(event.target.value, searchAutocomplete);
+        }
+    });
+
+    // Allow Enter key to submit search and handle autocomplete navigation
+    searchInput.addEventListener("keydown", (event) => {
+        if (searchAutocomplete.style.display === 'block' && 
+            (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            handleAutocompleteNavigation(event, searchAutocomplete);
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            if (searchAutocomplete.style.display === 'block' && currentHighlightIndex >= 0) {
+                const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
+                if (items[currentHighlightIndex]) {
+                    items[currentHighlightIndex].click();
+                    return;
+                }
+            }
+            const searchSubmit = document.getElementById('search-submit');
+            if (searchSubmit) searchSubmit.click();
+        } else if (event.key === "Escape") {
+            event.preventDefault();
+            if (searchAutocomplete.style.display === 'block') {
+                searchAutocomplete.style.display = 'none';
+                currentHighlightIndex = -1;
+            } else {
+                const searchCancel = document.getElementById('search-cancel');
+                if (searchCancel) searchCancel.click();
+            }
+        }
+    });
+}
+
+// Function to initialize custom select dropdowns
+function initializeCustomSelects() {
+    const customSelects = document.querySelectorAll('.custom-select');
+    
+    customSelects.forEach(customSelect => {
+        const trigger = customSelect.querySelector('.custom-select-trigger');
+        const options = customSelect.querySelector('.custom-select-options');
+        const targetSelectId = customSelect.dataset.target;
+        const targetSelect = document.getElementById(targetSelectId);
+        
+        if (!trigger || !options || !targetSelect) return;
+        
+        // Click handler for opening/closing dropdown
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            // Close other custom selects
+            customSelects.forEach(otherSelect => {
+                if (otherSelect !== customSelect) {
+                    otherSelect.classList.remove('open');
+                }
+            });
+            
+            customSelect.classList.toggle('open');
+        });
+        
+        // Option selection handler
+        options.addEventListener('click', (e) => {
+            const option = e.target.closest('.custom-select-option');
+            if (!option) return;
+            
+            const value = option.dataset.value;
+            const text = option.textContent;
+            
+            // Update visual state
+            options.querySelectorAll('.custom-select-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            option.classList.add('selected');
+            
+            // Update trigger text
+            const valueElement = trigger.querySelector('.custom-select-value');
+            if (valueElement) valueElement.textContent = text;
+            
+            // Update actual select
+            targetSelect.value = value;
+            
+            // Trigger change event
+            targetSelect.dispatchEvent(new Event('change'));
+            
+            // Close dropdown
+            customSelect.classList.remove('open');
+        });
+    });
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+        customSelects.forEach(customSelect => {
+            customSelect.classList.remove('open');
+        });
+    });
+}
+
+// Function to initialize filter checkboxes
+function initializeFilterCheckboxes() {
+    const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
+    
+    filterCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', async () => {
+            // Apply filters when any checkbox changes
+            await applySearchAndFilters();
+        });
+    });
+}
 
 document.addEventListener("DOMContentLoaded", async function () {
+    // Set up event listeners dynamically
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+
+    if (yearSelect && termSelect) {
+        yearSelect.addEventListener("change", updateCoursesAndFilters);
+        termSelect.addEventListener("change", updateCoursesAndFilters);
+    }
+    
+    // Set up button event listeners
+    const filterBtn = document.getElementById("filter-btn");
+    const filterContainer = document.querySelector(".filter-container");
+    const filterBackground = document.querySelector(".filter-background");
+    const searchBtn = document.getElementById("search-btn");
+    const searchContainer = document.querySelector(".search-container");
+    const searchBackground = document.querySelector(".search-background");
+    const searchModal = document.querySelector(".search-modal");
+    const sortBtn = document.getElementById("sort-btn");
+    const sortDropdown = document.getElementById("sort-dropdown");
+    
+    // Sort button click handler
+    if (sortBtn && filterContainer) {
+        sortBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Close other dropdowns/modals
+            if (!filterContainer.classList.contains("hidden")) {
+                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                filterContainer.style.opacity = "0";
+                filterContainer.style.transform = "translateY(-10px)";
+                setTimeout(() => {
+                    filterContainer.classList.add("hidden");
+                }, 300);
+            }
+            
+            // Close any open custom selects
+            const customSelects = document.querySelectorAll('.custom-select');
+            customSelects.forEach(customSelect => {
+                customSelect.classList.remove('open');
+            });
+            
+            // Toggle sort dropdown
+            const sortWrapper = sortBtn.closest('.sort-wrapper');
+            sortWrapper.classList.toggle("open");
+        });
+    }
+    
+    // Sort option selection
+    if (sortDropdown && sortBtn) {
+        sortDropdown.addEventListener("click", (event) => {
+            const option = event.target.closest('.sort-option');
+            if (!option) return;
+            
+            const sortMethod = option.dataset.sort;
+            
+            // Update selected state
+            sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            option.classList.add('selected');
+            
+            // Apply sorting
+            currentSortMethod = sortMethod;
+            sortCourses(sortMethod);
+            
+            // Close dropdown
+            const sortWrapper = sortBtn.closest('.sort-wrapper');
+            sortWrapper.classList.remove("open");
+        });
+    }
+    
+    // Filter button click handler
+    if (filterBtn && filterContainer) {
+        filterBtn.addEventListener("click", () => {
+            const filterPopup = filterContainer.querySelector('.filter-popup');
+            
+            if (filterContainer.classList.contains("hidden")) {
+                filterContainer.classList.remove("hidden");
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    showModalWithMobileAnimation(filterPopup, filterContainer);
+                } else {
+                    // Desktop animation
+                    filterContainer.style.opacity = "0";
+                    filterContainer.style.transform = "translateY(-10px)";
+                    
+                    // Simple direct overflow lock for filter modal
+                    document.body.style.overflow = "hidden";
+                    
+                    requestAnimationFrame(() => {
+                        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                        filterContainer.style.opacity = "1";
+                        filterContainer.style.transform = "translateY(0)";
+                    });
+                }
+            } else {
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                        filterContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation
+                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                    filterContainer.style.opacity = "0";
+                    filterContainer.style.transform = "translateY(-10px)";
+                    
+                    setTimeout(() => {
+                        filterContainer.classList.add("hidden");
+                        // Simple direct overflow unlock for filter modal
+                        document.body.style.overflow = "";
+                        console.log('Filter modal closed, body overflow restored');
+                    }, 300);
+                }
+            }
+        });
+        
+        // Document click listener for closing filter
+        document.addEventListener("click", (event) => {
+            // Check if filter menu is visible
+            if (filterContainer.classList.contains("hidden")) {
+                return;
+            }
+            
+            // Get the actual filter popup/content div (child of filter-container)
+            const filterPopup = filterContainer.querySelector('.filter-popup, .filter-content, [class*="filter"]:not(.filter-container):not(.filter-background)');
+            
+            // Check if click is inside the filter popup content
+            const isInsideFilterPopup = filterPopup && filterPopup.contains(event.target);
+            
+            // Check if click is on the filter button
+            const isFilterButton = filterBtn.contains(event.target);
+            
+            // Only close if click is NOT on the button and NOT inside the filter popup
+            if (!isFilterButton && !isInsideFilterPopup) {
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                        filterContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation
+                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                    filterContainer.style.opacity = "0";
+                    filterContainer.style.transform = "translateY(-10px)";
+                    
+                    setTimeout(() => {
+                        filterContainer.classList.add("hidden");
+                        // Simple direct overflow unlock for filter modal
+                        document.body.style.overflow = "";
+                        console.log('Filter modal closed by outside click, body overflow restored');
+                    }, 300);
+                }
+            }
+        });
+    }
+    
+    // Set up filter action buttons
+    const seeResultsBtn = document.getElementById("see-results-btn");
+    const clearAllBtn = document.getElementById("clear-all-btn");
+    
+    if (seeResultsBtn && filterContainer) {
+        seeResultsBtn.addEventListener("click", () => {
+            if (window.innerWidth <= 780) {
+                // Mobile handling
+                const filterPopup = filterContainer.querySelector('.filter-popup');
+                hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
+                    filterContainer.classList.add("hidden");
+                });
+            } else {
+                // Desktop handling
+                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                filterContainer.style.opacity = "0";
+                filterContainer.style.transform = "translateY(-10px)";
+                
+                setTimeout(() => {
+                    filterContainer.classList.add("hidden");
+                    filterContainer.style.transition = "";
+                    filterContainer.style.opacity = "";
+                    filterContainer.style.transform = "";
+                    // Restore body overflow
+                    document.body.style.overflow = "";
+                    console.log('See results button clicked, body overflow restored');
+                }, 300);
+            }
+        });
+    }
+    
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener("click", async () => {
+            // Get filter elements dynamically
+            const filterByDays = document.getElementById("filter-by-days");
+            const filterByTime = document.getElementById("filter-by-time");
+            const filterByConcentration = document.getElementById("filter-by-concentration");
+            
+            // Clear day checkboxes
+            if (filterByDays) {
+                const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
+                dayCheckboxes.forEach(checkbox => checkbox.checked = false);
+            }
+            
+            // Clear time checkboxes
+            if (filterByTime) {
+                const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
+                timeCheckboxes.forEach(checkbox => checkbox.checked = false);
+            }
+            
+            // Clear concentration checkboxes
+            if (filterByConcentration) {
+                const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
+                concCheckboxes.forEach(checkbox => checkbox.checked = false);
+            }
+
+            // Reset course filter paragraph
+            value.length = 0;
+            updateCourseFilterParagraph();
+            
+            // Reset custom dropdowns to default values
+            const termSelect = document.getElementById("term-select");
+            const yearSelect = document.getElementById("year-select");
+            const termCustomSelect = document.querySelector('[data-target="term-select"]');
+            const yearCustomSelect = document.querySelector('[data-target="year-select"]');
+            
+            if (termCustomSelect) {
+                const termValue = termCustomSelect.querySelector('.custom-select-value');
+                const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
+                termOptions.forEach(option => option.classList.remove('selected'));
+                const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
+                if (fallOption) {
+                    fallOption.classList.add('selected');
+                    termValue.textContent = 'Fall';
+                    termSelect.value = '秋学期/Fall';
+                }
+            }
+            
+            if (yearCustomSelect) {
+                const yearValue = yearCustomSelect.querySelector('.custom-select-value');
+                const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
+                yearOptions.forEach(option => option.classList.remove('selected'));
+                const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
+                if (currentYearOption) {
+                    currentYearOption.classList.add('selected');
+                    yearValue.textContent = '2025';
+                    yearSelect.value = '2025';
+                }
+            }
+            
+            // Reset sorting
+            currentSortMethod = null;
+            const sortOptions = document.querySelectorAll('.sort-option');
+            sortOptions.forEach(option => option.classList.remove('selected'));
+            
+            // Reset search
+            currentSearchQuery = null;
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = '';
+            
+            // Apply filters to update the display
+            await applyFilters();
+            await updateCoursesAndFilters();
+        });
+    }
+    
+    // Set up search functionality
+    if (searchBtn && searchContainer && searchModal) {
+        searchBtn.addEventListener("click", async () => {
+            if (searchContainer.classList.contains("hidden")) {
+                searchContainer.classList.remove("hidden");
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    showModalWithMobileAnimation(searchModal, searchContainer);
+                } else {
+                    // Desktop animation
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    lockBodyScroll();
+                    
+                    requestAnimationFrame(() => {
+                        searchContainer.style.transition = "opacity 0.3s ease";
+                        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                        searchContainer.style.opacity = "1";
+                        searchModal.style.transform = "translate(-50%, -50%)";
+                    });
+                }
+                
+                // Load courses for autocomplete
+                await getAllCourses();
+                
+                // Focus on search input after animation
+                setTimeout(() => {
+                    const searchInput = document.getElementById('search-input');
+                    if (searchInput) searchInput.focus();
+                }, 100);
+            }
+        });
+        
+        // Set up additional search event listeners
+        const searchSubmit = document.getElementById('search-submit');
+        const searchCancel = document.getElementById('search-cancel');
+        const searchInput = document.getElementById('search-input');
+        const searchAutocomplete = document.getElementById('search-autocomplete');
+        
+        if (searchSubmit) {
+            searchSubmit.addEventListener("click", async () => {
+                const searchQuery = searchInput ? searchInput.value : '';
+                await performSearch(searchQuery);
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                        searchContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation - Close search modal with animation
+                    searchContainer.style.transition = "opacity 0.3s ease";
+                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    
+                    setTimeout(() => {
+                        searchContainer.classList.add("hidden");
+                        unlockBodyScroll();
+                        // Reset styles
+                        searchContainer.style.transition = "";
+                        searchModal.style.transition = "";
+                        searchContainer.style.opacity = "";
+                        searchModal.style.transform = "";
+                    }, 300);
+                }
+            });
+        }
+        
+        if (searchCancel) {
+            searchCancel.addEventListener("click", async () => {
+                if (searchInput) searchInput.value = ""; // Clear search input
+                if (searchAutocomplete) searchAutocomplete.style.display = 'none';
+                currentHighlightIndex = -1;
+                
+                if (window.innerWidth <= 780) {
+                    // Mobile full-screen animation
+                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                        searchContainer.classList.add("hidden");
+                    });
+                } else {
+                    // Desktop animation - Close search modal with animation
+                    searchContainer.style.transition = "opacity 0.3s ease";
+                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    
+                    setTimeout(() => {
+                        searchContainer.classList.add("hidden");
+                        unlockBodyScroll();
+                        // Reset styles
+                        searchContainer.style.transition = "";
+                        searchModal.style.transition = "";
+                        searchContainer.style.opacity = "";
+                        searchModal.style.transform = "";
+                    }, 300);
+                }
+                
+                // Clear search state and restore filtered state
+                currentSearchQuery = null;
+                updateCourseFilterParagraph(); // Update paragraph when search is cleared
+                await applySearchAndFilters(null);
+            });
+        }
+    }
+    
+    // Set up filter event listeners
+    const filterByDays = document.getElementById("filter-by-days");
+    const filterByTime = document.getElementById("filter-by-time");
+    const filterByConcentration = document.getElementById("filter-by-concentration");
+
+    if (filterByDays) filterByDays.addEventListener("change", applyFilters);
+    if (filterByTime) filterByTime.addEventListener("change", applyFilters);
+    if (filterByConcentration) filterByConcentration.addEventListener("change", applyFilters);
+    
+    // Initialize filter checkbox functionality
+    const filterDaysDiv = document.getElementById("filter-by-days");
+    if (filterDaysDiv) {
+        const value = [];
+        const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
+        const courseFilterParagraph = document.getElementById("course-filter-paragraph");
+        updateCourseFilterParagraph(); // Initialize the paragraph
+        inputElements.forEach((input) => {
+            input.addEventListener("change", () => {
+                value.length = 0; // Clear the array
+                inputElements.forEach((el) => {
+                    if (el.checked) {
+                        if (el.value === "Mon") {
+                            const newValue = "Monday";
+                            value.push(newValue);
+                        } else if (el.value === "Tue") {
+                            const newValue = "Tuesday";
+                            value.push(newValue);
+                        } else if (el.value === "Wed") {
+                            const newValue = "Wednesday";
+                            value.push(newValue);
+                        } else if (el.value === "Thu") {
+                            const newValue = "Thursday";
+                            value.push(newValue);
+                        } else if (el.value === "Fri") {
+                            const newValue = "Friday";
+                            value.push(newValue);
+                        }
+                    }
+                });
+                updateCourseFilterParagraph(); // Use the new function
+            });
+        });
+    }
+    
     // Handle responsive layout for all users (authenticated or not)
     // Add a small delay to ensure all elements are rendered
     setTimeout(handleResponsiveLayout, 100);
@@ -905,9 +1730,17 @@ document.addEventListener("DOMContentLoaded", async function () {
     const topContent = document.querySelector('.top-content');
     
     if (!session) {
-        // Hide top-content for non-authenticated users
+        // Hide top-content for non-authenticated users but still load courses
         if (topContent) {
             topContent.style.display = 'none';
+        }
+        
+        // Load courses for guest users
+        console.log('Loading courses for guest user');
+        try {
+            await updateCoursesAndFilters();
+        } catch (error) {
+            console.error('Error loading courses for guest user:', error);
         }
         return;
     }
@@ -926,6 +1759,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         profileButton.addEventListener("click", function() {
             window.location.href = `/profile/${user.id}`;
         });
+    }
+
+    // Load courses for authenticated users
+    try {
+        await updateCoursesAndFilters();
+    } catch (error) {
+        console.error('Error loading courses for authenticated user:', error);
     }
 
     // Keep navigation text as "Profile" - don't change it to show email
@@ -1231,19 +2071,6 @@ function initStickyObserver() {
     observer.observe(containerAbove);
 }
 
-const filterBtn = document.getElementById("filter-btn");
-const filterContainer = document.querySelector(".filter-container");
-const filterBackground = document.querySelector(".filter-background");
-const searchBtn = document.getElementById("search-btn");
-const searchContainer = document.querySelector(".search-container");
-const searchBackground = document.querySelector(".search-background");
-const searchModal = document.querySelector(".search-modal");
-const searchInput = document.getElementById("search-input");
-const searchSubmit = document.getElementById("search-submit");
-const searchCancel = document.getElementById("search-cancel");
-const searchAutocomplete = document.getElementById("search-autocomplete");
-const pageBody = document.body;
-
 // Function to handle mobile modal animations and scroll prevention
 let scrollPosition = 0;
 let modalCount = 0; // Track how many modals are open
@@ -1371,95 +2198,11 @@ function hideModalWithMobileAnimation(modal, container, callback = null) {
     }
 }
 
-filterBtn.addEventListener("click", () => {
-    const filterPopup = filterContainer.querySelector('.filter-popup');
-    
-    if (filterContainer.classList.contains("hidden")) {
-        filterContainer.classList.remove("hidden");
-        
-        if (window.innerWidth <= 780) {
-            // Mobile full-screen animation
-            showModalWithMobileAnimation(filterPopup, filterContainer);
-        } else {
-            // Desktop animation
-            filterContainer.style.opacity = "0";
-            filterContainer.style.transform = "translateY(-10px)";
-            
-            // Simple direct overflow lock for filter modal
-            document.body.style.overflow = "hidden";
-            
-            requestAnimationFrame(() => {
-                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                filterContainer.style.opacity = "1";
-                filterContainer.style.transform = "translateY(0)";
-            });
-        }
-    } else {
-        if (window.innerWidth <= 780) {
-            // Mobile full-screen animation
-            hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-                filterContainer.classList.add("hidden");
-            });
-        } else {
-            // Desktop animation
-            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-            filterContainer.style.opacity = "0";
-            filterContainer.style.transform = "translateY(-10px)";
-            
-            setTimeout(() => {
-                filterContainer.classList.add("hidden");
-                // Simple direct overflow unlock for filter modal
-                document.body.style.overflow = "";
-                console.log('Filter modal closed, body overflow restored');
-            }, 300);
-        }
-    }
-});
-
-document.addEventListener("click", (event) => {
-    // Check if filter menu is visible
-    if (filterContainer.classList.contains("hidden")) {
-        return;
-    }
-    
-    // Get the actual filter popup/content div (child of filter-container)
-    const filterPopup = filterContainer.querySelector('.filter-popup, .filter-content, [class*="filter"]:not(.filter-container):not(.filter-background)');
-    
-    // Check if click is inside the filter popup content
-    const isInsideFilterPopup = filterPopup && filterPopup.contains(event.target);
-    
-    // Check if click is on the filter button
-    const isFilterButton = filterBtn.contains(event.target);
-    
-    // Only close if click is NOT on the button and NOT inside the filter popup
-    if (!isFilterButton && !isInsideFilterPopup) {
-        if (window.innerWidth <= 780) {
-            // Mobile full-screen animation
-            hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-                filterContainer.classList.add("hidden");
-            });
-        } else {
-            // Desktop animation
-            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-            filterContainer.style.opacity = "0";
-            filterContainer.style.transform = "translateY(-10px)";
-            
-            setTimeout(() => {
-                filterContainer.classList.add("hidden");
-                // Simple direct overflow unlock for filter modal
-                document.body.style.overflow = "";
-                console.log('Filter modal closed by outside click, body overflow restored');
-            }, 300);
-        }
-    }
-});
-
-// Sort dropdown functionality
-const sortBtn = document.getElementById("sort-btn");
-const sortDropdown = document.getElementById("sort-dropdown");
-
 // Function to sort courses based on selected method
 function sortCourses(method) {
+    const courseList = document.getElementById("course-list");
+    if (!courseList) return;
+    
     const courseContainers = Array.from(courseList.querySelectorAll(".class-outside"));
     
     courseContainers.sort((a, b) => {
@@ -1490,54 +2233,6 @@ function sortCourses(method) {
     applyFilters();
 }
 
-// Sort button click handler
-sortBtn.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    
-    // Close other dropdowns/modals
-    if (!filterContainer.classList.contains("hidden")) {
-        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-        filterContainer.style.opacity = "0";
-        filterContainer.style.transform = "translateY(-10px)";
-        setTimeout(() => {
-            filterContainer.classList.add("hidden");
-        }, 300);
-    }
-    
-    // Close any open custom selects
-    const customSelects = document.querySelectorAll('.custom-select');
-    customSelects.forEach(customSelect => {
-        customSelect.classList.remove('open');
-    });
-    
-    // Toggle sort dropdown
-    const sortWrapper = sortBtn.closest('.sort-wrapper');
-    sortWrapper.classList.toggle("open");
-});
-
-// Sort option selection
-sortDropdown.addEventListener("click", (event) => {
-    const option = event.target.closest('.sort-option');
-    if (!option) return;
-    
-    const sortMethod = option.dataset.sort;
-    
-    // Update selected state
-    sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
-        opt.classList.remove('selected');
-    });
-    option.classList.add('selected');
-    
-    // Apply sorting
-    currentSortMethod = sortMethod;
-    sortCourses(sortMethod);
-    
-    // Close dropdown
-    const sortWrapper = sortBtn.closest('.sort-wrapper');
-    sortWrapper.classList.remove("open");
-});
-
 // Search modal functionality
 let originalCourses = []; // Store original courses for search
 let allCourses = []; // Store all courses for autocomplete
@@ -1546,6 +2241,10 @@ let currentHighlightIndex = -1;
 // Function to get all courses for autocomplete
 async function getAllCourses() {
     try {
+        const yearSelect = document.getElementById("year-select");
+        const termSelect = document.getElementById("term-select");
+        if (!yearSelect || !termSelect) return [];
+        
         const year = yearSelect.value;
         const term = termSelect.value;
         const courses = await fetchCourseData(year, term);
@@ -1558,9 +2257,13 @@ async function getAllCourses() {
 }
 
 // Enhanced autocomplete function with fuzzy matching
-function showAutocomplete(query) {
+function showAutocomplete(query, searchAutocomplete) {
+    if (!searchAutocomplete) {
+        searchAutocomplete = document.getElementById('search-autocomplete');
+    }
+    
     if (!query.trim() || query.length < 2) {
-        searchAutocomplete.style.display = 'none';
+        if (searchAutocomplete) searchAutocomplete.style.display = 'none';
         return;
     }
     
@@ -1591,9 +2294,11 @@ function showAutocomplete(query) {
     }
     
     if (suggestions.length === 0) {
-        searchAutocomplete.style.display = 'none';
+        if (searchAutocomplete) searchAutocomplete.style.display = 'none';
         return;
     }
+    
+    if (!searchAutocomplete) return;
     
     searchAutocomplete.innerHTML = '';
     suggestions.forEach((course, index) => {
@@ -1613,8 +2318,9 @@ function showAutocomplete(query) {
         `;
         
         item.addEventListener('click', () => {
-            searchInput.value = course.title;
-            searchAutocomplete.style.display = 'none';
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) searchInput.value = course.title;
+            if (searchAutocomplete) searchAutocomplete.style.display = 'none';
             currentHighlightIndex = -1;
         });
         
@@ -1660,7 +2366,12 @@ function highlightMatches(text, query) {
 }
 
 // Function to handle keyboard navigation in autocomplete
-function handleAutocompleteNavigation(event) {
+function handleAutocompleteNavigation(event, searchAutocomplete) {
+    if (!searchAutocomplete) {
+        searchAutocomplete = document.getElementById('search-autocomplete');
+    }
+    if (!searchAutocomplete) return;
+    
     const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
     
     if (event.key === 'ArrowDown') {
@@ -1962,186 +2673,6 @@ function performSearch(searchQuery) {
     return applySearchAndFilters(currentSearchQuery);
 }
 
-// Search button click handler
-searchBtn.addEventListener("click", async () => {
-    if (searchContainer.classList.contains("hidden")) {
-        searchContainer.classList.remove("hidden");
-        
-        if (window.innerWidth <= 780) {
-            // Mobile full-screen animation
-            showModalWithMobileAnimation(searchModal, searchContainer);
-        } else {
-            // Desktop animation
-            searchContainer.style.opacity = "0";
-            searchModal.style.transform = "translate(-50%, -60%)";
-            lockBodyScroll();
-            
-            requestAnimationFrame(() => {
-                searchContainer.style.transition = "opacity 0.3s ease";
-                searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-                searchContainer.style.opacity = "1";
-                searchModal.style.transform = "translate(-50%, -50%)";
-            });
-        }
-        
-        // Load courses for autocomplete
-        await getAllCourses();
-        
-        // Focus on search input after animation
-        setTimeout(() => {
-            searchInput.focus();
-        }, 100);
-    }
-});
-
-// Search submit handler
-searchSubmit.addEventListener("click", async () => {
-    const searchQuery = searchInput.value;
-    await performSearch(searchQuery);
-    
-    if (window.innerWidth <= 780) {
-        // Mobile full-screen animation
-        hideModalWithMobileAnimation(searchModal, searchContainer, () => {
-            searchContainer.classList.add("hidden");
-        });
-    } else {
-        // Desktop animation - Close search modal with animation
-        searchContainer.style.transition = "opacity 0.3s ease";
-        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-        searchContainer.style.opacity = "0";
-        searchModal.style.transform = "translate(-50%, -60%)";
-        
-        setTimeout(() => {
-            searchContainer.classList.add("hidden");
-            unlockBodyScroll();
-            // Reset styles
-            searchContainer.style.transition = "";
-            searchModal.style.transition = "";
-            searchContainer.style.opacity = "";
-            searchModal.style.transform = "";
-        }, 300);
-    }
-});
-
-// Search cancel handler
-searchCancel.addEventListener("click", async () => {
-    searchInput.value = ""; // Clear search input
-    searchAutocomplete.style.display = 'none';
-    currentHighlightIndex = -1;
-    
-    if (window.innerWidth <= 780) {
-        // Mobile full-screen animation
-        hideModalWithMobileAnimation(searchModal, searchContainer, () => {
-            searchContainer.classList.add("hidden");
-        });
-    } else {
-        // Desktop animation - Close search modal with animation
-        searchContainer.style.transition = "opacity 0.3s ease";
-        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-        searchContainer.style.opacity = "0";
-        searchModal.style.transform = "translate(-50%, -60%)";
-        
-        setTimeout(() => {
-            searchContainer.classList.add("hidden");
-            unlockBodyScroll();
-            // Reset styles
-            searchContainer.style.transition = "";
-            searchModal.style.transition = "";
-            searchContainer.style.opacity = "";
-            searchModal.style.transform = "";
-        }, 300);
-    }
-    
-    // Clear search state and restore filtered state
-    currentSearchQuery = null;
-    updateCourseFilterParagraph(); // Update paragraph when search is cleared
-    await applySearchAndFilters(null);
-});
-
-// Search input event handlers for autocomplete
-searchInput.addEventListener("input", (event) => {
-    showAutocomplete(event.target.value);
-});
-
-// Show autocomplete when clicking in search input (if there's content)
-searchInput.addEventListener("click", (event) => {
-    if (event.target.value.trim() && event.target.value.length >= 2) {
-        showAutocomplete(event.target.value);
-    }
-});
-
-// Focus event to show autocomplete when tabbing into input
-searchInput.addEventListener("focus", (event) => {
-    if (event.target.value.trim() && event.target.value.length >= 2) {
-        showAutocomplete(event.target.value);
-    }
-});
-
-// Allow Enter key to submit search and handle autocomplete navigation
-searchInput.addEventListener("keydown", (event) => {
-    if (searchAutocomplete.style.display === 'block' && 
-        (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-        handleAutocompleteNavigation(event);
-    } else if (event.key === "Enter") {
-        event.preventDefault();
-        if (searchAutocomplete.style.display === 'block' && currentHighlightIndex >= 0) {
-            const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
-            if (items[currentHighlightIndex]) {
-                items[currentHighlightIndex].click();
-                return;
-            }
-        }
-        searchSubmit.click();
-    } else if (event.key === "Escape") {
-        event.preventDefault();
-        if (searchAutocomplete.style.display === 'block') {
-            searchAutocomplete.style.display = 'none';
-            currentHighlightIndex = -1;
-        } else {
-            searchCancel.click();
-        }
-    }
-});
-
-// Close search modal when clicking on background
-searchBackground.addEventListener("click", (event) => {
-    if (event.target === searchBackground) {
-        searchAutocomplete.style.display = 'none';
-        currentHighlightIndex = -1;
-        searchCancel.click();
-    }
-});
-
-// Handle clicks inside the modal (for autocomplete behavior and preventing modal closure)
-searchModal.addEventListener("click", (event) => {
-    // Check if click is inside search input or autocomplete dropdown
-    const clickedInsideSearch = searchInput.contains(event.target);
-    const clickedInsideAutocomplete = searchAutocomplete.contains(event.target);
-    
-    // If clicked inside the modal but outside search input and autocomplete, hide autocomplete
-    if (!clickedInsideSearch && !clickedInsideAutocomplete) {
-        searchAutocomplete.style.display = 'none';
-        currentHighlightIndex = -1;
-    }
-    
-    // Always prevent modal from closing when clicking inside
-    event.stopPropagation();
-});
-
-// Close autocomplete when clicking completely outside the modal
-document.addEventListener("click", (event) => {
-    // Only handle clicks when search modal is open
-    if (searchContainer.classList.contains("hidden")) {
-        return;
-    }
-    
-    // If clicked completely outside the modal, hide autocomplete
-    if (!searchModal.contains(event.target)) {
-        searchAutocomplete.style.display = 'none';
-        currentHighlightIndex = -1;
-    }
-});
-
 // Mobile navigation positioning fix
 function ensureMobileNavigationPositioning() {
     const appNavigation = document.querySelector('app-navigation');
@@ -2293,6 +2824,12 @@ export function initializeDashboard() {
   restructureReviewDatesForMobile();
   setViewportHeight();
   
+  // Set up course list click listener
+  setupCourseListClickListener();
+  
+  // Set up button event listeners for router-based navigation
+  setupDashboardEventListeners();
+  
   // Handle responsive layout for container-above positioning
   setTimeout(handleResponsiveLayout, 100);
 }
@@ -2307,6 +2844,8 @@ export function reinitializeMainJS() {
 // Export search function for global use
 window.performSearch = performSearch;
 window.applySearchAndFilters = applySearchAndFilters;
+window.initializeDashboard = initializeDashboard;
+window.updateCoursesAndFilters = updateCoursesAndFilters;
 
 // Export search state for global access
 Object.defineProperty(window, 'currentSearchQuery', {

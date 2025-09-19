@@ -3190,3 +3190,4 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
 
 // Make it globally available
 window.addSwipeToCloseSimple = addSwipeToCloseSimple;
+window.fetchCourseData = fetchCourseData;

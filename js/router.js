@@ -317,12 +317,29 @@ class SimpleRouter {
 
   async initializeDashboard() {
     try {
-      // Re-import main.js to get fresh instances
-      const mainModule = await import('/js/main.js?' + Date.now())
-      
-      // Call the initialization function
-      if (mainModule.initializeDashboard) {
-        mainModule.initializeDashboard()
+      // In production, modules are already bundled and available
+      if (this.isProduction()) {
+        // Call initialization functions directly if they exist
+        if (window.initializeDashboard) {
+          window.initializeDashboard()
+        }
+        
+        // Also ensure courses are loaded
+        if (window.updateCoursesAndFilters) {
+          try {
+            await window.updateCoursesAndFilters()
+          } catch (error) {
+            console.error('Error loading courses in production:', error)
+          }
+        }
+      } else {
+        // Re-import main.js to get fresh instances (dev mode only)
+        const mainModule = await import('./main.js?' + Date.now())
+        
+        // Call the initialization function
+        if (mainModule.initializeDashboard) {
+          mainModule.initializeDashboard()
+        }
       }
       
       // Initialize year/term selectors
@@ -373,8 +390,12 @@ class SimpleRouter {
         if (basePath === '/calendar') {
           console.log('Attempting dynamic import of calendar page component...')
           try {
-            await import('/js/calendar-page-component.js')
-            console.log('Calendar page component imported successfully')
+            if (!this.isProduction()) {
+              await import('./calendar-page-component.js')
+              console.log('Calendar page component imported successfully')
+            } else {
+              console.log('Production mode: calendar component should already be bundled')
+            }
           } catch (error) {
             console.error('Failed to import calendar page component:', error)
           }
@@ -388,12 +409,20 @@ class SimpleRouter {
 
   async initializeProfile() {
     try {
-      // Re-import profile.js to get fresh instances  
-      const profileModule = await import('/js/profile.js?' + Date.now())
-      
-      // Call the initialization function
-      if (profileModule.initializeProfile) {
-        await profileModule.initializeProfile()
+      // In production, modules are already bundled and available
+      if (this.isProduction()) {
+        // Call initialization functions directly if they exist
+        if (window.initializeProfile) {
+          await window.initializeProfile()
+        }
+      } else {
+        // Re-import profile.js to get fresh instances (dev mode only)
+        const profileModule = await import('./profile.js?' + Date.now())
+        
+        // Call the initialization function
+        if (profileModule.initializeProfile) {
+          await profileModule.initializeProfile()
+        }
       }
       
       // Initialize profile-specific functionality
@@ -409,11 +438,17 @@ class SimpleRouter {
 
   async initializeShared() {
     try {
-      // Re-import shared.js to get fresh instances
-      const sharedModule = await import('/js/shared.js?' + Date.now())
-      
-      // Initialize shared functionality
-      this.initializeSharedComponents()
+      // In production, modules are already bundled and available
+      if (this.isProduction()) {
+        // Shared functionality is already loaded, just initialize components
+        this.initializeSharedComponents()
+      } else {
+        // Re-import shared.js to get fresh instances (dev mode only)
+        const sharedModule = await import('./shared.js?' + Date.now())
+        
+        // Initialize shared functionality
+        this.initializeSharedComponents()
+      }
       
       // Set up global year/term tracking for all pages as fallback
       this.setupGlobalYearTermTracking()
@@ -561,9 +596,19 @@ class SimpleRouter {
   async checkAuthentication() {
     try {
       // Import supabase dynamically to avoid circular dependencies
-      const { supabase } = await import('/supabase.js')
-      const { data: { session } } = await supabase.auth.getSession()
-      return !!session
+      if (this.isProduction()) {
+        // In production, supabase is already available globally
+        if (window.supabase) {
+          const { data: { session } } = await window.supabase.auth.getSession()
+          return !!session
+        }
+        return false
+      } else {
+        // Development mode - dynamic import
+        const { supabase } = await import('../supabase.js')
+        const { data: { session } } = await supabase.auth.getSession()
+        return !!session
+      }
     } catch (error) {
       console.error('Error checking authentication:', error)
       return false
@@ -1198,10 +1243,16 @@ class SimpleRouter {
       const term = termSelect ? termSelect.value : 'Fall'
 
       // Import shared functions
-      const { fetchCourseData } = await import('/js/shared.js')
-      
-      // Fetch courses for the selected year/term
-      this.globalSearchCourses = await fetchCourseData(year, term)
+      if (this.isProduction()) {
+        // In production, fetchCourseData should be globally available
+        if (window.fetchCourseData) {
+          this.globalSearchCourses = await window.fetchCourseData(year, term)
+        }
+      } else {
+        // Development mode - dynamic import
+        const { fetchCourseData } = await import('./shared.js')
+        this.globalSearchCourses = await fetchCourseData(year, term)
+      }
     } catch (error) {
       console.error('Error loading autocomplete data:', error)
       this.globalSearchCourses = []
@@ -1674,6 +1725,21 @@ class SimpleRouter {
       }
     `
     document.head.appendChild(styles)
+  }
+
+  // Check if running in production mode
+  isProduction() {
+    // Check for various indicators that we're in production
+    return (
+      // Check if we're running from bundled assets
+      window.location.pathname.includes('/assets/') ||
+      // Check for common production indicators
+      process?.env?.NODE_ENV === 'production' ||
+      // Check if development server port is NOT in URL
+      !window.location.href.includes(':5173') &&
+      !window.location.href.includes('localhost') &&
+      !window.location.href.includes('127.0.0.1')
+    )
   }
 }
 

@@ -57,3 +57,6 @@ document.addEventListener('pageLoaded', (e) => {
 
 // Export for router use
 export { initializeProfile };
+
+// Make available globally for production builds
+window.initializeProfile = initializeProfile;
