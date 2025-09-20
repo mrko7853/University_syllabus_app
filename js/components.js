@@ -325,6 +325,7 @@ class CourseCalendar extends HTMLElement {
   constructor() {
     super();
     this.isInitialized = false;
+    this.pageLoadedListenerAdded = false;
     this.currentUser = null;
     this.retryCount = 0;
     this.maxRetries = 5;
@@ -407,13 +408,18 @@ class CourseCalendar extends HTMLElement {
   }
 
   connectedCallback() {
-    // Always reinitialize when connected
-    this.initializeCalendar();
+    // Only initialize if not already done
+    if (!this.isInitialized) {
+      this.initializeCalendar();
+    }
     
-    // Set up refresh on router navigation
-    document.addEventListener('pageLoaded', () => {
-      setTimeout(() => this.initializeCalendar(), 100);
-    });
+    // Set up refresh on router navigation only once
+    if (!this.pageLoadedListenerAdded) {
+      this.pageLoadedListenerAdded = true;
+      document.addEventListener('pageLoaded', () => {
+        setTimeout(() => this.initializeCalendar(), 100);
+      });
+    }
   }
 
   disconnectedCallback() {

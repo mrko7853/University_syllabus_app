@@ -826,22 +826,71 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     const gpaD = "#FFDD55";
     const gpaF = "#ED7F81";
 
-    if (course.gpa_a_percent === null || course.gpa_b_percent === null || course.gpa_c_percent === null || course.gpa_d_percent === null || course.gpa_f_percent === null) {
-    classGPA.innerHTML = `
-            <p class="class-subtitle">Grade Point Average</p>
-            <p>No GPA data available for this course.</p>
+    // Always clear the GPA element first to prevent content from previous courses
+    if (classGPA) {
+        classGPA.innerHTML = '';
+        classGPA.style.display = 'none';
+        classGPA.removeAttribute('id');
+        
+        // Also clear any nested elements that might have been created
+        while (classGPA.firstChild) {
+            classGPA.removeChild(classGPA.firstChild);
+        }
+        
+        // Force DOM update to ensure changes are applied
+        void classGPA.offsetHeight;
+    }
+
+    // Also clear any other elements that might have GPA content
+    const gpaElements = document.querySelectorAll('.class-gpa-graph, [id*="gpa"], .gpa-container');
+    gpaElements.forEach(el => {
+        if (el !== classGPA) {
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+    });
+
+    // Check if we have valid GPA data (all percentages must be non-null)
+    const hasValidGpaData = course.gpa_a_percent !== null && 
+                           course.gpa_b_percent !== null && 
+                           course.gpa_c_percent !== null && 
+                           course.gpa_d_percent !== null && 
+                           course.gpa_f_percent !== null;
+
+    console.log('Course GPA data check:', {
+        courseCode: course.course_code,
+        gpa_a_percent: course.gpa_a_percent,
+        gpa_b_percent: course.gpa_b_percent, 
+        gpa_c_percent: course.gpa_c_percent,
+        gpa_d_percent: course.gpa_d_percent,
+        gpa_f_percent: course.gpa_f_percent,
+        hasValidGpaData
+    });
+
+    if (hasValidGpaData) {
+        // Show the GPA element and restore the id if it was removed
+        if (classGPA) {
+            classGPA.style.display = 'block';
+            classGPA.id = 'class-gpa-graph'; // Restore the id attribute
+            
+            // Force DOM update before setting innerHTML
+            void classGPA.offsetHeight;
+            
+            classGPA.innerHTML = `
+                <p class="class-subtitle">Grade Point Average</p>
+                <div class="class-info-container gpa-layout">
+                    <div class="gpa-container"><h3>A</h3><div class="gpa-bar-graph" style="background: ${gpaA}; width: ${course.gpa_a_percent}%;"><h3>${course.gpa_a_percent}%</h3></div></div>
+                    <div class="gpa-container"><h3>B</h3><div class="gpa-bar-graph" style="background: ${gpaB}; width: ${course.gpa_b_percent}%;"><h3>${course.gpa_b_percent}%</h3></div></div>
+                    <div class="gpa-container"><h3>C</h3><div class="gpa-bar-graph" style="background: ${gpaC}; width: ${course.gpa_c_percent}%;"><h3>${course.gpa_c_percent}%</h3></div></div>
+                    <div class="gpa-container"><h3>D</h3><div class="gpa-bar-graph" style="background: ${gpaD}; width: ${course.gpa_d_percent}%;"><h3>${course.gpa_d_percent}%</h3></div></div>
+                    <div class="gpa-container"><h3>F</h3><div class="gpa-bar-graph" style="background: ${gpaF}; width: ${course.gpa_f_percent}%;"><h3>${course.gpa_f_percent}%</h3></div></div>
+                </div>
             `;
+        }
     } else {
-        classGPA.innerHTML = `
-            <p class="class-subtitle">Grade Point Average</p>
-            <div class="class-info-container gpa-layout">
-                <div class="gpa-container"><h3>A</h3><div class="gpa-bar-graph" style="background: ${gpaA}; width: ${course.gpa_a_percent}%;"><h3>${course.gpa_a_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>B</h3><div class="gpa-bar-graph" style="background: ${gpaB}; width: ${course.gpa_b_percent}%;"><h3>${course.gpa_b_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>C</h3><div class="gpa-bar-graph" style="background: ${gpaC}; width: ${course.gpa_c_percent}%;"><h3>${course.gpa_c_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>D</h3><div class="gpa-bar-graph" style="background: ${gpaD}; width: ${course.gpa_d_percent}%;"><h3>${course.gpa_d_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>F</h3><div class="gpa-bar-graph" style="background: ${gpaF}; width: ${course.gpa_f_percent}%;"><h3>${course.gpa_f_percent}%</h3></div></div>
-            </div>
-        `};
+        // If no valid GPA data, ensure the element stays hidden with no content and no ID
+        console.log('No valid GPA data found for course:', course.course_code, '- element should be hidden');
+    }
 
     // Function to load course reviews
     async function loadCourseReviews(courseCode, academicYear, term) {
@@ -2074,9 +2123,6 @@ export async function initializeCourseRouting() {
             const params = parseCourseURL();
             if (params) {
                 console.log('Found course parameters in URL:', params);
-                
-                // Add a delay to ensure DOM is ready
-                await new Promise(resolve => setTimeout(resolve, 2000));
                 
                 console.log('Searching for course...');
                 const course = await findCourseByParams(params.courseCode, params.year, params.term);

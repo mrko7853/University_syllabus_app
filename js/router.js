@@ -16,6 +16,9 @@ class SimpleRouter {
       '/help': '/profile.html' // For now, help goes to profile
     }
     
+    // Course URL pattern: /course/courseCode/year/term
+    this.coursePattern = /^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/
+    
     this.currentPath = window.location.pathname
     this.isInitialized = false
     this.componentCleanupFunctions = []
@@ -162,6 +165,59 @@ class SimpleRouter {
   async loadPage(path) {
     // Show loading bar
     this.showLoadingBar()
+    
+    // Check if this is a course URL first
+    const courseMatch = path.match(this.coursePattern)
+    if (courseMatch) {
+      // This is a course URL - redirect to dashboard and handle course opening
+      const [, courseCode, year, term] = courseMatch
+      console.log('Course URL detected:', { courseCode, year, term })
+      
+      // Load dashboard first
+      const basePath = '/dashboard'
+      this.currentPath = basePath
+      
+      try {
+        // Clean up current page first
+        this.cleanupCurrentPage()
+        
+        // Load dashboard HTML
+        const response = await fetch('/index.html')
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        
+        const html = await response.text()
+        document.body.innerHTML = html
+        
+        // Initialize dashboard components
+        await this.reinitializeEverything('/dashboard')
+        
+        // Update active navigation to show dashboard as active
+        this.updateActiveNav('/dashboard')
+        
+        // Wait for components to be ready, then open the course
+        setTimeout(async () => {
+          try {
+            // Find the course and open it
+            const courses = await fetchCourseData(parseInt(year), term)
+            const course = courses.find(c => c.course_code === courseCode)
+            if (course) {
+              openCourseInfoMenu(course, false) // false to prevent URL update loop
+            } else {
+              console.warn('Course not found:', courseCode)
+            }
+          } catch (error) {
+            console.error('Error opening course from URL:', error)
+          }
+        }, 1000)
+        
+        this.hideLoadingBar()
+        return
+      } catch (error) {
+        console.error('Error loading course URL:', error)
+        this.hideLoadingBar()
+        return
+      }
+    }
     
     // Extract base path for route matching
     const basePath = this.extractBasePath(path)
@@ -634,15 +690,16 @@ class SimpleRouter {
     document.title = `${pageName} - BlazeArchive`
 
     // Show locked message
+            // <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
+           // <button class="register-btn" onclick="window.router.navigate('/register')">Sign Up</button>
     mainContent.innerHTML = `
       <div class="locked-page-container">
         <div class="locked-page-content">
-          <div class="lock-icon">🔒</div>
+          <div class="lock-icon"></div>
           <h2 class="locked-title">Page Locked</h2>
           <p class="locked-message">Please log in to access the ${pageName} page.</p>
           <div class="locked-actions">
-            <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
-            <button class="register-btn" onclick="window.router.navigate('/register')">Sign Up</button>
+
           </div>
         </div>
       </div>
