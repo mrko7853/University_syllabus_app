@@ -1,6 +1,28 @@
 import { supabase } from "/supabase.js";
 import * as wanakana from 'wanakana';
 
+// Course type to color mapping
+const courseTypeColors = {
+    'Introductory Seminars': '#FFD700',                              // Placeholder - Gold
+    'Intermediate Seminars': '#FFA500',                              // Placeholder - Orange
+    'Advanced Seminars and Honors Thesis': '#FF6347',                // Placeholder - Tomato
+    'Academic and Research Skills': '#9370DB',                       // Placeholder - Medium Purple
+    'Understanding Japan and Kyoto': '#AED3F2',                      // Light Blue (as specified)
+    'Japanese Society and Global Culture Concentration': '#98FB98',  // Placeholder - Pale Green
+    'Japanese Business and the Global Economy Concentration': '#FFE4B5', // Placeholder - Moccasin
+    'Japanese Politics and Global Studies Concentration': '#FFB6C1', // Placeholder - Light Pink
+    'Other Elective Courses': '#D3D3D3',                             // Placeholder - Light Gray
+};
+
+// Default color for unknown types
+const defaultCourseColor = '#E0E0E0';
+
+// Function to get color based on course type
+export function getCourseColorByType(courseType) {
+    if (!courseType) return defaultCourseColor;
+    return courseTypeColors[courseType] || defaultCourseColor;
+}
+
 // Japanese name romanization mapping
 const japaneseNameMapping = {
     // Common surnames
@@ -219,7 +241,7 @@ function parseCourseURL() {
         const courseCode = decodeURIComponent(match[1]).replace(/_/g, ' ');
         const year = parseInt(match[2]);
         const termParam = match[3].toLowerCase();
-        const term = termParam === 'fall' ? '秋学期/Fall' : '春学期/Spring';
+        const term = termParam === 'fall' ? 'Fall' : 'Spring';
         
         return { courseCode, year, term };
     }
@@ -341,7 +363,20 @@ export async function fetchCourseData(year, term) {
 // Fallback method for when RPC permissions fail
 async function fetchCourseDataFallback(year, term) {
     try {
-        console.log(`Attempting fallback fetch for ${term} ${year}...`);
+        console.log(`Attempting fallback fetch for term="${term}" year=${year}...`);
+        
+        // First, let's see what terms actually exist in the database
+        const { data: termCheck, error: termError } = await supabase
+            .from('courses')
+            .select('term')
+            .eq('academic_year', year)
+            .limit(5);
+        
+        if (termCheck && termCheck.length > 0) {
+            console.log('Sample terms in database for year', year, ':', termCheck.map(c => c.term));
+        } else {
+            console.log('No courses found for year', year, 'at all');
+        }
         
         // First, try to get courses WITH GPA columns directly
         const { data: courses, error: coursesError } = await supabase
@@ -363,7 +398,7 @@ async function fetchCourseDataFallback(year, term) {
         }
         
         if (!courses || courses.length === 0) {
-            console.warn(`No courses found in fallback method for ${term} ${year}`);
+            console.warn(`No courses found in fallback method for term="${term}" year=${year}`);
             return [];
         }
         

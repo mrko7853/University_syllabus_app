@@ -1,5 +1,5 @@
 import { supabase } from "/supabase.js";
-import { fetchCourseData } from '/js/shared.js';
+import { fetchCourseData, getCourseColorByType } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 import * as wanakana from 'wanakana';
 
@@ -280,19 +280,41 @@ let suggestionsDisplayed = false; // Track if suggestions are currently shown
 // Global course loading state management
 let isLoadingCourses = false;
 let courseLoadRetryCount = 0;
+let lastLoadedCourses = null; // Cache the last loaded courses data
+let lastLoadedYear = null;
+let lastLoadedTerm = null;
 const MAX_COURSE_LOAD_RETRIES = 3;
 
 async function showCourse(year, term) {
-    try {
-        // Get courseList element dynamically to ensure it exists
-        const courseList = document.getElementById("course-list");
-        
-        // Check if courseList element exists
-        if (!courseList) {
-            console.error('Course list element not found');
-            return;
+    // Get courseList element dynamically to ensure it exists
+    const courseList = document.getElementById("course-list");
+    
+    // Check if courseList element exists
+    if (!courseList) {
+        console.error('Course list element not found');
+        return;
+    }
+    
+    // If we have cached courses for the same year/term, render them immediately
+    // This handles the case where DOM was replaced but we already have the data
+    if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term && !isLoadingCourses) {
+        console.log('Using cached course data for rendering');
+        renderCourses(lastLoadedCourses, courseList, year, term);
+        return;
+    }
+    
+    // If already loading the same year/term, wait for it then render
+    if (isLoadingCourses && lastLoadedYear === year && lastLoadedTerm === term) {
+        console.log('Waiting for in-progress course load to complete');
+        // Wait a bit for the loading to complete, then check again
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term) {
+            renderCourses(lastLoadedCourses, courseList, year, term);
         }
-        
+        return;
+    }
+    
+    try {
         const courses = await fetchCourseDataWithRetry(year, term);
         if (!courses || courses.length === 0) {
             console.warn('No courses returned');
@@ -311,74 +333,96 @@ async function showCourse(year, term) {
         // Pre-romanize all professor names
         preromanizeCourseData(courses);
         
-        let courseHTML = "";
-        courses.forEach(function(course) {
-            const days = {
-                "月曜日": "Mon", "月": "Mon",
-                "火曜日": "Tue", "火": "Tue", 
-                "水曜日": "Wed", "水": "Wed",
-                "木曜日": "Thu", "木": "Thu",
-                "金曜日": "Fri", "金": "Fri"
-            };
-            const times = {
-                "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
-                "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
-                "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
-                "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
-                "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
-            };
-            // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-            const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
-            const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
-            if (specialMatch) {
-                course.time_slot = "Mon 13:10 - 14:40\nThu 13:10 - 14:40";
-                course.time_slot = course.time_slot.replace(/\n/g, "<br>");
-            } else if (match) {
-                course.time_slot = `${days[match[1]]} ${times[match[2]]}`;
-            }
-
-            courseHTML += `
-            <div class="class-outside" id="${course.time_slot}" data-color='${course.color}'>
-                <div class="class-container" style="background-color: ${course.color}" data-course='${JSON.stringify(course)}'>
-                    <p id="course-code">${course.course_code}</p>
-                    <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
-                    <p id="course-professor-small">Professor</p>
-                    <h3 id="course-professor"><div class="course-professor-icon"></div>${getRomanizedProfessorName(course.professor)}</h3>
-                    <div class="class-space"></div>
-                    <p id="course-time-small">Time</p>
-                    <h3 id="course-time"><div class="course-time-icon"></div>${course.time_slot}</h3>
-                </div>
-                <!-- Mobile GPA bar outside class-container -->
-                <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
-                    <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
-                </div>
-                <!-- Desktop GPA bar outside class-container -->
-                <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                    <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
-                    <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
-                    <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
-                    <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
-                    <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
-                </div>
-            </div>
-            `;
-        });
-        courseList.innerHTML = courseHTML;
+        // Cache the loaded courses
+        lastLoadedCourses = courses;
+        lastLoadedYear = year;
+        lastLoadedTerm = term;
         
-        // Reset suggestions flag when courses are reloaded
-        suggestionsDisplayed = false;
-        
-        console.log(`Successfully loaded ${courses.length} courses for ${term} ${year}`);
+        // Re-get courseList in case DOM changed during fetch
+        const currentCourseList = document.getElementById("course-list");
+        if (currentCourseList) {
+            renderCourses(courses, currentCourseList, year, term);
+        }
     } catch (error) {
         console.error('Failed to load courses after all retries:', error);
         showCourseLoadError();
     }
 }
 
+// Separate function to render courses to the DOM
+function renderCourses(courses, courseList, year, term) {
+    const days = {
+        "月曜日": "Mon", "月": "Mon",
+        "火曜日": "Tue", "火": "Tue", 
+        "水曜日": "Wed", "水": "Wed",
+        "木曜日": "Thu", "木": "Thu",
+        "金曜日": "Fri", "金": "Fri"
+    };
+    const times = {
+        "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
+        "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
+        "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
+        "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
+        "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
+    };
+    
+    let courseHTML = "";
+    courses.forEach(function(course) {
+        // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
+        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+        const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
+        
+        let displayTimeSlot = course.time_slot;
+        if (specialMatch) {
+            displayTimeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
+        } else if (match) {
+            displayTimeSlot = `${days[match[1]]} ${times[match[2]]}`;
+        }
+
+        // Get color based on course type
+        const courseColor = getCourseColorByType(course.type);
+
+        courseHTML += `
+        <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
+            <div class="class-container" style="background-color: ${courseColor}" data-course='${JSON.stringify(course)}'>
+                <p id="course-code">${course.course_code}</p>
+                <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
+                <p id="course-professor-small">Professor</p>
+                <h3 id="course-professor"><div class="course-professor-icon"></div>${getRomanizedProfessorName(course.professor)}</h3>
+                <div class="class-space"></div>
+                <p id="course-time-small">Time</p>
+                <h3 id="course-time"><div class="course-time-icon"></div>${displayTimeSlot}</h3>
+            </div>
+            <!-- Mobile GPA bar outside class-container -->
+            <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
+            </div>
+            <!-- Desktop GPA bar outside class-container -->
+            <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+                <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
+                <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
+                <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
+                <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
+                <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+            </div>
+        </div>
+        `;
+    });
+    
+    courseList.innerHTML = courseHTML;
+    
+    // Remove loading class to restore normal margin
+    courseList.classList.remove('loading');
+    
+    // Reset suggestions flag when courses are reloaded
+    suggestionsDisplayed = false;
+    
+    console.log(`Successfully rendered ${courses.length} courses for ${term} ${year}`);
+}
 // Robust course data fetching with retry mechanism
 async function fetchCourseDataWithRetry(year, term, retryCount = 0) {
     try {
@@ -413,13 +457,13 @@ function createSkeletonCourse() {
     return `
         <div class="skeleton-class-outside">
             <div class="skeleton-class-container">
-                <div class="skeleton-line short"></div>
-                <div class="skeleton-title"></div>
-                <div class="skeleton-line short"></div>
-                <div class="skeleton-line medium"></div>
-                <div class="skeleton-space"></div>
-                <div class="skeleton-line short"></div>
-                <div class="skeleton-line medium"></div>
+                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                <div style="margin: 40px 0;"></div>
+                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
             </div>
             <div class="skeleton-gpa-bar">
                 <div class="skeleton-gpa-section"></div>
@@ -440,6 +484,9 @@ function showCourseLoadingState() {
     // Get courseList element dynamically
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
+    
+    // Add loading class for increased margin during loading
+    courseList.classList.add('loading');
     
     // Create multiple skeleton courses as direct children for grid layout
     let skeletonHTML = '';
@@ -515,7 +562,10 @@ function containerMatchesFilters(container) {
     const filterByTime = document.getElementById("filter-by-time");  
     const filterByConcentration = document.getElementById("filter-by-concentration");
     
-    if (!filterByDays || !filterByTime || !filterByConcentration) return true;
+    if (!filterByDays || !filterByTime || !filterByConcentration) {
+        // Filter elements not found, show all courses
+        return true;
+    }
     
     // Days filter
     const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
@@ -537,19 +587,10 @@ function containerMatchesFilters(container) {
 
     // Day logic
     const timeSlot = container.id;
-    const day = timeSlot.split(" ")[0];
+    const day = timeSlot ? timeSlot.split(" ")[0] : '';
 
     // Time logic
-    const time = timeSlot.split(" ")[1];
-
-    // Concentration logic
-    const courseColor = container.dataset.color;
-    const cultureColor = "#C6E0B4";
-    const economyColor = "#FFE699";
-    const politicsColor = "#FFCCCC";
-    const seminarColor = "#FFFF99";
-    const academicColor = "#CCFFFF";
-    const specialColor = "#CCCCFF";
+    const time = timeSlot ? timeSlot.split(" ")[1] : '';
 
     // Check if matches day filter
     const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
@@ -557,15 +598,8 @@ function containerMatchesFilters(container) {
     // Check if matches time filter
     const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
 
-    // Check if matches concentration filter
-    const concMatch =
-        selectedConcentrations.length === 0 ||
-        (selectedConcentrations.includes("culture") && courseColor === cultureColor) ||
-        (selectedConcentrations.includes("economy") && courseColor === economyColor) ||
-        (selectedConcentrations.includes("politics") && courseColor === politicsColor) ||
-        (selectedConcentrations.includes("seminar") && courseColor === seminarColor) ||
-        (selectedConcentrations.includes("academic") && courseColor === academicColor) ||
-        (selectedConcentrations.includes("special") && courseColor === specialColor);
+    // Concentration/Type filter - if no filters selected, show all courses
+    const concMatch = selectedConcentrations.length === 0;
 
     return dayMatch && timeMatch && concMatch;
 }
@@ -577,6 +611,12 @@ function applyFilters() {
 
 // Unified function that applies both search and filter criteria
 async function applySearchAndFilters(searchQuery) {
+    // Don't apply filters while courses are still loading
+    if (isLoadingCourses) {
+        console.log('Skipping filter application - courses still loading');
+        return;
+    }
+    
     // Get courseList element dynamically
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
@@ -598,6 +638,14 @@ async function applySearchAndFilters(searchQuery) {
     }
     
     const classContainers = courseList.querySelectorAll(".class-outside");
+    
+    // If no course containers exist yet, don't show "no results" message
+    // This can happen during initial load or race conditions
+    if (classContainers.length === 0) {
+        console.log('No course containers found - skipping filter application');
+        return;
+    }
+    
     let hasResults = false;
     
     // Remove any existing no-results message
@@ -647,7 +695,7 @@ async function applySearchAndFilters(searchQuery) {
                     const convertedTimeSlot = convertTimeSlotToContainerFormat(course.time_slot);
                     const tempContainer = {
                         id: convertedTimeSlot,
-                        dataset: { color: course.color }
+                        dataset: { color: getCourseColorByType(course.type) }
                     };
                     return containerMatchesFilters(tempContainer);
                 });
@@ -688,10 +736,10 @@ async function applySearchAndFilters(searchQuery) {
 
 async function updateCoursesAndFilters() {
     try {
-        // Prevent multiple simultaneous updates
+        // If already loading, wait a bit then proceed (data will be cached)
         if (isLoadingCourses) {
-            console.log('Course loading already in progress, skipping update');
-            return;
+            console.log('Course loading already in progress, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
         
         // Get selectors dynamically
@@ -781,7 +829,7 @@ function setupCourseListClickListener() {
         }
         
         const default_year = yearSelect.value || "2025";
-        const default_term = termSelect.value || "秋学期/Fall";
+        const default_term = termSelect.value || "Fall";
         
         console.log('Loading courses for:', { year: default_year, term: default_term });
         
@@ -1002,11 +1050,11 @@ function setupDashboardEventListeners() {
                 termOptions.forEach(option => option.classList.remove('selected'));
                 
                 // Set default to Fall
-                const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
+                const fallOption = termCustomSelect.querySelector('[data-value="Fall"]');
                 if (fallOption) {
                     fallOption.classList.add('selected');
                     if (termValue) termValue.textContent = 'Fall';
-                    termSelect.value = '秋学期/Fall';
+                    termSelect.value = 'Fall';
                 }
             }
             
@@ -1530,11 +1578,11 @@ document.addEventListener("DOMContentLoaded", async function () {
                 const termValue = termCustomSelect.querySelector('.custom-select-value');
                 const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
                 termOptions.forEach(option => option.classList.remove('selected'));
-                const fallOption = termCustomSelect.querySelector('[data-value="秋学期/Fall"]');
+                const fallOption = termCustomSelect.querySelector('[data-value="Fall"]');
                 if (fallOption) {
                     fallOption.classList.add('selected');
                     termValue.textContent = 'Fall';
-                    termSelect.value = '秋学期/Fall';
+                    termSelect.value = 'Fall';
                 }
             }
             
@@ -1931,7 +1979,7 @@ async function calendarSchedule(year, term) {
                     div_classroom.classList.add("empty-classroom");
                     div_title.classList.add("empty-classroom-title");
                 }
-                div.style.backgroundColor = course.color || "#E3D5E9";
+                div.style.backgroundColor = getCourseColorByType(course.type);
                 div.dataset.courseIdentifier = course.course_code;
                 cell.appendChild(div);
                 div.appendChild(div_title);
@@ -2622,9 +2670,10 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const matchQuality = relevanceScore > 0.7 ? "High" : relevanceScore > 0.4 ? "Medium" : "Low";
         const matchColor = relevanceScore > 0.7 ? "#4CAF50" : relevanceScore > 0.4 ? "#FF9800" : "#757575";
 
+        const suggestedCourseColor = getCourseColorByType(course.type);
         suggestionsHTML += `
-        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${course.color}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
-            <div class="class-container" style="background-color: ${course.color}; position: relative;" data-course='${JSON.stringify(course)}'>
+        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
+            <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${JSON.stringify(course)}'>
                 <div class="class-suggestion">
                     <div class="class-suggestion-label">
                         Suggested

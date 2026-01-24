@@ -1289,6 +1289,10 @@ table#calendar-main {
     margin-top: 10px;
 }
 
+#course-list.loading {
+    margin-top: 30px;
+}
+
 .class-outside {
     display: flex;
     flex-direction: column;
@@ -3443,14 +3447,12 @@ td p {
 .skeleton-class-outside:nth-child(6) { animation-delay: 0.5s; }
 
 .skeleton-class-container {
-    padding: 20px;
+    padding: 15px;
     border-top-left-radius: 30px;
     border-top-right-radius: 30px;
     background: #e8e8e8;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    min-height: 180px;
     flex: 1;
 }
 
@@ -3458,10 +3460,12 @@ td p {
     height: 14px;
     background: #d0d0d0;
     border-radius: 4px;
+    margin: 5px 0;
 }
 
 .skeleton-line.short {
-    width: 30%;
+    width: 40%;
+    opacity: 0.6;
 }
 
 .skeleton-line.medium {
@@ -3473,47 +3477,57 @@ td p {
 }
 
 .skeleton-title {
-    height: 24px;
+    height: 20px;
     background: #d0d0d0;
     border-radius: 4px;
-    width: 70%;
-    margin: 10px 0;
+    width: 85%;
+    margin: 5px 0 40px 0;
 }
 
 .skeleton-space {
-    height: 20px;
+    margin: 40px 0;
 }
 
 .skeleton-gpa-bar {
-    height: 40px;
-    background: #d8d8d8;
-    border-radius: 0 0 30px 30px;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     text-align: center;
+    min-height: 28px;
 }
 
 .skeleton-gpa-section {
-    background: #d0d0d0;
-    margin: 4px 2px;
-    border-radius: 4px;
+    background: #d8d8d8;
+    height: 100%;
 }
 
-.skeleton-gpa-section:first-child,
-.skeleton-gpa-section:nth-child(2) {
+.skeleton-gpa-section:nth-child(-n+2) {
     grid-column: span 3;
+}
+
+.skeleton-gpa-section:nth-child(1) {
+    background-color: #c8c8c8;
+}
+
+.skeleton-gpa-section:nth-child(2) {
+    background-color: #d0d0d0;
+}
+
+.skeleton-gpa-section:nth-child(3) {
+    background-color: #d8d8d8;
+    border-bottom-left-radius: 30px;
+}
+
+.skeleton-gpa-section:nth-child(4) {
+    background-color: #e0e0e0;
+}
+
+.skeleton-gpa-section:nth-child(5) {
+    background-color: #d4d4d4;
+    border-bottom-right-radius: 30px;
 }
 
 .skeleton-gpa-section:nth-child(n+3) {
     grid-column: span 2;
-}
-
-.skeleton-gpa-section:first-child {
-    margin-left: 4px;
-}
-
-.skeleton-gpa-section:last-child {
-    margin-right: 4px;
 }
 
 @keyframes skeletonPulse {

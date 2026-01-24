@@ -1,5 +1,5 @@
 import { supabase } from "/supabase.js";
-import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "/js/shared.js";
 
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
@@ -215,7 +215,7 @@ class TotalCourses extends HTMLElement {
                 // Filter to only count courses for the current year and term using utility functions
                 const currentDisplayCourses = selectedCourses.filter(course => {
                     const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear());
-                    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || '秋学期/Fall');
+                    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
                     return course.year === currentYear && (!course.term || course.term === currentTerm);
                 });
                 
@@ -283,10 +283,8 @@ class TermBox extends HTMLElement {
   }
 
   translateTerm(termRaw) {
-    return (termRaw || '')
-      .replace('春学期', 'Spring')
-      .replace('秋学期', 'Fall')
-      .trim();
+    // Terms are now just 'Spring' or 'Fall' in the database
+    return (termRaw || '').trim();
   }
 
   updateDisplayTerm() {
@@ -441,9 +439,9 @@ class CourseCalendar extends HTMLElement {
       // Set current term
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth() + 1;
-      let term = "春学期/Spring";
+      let term = "Spring";
       if (currentMonth >= 8 || currentMonth <= 2) {
-        term = "秋学期/Fall";
+        term = "Fall";
       }
 
       // Load courses with retry mechanism
@@ -657,7 +655,7 @@ class CourseCalendar extends HTMLElement {
         //  div_classroom.classList.add("empty-classroom");
         //  div_title.classList.add("empty-classroom-title");
         //}
-        div_box.style.backgroundColor = "#ED7F81";
+        div_box.style.backgroundColor = getCourseColorByType(course.type);
         div.dataset.courseIdentifier = course.course_code;
         cell.appendChild(div);
         div.appendChild(div_box);
@@ -709,7 +707,7 @@ class CourseCalendar extends HTMLElement {
     const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
       const currentMonth = new Date().getMonth() + 1;
-      return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+      return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
     })();
 
     await this.showCourseWithRetry(currentYear, currentTerm);
@@ -917,7 +915,7 @@ class WeeklyCalendar extends HTMLElement {
       const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
       const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
         const currentMonth = new Date().getMonth() + 1;
-        return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
+        return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
       })();
 
       console.log(`Loading courses for weekly calendar: ${currentYear} ${currentTerm} for user ${user.id}`);
@@ -979,7 +977,7 @@ class WeeklyCalendar extends HTMLElement {
         const courseElement = document.createElement('div');
         courseElement.className = 'course-cell-main';
         courseElement.innerHTML = `
-          <div class="course-cell-box" style="background-color: ${course.color || '#E3D5E9'};">
+          <div class="course-cell-box" style="background-color: ${getCourseColorByType(course.type)};">
             <span style="display: none;">${normalizeCourseTitle(course.title)}</span>
           </div>
         `;

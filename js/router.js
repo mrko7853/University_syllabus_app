@@ -39,7 +39,7 @@ class SimpleRouter {
     // Set default global year/term values
     const currentMonth = new Date().getMonth() + 1
     window.globalCurrentYear = new Date().getFullYear()
-    window.globalCurrentTerm = currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring"
+    window.globalCurrentTerm = currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring"
   }
 
   init() {
@@ -430,7 +430,7 @@ class SimpleRouter {
         // Or if it has a showCourse method, call it
         else if (calendarComponent.showCourse) {
           const currentYear = window.globalCurrentYear || new Date().getFullYear()
-          const currentTerm = window.globalCurrentTerm || (new Date().getMonth() >= 7 ? "秋学期/Fall" : "春学期/Spring")
+          const currentTerm = window.globalCurrentTerm || (new Date().getMonth() >= 7 ? "Fall" : "Spring")
           calendarComponent.showCourse(currentYear, currentTerm)
         }
       }

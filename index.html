@@ -20,7 +20,8 @@
 
     <app-navigation></app-navigation>
 
-    <div id="app-content">
+    <!-- Start with guest-dashboard class by default, router will remove it if authenticated -->
+    <div id="app-content" class="guest-dashboard">
 
                     <div class="filter-container hidden">
                         <div class="filter-background">
@@ -42,13 +43,13 @@
                                                     <div class="custom-select-arrow"></div>
                                                 </div>
                                                 <div class="custom-select-options">
-                                                    <div class="custom-select-option" data-value="春学期/Spring">Spring</div>
-                                                    <div class="custom-select-option selected" data-value="秋学期/Fall">Fall</div>
+                                                    <div class="custom-select-option" data-value="Spring">Spring</div>
+                                                    <div class="custom-select-option selected" data-value="Fall">Fall</div>
                                                 </div>
                                             </div>
                                             <select name="term" id="term-select" style="display: none;">
-                                                <option value="春学期/Spring">Spring</option>
-                                                <option value="秋学期/Fall" selected>Fall</option>
+                                                <option value="Spring">Spring</option>
+                                                <option value="Fall" selected>Fall</option>
                                             </select>
                                             
                                             <div class="custom-select" data-target="year-select">
@@ -194,7 +195,116 @@
                         <button id="filter-btn">Filter</button>
                     </div>
                 </div>
-                <div id="course-list">
+                <div id="course-list" class="loading">
+                    <!-- Initial skeleton placeholders - will be replaced when courses load -->
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton-class-outside">
+                        <div class="skeleton-class-container">
+                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                            <div style="margin: 40px 0;"></div>
+                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                        </div>
+                        <div class="skeleton-gpa-bar">
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                            <div class="skeleton-gpa-section"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="class-info" id="class-info">
