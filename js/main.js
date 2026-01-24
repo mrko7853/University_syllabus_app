@@ -381,10 +381,13 @@ function renderCourses(courses, courseList, year, term) {
 
         // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
+        
+        // Escape the JSON string for safe HTML attribute embedding
+        const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
 
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
-            <div class="class-container" style="background-color: ${courseColor}" data-course='${JSON.stringify(course)}'>
+            <div class="class-container" style="background-color: ${courseColor}" data-course='${escapedCourseJSON}'>
                 <p id="course-code">${course.course_code}</p>
                 <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
                 <p id="course-professor-small">Professor</p>
@@ -848,15 +851,31 @@ function setupCourseListClickListener() {
 // Set default sort to Course A-Z
 currentSortMethod = 'title-az';
 
+// Track if dashboard event listeners have been set up
+let dashboardEventListenersInitialized = false;
+
 // Function to set up all dashboard event listeners
 function setupDashboardEventListeners() {
+    console.log('Setting up dashboard event listeners... already initialized:', dashboardEventListenersInitialized);
+    
     // Set up event listeners dynamically
     const yearSelect = document.getElementById("year-select");
     const termSelect = document.getElementById("term-select");
 
     if (yearSelect && termSelect) {
-        yearSelect.addEventListener("change", updateCoursesAndFilters);
-        termSelect.addEventListener("change", updateCoursesAndFilters);
+        // Check if already initialized using data attribute
+        if (yearSelect.dataset.listenerAttached !== 'true') {
+            yearSelect.addEventListener("change", updateCoursesAndFilters);
+            yearSelect.dataset.listenerAttached = 'true';
+            console.log('Year select change listener attached');
+        }
+        if (termSelect.dataset.listenerAttached !== 'true') {
+            termSelect.addEventListener("change", updateCoursesAndFilters);
+            termSelect.dataset.listenerAttached = 'true';
+            console.log('Term select change listener attached');
+        }
+    } else {
+        console.log('Year/term selects not found');
     }
     
     // Set up button event listeners
@@ -1219,6 +1238,9 @@ function setupDashboardEventListeners() {
     // Initialize custom select dropdowns and filter checkboxes
     initializeCustomSelects();
     initializeFilterCheckboxes();
+    
+    dashboardEventListenersInitialized = true;
+    console.log('Dashboard event listeners initialization complete');
 }
 
 // Function to set up search autocomplete event listeners
@@ -1273,9 +1295,18 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
     });
 }
 
+// Track if custom selects have been initialized
+let customSelectsInitialized = false;
+
 // Function to initialize custom select dropdowns
 function initializeCustomSelects() {
     const customSelects = document.querySelectorAll('.custom-select');
+    if (customSelects.length === 0) {
+        console.log('No custom selects found');
+        return;
+    }
+    
+    console.log('Initializing custom selects:', customSelects.length, 'already initialized:', customSelectsInitialized);
     
     customSelects.forEach(customSelect => {
         const trigger = customSelect.querySelector('.custom-select-trigger');
@@ -1283,20 +1314,35 @@ function initializeCustomSelects() {
         const targetSelectId = customSelect.dataset.target;
         const targetSelect = document.getElementById(targetSelectId);
         
-        if (!trigger || !options || !targetSelect) return;
+        if (!trigger || !options || !targetSelect) {
+            console.log('Missing elements for custom select:', targetSelectId);
+            return;
+        }
+        
+        // Skip if already initialized (check for marker)
+        if (customSelect.dataset.initialized === 'true') {
+            console.log('Custom select already initialized:', targetSelectId);
+            return;
+        }
+        
+        console.log('Setting up custom select for:', targetSelectId);
+        
+        // Mark as initialized
+        customSelect.dataset.initialized = 'true';
         
         // Click handler for opening/closing dropdown
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
             
             // Close other custom selects
-            customSelects.forEach(otherSelect => {
+            document.querySelectorAll('.custom-select').forEach(otherSelect => {
                 if (otherSelect !== customSelect) {
                     otherSelect.classList.remove('open');
                 }
             });
             
             customSelect.classList.toggle('open');
+            console.log('Custom select toggled:', targetSelectId, customSelect.classList.contains('open'));
         });
         
         // Option selection handler
@@ -1306,6 +1352,8 @@ function initializeCustomSelects() {
             
             const value = option.dataset.value;
             const text = option.textContent;
+            
+            console.log('Custom select option clicked:', targetSelectId, value);
             
             // Update visual state
             options.querySelectorAll('.custom-select-option').forEach(opt => {
@@ -1328,12 +1376,25 @@ function initializeCustomSelects() {
         });
     });
     
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', () => {
-        customSelects.forEach(customSelect => {
-            customSelect.classList.remove('open');
+    // Close dropdowns when clicking outside (only add once)
+    if (!customSelectsInitialized) {
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.custom-select')) {
+                document.querySelectorAll('.custom-select').forEach(customSelect => {
+                    customSelect.classList.remove('open');
+                });
+            }
+            
+            // Close sort dropdown when clicking outside
+            const sortWrapper = document.querySelector('.sort-wrapper');
+            if (sortWrapper && !sortWrapper.contains(e.target)) {
+                sortWrapper.classList.remove("open");
+            }
         });
-    });
+    }
+    
+    customSelectsInitialized = true;
+    console.log('Custom selects initialization complete');
 }
 
 // Function to initialize filter checkboxes
@@ -2000,102 +2061,17 @@ async function calendarSchedule(year, term) {
     }
 }
 
-// Custom dropdown functionality
-function initCustomDropdowns() {
-    const customSelects = document.querySelectorAll('.custom-select');
-    console.log('Found custom selects:', customSelects.length);
-    
-    customSelects.forEach(customSelect => {
-        const trigger = customSelect.querySelector('.custom-select-trigger');
-        const options = customSelect.querySelectorAll('.custom-select-option');
-        const valueDisplay = customSelect.querySelector('.custom-select-value');
-        const hiddenSelect = document.getElementById(customSelect.dataset.target);
-        
-        console.log('Initializing dropdown for:', customSelect.dataset.target);
-        
-        // Toggle dropdown
-        trigger.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            console.log('Dropdown clicked, current state:', customSelect.classList.contains('open'));
-            
-            // Close other dropdowns
-            customSelects.forEach(other => {
-                if (other !== customSelect) {
-                    other.classList.remove('open');
-                }
-            });
-            
-            customSelect.classList.toggle('open');
-            console.log('New state:', customSelect.classList.contains('open'));
-        });
-        
-        // Handle keyboard navigation
-        trigger.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                customSelect.classList.toggle('open');
-            } else if (e.key === 'Escape') {
-                customSelect.classList.remove('open');
-            }
-        });
-        
-        // Handle option selection
-        options.forEach(option => {
-            option.addEventListener('click', (e) => {
-                e.stopPropagation();
-                
-                console.log('Option selected:', option.textContent);
-                
-                // Update selected state
-                options.forEach(opt => opt.classList.remove('selected'));
-                option.classList.add('selected');
-                
-                // Update display value
-                valueDisplay.textContent = option.textContent;
-                
-                // Update hidden select value
-                if (hiddenSelect) {
-                    hiddenSelect.value = option.dataset.value;
-                    // Trigger change event on hidden select
-                    hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                
-                // Close dropdown
-                customSelect.classList.remove('open');
-            });
-        });
-    });
-    
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.custom-select')) {
-            customSelects.forEach(customSelect => {
-                customSelect.classList.remove('open');
-            });
-        }
-        
-        // Close sort dropdown when clicking outside
-        const sortWrapper = document.querySelector('.sort-wrapper');
-        if (sortWrapper && !sortWrapper.contains(e.target)) {
-            sortWrapper.classList.remove("open");
-        }
-    });
-}
-
-// Initialize custom dropdowns when DOM is loaded
+// Initialize sticky observer when DOM is loaded
+// NOTE: Custom dropdowns are initialized via initializeCustomSelects() called from setupDashboardEventListeners()
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('DOM loaded, initializing dropdowns...');
-        initCustomDropdowns();
+        console.log('DOM loaded, initializing sticky observer...');
         initStickyObserver();
     });
 } else {
     // DOM is already loaded
-    console.log('DOM already loaded, initializing dropdowns immediately...');
+    console.log('DOM already loaded, initializing sticky observer immediately...');
     setTimeout(() => {
-        initCustomDropdowns();
         initStickyObserver();
     }, 100); // Small delay to ensure elements are rendered
 }
@@ -2671,9 +2647,12 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const matchColor = relevanceScore > 0.7 ? "#4CAF50" : relevanceScore > 0.4 ? "#FF9800" : "#757575";
 
         const suggestedCourseColor = getCourseColorByType(course.type);
+        // Escape the JSON string for safe HTML attribute embedding
+        const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
+        
         suggestionsHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
-            <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${JSON.stringify(course)}'>
+            <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
                 <div class="class-suggestion">
                     <div class="class-suggestion-label">
                         Suggested

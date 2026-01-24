@@ -163,7 +163,8 @@
     <section id="syllabus-main">
     <div class="main-content">
 
-        <div class="top-content">
+        <!-- Hidden by default for guest users, shown via JS if authenticated -->
+        <div class="top-content" style="display: none;">
             <div class="main-container">
                 <div class="top-content-two">
                     <term-box></term-box>
@@ -175,7 +176,7 @@
             </div>
         </div>
 
-            <div class="main-container" id="course-main-div">
+            <div class="main-container" id="course-main-div" style="margin-top: 20px;">
                 <div class="container-above">
                     <div class="title-box">
                         <h2 class="course-main-title">Courses</h2>

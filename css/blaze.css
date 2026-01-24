@@ -377,6 +377,17 @@ term-box {
     background-color: #EEE6F2;
 }
 
+/* Guest dashboard styles - hide top content for non-logged-in users */
+/* This must be in CSS file (not injected by JS) to prevent layout shift on page load */
+.guest-dashboard .top-content {
+    display: none !important;
+}
+
+/* Prevent margin collapse when top-content is hidden */
+.guest-dashboard .main-content {
+    padding-top: 1px;
+}
+
 .top-content {
     display: grid;
     grid-template-columns: 1fr 1fr;

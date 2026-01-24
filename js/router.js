@@ -77,8 +77,11 @@ class SimpleRouter {
     const currentPath = window.location.pathname
     const basePath = this.extractBasePath(currentPath)
     
-    if (basePath === '/' || basePath === '') {
-      this.navigate('/dashboard')
+    if (basePath === '/' || basePath === '' || basePath === '/dashboard') {
+      // For dashboard on initial load, skip HTML replacement and just initialize
+      // This prevents the "bump" caused by re-fetching and replacing content
+      this.currentPath = '/dashboard'
+      this.initializeCurrentPageOnly('/dashboard')
     } else {
       // Load current page to initialize components
       this.loadPage(currentPath)
@@ -312,6 +315,32 @@ class SimpleRouter {
     } catch (error) {
       console.error('Error loading page:', error)
       this.hideLoadingBar()
+    }
+  }
+
+  // Initialize current page without re-fetching HTML - used for initial load when HTML is already present
+  async initializeCurrentPageOnly(path) {
+    try {
+      console.log('Router: Initializing current page only (no HTML fetch):', path)
+      
+      // Check authentication status
+      const isAuthenticated = await this.checkAuthentication()
+      
+      // Update active navigation
+      this.updateActiveNav(path)
+      
+      // Re-initialize everything for the current content
+      await this.reinitializeEverything(path)
+      
+      // Handle guest dashboard if on dashboard
+      if (path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
+        this.handleGuestDashboard(isAuthenticated)
+      }
+      
+      console.log('Router: Current page initialized successfully')
+      
+    } catch (error) {
+      console.error('Error initializing current page:', error)
     }
   }
 
@@ -902,14 +931,23 @@ class SimpleRouter {
   // Handle guest user dashboard modifications
   handleGuestDashboard(isAuthenticated) {
     const mainContent = document.querySelector('#app-content')
+    const topContent = document.querySelector('.top-content')
     if (!mainContent) return
 
     if (!isAuthenticated) {
       // Add guest class to hide top content
       mainContent.classList.add('guest-dashboard')
+      // Ensure top-content stays hidden
+      if (topContent) {
+        topContent.style.display = 'none'
+      }
     } else {
       // Remove guest class if user is authenticated
       mainContent.classList.remove('guest-dashboard')
+      // Show top-content for authenticated users
+      if (topContent) {
+        topContent.style.display = 'grid'
+      }
     }
   }
 
