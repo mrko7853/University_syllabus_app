@@ -1,5 +1,5 @@
 import { supabase } from "/supabase.js";
-import { fetchCourseData, getCourseColorByType } from '/js/shared.js';
+import { fetchCourseData, getCourseColorByType, fetchAvailableYears } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 import * as wanakana from 'wanakana';
 
@@ -286,6 +286,17 @@ let lastLoadedTerm = null;
 const MAX_COURSE_LOAD_RETRIES = 3;
 
 async function showCourse(year, term) {
+    // Validate year and term before proceeding
+    if (!year || year === '' || year === 'Loading...') {
+        console.error('Invalid year value:', year);
+        return;
+    }
+    
+    if (!term || term === '') {
+        console.error('Invalid term value:', term);
+        return;
+    }
+    
     // Get courseList element dynamically to ensure it exists
     const courseList = document.getElementById("course-list");
     
@@ -753,7 +764,24 @@ async function updateCoursesAndFilters() {
             return;
         }
         
-        await showCourse(yearSelect.value, termSelect.value);
+        // Validate year and term values before fetching
+        const year = yearSelect.value;
+        const term = termSelect.value;
+        
+        if (!year || year === '' || year === 'Loading...') {
+            console.log('Year not yet populated, skipping course fetch');
+            return;
+        }
+        
+        if (!term || term === '') {
+            console.log('Term not yet populated, skipping course fetch');
+            return;
+        }
+        
+        await showCourse(year, term);
+        
+        // Update the course title to reflect current year/term
+        updateCourseTitle();
         
         // Re-apply current sort if one is selected
         if (currentSortMethod) {
@@ -831,7 +859,11 @@ function setupCourseListClickListener() {
             }
         }
         
-        const default_year = yearSelect.value || "2025";
+        // Populate year dropdown from database before loading courses
+        await populateYearDropdown();
+        
+        // Re-query yearSelect value after population (it was empty before)
+        const default_year = document.getElementById("year-select").value || "2025";
         const default_term = termSelect.value || "Fall";
         
         console.log('Loading courses for:', { year: default_year, term: default_term });
@@ -1297,6 +1329,57 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
 
 // Track if custom selects have been initialized
 let customSelectsInitialized = false;
+
+// Function to populate the year dropdown dynamically from the database
+async function populateYearDropdown() {
+    const years = await fetchAvailableYears();
+    console.log('Populating year dropdown with years:', years);
+    
+    const yearSelect = document.getElementById('year-select');
+    const customSelect = document.querySelector('.custom-select[data-target="year-select"]');
+    
+    if (!yearSelect || !customSelect) {
+        console.error('Year select elements not found');
+        return;
+    }
+    
+    const optionsContainer = customSelect.querySelector('.custom-select-options');
+    const valueElement = customSelect.querySelector('.custom-select-value');
+    
+    if (!optionsContainer || !valueElement) {
+        console.error('Year dropdown options or value element not found');
+        return;
+    }
+    
+    // Clear existing options
+    yearSelect.innerHTML = '';
+    optionsContainer.innerHTML = '';
+    
+    // Add options from database
+    years.forEach((year, index) => {
+        // Add to hidden select
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (index === 0) option.selected = true;
+        yearSelect.appendChild(option);
+        
+        // Add to custom dropdown
+        const customOption = document.createElement('div');
+        customOption.className = 'custom-select-option' + (index === 0 ? ' selected' : '');
+        customOption.dataset.value = year;
+        customOption.textContent = year;
+        optionsContainer.appendChild(customOption);
+    });
+    
+    // Set the displayed value to the first (most recent) year
+    if (years.length > 0) {
+        valueElement.textContent = years[0];
+        yearSelect.value = years[0];
+    }
+    
+    console.log('Year dropdown populated successfully');
+}
 
 // Function to initialize custom select dropdowns
 function initializeCustomSelects() {
@@ -2858,6 +2941,9 @@ export function initializeDashboard() {
   // Set up button event listeners for router-based navigation
   setupDashboardEventListeners();
   
+  // Update course title with current year/term
+  updateCourseTitle();
+  
   // Handle responsive layout for container-above positioning
   setTimeout(handleResponsiveLayout, 100);
 }
@@ -2882,6 +2968,20 @@ Object.defineProperty(window, 'currentSearchQuery', {
   enumerable: true,
   configurable: true
 });
+
+function updateCourseTitle() {
+    const courseTitleElement = document.getElementById("course-title-change");
+    if (!courseTitleElement) return;
+    
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+    if (!yearSelect || !termSelect) return;
+    const year = yearSelect.value;
+    const term = termSelect.value;
+    
+    // Use innerHTML to include an icon for the chevron with 50% opacity
+    courseTitleElement.innerHTML = `Courses <span style="opacity: 0.5; margin: 0 4px;">›</span> ${term} ${year}`;
+}
 
 // Function to update the course filter paragraph with search/filter info
 function updateCourseFilterParagraph() {
@@ -2939,3 +3039,4 @@ function updateCourseFilterParagraph() {
 
 // Export the update function globally
 window.updateCourseFilterParagraph = updateCourseFilterParagraph;
+window.updateCourseTitle = updateCourseTitle;

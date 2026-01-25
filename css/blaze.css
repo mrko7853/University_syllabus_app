@@ -2203,7 +2203,7 @@ td p {
     }
 
     .course-title {
-        width: 50%;
+        width: 100%;
         display: flex;
         height: 100%;
         align-items: center;
@@ -3379,7 +3379,7 @@ td p {
     
     .course-header {
         flex-direction: column;
-        gap: 15px;
+        gap: 0px;
         align-items: flex-start;
     }
 

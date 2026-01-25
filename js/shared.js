@@ -3,15 +3,15 @@ import * as wanakana from 'wanakana';
 
 // Course type to color mapping
 const courseTypeColors = {
-    'Introductory Seminars': '#FFD700',                              // Placeholder - Gold
-    'Intermediate Seminars': '#FFA500',                              // Placeholder - Orange
-    'Advanced Seminars and Honors Thesis': '#FF6347',                // Placeholder - Tomato
-    'Academic and Research Skills': '#9370DB',                       // Placeholder - Medium Purple
+    'Introductory Seminars': '#FFFF89',                              // Placeholder - Gold
+    'Intermediate Seminars': '#FFFF89',                              // Placeholder - Orange
+    'Advanced Seminars and Honors Thesis': '#FFFF89',                // Placeholder - Tomato
+    'Academic and Research Skills': '#A0BEE8',                       // Placeholder - Medium Purple
     'Understanding Japan and Kyoto': '#AED3F2',                      // Light Blue (as specified)
-    'Japanese Society and Global Culture Concentration': '#98FB98',  // Placeholder - Pale Green
-    'Japanese Business and the Global Economy Concentration': '#FFE4B5', // Placeholder - Moccasin
-    'Japanese Politics and Global Studies Concentration': '#FFB6C1', // Placeholder - Light Pink
-    'Other Elective Courses': '#D3D3D3',                             // Placeholder - Light Gray
+    'Japanese Society and Global Culture Concentration': '#C1E0C8',  // Placeholder - Pale Green
+    'Japanese Business and the Global Economy Concentration': '#EFDC8F', // Placeholder - Moccasin
+    'Japanese Politics and Global Studies Concentration': '#E6A4AE', // Placeholder - Light Pink
+    'Other Elective Courses': '#CCCCFF',                             // Placeholder - Light Gray
 };
 
 // Default color for unknown types
@@ -298,6 +298,54 @@ async function findCourseByParams(courseCode, year, term) {
     } catch (error) {
         console.error('Error finding course:', error);
         return null;
+    }
+}
+
+// Cache for available years
+let availableYearsCache = null;
+
+// Fetch available years from the database
+export async function fetchAvailableYears() {
+    // Return cached data if available
+    if (availableYearsCache) {
+        console.log('Using cached available years:', availableYearsCache);
+        return availableYearsCache;
+    }
+    
+    try {
+        console.log('Fetching available years from database...');
+        
+        // Query distinct academic_year values from courses table
+        const { data, error } = await supabase
+            .from('courses')
+            .select('academic_year')
+            .order('academic_year', { ascending: false });
+        
+        if (error) {
+            console.error('Error fetching available years:', error);
+            // Return default years if query fails
+            return [2025, 2024];
+        }
+        
+        if (!data || data.length === 0) {
+            console.warn('No years found in database, using defaults');
+            return [2025, 2024];
+        }
+        
+        // Extract unique years and sort descending
+        const uniqueYears = [...new Set(data.map(item => item.academic_year))]
+            .filter(year => year !== null)
+            .sort((a, b) => b - a);
+        
+        console.log('Available years from database:', uniqueYears);
+        
+        // Cache the result
+        availableYearsCache = uniqueYears;
+        
+        return uniqueYears;
+    } catch (error) {
+        console.error('Error in fetchAvailableYears:', error);
+        return [2025, 2024];
     }
 }
 
@@ -833,7 +881,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     classContent.innerHTML = `
         <div class="course-header">
             <div class="course-title"><h2>${normalizeCourseTitle(course.title)}</h2></div>
-            ${!canModify ? `<div class="semester-status locked" style="background: #ffebcc; color: #d6620f; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 5px 0;" title="This semester is locked for modifications"><p style="margin: 0;">🔒 Semester Locked</p></div>` : ''}
+            ${!canModify ? '' : ''}
             <button onclick="shareCourseURL()" title="Share this course"><div class="button-icon"><p>Share</p><div class="share-icon"></div></div></button>
         </div>
         <div class="class-info-container">

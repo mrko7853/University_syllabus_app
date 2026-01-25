@@ -54,17 +54,15 @@
                                             
                                             <div class="custom-select" data-target="year-select">
                                                 <div class="custom-select-trigger" tabindex="0">
-                                                    <span class="custom-select-value">2025</span>
+                                                    <span class="custom-select-value">Loading...</span>
                                                     <div class="custom-select-arrow"></div>
                                                 </div>
                                                 <div class="custom-select-options">
-                                                    <div class="custom-select-option selected" data-value="2025">2025</div>
-                                                    <div class="custom-select-option" data-value="2024">2024</div>
+                                                    <!-- Options populated dynamically from database -->
                                                 </div>
                                             </div>
                                             <select name="year" id="year-select" style="display: none;">
-                                                <option value="2025" selected>2025</option>
-                                                <option value="2024">2024</option>
+                                                <!-- Options populated dynamically from database -->
                                             </select>
                                         </div>
                                     </div>
@@ -179,7 +177,7 @@
             <div class="main-container" id="course-main-div" style="margin-top: 20px;">
                 <div class="container-above">
                     <div class="title-box">
-                        <h2 class="course-main-title">Courses</h2>
+                        <h2 class="course-main-title" id="course-title-change">Courses</h2>
                         <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
                     </div>
                     <div class="buttons-box">
