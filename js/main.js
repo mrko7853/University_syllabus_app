@@ -1,5 +1,5 @@
 import { supabase } from "/supabase.js";
-import { fetchCourseData, getCourseColorByType, fetchAvailableYears } from '/js/shared.js';
+import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters } from '/js/shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
 import * as wanakana from 'wanakana';
 
@@ -283,6 +283,7 @@ let courseLoadRetryCount = 0;
 let lastLoadedCourses = null; // Cache the last loaded courses data
 let lastLoadedYear = null;
 let lastLoadedTerm = null;
+let lastLoadedProfessorChanges = new Set(); // Cache professor changes
 const MAX_COURSE_LOAD_RETRIES = 3;
 
 async function showCourse(year, term) {
@@ -310,7 +311,7 @@ async function showCourse(year, term) {
     // This handles the case where DOM was replaced but we already have the data
     if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term && !isLoadingCourses) {
         console.log('Using cached course data for rendering');
-        renderCourses(lastLoadedCourses, courseList, year, term);
+        renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges);
         return;
     }
     
@@ -320,7 +321,7 @@ async function showCourse(year, term) {
         // Wait a bit for the loading to complete, then check again
         await new Promise(resolve => setTimeout(resolve, 100));
         if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term) {
-            renderCourses(lastLoadedCourses, courseList, year, term);
+            renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges);
         }
         return;
     }
@@ -344,15 +345,20 @@ async function showCourse(year, term) {
         // Pre-romanize all professor names
         preromanizeCourseData(courses);
         
-        // Cache the loaded courses
+        // Fetch professor change data for all courses
+        const courseCodes = courses.map(c => c.course_code).filter(Boolean);
+        const professorChanges = await fetchProfessorChanges(courseCodes);
+        
+        // Cache the loaded courses and professor changes
         lastLoadedCourses = courses;
         lastLoadedYear = year;
         lastLoadedTerm = term;
+        lastLoadedProfessorChanges = professorChanges;
         
         // Re-get courseList in case DOM changed during fetch
         const currentCourseList = document.getElementById("course-list");
         if (currentCourseList) {
-            renderCourses(courses, currentCourseList, year, term);
+            renderCourses(courses, currentCourseList, year, term, professorChanges);
         }
     } catch (error) {
         console.error('Failed to load courses after all retries:', error);
@@ -361,7 +367,7 @@ async function showCourse(year, term) {
 }
 
 // Separate function to render courses to the DOM
-function renderCourses(courses, courseList, year, term) {
+function renderCourses(courses, courseList, year, term, professorChanges = new Set()) {
     const days = {
         "月曜日": "Mon", "月": "Mon",
         "火曜日": "Tue", "火": "Tue", 
@@ -395,6 +401,11 @@ function renderCourses(courses, courseList, year, term) {
         
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
+        
+        // Check if professor has changed across semesters
+        const hasProfessorChanged = professorChanges.has(course.course_code);
+        const professorName = getRomanizedProfessorName(course.professor);
+        const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
 
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
@@ -402,7 +413,7 @@ function renderCourses(courses, courseList, year, term) {
                 <p id="course-code">${course.course_code}</p>
                 <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
                 <p id="course-professor-small">Professor</p>
-                <h3 id="course-professor"><div class="course-professor-icon"></div>${getRomanizedProfessorName(course.professor)}</h3>
+                <h3 id="course-professor"><div class="course-professor-icon"></div>${professorDisplay}</h3>
                 <div class="class-space"></div>
                 <p id="course-time-small">Time</p>
                 <h3 id="course-time"><div class="course-time-icon"></div>${displayTimeSlot}</h3>
@@ -780,9 +791,6 @@ async function updateCoursesAndFilters() {
         
         await showCourse(year, term);
         
-        // Update the course title to reflect current year/term
-        updateCourseTitle();
-        
         // Re-apply current sort if one is selected
         if (currentSortMethod) {
             sortCourses(currentSortMethod);
@@ -830,46 +838,49 @@ function setupCourseListClickListener() {
         await new Promise(resolve => setTimeout(resolve, 200));
         
         // Find elements dynamically  
+        let semesterSelect = document.getElementById("semester-select");
         let yearSelect = document.getElementById("year-select");
         let termSelect = document.getElementById("term-select");
         let courseList = document.getElementById("course-list");
         
         // Check if required elements exist
-        if (!yearSelect || !termSelect || !courseList) {
+        if (!semesterSelect || !courseList) {
             console.error('Required DOM elements not found on first try:', {
-                yearSelect: !!yearSelect,
-                termSelect: !!termSelect, 
+                semesterSelect: !!semesterSelect,
                 courseList: !!courseList
             });
             
             // Try to find them again with a longer delay
             await new Promise(resolve => setTimeout(resolve, 500));
+            semesterSelect = document.getElementById("semester-select");
             yearSelect = document.getElementById("year-select");
             termSelect = document.getElementById("term-select");
             courseList = document.getElementById("course-list");
             
             console.log('Second element search:', {
-                yearSelect: !!yearSelect,
-                termSelect: !!termSelect,
+                semesterSelect: !!semesterSelect,
                 courseList: !!courseList
             });
             
-            if (!yearSelect || !termSelect || !courseList) {
+            if (!semesterSelect || !courseList) {
                 throw new Error('Critical DOM elements missing after retry');
             }
         }
         
-        // Populate year dropdown from database before loading courses
-        await populateYearDropdown();
+        // Populate semester dropdown from database before loading courses
+        await populateSemesterDropdown();
         
-        // Re-query yearSelect value after population (it was empty before)
+        // Re-query values after population
         const default_year = document.getElementById("year-select").value || "2025";
-        const default_term = termSelect.value || "Fall";
+        const default_term = document.getElementById("term-select").value || "Fall";
         
         console.log('Loading courses for:', { year: default_year, term: default_term });
         
         await showCourse(default_year, default_term);
         console.log('Initial course loading completed successfully');
+        
+        // Update the course filter paragraph to show initial state
+        updateCourseFilterParagraph();
         
         // Initialize URL-based course routing after courses are loaded
         initializeCourseRouting();
@@ -890,118 +901,144 @@ let dashboardEventListenersInitialized = false;
 function setupDashboardEventListeners() {
     console.log('Setting up dashboard event listeners... already initialized:', dashboardEventListenersInitialized);
     
-    // Set up event listeners dynamically
-    const yearSelect = document.getElementById("year-select");
-    const termSelect = document.getElementById("term-select");
+    // Set up event listeners for all semester selects (mobile and desktop)
+    const semesterSelects = document.querySelectorAll(".semester-select");
 
-    if (yearSelect && termSelect) {
+    semesterSelects.forEach(semesterSelect => {
         // Check if already initialized using data attribute
-        if (yearSelect.dataset.listenerAttached !== 'true') {
-            yearSelect.addEventListener("change", updateCoursesAndFilters);
-            yearSelect.dataset.listenerAttached = 'true';
-            console.log('Year select change listener attached');
+        if (semesterSelect.dataset.listenerAttached !== 'true') {
+            semesterSelect.addEventListener("change", (e) => {
+                // Parse the semester value and update hidden inputs
+                const { term, year } = parseSemesterValue(e.target.value);
+                const termSelect = document.getElementById("term-select");
+                const yearSelect = document.getElementById("year-select");
+                
+                if (termSelect) termSelect.value = term;
+                if (yearSelect) yearSelect.value = year;
+                
+                console.log('Semester changed to:', term, year);
+                
+                // Sync both dropdowns (mobile and desktop)
+                syncSemesterDropdowns(e.target.value);
+                
+                // Update courses
+                updateCoursesAndFilters();
+            });
+            semesterSelect.dataset.listenerAttached = 'true';
+            console.log('Semester select change listener attached');
         }
-        if (termSelect.dataset.listenerAttached !== 'true') {
-            termSelect.addEventListener("change", updateCoursesAndFilters);
-            termSelect.dataset.listenerAttached = 'true';
-            console.log('Term select change listener attached');
-        }
-    } else {
-        console.log('Year/term selects not found');
-    }
+    });
     
-    // Set up button event listeners
-    const filterBtn = document.getElementById("filter-btn");
+    // Set up button event listeners for both mobile and desktop containers
+    const filterBtns = document.querySelectorAll(".filter-btn");
     const filterContainer = document.querySelector(".filter-container");
     const filterBackground = document.querySelector(".filter-background");
-    const searchBtn = document.getElementById("search-btn");
+    const searchBtns = document.querySelectorAll(".search-btn");
     const searchContainer = document.querySelector(".search-container");
     const searchBackground = document.querySelector(".search-background");
     const searchModal = document.querySelector(".search-modal");
-    const sortBtn = document.getElementById("sort-btn");
-    const sortDropdown = document.getElementById("sort-dropdown");
+    const sortBtns = document.querySelectorAll(".sort-btn");
+    const sortDropdowns = document.querySelectorAll(".sort-dropdown");
     
-    // Sort button click handler
-    if (sortBtn && filterContainer) {
-        sortBtn.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            // Close other dropdowns/modals
-            if (!filterContainer.classList.contains("hidden")) {
-                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                filterContainer.style.opacity = "0";
-                filterContainer.style.transform = "translateY(-10px)";
-                setTimeout(() => {
-                    filterContainer.classList.add("hidden");
-                }, 300);
-            }
-            
-            // Close any open custom selects
-            const customSelects = document.querySelectorAll('.custom-select');
-            customSelects.forEach(customSelect => {
-                customSelect.classList.remove('open');
-            });
-            
-            // Toggle sort dropdown
-            const sortWrapper = sortBtn.closest('.sort-wrapper');
-            sortWrapper.classList.toggle("open");
-        });
-    }
-    
-    // Sort option selection
-    if (sortDropdown && sortBtn) {
-        sortDropdown.addEventListener("click", (event) => {
-            const option = event.target.closest('.sort-option');
-            if (!option) return;
-            
-            const sortMethod = option.dataset.sort;
-            
-            // Update selected state
-            sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            option.classList.add('selected');
-            
-            // Apply sorting
-            currentSortMethod = sortMethod;
-            sortCourses(sortMethod);
-            
-            // Close dropdown
-            const sortWrapper = sortBtn.closest('.sort-wrapper');
-            sortWrapper.classList.remove("open");
-        });
-    }
-    
-    // Filter button click handler
-    if (filterBtn && filterContainer) {
-        filterBtn.addEventListener("click", () => {
-            const filterPopup = filterContainer.querySelector('.filter-popup');
-            
-            if (filterContainer.classList.contains("hidden")) {
-                filterContainer.classList.remove("hidden");
+    // Sort button click handlers - for both mobile and desktop
+    sortBtns.forEach(sortBtn => {
+        if (sortBtn && filterContainer && sortBtn.dataset.listenerAttached !== 'true') {
+            sortBtn.dataset.listenerAttached = 'true';
+            console.log('Attaching sort button listener');
+            sortBtn.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
                 
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    showModalWithMobileAnimation(filterPopup, filterContainer);
-                } else {
-                    // Desktop animation
+                // Close other dropdowns/modals
+                if (!filterContainer.classList.contains("hidden")) {
+                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
                     filterContainer.style.opacity = "0";
                     filterContainer.style.transform = "translateY(-10px)";
-                    
-                    // Simple direct overflow lock for filter modal
-                    document.body.style.overflow = "hidden";
-                    
-                    requestAnimationFrame(() => {
-                        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                        filterContainer.style.opacity = "1";
-                        filterContainer.style.transform = "translateY(0)";
-                    });
+                    setTimeout(() => {
+                        filterContainer.classList.add("hidden");
+                    }, 300);
                 }
-            }
-        });
+                
+                // Close any open custom selects
+                const customSelects = document.querySelectorAll('.custom-select');
+                customSelects.forEach(customSelect => {
+                    customSelect.classList.remove('open');
+                });
+                
+                // Toggle sort dropdown
+                const sortWrapper = sortBtn.closest('.sort-wrapper');
+                sortWrapper.classList.toggle("open");
+            });
+        }
+    });
+    
+    // Sort option selection - for both mobile and desktop
+    sortDropdowns.forEach(sortDropdown => {
+        if (sortDropdown && sortDropdown.dataset.listenerAttached !== 'true') {
+            sortDropdown.dataset.listenerAttached = 'true';
+            console.log('Attaching sort dropdown listener');
+            sortDropdown.addEventListener("click", (event) => {
+                const option = event.target.closest('.sort-option');
+                if (!option) return;
+                
+                const sortMethod = option.dataset.sort;
+                
+                // Update selected state in all sort dropdowns
+                document.querySelectorAll('.sort-dropdown').forEach(dropdown => {
+                    dropdown.querySelectorAll('.sort-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                        if (opt.dataset.sort === sortMethod) {
+                            opt.classList.add('selected');
+                        }
+                    });
+                });
+                
+                // Apply sorting
+                currentSortMethod = sortMethod;
+                sortCourses(sortMethod);
+                
+                // Close dropdown
+                const sortWrapper = sortDropdown.closest('.sort-wrapper');
+                sortWrapper.classList.remove("open");
+            });
+        }
+    });
+    
+    // Filter button click handlers - for both mobile and desktop
+    filterBtns.forEach(filterBtn => {
+        if (filterBtn && filterContainer && filterBtn.dataset.listenerAttached !== 'true') {
+            filterBtn.dataset.listenerAttached = 'true';
+            console.log('Attaching filter button listener');
+            filterBtn.addEventListener("click", () => {
+                const filterPopup = filterContainer.querySelector('.filter-popup');
+                
+                if (filterContainer.classList.contains("hidden")) {
+                    filterContainer.classList.remove("hidden");
+                    
+                    if (window.innerWidth <= 780) {
+                        // Mobile full-screen animation
+                        showModalWithMobileAnimation(filterPopup, filterContainer);
+                    } else {
+                        // Desktop animation
+                        filterContainer.style.opacity = "0";
+                        filterContainer.style.transform = "translateY(-10px)";
+                        
+                        // Simple direct overflow lock for filter modal
+                        document.body.style.overflow = "hidden";
+                        
+                        requestAnimationFrame(() => {
+                            filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+                            filterContainer.style.opacity = "1";
+                            filterContainer.style.transform = "translateY(0)";
+                        });
+                    }
+                }
+            });
+        }
+    });
         
-        // Close filter modal when clicking outside
+    // Close filter modal when clicking outside
+    if (filterBackground) {
         filterBackground.addEventListener("click", (event) => {
             if (event.target === filterBackground) {
                 if (window.innerWidth <= 780) {
@@ -1149,41 +1186,46 @@ function setupDashboardEventListeners() {
         });
     }
     
-    // Search button and modal setup
-    if (searchBtn && searchContainer && searchModal) {
-        searchBtn.addEventListener("click", async () => {
-            if (searchContainer.classList.contains("hidden")) {
-                searchContainer.classList.remove("hidden");
-                
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    showModalWithMobileAnimation(searchModal, searchContainer);
-                } else {
-                    // Desktop animation
-                    searchContainer.style.opacity = "0";
-                    searchModal.style.transform = "translate(-50%, -60%)";
-                    lockBodyScroll();
+    // Search button and modal setup - for both mobile and desktop
+    searchBtns.forEach(searchBtn => {
+        if (searchBtn && searchContainer && searchModal && searchBtn.dataset.listenerAttached !== 'true') {
+            searchBtn.dataset.listenerAttached = 'true';
+            searchBtn.addEventListener("click", async () => {
+                if (searchContainer.classList.contains("hidden")) {
+                    searchContainer.classList.remove("hidden");
                     
-                    requestAnimationFrame(() => {
-                        searchContainer.style.transition = "opacity 0.3s ease";
-                        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-                        searchContainer.style.opacity = "1";
-                        searchModal.style.transform = "translate(-50%, -50%)";
-                    });
+                    if (window.innerWidth <= 780) {
+                        // Mobile full-screen animation
+                        showModalWithMobileAnimation(searchModal, searchContainer);
+                    } else {
+                        // Desktop animation
+                        searchContainer.style.opacity = "0";
+                        searchModal.style.transform = "translate(-50%, -60%)";
+                        lockBodyScroll();
+                        
+                        requestAnimationFrame(() => {
+                            searchContainer.style.transition = "opacity 0.3s ease";
+                            searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                            searchContainer.style.opacity = "1";
+                            searchModal.style.transform = "translate(-50%, -50%)";
+                        });
+                    }
+                    
+                    // Load courses for autocomplete
+                    await getAllCourses();
+                    
+                    // Focus on search input after animation
+                    setTimeout(() => {
+                        const searchInput = document.getElementById('search-input');
+                        if (searchInput) searchInput.focus();
+                    }, 100);
                 }
-                
-                // Load courses for autocomplete
-                await getAllCourses();
-                
-                // Focus on search input after animation
-                setTimeout(() => {
-                    const searchInput = document.getElementById('search-input');
-                    if (searchInput) searchInput.focus();
-                }, 100);
-            }
-        });
-        
-        // Set up additional search event listeners
+            });
+        }
+    });
+    
+    // Set up additional search event listeners (only once, not per button)
+    if (searchContainer && searchModal) {
         const searchSubmit = document.getElementById('search-submit');
         const searchCancel = document.getElementById('search-cancel');
         const searchInput = document.getElementById('search-input');
@@ -1330,55 +1372,107 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
 // Track if custom selects have been initialized
 let customSelectsInitialized = false;
 
-// Function to populate the year dropdown dynamically from the database
-async function populateYearDropdown() {
-    const years = await fetchAvailableYears();
-    console.log('Populating year dropdown with years:', years);
-    
-    const yearSelect = document.getElementById('year-select');
-    const customSelect = document.querySelector('.custom-select[data-target="year-select"]');
-    
-    if (!yearSelect || !customSelect) {
-        console.error('Year select elements not found');
-        return;
-    }
-    
-    const optionsContainer = customSelect.querySelector('.custom-select-options');
-    const valueElement = customSelect.querySelector('.custom-select-value');
-    
-    if (!optionsContainer || !valueElement) {
-        console.error('Year dropdown options or value element not found');
-        return;
-    }
-    
-    // Clear existing options
-    yearSelect.innerHTML = '';
-    optionsContainer.innerHTML = '';
-    
-    // Add options from database
-    years.forEach((year, index) => {
-        // Add to hidden select
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        if (index === 0) option.selected = true;
-        yearSelect.appendChild(option);
-        
-        // Add to custom dropdown
-        const customOption = document.createElement('div');
-        customOption.className = 'custom-select-option' + (index === 0 ? ' selected' : '');
-        customOption.dataset.value = year;
-        customOption.textContent = year;
-        optionsContainer.appendChild(customOption);
+// Function to sync all semester dropdowns (mobile and desktop)
+function syncSemesterDropdowns(value) {
+    const semesterSelects = document.querySelectorAll('.semester-select');
+    semesterSelects.forEach(select => {
+        if (select.value !== value) {
+            select.value = value;
+        }
     });
     
-    // Set the displayed value to the first (most recent) year
-    if (years.length > 0) {
-        valueElement.textContent = years[0];
-        yearSelect.value = years[0];
+    // Also sync the custom dropdown visual states
+    const customSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
+    customSelects.forEach(customSelect => {
+        const valueElement = customSelect.querySelector('.custom-select-value');
+        const options = customSelect.querySelectorAll('.custom-select-option');
+        
+        options.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.value === value) {
+                option.classList.add('selected');
+                if (valueElement) valueElement.textContent = option.textContent;
+            }
+        });
+    });
+}
+
+// Function to populate the semester dropdown dynamically from the database
+async function populateSemesterDropdown() {
+    const semesters = await fetchAvailableSemesters();
+    console.log('Populating semester dropdown with semesters:', semesters);
+    
+    // Get all semester selects (mobile and desktop)
+    const semesterSelects = document.querySelectorAll('.semester-select');
+    const termSelect = document.getElementById('term-select');
+    const yearSelect = document.getElementById('year-select');
+    
+    // Get all custom select dropdowns for semester
+    const customSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
+    
+    if (semesterSelects.length === 0 || customSelects.length === 0) {
+        console.error('Semester select elements not found');
+        return;
     }
     
-    console.log('Year dropdown populated successfully');
+    // Populate each semester select (hidden <select> elements)
+    semesterSelects.forEach(semesterSelect => {
+        semesterSelect.innerHTML = '';
+        
+        semesters.forEach((semester, index) => {
+            const value = `${semester.term}-${semester.year}`;
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = semester.label;
+            if (index === 0) option.selected = true;
+            semesterSelect.appendChild(option);
+        });
+    });
+    
+    // Populate each custom dropdown
+    customSelects.forEach(customSelect => {
+        const optionsContainer = customSelect.querySelector('.custom-select-options');
+        const valueElement = customSelect.querySelector('.custom-select-value');
+        
+        if (!optionsContainer || !valueElement) return;
+        
+        optionsContainer.innerHTML = '';
+        
+        semesters.forEach((semester, index) => {
+            const value = `${semester.term}-${semester.year}`;
+            const customOption = document.createElement('div');
+            customOption.className = 'custom-select-option' + (index === 0 ? ' selected' : '');
+            customOption.dataset.value = value;
+            customOption.textContent = semester.label;
+            optionsContainer.appendChild(customOption);
+        });
+        
+        // Set the displayed value for the first (most recent) semester
+        if (semesters.length > 0) {
+            valueElement.textContent = semesters[0].label;
+        }
+    });
+    
+    // Update hidden term and year inputs for the first (most recent) semester
+    if (semesters.length > 0) {
+        const firstSemester = semesters[0];
+        if (termSelect) termSelect.value = firstSemester.term;
+        if (yearSelect) yearSelect.value = firstSemester.year;
+    }
+    
+    console.log('Semester dropdown populated successfully');
+}
+
+// Helper function to parse semester value into term and year
+function parseSemesterValue(value) {
+    if (!value || value === '' || value === 'Loading...') {
+        return { term: null, year: null };
+    }
+    const parts = value.split('-');
+    if (parts.length === 2) {
+        return { term: parts[0], year: parts[1] };
+    }
+    return { term: null, year: null };
 }
 
 // Function to initialize custom select dropdowns
@@ -1492,546 +1586,8 @@ function initializeFilterCheckboxes() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", async function () {
-    // Set up event listeners dynamically
-    const yearSelect = document.getElementById("year-select");
-    const termSelect = document.getElementById("term-select");
-
-    if (yearSelect && termSelect) {
-        yearSelect.addEventListener("change", updateCoursesAndFilters);
-        termSelect.addEventListener("change", updateCoursesAndFilters);
-    }
-    
-    // Set up button event listeners
-    const filterBtn = document.getElementById("filter-btn");
-    const filterContainer = document.querySelector(".filter-container");
-    const filterBackground = document.querySelector(".filter-background");
-    const searchBtn = document.getElementById("search-btn");
-    const searchContainer = document.querySelector(".search-container");
-    const searchBackground = document.querySelector(".search-background");
-    const searchModal = document.querySelector(".search-modal");
-    const sortBtn = document.getElementById("sort-btn");
-    const sortDropdown = document.getElementById("sort-dropdown");
-    
-    // Sort button click handler
-    if (sortBtn && filterContainer) {
-        sortBtn.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            // Close other dropdowns/modals
-            if (!filterContainer.classList.contains("hidden")) {
-                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                filterContainer.style.opacity = "0";
-                filterContainer.style.transform = "translateY(-10px)";
-                setTimeout(() => {
-                    filterContainer.classList.add("hidden");
-                }, 300);
-            }
-            
-            // Close any open custom selects
-            const customSelects = document.querySelectorAll('.custom-select');
-            customSelects.forEach(customSelect => {
-                customSelect.classList.remove('open');
-            });
-            
-            // Toggle sort dropdown
-            const sortWrapper = sortBtn.closest('.sort-wrapper');
-            sortWrapper.classList.toggle("open");
-        });
-    }
-    
-    // Sort option selection
-    if (sortDropdown && sortBtn) {
-        sortDropdown.addEventListener("click", (event) => {
-            const option = event.target.closest('.sort-option');
-            if (!option) return;
-            
-            const sortMethod = option.dataset.sort;
-            
-            // Update selected state
-            sortDropdown.querySelectorAll('.sort-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            option.classList.add('selected');
-            
-            // Apply sorting
-            currentSortMethod = sortMethod;
-            sortCourses(sortMethod);
-            
-            // Close dropdown
-            const sortWrapper = sortBtn.closest('.sort-wrapper');
-            sortWrapper.classList.remove("open");
-        });
-    }
-    
-    // Filter button click handler
-    if (filterBtn && filterContainer) {
-        filterBtn.addEventListener("click", () => {
-            const filterPopup = filterContainer.querySelector('.filter-popup');
-            
-            if (filterContainer.classList.contains("hidden")) {
-                filterContainer.classList.remove("hidden");
-                
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    showModalWithMobileAnimation(filterPopup, filterContainer);
-                } else {
-                    // Desktop animation
-                    filterContainer.style.opacity = "0";
-                    filterContainer.style.transform = "translateY(-10px)";
-                    
-                    // Simple direct overflow lock for filter modal
-                    document.body.style.overflow = "hidden";
-                    
-                    requestAnimationFrame(() => {
-                        filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                        filterContainer.style.opacity = "1";
-                        filterContainer.style.transform = "translateY(0)";
-                    });
-                }
-            } else {
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-                        filterContainer.classList.add("hidden");
-                    });
-                } else {
-                    // Desktop animation
-                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                    filterContainer.style.opacity = "0";
-                    filterContainer.style.transform = "translateY(-10px)";
-                    
-                    setTimeout(() => {
-                        filterContainer.classList.add("hidden");
-                        // Simple direct overflow unlock for filter modal
-                        document.body.style.overflow = "";
-                        console.log('Filter modal closed, body overflow restored');
-                    }, 300);
-                }
-            }
-        });
-        
-        // Document click listener for closing filter
-        document.addEventListener("click", (event) => {
-            // Check if filter menu is visible
-            if (filterContainer.classList.contains("hidden")) {
-                return;
-            }
-            
-            // Get the actual filter popup/content div (child of filter-container)
-            const filterPopup = filterContainer.querySelector('.filter-popup, .filter-content, [class*="filter"]:not(.filter-container):not(.filter-background)');
-            
-            // Check if click is inside the filter popup content
-            const isInsideFilterPopup = filterPopup && filterPopup.contains(event.target);
-            
-            // Check if click is on the filter button
-            const isFilterButton = filterBtn.contains(event.target);
-            
-            // Only close if click is NOT on the button and NOT inside the filter popup
-            if (!isFilterButton && !isInsideFilterPopup) {
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-                        filterContainer.classList.add("hidden");
-                    });
-                } else {
-                    // Desktop animation
-                    filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                    filterContainer.style.opacity = "0";
-                    filterContainer.style.transform = "translateY(-10px)";
-                    
-                    setTimeout(() => {
-                        filterContainer.classList.add("hidden");
-                        // Simple direct overflow unlock for filter modal
-                        document.body.style.overflow = "";
-                        console.log('Filter modal closed by outside click, body overflow restored');
-                    }, 300);
-                }
-            }
-        });
-    }
-    
-    // Set up filter action buttons
-    const seeResultsBtn = document.getElementById("see-results-btn");
-    const clearAllBtn = document.getElementById("clear-all-btn");
-    
-    if (seeResultsBtn && filterContainer) {
-        seeResultsBtn.addEventListener("click", () => {
-            if (window.innerWidth <= 780) {
-                // Mobile handling
-                const filterPopup = filterContainer.querySelector('.filter-popup');
-                hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
-                    filterContainer.classList.add("hidden");
-                });
-            } else {
-                // Desktop handling
-                filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
-                filterContainer.style.opacity = "0";
-                filterContainer.style.transform = "translateY(-10px)";
-                
-                setTimeout(() => {
-                    filterContainer.classList.add("hidden");
-                    filterContainer.style.transition = "";
-                    filterContainer.style.opacity = "";
-                    filterContainer.style.transform = "";
-                    // Restore body overflow
-                    document.body.style.overflow = "";
-                    console.log('See results button clicked, body overflow restored');
-                }, 300);
-            }
-        });
-    }
-    
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener("click", async () => {
-            // Get filter elements dynamically
-            const filterByDays = document.getElementById("filter-by-days");
-            const filterByTime = document.getElementById("filter-by-time");
-            const filterByConcentration = document.getElementById("filter-by-concentration");
-            
-            // Clear day checkboxes
-            if (filterByDays) {
-                const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
-                dayCheckboxes.forEach(checkbox => checkbox.checked = false);
-            }
-            
-            // Clear time checkboxes
-            if (filterByTime) {
-                const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
-                timeCheckboxes.forEach(checkbox => checkbox.checked = false);
-            }
-            
-            // Clear concentration checkboxes
-            if (filterByConcentration) {
-                const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
-                concCheckboxes.forEach(checkbox => checkbox.checked = false);
-            }
-
-            // Reset course filter paragraph
-            value.length = 0;
-            updateCourseFilterParagraph();
-            
-            // Reset custom dropdowns to default values
-            const termSelect = document.getElementById("term-select");
-            const yearSelect = document.getElementById("year-select");
-            const termCustomSelect = document.querySelector('[data-target="term-select"]');
-            const yearCustomSelect = document.querySelector('[data-target="year-select"]');
-            
-            if (termCustomSelect) {
-                const termValue = termCustomSelect.querySelector('.custom-select-value');
-                const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
-                termOptions.forEach(option => option.classList.remove('selected'));
-                const fallOption = termCustomSelect.querySelector('[data-value="Fall"]');
-                if (fallOption) {
-                    fallOption.classList.add('selected');
-                    termValue.textContent = 'Fall';
-                    termSelect.value = 'Fall';
-                }
-            }
-            
-            if (yearCustomSelect) {
-                const yearValue = yearCustomSelect.querySelector('.custom-select-value');
-                const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
-                yearOptions.forEach(option => option.classList.remove('selected'));
-                const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
-                if (currentYearOption) {
-                    currentYearOption.classList.add('selected');
-                    yearValue.textContent = '2025';
-                    yearSelect.value = '2025';
-                }
-            }
-            
-            // Reset sorting
-            currentSortMethod = null;
-            const sortOptions = document.querySelectorAll('.sort-option');
-            sortOptions.forEach(option => option.classList.remove('selected'));
-            
-            // Reset search
-            currentSearchQuery = null;
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) searchInput.value = '';
-            
-            // Apply filters to update the display
-            await applyFilters();
-            await updateCoursesAndFilters();
-        });
-    }
-    
-    // Set up search functionality
-    if (searchBtn && searchContainer && searchModal) {
-        searchBtn.addEventListener("click", async () => {
-            if (searchContainer.classList.contains("hidden")) {
-                searchContainer.classList.remove("hidden");
-                
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    showModalWithMobileAnimation(searchModal, searchContainer);
-                } else {
-                    // Desktop animation
-                    searchContainer.style.opacity = "0";
-                    searchModal.style.transform = "translate(-50%, -60%)";
-                    lockBodyScroll();
-                    
-                    requestAnimationFrame(() => {
-                        searchContainer.style.transition = "opacity 0.3s ease";
-                        searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-                        searchContainer.style.opacity = "1";
-                        searchModal.style.transform = "translate(-50%, -50%)";
-                    });
-                }
-                
-                // Load courses for autocomplete
-                await getAllCourses();
-                
-                // Focus on search input after animation
-                setTimeout(() => {
-                    const searchInput = document.getElementById('search-input');
-                    if (searchInput) searchInput.focus();
-                }, 100);
-            }
-        });
-        
-        // Set up additional search event listeners
-        const searchSubmit = document.getElementById('search-submit');
-        const searchCancel = document.getElementById('search-cancel');
-        const searchInput = document.getElementById('search-input');
-        const searchAutocomplete = document.getElementById('search-autocomplete');
-        
-        if (searchSubmit) {
-            searchSubmit.addEventListener("click", async () => {
-                const searchQuery = searchInput ? searchInput.value : '';
-                await performSearch(searchQuery);
-                
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
-                        searchContainer.classList.add("hidden");
-                    });
-                } else {
-                    // Desktop animation - Close search modal with animation
-                    searchContainer.style.transition = "opacity 0.3s ease";
-                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-                    searchContainer.style.opacity = "0";
-                    searchModal.style.transform = "translate(-50%, -60%)";
-                    
-                    setTimeout(() => {
-                        searchContainer.classList.add("hidden");
-                        unlockBodyScroll();
-                        // Reset styles
-                        searchContainer.style.transition = "";
-                        searchModal.style.transition = "";
-                        searchContainer.style.opacity = "";
-                        searchModal.style.transform = "";
-                    }, 300);
-                }
-            });
-        }
-        
-        if (searchCancel) {
-            searchCancel.addEventListener("click", async () => {
-                if (searchInput) searchInput.value = ""; // Clear search input
-                if (searchAutocomplete) searchAutocomplete.style.display = 'none';
-                currentHighlightIndex = -1;
-                
-                if (window.innerWidth <= 780) {
-                    // Mobile full-screen animation
-                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
-                        searchContainer.classList.add("hidden");
-                    });
-                } else {
-                    // Desktop animation - Close search modal with animation
-                    searchContainer.style.transition = "opacity 0.3s ease";
-                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
-                    searchContainer.style.opacity = "0";
-                    searchModal.style.transform = "translate(-50%, -60%)";
-                    
-                    setTimeout(() => {
-                        searchContainer.classList.add("hidden");
-                        unlockBodyScroll();
-                        // Reset styles
-                        searchContainer.style.transition = "";
-                        searchModal.style.transition = "";
-                        searchContainer.style.opacity = "";
-                        searchModal.style.transform = "";
-                    }, 300);
-                }
-                
-                // Clear search state and restore filtered state
-                currentSearchQuery = null;
-                updateCourseFilterParagraph(); // Update paragraph when search is cleared
-                await applySearchAndFilters(null);
-            });
-        }
-    }
-    
-    // Set up filter event listeners
-    const filterByDays = document.getElementById("filter-by-days");
-    const filterByTime = document.getElementById("filter-by-time");
-    const filterByConcentration = document.getElementById("filter-by-concentration");
-
-    if (filterByDays) filterByDays.addEventListener("change", applyFilters);
-    if (filterByTime) filterByTime.addEventListener("change", applyFilters);
-    if (filterByConcentration) filterByConcentration.addEventListener("change", applyFilters);
-    
-    // Initialize filter checkbox functionality
-    const filterDaysDiv = document.getElementById("filter-by-days");
-    if (filterDaysDiv) {
-        const value = [];
-        const inputElements = filterDaysDiv.querySelectorAll("input[type='checkbox']");
-        const courseFilterParagraph = document.getElementById("course-filter-paragraph");
-        updateCourseFilterParagraph(); // Initialize the paragraph
-        inputElements.forEach((input) => {
-            input.addEventListener("change", () => {
-                value.length = 0; // Clear the array
-                inputElements.forEach((el) => {
-                    if (el.checked) {
-                        if (el.value === "Mon") {
-                            const newValue = "Monday";
-                            value.push(newValue);
-                        } else if (el.value === "Tue") {
-                            const newValue = "Tuesday";
-                            value.push(newValue);
-                        } else if (el.value === "Wed") {
-                            const newValue = "Wednesday";
-                            value.push(newValue);
-                        } else if (el.value === "Thu") {
-                            const newValue = "Thursday";
-                            value.push(newValue);
-                        } else if (el.value === "Fri") {
-                            const newValue = "Friday";
-                            value.push(newValue);
-                        }
-                    }
-                });
-                updateCourseFilterParagraph(); // Use the new function
-            });
-        });
-    }
-    
-    // Handle responsive layout for all users (authenticated or not)
-    // Add a small delay to ensure all elements are rendered
-    setTimeout(handleResponsiveLayout, 100);
-    
-    // Listen for window resize to adjust layout  
-    window.addEventListener('resize', handleResponsiveLayout);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-
-    // Hide/show .top-content based on authentication status
-    const topContent = document.querySelector('.top-content');
-    
-    if (!session) {
-        // Hide top-content for non-authenticated users but still load courses
-        if (topContent) {
-            topContent.style.display = 'none';
-        }
-        
-        // Load courses for guest users
-        console.log('Loading courses for guest user');
-        try {
-            await updateCoursesAndFilters();
-        } catch (error) {
-            console.error('Error loading courses for guest user:', error);
-        }
-        return;
-    }
-
-    // Show top-content for authenticated users with grid layout
-    if (topContent) {
-        topContent.style.display = 'grid';
-    }
-
-    const user = session.user;
-
-    console.log(user.email, user.id);
-
-    const profileButton = document.getElementById("profile");
-    if (profileButton) {
-        profileButton.addEventListener("click", function() {
-            window.location.href = `/profile/${user.id}`;
-        });
-    }
-
-    // Load courses for authenticated users
-    try {
-        await updateCoursesAndFilters();
-    } catch (error) {
-        console.error('Error loading courses for authenticated user:', error);
-    }
-
-    // Keep navigation text as "Profile" - don't change it to show email
-});
-
-// Function to handle responsive layout changes
-function handleResponsiveLayout() {
-    const containerAbove = document.querySelector('.container-above');
-    const mainContent = document.querySelector('.main-content');
-    
-    console.log('handleResponsiveLayout called');
-    console.log('containerAbove found:', !!containerAbove);
-    console.log('mainContent found:', !!mainContent);
-    
-    if (!containerAbove || !mainContent) {
-        console.log('Elements not found for responsive layout');
-        return;
-    }
-    
-    // Find the specific main-container that contains container-above
-    // Use the specific ID for reliable detection
-    const targetMainContainer = document.getElementById('course-main-div');
-    
-    console.log('targetMainContainer found:', !!targetMainContainer);
-    console.log('Current parent:', containerAbove.parentElement?.className);
-    console.log('Screen width:', window.innerWidth);
-    
-    if (!targetMainContainer) {
-        console.log('Target main container not found');
-        return;
-    }
-    
-    if (window.innerWidth <= 780) {
-        // Mobile: move container-above outside of main-container
-        if (containerAbove.parentElement === targetMainContainer) {
-            console.log('Moving container-above outside main-container for mobile');
-            // Insert before the main-container that used to contain it
-            mainContent.insertBefore(containerAbove, targetMainContainer);
-            console.log('After move - new parent:', containerAbove.parentElement?.className);
-        } else {
-            console.log('Container-above is already outside main-container');
-        }
-    } else {
-        // Desktop: move container-above back inside main-container
-        if (containerAbove.parentElement === mainContent) {
-            console.log('Moving container-above back inside main-container for desktop');
-            // Insert as first child of main-container (before course-list)
-            const courseList = document.getElementById('course-list');
-            targetMainContainer.insertBefore(containerAbove, courseList);
-            console.log('After move - new parent:', containerAbove.parentElement?.className);
-        } else {
-            console.log('Container-above is already inside main-container');
-        }
-    }
-}
-
-// Test function to manually trigger mobile layout - call testMobileLayout() in console
-window.testMobileLayout = function() {
-    const containerAbove = document.querySelector('.container-above');
-    const mainContent = document.querySelector('.main-content');
-    const mainContainer = containerAbove?.closest('.main-container');
-    
-    console.log('Manual test - elements found:', {
-        containerAbove: !!containerAbove,
-        mainContent: !!mainContent, 
-        mainContainer: !!mainContainer
-    });
-    
-    if (containerAbove && mainContent && mainContainer) {
-        console.log('Before move - parent:', containerAbove.parentElement?.className);
-        mainContent.insertBefore(containerAbove, mainContainer);
-        console.log('After move - parent:', containerAbove.parentElement?.className);
-    }
-};
+// Responsive layout is now handled purely via CSS with .container-above-mobile and .container-above-desktop
+// No JavaScript DOM manipulation needed - see blaze.css for media query based show/hide
 
 async function calendarSchedule(year, term) {
     displayedYear = year;
@@ -2929,11 +2485,45 @@ window.addEventListener('load', ensureMobileNavigationPositioning);
 window.addEventListener('resize', restructureReviewDatesForMobile);
 
 // Export initialization functions for the router
-export function initializeDashboard() {
+export async function initializeDashboard() {
+  console.log('initializeDashboard called');
+  
   // Re-run mobile navigation positioning
   ensureMobileNavigationPositioning();
   restructureReviewDatesForMobile();
   setViewportHeight();
+  
+  // Reset the custom select initialization flags so they can be reinitialized (for both mobile and desktop)
+  const semesterCustomSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
+  semesterCustomSelects.forEach(customSelect => {
+    customSelect.dataset.initialized = 'false';
+  });
+  
+  // Reset semester select listener flags (for both mobile and desktop)
+  const semesterSelects = document.querySelectorAll('.semester-select');
+  semesterSelects.forEach(select => {
+    select.dataset.listenerAttached = 'false';
+  });
+  
+  // Reset sort button and dropdown listener flags (for both mobile and desktop)
+  const sortBtns = document.querySelectorAll('.sort-btn');
+  const sortDropdowns = document.querySelectorAll('.sort-dropdown');
+  sortBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+  sortDropdowns.forEach(dropdown => dropdown.dataset.listenerAttached = 'false');
+  
+  // Reset filter button listener flags (for both mobile and desktop)
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  filterBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+  
+  // Reset search button listener flags (for both mobile and desktop)
+  const searchBtns = document.querySelectorAll('.search-btn');
+  searchBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+  
+  // Populate semester dropdown (this also sets term/year hidden inputs)
+  await populateSemesterDropdown();
+  
+  // Initialize custom selects (dropdown behavior)
+  initializeCustomSelects();
   
   // Set up course list click listener
   setupCourseListClickListener();
@@ -2941,11 +2531,19 @@ export function initializeDashboard() {
   // Set up button event listeners for router-based navigation
   setupDashboardEventListeners();
   
-  // Update course title with current year/term
-  updateCourseTitle();
+  // Load courses with current semester values
+  const yearSelect = document.getElementById("year-select");
+  const termSelect = document.getElementById("term-select");
+  console.log('Loading courses with:', { year: yearSelect?.value, term: termSelect?.value });
   
-  // Handle responsive layout for container-above positioning
-  setTimeout(handleResponsiveLayout, 100);
+  if (yearSelect && termSelect && yearSelect.value && termSelect.value) {
+    await showCourse(yearSelect.value, termSelect.value);
+  }
+  
+  // Update the course filter paragraph to show current state
+  updateCourseFilterParagraph();
+  
+  console.log('initializeDashboard completed');
 }
 
 export function reinitializeMainJS() {
@@ -2969,24 +2567,11 @@ Object.defineProperty(window, 'currentSearchQuery', {
   configurable: true
 });
 
-function updateCourseTitle() {
-    const courseTitleElement = document.getElementById("course-title-change");
-    if (!courseTitleElement) return;
-    
-    const yearSelect = document.getElementById("year-select");
-    const termSelect = document.getElementById("term-select");
-    if (!yearSelect || !termSelect) return;
-    const year = yearSelect.value;
-    const term = termSelect.value;
-    
-    // Use innerHTML to include an icon for the chevron with 50% opacity
-    courseTitleElement.innerHTML = `Courses <span style="opacity: 0.5; margin: 0 4px;">›</span> ${term} ${year}`;
-}
-
 // Function to update the course filter paragraph with search/filter info
 function updateCourseFilterParagraph() {
-  const courseFilterParagraph = document.getElementById("course-filter-paragraph");
-  if (!courseFilterParagraph) return;
+  // Update all course filter paragraphs (mobile and desktop)
+  const courseFilterParagraphs = document.querySelectorAll(".course-filter-paragraph");
+  if (courseFilterParagraphs.length === 0) return;
   
   let message = "";
   
@@ -3034,9 +2619,11 @@ function updateCourseFilterParagraph() {
     message = `Showing ${activeDays.join(", ") || "All Days"} Courses`;
   }
   
-  courseFilterParagraph.innerHTML = message;
+  // Update all instances
+  courseFilterParagraphs.forEach(paragraph => {
+    paragraph.innerHTML = message;
+  });
 }
 
 // Export the update function globally
 window.updateCourseFilterParagraph = updateCourseFilterParagraph;
-window.updateCourseTitle = updateCourseTitle;

@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
 
 html, body {
     margin: 0;
@@ -15,14 +16,14 @@ html, body {
 
 @media (max-width: 780px) {
     :root {
-        --small-desktop: 12px !important;
-        --small-h1-desktop: 24px !important;
-        --small-h2-desktop: 16px !important;
-        --small-h3-desktop: 14px !important;
-        --h1: 24px !important;
-        --h2: 16px !important;
-        --h3: 14px !important;
-        --p: 12px !important;
+        --small-desktop: 16px !important;
+        --small-h1-desktop: 26px !important;
+        --small-h2-desktop: 20px !important;
+        --small-h3-desktop: 18px !important;
+        --h1: 26px !important;
+        --h2: 20px !important;
+        --h3: 18px !important;
+        --p: 16px !important;
     }
     
     /* Use dynamic viewport height on mobile */
@@ -91,6 +92,8 @@ h2 {
 
 h3 {
     font-size: var(--h3);
+    font-family: Roboto, sans-serif;
+    font-weight: 400;
 }
 
 p {
@@ -566,6 +569,23 @@ table#calendar-main {
     backdrop-filter: blur(10px);
 }
 
+/* Mobile/Desktop container visibility - no JS needed */
+.container-above-mobile {
+    display: none;
+}
+.container-above-desktop {
+    display: flex;
+}
+
+@media (max-width: 780px) {
+    .container-above-mobile {
+        display: flex;
+    }
+    .container-above-desktop {
+        display: none;
+    }
+}
+
 .container-above::before {
     content: '';
     position: absolute;
@@ -988,7 +1008,7 @@ table#calendar-main {
 
 #filter-year-term-container {
     display: grid !important;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 10px;
 }
 
@@ -1003,22 +1023,25 @@ table#calendar-main {
 }
 
 /* Style select inputs to match checkboxes */
-#filter-year-term select {
+#filter-year-term select,
+#filter-year-term-mobile select {
     display: none; /* Hide native select, we'll create custom dropdown */
 }
 
 /* Custom dropdown styling */
-#filter-year-term .custom-select {
+#filter-year-term .custom-select,
+#filter-year-term-mobile .custom-select {
     position: relative;
     display: inline-block;
     width: 100%;
 }
 
-#filter-year-term .custom-select-trigger {
+#filter-year-term .custom-select-trigger,
+#filter-year-term-mobile .custom-select-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    min-width: 120px;
+    min-width: max-content;
     width: 100%;
     height: 40px;
     border-radius: 50px;
@@ -1036,18 +1059,22 @@ table#calendar-main {
 }
 
 #filter-year-term .custom-select-trigger:focus,
-#filter-year-term .custom-select.open .custom-select-trigger {
+#filter-year-term .custom-select.open .custom-select-trigger,
+#filter-year-term-mobile .custom-select-trigger:focus,
+#filter-year-term-mobile .custom-select.open .custom-select-trigger {
     background-color: #E3D5E9;
     border: 2px solid #E3D5E9;
     outline: none;
 }
 
-#filter-year-term .custom-select-trigger:focus-visible {
+#filter-year-term .custom-select-trigger:focus-visible,
+#filter-year-term-mobile .custom-select-trigger:focus-visible {
     outline: 2px solid #E3D5E9;
     outline-offset: 2px;
 }
 
-#filter-year-term .custom-select-arrow {
+#filter-year-term .custom-select-arrow,
+#filter-year-term-mobile .custom-select-arrow {
     width: 16px;
     height: 16px;
     background-image: url(/assets/arrow.svg);
@@ -1059,11 +1086,13 @@ table#calendar-main {
     border: none;
 }
 
-#filter-year-term .custom-select.open .custom-select-arrow {
+#filter-year-term .custom-select.open .custom-select-arrow,
+#filter-year-term-mobile .custom-select.open .custom-select-arrow {
     transform: rotate(180deg);
 }
 
-#filter-year-term .custom-select-options {
+#filter-year-term .custom-select-options,
+#filter-year-term-mobile .custom-select-options {
     position: absolute;
     top: 133%;
     left: 0;
@@ -1080,13 +1109,15 @@ table#calendar-main {
     transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
 }
 
-#filter-year-term .custom-select.open .custom-select-options {
+#filter-year-term .custom-select.open .custom-select-options,
+#filter-year-term-mobile .custom-select.open .custom-select-options {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-#filter-year-term .custom-select-option {
+#filter-year-term .custom-select-option,
+#filter-year-term-mobile .custom-select-option {
     padding: 10px 20px;
     cursor: pointer;
     font-size: var(--p);
@@ -1096,11 +1127,13 @@ table#calendar-main {
     transition: background-color 0.2s ease;
 }
 
-#filter-year-term .custom-select-option:hover {
+#filter-year-term .custom-select-option:hover,
+#filter-year-term-mobile .custom-select-option:hover {
     background-color: #f8f5ff;
 }
 
-#filter-year-term .custom-select-option.selected {
+#filter-year-term .custom-select-option.selected,
+#filter-year-term-mobile .custom-select-option.selected {
     background-color: #E3D5E9;
 }
 
@@ -1151,26 +1184,26 @@ table#calendar-main {
 
 /* Buttons course list style */
 
-#search-btn,
-#sort-btn,
-#filter-btn {
+.search-btn,
+.sort-btn,
+.filter-btn {
     font-family: 'Libre Bodoni', sans-serif;
     font-size: var(--h3);
     font-weight: 400;
 }
 
-#filter-btn {
+.filter-btn {
     width: 160px;
     height: 70px;
 }
 
-#search-btn,
-#sort-btn {
+.search-btn,
+.sort-btn {
     width: 70px;
     height: 70px;
 }
 
-#search-btn div {
+.search-btn div {
     background-image: url(/assets/search.svg);
     background-position: center;
     background-repeat: no-repeat;
@@ -1179,7 +1212,7 @@ table#calendar-main {
     height: 100%;
 }
 
-#sort-btn div {
+.sort-btn div {
     background-image: url(/assets/sort.svg);
     background-position: center;
     background-repeat: no-repeat;
@@ -1248,7 +1281,7 @@ table#calendar-main {
 }
 
 .course-main-paragraph {
-    margin: 0 0 20px 0;
+    margin: 15px 0 20px 0;
     font-weight: 100;
 }
 
@@ -1662,14 +1695,14 @@ td p {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.4);
+    background: #EEE6F2;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #666;
-    font-size: var(--small);
+    font-size: var(--p);
     font-weight: 500;
     text-align: center;
     white-space: nowrap;
@@ -1705,17 +1738,17 @@ td p {
         display: none;
     }
 
-    #filter-btn {
+    .filter-btn {
         width: 100px !important;
         height: 50px !important;
     }
 
-    #search-btn, #sort-btn {
+    .search-btn, .sort-btn {
         width: 50px !important;
         height: 50px !important;
     }
 
-    #search-btn div, #sort-btn div {
+    .search-btn div, .sort-btn div {
         background-size: 20px !important;
     }
     
@@ -1748,7 +1781,7 @@ td p {
     }
 
     #course-list {
-        grid-template-columns: 1fr 1fr !important;
+        grid-template-columns: 1fr !important;
         margin-top: 0px !important;
     }
 
@@ -2310,7 +2343,7 @@ td p {
 
     /* Course list mobile layout */
     #course-list {
-        grid-template-columns: 1fr 1fr !important;
+        grid-template-columns: 1fr !important;
         gap: 10px !important;
         padding: 0 !important;
     }
@@ -2487,21 +2520,14 @@ td p {
     }
 
     #course-list h3 {
-        font-weight: 100 !important;
+        margin: 15px 0 !important;
     }
 
-    #course-professor {
+    #course-professor, #course-time {
         display: flex;
         gap: 10px;
         align-items: center;
-        font-size: var(--p);
-    }
-
-    #course-time {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        font-size: var(--p);
+        font-size: var(--p) !important;
     }
 
     .class-space {
@@ -2532,7 +2558,7 @@ td p {
 
     /* Mobile GPA null overlay */
     .gpa-null::before {
-        font-size: 11px; /* Smaller text for mobile */
+        font-size: var(--p); /* Smaller text for mobile */
     }
 
     .gpa-fill-mobile:nth-child(1) {
@@ -2676,7 +2702,7 @@ td p {
         font-size: var(--small-h1-desktop);
     }
 
-    .total-text, #term-year-display, #search-btn, #sort-btn, #filter-btn {
+    .total-text, #term-year-display, .search-btn, .sort-btn, .filter-btn {
         font-size: var(--small-h3-desktop) !important;
     }
 
@@ -2684,20 +2710,20 @@ td p {
         font-size: var(--small-h1-desktop) !important;
     }
 
-    #search-btn div {
+    .search-btn div {
         background-size: 25px;
     }
 
-    #sort-btn div {
+    .sort-btn div {
         background-size: 25px;
     }
 
-    #search-btn, #sort-btn {
+    .search-btn, .sort-btn {
         width: 60px;
         height: 60px;
     }
 
-    #filter-btn {
+    .filter-btn {
         width: 150px;
         height: 60px;
     }
@@ -4307,5 +4333,11 @@ calendar-page .mobile-day-buttons {
     calendar-page .day-button.active {
         background-color: #E3D5E9;
         transition: box-shadow 0.2s;
+    }
+}
+
+@media (max-width: 780px) {
+    .sort-wrapper {
+        display: none !important;
     }
 }

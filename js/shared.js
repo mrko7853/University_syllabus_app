@@ -304,6 +304,83 @@ async function findCourseByParams(courseCode, year, term) {
 // Cache for available years
 let availableYearsCache = null;
 
+// Cache for available semesters (term + year combinations)
+let availableSemestersCache = null;
+
+// Fetch available semesters (term + year combinations) from the database
+export async function fetchAvailableSemesters() {
+    // Return cached data if available
+    if (availableSemestersCache) {
+        console.log('Using cached available semesters:', availableSemestersCache);
+        return availableSemestersCache;
+    }
+    
+    try {
+        console.log('Fetching available semesters from database...');
+        
+        // Query distinct term and academic_year combinations from courses table
+        const { data, error } = await supabase
+            .from('courses')
+            .select('term, academic_year')
+            .order('academic_year', { ascending: false });
+        
+        if (error) {
+            console.error('Error fetching available semesters:', error);
+            // Return default semesters if query fails
+            return [
+                { term: 'Fall', year: 2025, label: 'Fall 2025' },
+                { term: 'Spring', year: 2025, label: 'Spring 2025' },
+                { term: 'Fall', year: 2024, label: 'Fall 2024' }
+            ];
+        }
+        
+        if (!data || data.length === 0) {
+            console.warn('No semesters found in database, using defaults');
+            return [
+                { term: 'Fall', year: 2025, label: 'Fall 2025' },
+                { term: 'Spring', year: 2025, label: 'Spring 2025' }
+            ];
+        }
+        
+        // Extract unique term-year combinations
+        const semesterMap = new Map();
+        data.forEach(item => {
+            if (item.term && item.academic_year) {
+                const key = `${item.term}-${item.academic_year}`;
+                if (!semesterMap.has(key)) {
+                    semesterMap.set(key, {
+                        term: item.term,
+                        year: item.academic_year,
+                        label: `${item.term} ${item.academic_year}`
+                    });
+                }
+            }
+        });
+        
+        // Convert to array and sort: by year descending, then Fall before Spring
+        const semesters = Array.from(semesterMap.values()).sort((a, b) => {
+            if (a.year !== b.year) return b.year - a.year;
+            // Fall comes before Spring in the same year
+            if (a.term === 'Fall' && b.term === 'Spring') return -1;
+            if (a.term === 'Spring' && b.term === 'Fall') return 1;
+            return 0;
+        });
+        
+        console.log('Available semesters from database:', semesters);
+        
+        // Cache the result
+        availableSemestersCache = semesters;
+        
+        return semesters;
+    } catch (error) {
+        console.error('Error in fetchAvailableSemesters:', error);
+        return [
+            { term: 'Fall', year: 2025, label: 'Fall 2025' },
+            { term: 'Spring', year: 2025, label: 'Spring 2025' }
+        ];
+    }
+}
+
 // Fetch available years from the database
 export async function fetchAvailableYears() {
     // Return cached data if available
@@ -631,6 +708,113 @@ async function fetchHistoricalGpaData(courseCodes) {
     } catch (error) {
         console.error('Failed to fetch historical GPA data:', error);
         return {};
+    }
+}
+
+// Cache for professor change data
+let professorChangeCache = {};
+
+// Function to clear professor change cache (call when semester changes)
+export function clearProfessorChangeCache() {
+    professorChangeCache = {};
+    console.log('Professor change cache cleared');
+}
+
+// Function to check which courses have professor changes across semesters
+// Returns a Set of course_codes that have had professor changes
+export async function fetchProfessorChanges(courseCodes) {
+    if (!courseCodes || courseCodes.length === 0) {
+        return new Set();
+    }
+    
+    // Check cache first - filter out already cached course codes
+    const uncachedCodes = courseCodes.filter(code => !(code in professorChangeCache));
+    
+    if (uncachedCodes.length === 0) {
+        // All codes are cached, build result from cache
+        const changedCourses = new Set();
+        courseCodes.forEach(code => {
+            if (professorChangeCache[code] === true) {
+                changedCourses.add(code);
+            }
+        });
+        return changedCourses;
+    }
+    
+    try {
+        console.log(`Checking professor changes for ${uncachedCodes.length} courses...`);
+        
+        // Fetch all instances of these courses across all semesters
+        const { data: courseHistory, error } = await supabase
+            .from('courses')
+            .select('course_code, professor, academic_year, term')
+            .in('course_code', uncachedCodes)
+            .order('academic_year', { ascending: false })
+            .order('term', { ascending: false });
+        
+        if (error) {
+            console.error('Error fetching professor history:', error);
+            return new Set();
+        }
+        
+        if (!courseHistory || courseHistory.length === 0) {
+            // No history found, cache as no change
+            uncachedCodes.forEach(code => {
+                professorChangeCache[code] = false;
+            });
+            return new Set();
+        }
+        
+        // Group courses by course_code
+        const coursesByCode = {};
+        courseHistory.forEach(course => {
+            if (!coursesByCode[course.course_code]) {
+                coursesByCode[course.course_code] = [];
+            }
+            coursesByCode[course.course_code].push(course);
+        });
+        
+        // Check each course code for professor changes
+        const changedCourses = new Set();
+        
+        Object.entries(coursesByCode).forEach(([code, instances]) => {
+            if (instances.length <= 1) {
+                // Only one instance, no change possible
+                professorChangeCache[code] = false;
+                return;
+            }
+            
+            // Get unique professors for this course (normalize for comparison)
+            const professors = new Set(
+                instances
+                    .map(i => i.professor)
+                    .filter(p => p && p.trim() !== '')
+                    .map(p => p.trim().toLowerCase())
+            );
+            
+            // If there's more than one unique professor, mark as changed
+            if (professors.size > 1) {
+                changedCourses.add(code);
+                professorChangeCache[code] = true;
+                console.log(`Professor change detected for ${code}:`, [...professors]);
+            } else {
+                professorChangeCache[code] = false;
+            }
+        });
+        
+        // Cache any codes that weren't found as no change
+        uncachedCodes.forEach(code => {
+            if (!(code in professorChangeCache)) {
+                professorChangeCache[code] = false;
+            }
+        });
+        
+        console.log(`Found ${changedCourses.size} courses with professor changes`);
+        return changedCourses;
+        
+    } catch (error) {
+        console.error('Error checking professor changes:', error);
+        return new Set();
     }
 }
 
@@ -3320,3 +3504,5 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
 // Make it globally available
 window.addSwipeToCloseSimple = addSwipeToCloseSimple;
 window.fetchCourseData = fetchCourseData;
+window.fetchProfessorChanges = fetchProfessorChanges;
+window.clearProfessorChangeCache = clearProfessorChangeCache;

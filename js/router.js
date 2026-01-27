@@ -406,24 +406,17 @@ class SimpleRouter {
       if (this.isProduction()) {
         // Call initialization functions directly if they exist
         if (window.initializeDashboard) {
-          window.initializeDashboard()
+          await window.initializeDashboard()
         }
         
-        // Also ensure courses are loaded
-        if (window.updateCoursesAndFilters) {
-          try {
-            await window.updateCoursesAndFilters()
-          } catch (error) {
-            console.error('Error loading courses in production:', error)
-          }
-        }
+        // Note: updateCoursesAndFilters is now called inside initializeDashboard
       } else {
         // Re-import main.js to get fresh instances (dev mode only)
         const mainModule = await import('./main.js?' + Date.now())
         
         // Call the initialization function
         if (mainModule.initializeDashboard) {
-          mainModule.initializeDashboard()
+          await mainModule.initializeDashboard()
         }
       }
       
@@ -544,22 +537,19 @@ class SimpleRouter {
   }
 
   initializeYearTermSelectors() {
-    // Year and term selector functionality
-    const yearSelect = document.getElementById('year-select')
-    const termSelect = document.getElementById('term-select')
+    // Combined semester selector functionality
+    const semesterSelect = document.getElementById('semester-select')
     
-    if (yearSelect && termSelect) {
-      // Set up event listeners for year/term changes
+    if (semesterSelect) {
+      // Set up event listener for semester changes
       const handleSelectChange = () => {
         this.refreshAllComponents()
       }
       
-      yearSelect.addEventListener('change', handleSelectChange)
-      termSelect.addEventListener('change', handleSelectChange)
+      semesterSelect.addEventListener('change', handleSelectChange)
       
       this.componentCleanupFunctions.push(() => {
-        yearSelect.removeEventListener('change', handleSelectChange)
-        termSelect.removeEventListener('change', handleSelectChange)
+        semesterSelect.removeEventListener('change', handleSelectChange)
       })
     }
   }
@@ -1178,52 +1168,45 @@ class SimpleRouter {
 
   // Update filter menu year and term
   updateFilterMenuYearTerm(year, term) {
-    // The filter menu uses the same selectors as the main dashboard
-    // year-select and term-select (without -filter suffix)
-    
-    // Update custom dropdowns in filter menu
-    this.updateFilterCustomDropdowns(year, term)
+    // Update the combined semester dropdown
+    this.updateSemesterDropdown(year, term)
   }
 
-  // Update custom dropdowns in filter menu
-  updateFilterCustomDropdowns(year, term) {
-    // Update term custom dropdown
-    const termCustomSelect = document.querySelector('.custom-select[data-target="term-select"]')
-    if (termCustomSelect) {
-      const termValue = termCustomSelect.querySelector('.custom-select-value')
-      const termOptions = termCustomSelect.querySelectorAll('.custom-select-option')
+  // Update combined semester dropdown
+  updateSemesterDropdown(year, term) {
+    const semesterValue = `${term}-${year}`
+    const semesterLabel = `${term} ${year}`
+    
+    // Update semester custom dropdown
+    const semesterCustomSelect = document.querySelector('.custom-select[data-target="semester-select"]')
+    if (semesterCustomSelect) {
+      const valueElement = semesterCustomSelect.querySelector('.custom-select-value')
+      const semesterOptions = semesterCustomSelect.querySelectorAll('.custom-select-option')
       
       // Remove existing selection
-      termOptions.forEach(option => option.classList.remove('selected'))
+      semesterOptions.forEach(option => option.classList.remove('selected'))
       
       // Find and select the correct option
-      const targetOption = Array.from(termOptions).find(option => option.dataset.value === term)
+      const targetOption = Array.from(semesterOptions).find(option => option.dataset.value === semesterValue)
       if (targetOption) {
         targetOption.classList.add('selected')
-        if (termValue) {
-          termValue.textContent = targetOption.textContent
+        if (valueElement) {
+          valueElement.textContent = targetOption.textContent
         }
       }
     }
-
-    // Update year custom dropdown  
-    const yearCustomSelect = document.querySelector('.custom-select[data-target="year-select"]')
-    if (yearCustomSelect) {
-      const yearValue = yearCustomSelect.querySelector('.custom-select-value')
-      const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option')
-      
-      // Remove existing selection
-      yearOptions.forEach(option => option.classList.remove('selected'))
-      
-      // Find and select the correct option
-      const targetOption = Array.from(yearOptions).find(option => option.dataset.value === year.toString())
-      if (targetOption) {
-        targetOption.classList.add('selected')
-        if (yearValue) {
-          yearValue.textContent = targetOption.textContent
-        }
-      }
+    
+    // Update hidden semester select
+    const semesterSelect = document.getElementById('semester-select')
+    if (semesterSelect) {
+      semesterSelect.value = semesterValue
     }
+    
+    // Update hidden term and year inputs
+    const termSelect = document.getElementById('term-select')
+    const yearSelect = document.getElementById('year-select')
+    if (termSelect) termSelect.value = term
+    if (yearSelect) yearSelect.value = year
   }
 
   // Perform search on dashboard

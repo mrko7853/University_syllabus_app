@@ -34,38 +34,7 @@
                                     </div>
                                 </div>
                                 <div class="filter-content">
-                                    <div id="filter-year-term">
-                                        <h3 class="filter-title">Semester and Year</h3>
-                                        <div id="filter-year-term-container">
-                                            <div class="custom-select" data-target="term-select">
-                                                <div class="custom-select-trigger" tabindex="0">
-                                                    <span class="custom-select-value">Fall</span>
-                                                    <div class="custom-select-arrow"></div>
-                                                </div>
-                                                <div class="custom-select-options">
-                                                    <div class="custom-select-option" data-value="Spring">Spring</div>
-                                                    <div class="custom-select-option selected" data-value="Fall">Fall</div>
-                                                </div>
-                                            </div>
-                                            <select name="term" id="term-select" style="display: none;">
-                                                <option value="Spring">Spring</option>
-                                                <option value="Fall" selected>Fall</option>
-                                            </select>
-                                            
-                                            <div class="custom-select" data-target="year-select">
-                                                <div class="custom-select-trigger" tabindex="0">
-                                                    <span class="custom-select-value">Loading...</span>
-                                                    <div class="custom-select-arrow"></div>
-                                                </div>
-                                                <div class="custom-select-options">
-                                                    <!-- Options populated dynamically from database -->
-                                                </div>
-                                            </div>
-                                            <select name="year" id="year-select" style="display: none;">
-                                                <!-- Options populated dynamically from database -->
-                                            </select>
-                                        </div>
-                                    </div>
+
 
                                     <div id="filter-by-days">
                                         <h3 class="filter-title">Day of the Week</h3>
@@ -174,26 +143,82 @@
             </div>
         </div>
 
+            <!-- Mobile version: container-above outside course-main-div -->
+            <div class="container-above container-above-mobile">
+                <div class="title-box">
+                    <h2 class="course-main-title"></h2>
+                        <div id="filter-year-term-mobile">
+                                    <div class="filter-year-term-container">
+                                        <div class="custom-select" data-target="semester-select-mobile">
+                                            <div class="custom-select-trigger" tabindex="0">
+                                                <span class="custom-select-value">Loading...</span>
+                                                <div class="custom-select-arrow"></div>
+                                            </div>
+                                            <div class="custom-select-options">
+                                                <!-- Options populated dynamically from database -->
+                                            </div>
+                                        </div>
+                                        <select name="semester" id="semester-select-mobile" class="semester-select" style="display: none;">
+                                            <!-- Options populated dynamically from database -->
+                                        </select>
+                                    </div>
+                            </div>
+                    <h3 class="course-main-paragraph course-filter-paragraph"></h3>
+                </div>
+                <div class="buttons-box">
+                    <button class="search-btn"><div></div></button>
+                    <div class="sort-wrapper">
+                        <button class="sort-btn"><div></div></button>
+                        <div class="sort-dropdown">
+                            <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
+                            <div class="sort-option" data-sort="title-za">Course Z-A</div>
+                            <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
+                            <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
+                        </div>
+                    </div>
+                    <button class="filter-btn">Filter</button>
+                </div>
+            </div>
             <div class="main-container" id="course-main-div" style="margin-top: 20px;">
-                <div class="container-above">
+                <!-- Desktop version: container-above inside course-main-div -->
+                <div class="container-above container-above-desktop">
                     <div class="title-box">
-                        <h2 class="course-main-title" id="course-title-change">Courses</h2>
-                        <h3 class="course-main-paragraph" id="course-filter-paragraph"></h3>
+                        <h2 class="course-main-title"></h2>
+                            <div id="filter-year-term">
+                                        <div class="filter-year-term-container">
+                                            <div class="custom-select" data-target="semester-select">
+                                                <div class="custom-select-trigger" tabindex="0">
+                                                    <span class="custom-select-value">Loading...</span>
+                                                    <div class="custom-select-arrow"></div>
+                                                </div>
+                                                <div class="custom-select-options">
+                                                    <!-- Options populated dynamically from database -->
+                                                </div>
+                                            </div>
+                                            <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                                                <!-- Options populated dynamically from database -->
+                                            </select>
+                                        </div>
+                                </div>
+                        <h3 class="course-main-paragraph course-filter-paragraph"></h3>
                     </div>
                     <div class="buttons-box">
-                        <button id="search-btn"><div></div></button>
+                        <button class="search-btn"><div></div></button>
                         <div class="sort-wrapper">
-                            <button id="sort-btn"><div></div></button>
-                            <div class="sort-dropdown" id="sort-dropdown">
+                            <button class="sort-btn"><div></div></button>
+                            <div class="sort-dropdown">
                                 <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
                                 <div class="sort-option" data-sort="title-za">Course Z-A</div>
                                 <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
                                 <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                             </div>
                         </div>
-                        <button id="filter-btn">Filter</button>
+                        <button class="filter-btn">Filter</button>
                     </div>
                 </div>
+                <!-- Hidden inputs to store parsed term and year values (shared) -->
+                <input type="hidden" id="term-select" value="Fall">
+                <input type="hidden" id="year-select" value="">
                 <div id="course-list" class="loading">
                     <!-- Initial skeleton placeholders - will be replaced when courses load -->
                     <div class="skeleton-class-outside">
