@@ -187,7 +187,7 @@
                             <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                         </div>
                     </div>
-                    <button class="filter-btn"><div></div><span>Filter</span></button>
+                    <button class="filter-btn"><div></div></button>
                 </div>
             </div>
             <div class="main-container" id="course-main-div" style="margin-top: 20px;">
@@ -214,6 +214,15 @@
                         <h3 class="course-main-paragraph course-filter-paragraph"></h3>
                     </div>
                     <div class="buttons-box">
+                        <!-- Desktop inline search pill -->
+                        <div class="search-pill-container">
+                            <div class="search-pill">
+                                <div class="search-pill-icon"></div>
+                                <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..." autocomplete="off">
+                            </div>
+                            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+                        </div>
+                        <!-- Mobile search button (hidden on desktop) -->
                         <button class="search-btn"><div></div></button>
                         <div class="sort-wrapper">
                             <button class="sort-btn"><div></div></button>
@@ -224,7 +233,7 @@
                                 <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                             </div>
                         </div>
-                        <button class="filter-btn"><div></div><span>Filter</span></button>
+                        <button class="filter-btn"><div></div></button>
                     </div>
                 </div>
                 <!-- Hidden inputs to store parsed term and year values (shared) -->

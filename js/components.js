@@ -52,47 +52,36 @@ class AppNavigation extends HTMLElement {
             <nav class="test">
                 <ul>
                     <div class="profile-menu-container">
-                    <li><button class="false" id="profile" data-route="/profile"></button>
-                        <p class="navigation-text">Profile</p></li>
+                    <li><button class="nav-btn" id="profile" data-route="/profile">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Profile</span>
+                    </button></li>
                       <div class="profile-dropdown-menu">
                         <a href="#view-profile">View Profile</a>
                         <a href="#settings">Settings</a>
                         <a href="#logout">Logout</a>
                       </div>
                     </div>
-                    <div class="accessibility-container">
-                    <li><button class="false" id="dashboard" data-route="/dashboard"></button>
-                        <p class="navigation-text">Dashboard</p></li>
-                      <div class="accessibility-dropdown">
-                        <p>Dashboard</p>
-                      </div>
-                    </div>
-                    <div class="accessibility-container">
-                    <li><button class="false" id="calendar-btn" data-route="/calendar"></button>
-                      <p class="navigation-text">Calendar</p></li>
-                    <div class="accessibility-dropdown">
-                        <p>Calendar</p>
-                      </div>
-                    </div>
-                    <div class="accessibility-container">
-                    <li><button class="false" id="search" data-route="/search"></button>
-                        <p class="navigation-text">Search</p></li>
-                      <div class="accessibility-dropdown">
-                        <p>Search</p>
-                      </div>
-                    </div>
-                    <div class="accessibility-container accessibility-down">
-                    <li><button class="false" id="settings" data-route="/settings"></button></li>
-                      <div class="accessibility-dropdown">
-                        <p>Settings</p>
-                      </div>
-                    </div>
-                    <div class="accessibility-container accessibility-down">
-                    <li><button class="false" id="help" data-route="/help"></button></li>
-                      <div class="accessibility-dropdown">
-                        <p>Help</p>
-                      </div>
-                    </div>
+                    <li><button class="nav-btn" id="dashboard" data-route="/courses">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Courses</span>
+                    </button></li>
+                    <li><button class="nav-btn" id="calendar-btn" data-route="/calendar">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Calendar</span>
+                    </button></li>
+                    <li><button class="nav-btn" id="search" data-route="/search">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Search</span>
+                    </button></li>
+                    <li><button class="nav-btn" id="settings" data-route="/settings">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Settings</span>
+                    </button></li>
+                    <li><button class="nav-btn" id="help" data-route="/help">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Help</span>
+                    </button></li>
                 </ul>
             </nav>
         `;

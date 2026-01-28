@@ -7,7 +7,8 @@ class SimpleRouter {
   constructor() {
     this.routes = {
       '/': '/index.html',
-      '/dashboard': '/index.html', 
+      '/courses': '/index.html', 
+      '/dashboard': '/index.html', // Legacy redirect
       '/calendar': '/calendar.html',
       '/profile': '/profile.html',
       '/login': '/login.html',
@@ -22,6 +23,14 @@ class SimpleRouter {
     this.currentPath = window.location.pathname
     this.isInitialized = false
     this.componentCleanupFunctions = []
+    
+    // State persistence for courses page
+    this.coursesPageState = {
+      year: null,
+      term: null,
+      searchQuery: null,
+      filters: null
+    }
     
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
@@ -77,11 +86,11 @@ class SimpleRouter {
     const currentPath = window.location.pathname
     const basePath = this.extractBasePath(currentPath)
     
-    if (basePath === '/' || basePath === '' || basePath === '/dashboard') {
-      // For dashboard on initial load, skip HTML replacement and just initialize
+    if (basePath === '/' || basePath === '' || basePath === '/courses' || basePath === '/dashboard') {
+      // For courses page on initial load, skip HTML replacement and just initialize
       // This prevents the "bump" caused by re-fetching and replacing content
-      this.currentPath = '/dashboard'
-      this.initializeCurrentPageOnly('/dashboard')
+      this.currentPath = '/courses'
+      this.initializeCurrentPageOnly('/courses')
     } else {
       // Load current page to initialize components
       this.loadPage(currentPath)
@@ -106,6 +115,14 @@ class SimpleRouter {
     return true
   }
 
+  // Check if currently on the courses page
+  isOnCoursesPage() {
+    return this.currentPath === '/' || 
+           this.currentPath === '/courses' || 
+           this.currentPath === '/dashboard' ||
+           this.currentPath === ''
+  }
+
   navigate(path) {
     // Remove domain if full URL
     if (path.includes(window.location.origin)) {
@@ -117,7 +134,9 @@ class SimpleRouter {
     
     // Normalize path
     if (cleanPath === '' || cleanPath === '/') {
-      path = '/dashboard'
+      path = '/courses'
+    } else if (cleanPath === '/dashboard') {
+      path = '/courses' // Redirect legacy dashboard to courses
     } else {
       path = cleanPath
     }
@@ -169,6 +188,11 @@ class SimpleRouter {
     // Show loading bar
     this.showLoadingBar()
     
+    // Save courses page state before navigating away
+    if (this.isOnCoursesPage()) {
+      this.saveCoursesPageState()
+    }
+    
     // Check if this is a course URL first
     const courseMatch = path.match(this.coursePattern)
     if (courseMatch) {
@@ -176,8 +200,8 @@ class SimpleRouter {
       const [, courseCode, year, term] = courseMatch
       console.log('Course URL detected:', { courseCode, year, term })
       
-      // Load dashboard first
-      const basePath = '/dashboard'
+      // Load courses page first
+      const basePath = '/courses'
       this.currentPath = basePath
       
       try {
@@ -191,11 +215,11 @@ class SimpleRouter {
         const html = await response.text()
         document.body.innerHTML = html
         
-        // Initialize dashboard components
-        await this.reinitializeEverything('/dashboard')
+        // Initialize courses page components
+        await this.reinitializeEverything('/courses')
         
-        // Update active navigation to show dashboard as active
-        this.updateActiveNav('/dashboard')
+        // Update active navigation to show courses as active
+        this.updateActiveNav('/courses')
         
         // Wait for components to be ready, then open the course
         setTimeout(async () => {
@@ -302,8 +326,8 @@ class SimpleRouter {
       // Update loading progress
       this.updateLoadingProgress(95)
       
-      // ALWAYS check for guest dashboard on ANY dashboard load (including first load)
-      if (basePath === '/dashboard' || basePath === '/' || this.routes[basePath] === '/index.html') {
+      // ALWAYS check for guest dashboard on ANY courses page load (including first load)
+      if (basePath === '/courses' || basePath === '/dashboard' || basePath === '/' || this.routes[basePath] === '/index.html') {
         const isAuthenticated = await this.checkAuthentication()
         this.handleGuestDashboard(isAuthenticated)
       }
@@ -332,8 +356,8 @@ class SimpleRouter {
       // Re-initialize everything for the current content
       await this.reinitializeEverything(path)
       
-      // Handle guest dashboard if on dashboard
-      if (path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
+      // Handle guest dashboard if on courses page
+      if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
         this.handleGuestDashboard(isAuthenticated)
       }
       
@@ -367,10 +391,10 @@ class SimpleRouter {
       // Check authentication status for UI modifications
       const isAuthenticated = await this.checkAuthentication()
       
-      // Re-import and reinitialize main.js functionality if on dashboard/index
-      if (path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
+      // Re-import and reinitialize main.js functionality if on courses/index
+      if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
         await this.initializeDashboard()
-        // Hide top content for guest users on dashboard
+        // Hide top content for guest users on courses page
         this.handleGuestDashboard(isAuthenticated)
       }
       
@@ -402,6 +426,9 @@ class SimpleRouter {
 
   async initializeDashboard() {
     try {
+      // Check if we have saved state to restore
+      const hasSavedState = this.coursesPageState.year || this.coursesPageState.term
+      
       // In production, modules are already bundled and available
       if (this.isProduction()) {
         // Call initialization functions directly if they exist
@@ -432,9 +459,282 @@ class SimpleRouter {
       // Set up global year/term tracking
       this.setupGlobalYearTermTracking()
       
+      // Restore saved state AFTER initialization completes
+      // This will override the defaults and reload courses with saved year/term
+      if (hasSavedState) {
+        // Give DOM time to settle, then restore state and reload courses
+        setTimeout(() => this.restoreCoursesPageStateWithReload(), 150)
+      }
+      
+      // Set up state persistence listeners
+      this.setupCoursesPageStatePersistence()
+      
     } catch (error) {
       console.error('Error initializing dashboard:', error)
     }
+  }
+
+  // Restore state and reload courses with the saved year/term
+  async restoreCoursesPageStateWithReload() {
+    console.log('Restoring courses page state with reload:', this.coursesPageState)
+    
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+    
+    let needsReload = false
+    
+    // Restore year
+    if (this.coursesPageState.year && yearSelect && yearSelect.value !== this.coursesPageState.year) {
+      yearSelect.value = this.coursesPageState.year
+      needsReload = true
+    }
+    
+    // Restore term
+    if (this.coursesPageState.term && termSelect && termSelect.value !== this.coursesPageState.term) {
+      termSelect.value = this.coursesPageState.term
+      needsReload = true
+    }
+    
+    // Update the custom semester dropdown to match
+    if (this.coursesPageState.year && this.coursesPageState.term) {
+      this.updateSemesterDropdown(this.coursesPageState.year, this.coursesPageState.term)
+    }
+    
+    // If year/term changed, reload the courses
+    if (needsReload) {
+      console.log('Reloading courses with saved year/term:', this.coursesPageState.year, this.coursesPageState.term)
+      
+      // Use window.showCourse to reload courses with the correct year/term
+      if (window.showCourse) {
+        await window.showCourse(this.coursesPageState.year, this.coursesPageState.term)
+      } else if (window.updateCoursesAndFilters) {
+        // Fallback to updateCoursesAndFilters
+        await window.updateCoursesAndFilters()
+      }
+    }
+    
+    // Restore search query after courses are loaded
+    if (this.coursesPageState.searchQuery) {
+      setTimeout(() => {
+        window.currentSearchQuery = this.coursesPageState.searchQuery
+        
+        // Update desktop search pill input
+        const searchPillInput = document.getElementById('search-pill-input')
+        if (searchPillInput) {
+          searchPillInput.value = this.coursesPageState.searchQuery
+        }
+        
+        // Update modal search input as well
+        const searchInput = document.getElementById('search-input')
+        if (searchInput) {
+          searchInput.value = this.coursesPageState.searchQuery
+        }
+        
+        // Apply the search
+        if (window.performSearch) {
+          window.performSearch(this.coursesPageState.searchQuery)
+        } else if (window.applySearchAndFilters) {
+          window.applySearchAndFilters(this.coursesPageState.searchQuery)
+        }
+        
+        // Update filter paragraph
+        if (window.updateCourseFilterParagraph) {
+          setTimeout(() => window.updateCourseFilterParagraph(), 100)
+        }
+      }, 300)
+    }
+    
+    // Restore filters if any
+    if (this.coursesPageState.filters) {
+      setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
+    }
+  }
+
+  // Save courses page state before navigating away
+  saveCoursesPageState() {
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+    
+    this.coursesPageState = {
+      year: yearSelect ? yearSelect.value : null,
+      term: termSelect ? termSelect.value : null,
+      searchQuery: window.currentSearchQuery || null,
+      filters: this.getActiveFilters()
+    }
+    
+    console.log('Saved courses page state:', this.coursesPageState)
+  }
+
+  // Restore courses page state when returning
+  restoreCoursesPageState() {
+    // Only restore if we have saved state
+    if (!this.coursesPageState.year && !this.coursesPageState.term && !this.coursesPageState.searchQuery) {
+      console.log('No saved courses page state to restore')
+      return
+    }
+    
+    console.log('Restoring courses page state:', this.coursesPageState)
+    
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+    
+    let needsRefresh = false
+    
+    // Restore year
+    if (this.coursesPageState.year && yearSelect && yearSelect.value !== this.coursesPageState.year) {
+      yearSelect.value = this.coursesPageState.year
+      needsRefresh = true
+    }
+    
+    // Restore term
+    if (this.coursesPageState.term && termSelect && termSelect.value !== this.coursesPageState.term) {
+      termSelect.value = this.coursesPageState.term
+      needsRefresh = true
+    }
+    
+    // Update the custom semester dropdown if it exists
+    if (needsRefresh && this.coursesPageState.year && this.coursesPageState.term) {
+      this.updateSemesterDropdown(this.coursesPageState.year, this.coursesPageState.term)
+    }
+    
+    // Trigger refresh if year/term changed
+    if (needsRefresh) {
+      // Dispatch change events to trigger data refresh
+      if (yearSelect) yearSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      if (termSelect) termSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    
+    // Restore search query after a delay to ensure courses are loaded
+    if (this.coursesPageState.searchQuery) {
+      setTimeout(() => {
+        window.currentSearchQuery = this.coursesPageState.searchQuery
+        
+        // Apply the search
+        if (window.performSearch) {
+          window.performSearch(this.coursesPageState.searchQuery)
+        } else if (window.applySearchAndFilters) {
+          window.applySearchAndFilters(this.coursesPageState.searchQuery)
+        }
+        
+        // Update filter paragraph
+        if (window.updateCourseFilterParagraph) {
+          setTimeout(() => window.updateCourseFilterParagraph(), 100)
+        }
+      }, 300)
+    }
+    
+    // Restore filters if any
+    if (this.coursesPageState.filters) {
+      setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
+    }
+  }
+
+  // Get active filters from the filter menu
+  getActiveFilters() {
+    const filters = {
+      types: [],
+      days: [],
+      periods: []
+    }
+    
+    // Get type filters
+    document.querySelectorAll('#filter-by-type input[type="checkbox"]:checked').forEach(cb => {
+      filters.types.push(cb.value)
+    })
+    
+    // Get day filters
+    document.querySelectorAll('#filter-by-days input[type="checkbox"]:checked').forEach(cb => {
+      filters.days.push(cb.value)
+    })
+    
+    // Get period/time filters
+    document.querySelectorAll('#filter-by-time input[type="checkbox"]:checked').forEach(cb => {
+      filters.periods.push(cb.value)
+    })
+    
+    // Only return if there are active filters
+    if (filters.types.length > 0 || filters.days.length > 0 || filters.periods.length > 0) {
+      return filters
+    }
+    
+    return null
+  }
+
+  // Restore filters
+  restoreFilters(filters) {
+    if (!filters) return
+    
+    // Restore type filters
+    if (filters.types && filters.types.length > 0) {
+      document.querySelectorAll('#filter-by-type input[type="checkbox"]').forEach(cb => {
+        cb.checked = filters.types.includes(cb.value)
+      })
+    }
+    
+    // Restore day filters
+    if (filters.days && filters.days.length > 0) {
+      document.querySelectorAll('#filter-by-days input[type="checkbox"]').forEach(cb => {
+        cb.checked = filters.days.includes(cb.value)
+      })
+    }
+    
+    // Restore period/time filters
+    if (filters.periods && filters.periods.length > 0) {
+      document.querySelectorAll('#filter-by-time input[type="checkbox"]').forEach(cb => {
+        cb.checked = filters.periods.includes(cb.value)
+      })
+    }
+    
+    // Apply filters
+    if (window.applySearchAndFilters) {
+      window.applySearchAndFilters(this.coursesPageState.searchQuery || '')
+    }
+  }
+
+  // Set up listeners to persist state changes
+  setupCoursesPageStatePersistence() {
+    const yearSelect = document.getElementById('year-select')
+    const termSelect = document.getElementById('term-select')
+    
+    // Listen for year/term changes
+    const saveState = () => {
+      this.saveCoursesPageState()
+    }
+    
+    if (yearSelect) {
+      yearSelect.addEventListener('change', saveState)
+      this.componentCleanupFunctions.push(() => {
+        yearSelect.removeEventListener('change', saveState)
+      })
+    }
+    
+    if (termSelect) {
+      termSelect.addEventListener('change', saveState)
+      this.componentCleanupFunctions.push(() => {
+        termSelect.removeEventListener('change', saveState)
+      })
+    }
+    
+    // Listen for search changes via global variable
+    const originalPerformSearch = window.performSearch
+    if (originalPerformSearch) {
+      window.performSearch = (query) => {
+        const result = originalPerformSearch(query)
+        this.coursesPageState.searchQuery = query || null
+        return result
+      }
+    }
+    
+    // Also watch for filter changes
+    document.querySelectorAll('#filter-by-type input, #filter-by-days input, #filter-by-time input').forEach(input => {
+      const filterChangeHandler = () => {
+        this.coursesPageState.filters = this.getActiveFilters()
+      }
+      input.addEventListener('change', filterChangeHandler)
+      this.componentCleanupFunctions.push(() => {
+        input.removeEventListener('change', filterChangeHandler)
+      })
+    })
   }
 
   async initializeCalendar() {
@@ -647,11 +947,14 @@ class SimpleRouter {
     if (path.startsWith('/profile/')) {
       return '/profile'
     }
-    if (path.startsWith('/calendar/')) {
-      return '/calendar'
+    if (path.startsWith('/courses/')) {
+      return '/courses'
     }
     if (path.startsWith('/dashboard/')) {
-      return '/dashboard'
+      return '/courses' // Redirect legacy dashboard paths
+    }
+    if (path.startsWith('/calendar/')) {
+      return '/calendar'
     }
     if (path.startsWith('/settings/')) {
       return '/settings'
@@ -699,7 +1002,8 @@ class SimpleRouter {
     const pageNames = {
       '/profile': 'Profile',
       '/calendar': 'Calendar',
-      '/dashboard': 'Dashboard',
+      '/courses': 'Courses',
+      '/dashboard': 'Courses',
       '/settings': 'Settings',
       '/help': 'Help'
     }
@@ -1127,11 +1431,11 @@ class SimpleRouter {
     // Close modal
     this.closeSearchModal()
 
-    // Navigate to dashboard if not already there
-    if (this.currentPath !== '/dashboard' && this.currentPath !== '/') {
-      await this.navigate('/dashboard')
+    // Navigate to courses page if not already there
+    if (this.currentPath !== '/courses' && this.currentPath !== '/dashboard' && this.currentPath !== '/') {
+      await this.navigate('/courses')
       
-      // Wait for dashboard to load completely
+      // Wait for courses page to load completely
       await new Promise(resolve => setTimeout(resolve, 800))
     }
 

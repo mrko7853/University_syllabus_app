@@ -1230,6 +1230,12 @@ function setupDashboardEventListeners() {
                 searchInput.value = "";
             }
             
+            // Clear desktop search pill input
+            const searchPillInput = document.getElementById('search-pill-input');
+            if (searchPillInput) {
+                searchPillInput.value = "";
+            }
+            
             // Clear global search state
             currentSearchQuery = null;
             
@@ -1364,6 +1370,9 @@ function setupDashboardEventListeners() {
         }
     }
     
+    // Desktop Search Pill Setup
+    setupDesktopSearchPill();
+    
     // Initialize custom select dropdowns and filter checkboxes
     initializeCustomSelects();
     initializeFilterCheckboxes();
@@ -1420,6 +1429,216 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
                 const searchCancel = document.getElementById('search-cancel');
                 if (searchCancel) searchCancel.click();
             }
+        }
+    });
+}
+
+// Desktop Search Pill - inline search with autocomplete
+let desktopSearchPillInitialized = false;
+let desktopHighlightIndex = -1;
+
+function setupDesktopSearchPill() {
+    const searchPillInput = document.getElementById('search-pill-input');
+    const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
+    
+    if (!searchPillInput || !searchPillAutocomplete) {
+        console.log('Desktop search pill elements not found');
+        return;
+    }
+    
+    if (desktopSearchPillInitialized && searchPillInput.dataset.listenerAttached === 'true') {
+        console.log('Desktop search pill already initialized');
+        return;
+    }
+    
+    console.log('Initializing desktop search pill');
+    searchPillInput.dataset.listenerAttached = 'true';
+    
+    // Load courses for autocomplete when user starts typing
+    let coursesLoaded = false;
+    
+    // Input event for autocomplete
+    searchPillInput.addEventListener("input", async (event) => {
+        const query = event.target.value;
+        
+        // Load courses on first interaction if not already loaded
+        if (!coursesLoaded && query.length >= 1) {
+            await getAllCourses();
+            coursesLoaded = true;
+        }
+        
+        showDesktopPillAutocomplete(query, searchPillAutocomplete);
+    });
+    
+    // Focus event - load courses and show autocomplete if has content
+    searchPillInput.addEventListener("focus", async (event) => {
+        if (!coursesLoaded) {
+            await getAllCourses();
+            coursesLoaded = true;
+        }
+        
+        if (event.target.value.trim() && event.target.value.length >= 2) {
+            showDesktopPillAutocomplete(event.target.value, searchPillAutocomplete);
+        }
+    });
+    
+    // Click event - show autocomplete if has content
+    searchPillInput.addEventListener("click", (event) => {
+        if (event.target.value.trim() && event.target.value.length >= 2) {
+            showDesktopPillAutocomplete(event.target.value, searchPillAutocomplete);
+        }
+    });
+    
+    // Keyboard navigation
+    searchPillInput.addEventListener("keydown", (event) => {
+        if (searchPillAutocomplete.style.display === 'block' && 
+            (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            handleDesktopPillAutocompleteNavigation(event, searchPillAutocomplete);
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            
+            // If autocomplete is open and item is highlighted, select it
+            if (searchPillAutocomplete.style.display === 'block' && desktopHighlightIndex >= 0) {
+                const items = searchPillAutocomplete.querySelectorAll('.search-autocomplete-item');
+                if (items[desktopHighlightIndex]) {
+                    items[desktopHighlightIndex].click();
+                    return;
+                }
+            }
+            
+            // Otherwise perform search
+            const searchQuery = searchPillInput.value.trim();
+            if (searchQuery) {
+                performSearch(searchQuery);
+                searchPillAutocomplete.style.display = 'none';
+                desktopHighlightIndex = -1;
+            }
+        } else if (event.key === "Escape") {
+            event.preventDefault();
+            searchPillAutocomplete.style.display = 'none';
+            desktopHighlightIndex = -1;
+            searchPillInput.blur();
+        }
+    });
+    
+    // Close autocomplete when clicking outside
+    document.addEventListener("click", (event) => {
+        const searchPillContainer = document.querySelector('.search-pill-container');
+        if (searchPillContainer && !searchPillContainer.contains(event.target)) {
+            searchPillAutocomplete.style.display = 'none';
+            desktopHighlightIndex = -1;
+        }
+    });
+    
+    desktopSearchPillInitialized = true;
+    console.log('Desktop search pill initialized');
+}
+
+// Show autocomplete for desktop search pill
+function showDesktopPillAutocomplete(query, autocompleteContainer) {
+    if (!autocompleteContainer) return;
+    
+    if (!query.trim() || query.length < 2) {
+        autocompleteContainer.style.display = 'none';
+        return;
+    }
+    
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    // First, try exact substring matches
+    let suggestions = allCourses.filter(course => {
+        const title = normalizeCourseTitle(course.title || '').toLowerCase();
+        const professor = romanizeProfessorName(course.professor || '').toLowerCase();
+        const courseCode = (course.course_code || '').toLowerCase();
+        
+        return title.includes(normalizedQuery) || 
+               professor.includes(normalizedQuery) || 
+               courseCode.includes(normalizedQuery);
+    }).slice(0, 6);
+    
+    // If no exact matches found, use fuzzy matching
+    if (suggestions.length === 0) {
+        const coursesWithRelevance = allCourses.map(course => {
+            const relevance = calculateCourseRelevance(normalizedQuery, course);
+            return { course, relevance };
+        })
+        .filter(item => item.relevance > 0.15)
+        .sort((a, b) => b.relevance - a.relevance)
+        .slice(0, 6);
+        
+        suggestions = coursesWithRelevance.map(item => item.course);
+    }
+    
+    if (suggestions.length === 0) {
+        autocompleteContainer.style.display = 'none';
+        return;
+    }
+    
+    // Create inner wrapper for proper scrolling with inner shadow
+    autocompleteContainer.innerHTML = '<div class="search-pill-autocomplete-inner"></div>';
+    const innerContainer = autocompleteContainer.querySelector('.search-pill-autocomplete-inner');
+    
+    suggestions.forEach((course, index) => {
+        const item = document.createElement('div');
+        item.className = 'search-autocomplete-item';
+        
+        // Highlight matching parts in the title
+        const title = course.title || '';
+        const highlightedTitle = highlightMatches(title, query);
+        
+        item.innerHTML = `
+            <div class="item-title">${highlightedTitle}</div>
+            <div class="item-details">
+                <span class="item-code">${course.course_code}</span>
+                <span class="item-professor">${romanizeProfessorName(course.professor)}</span>
+            </div>
+        `;
+        
+        item.addEventListener('click', () => {
+            const searchPillInput = document.getElementById('search-pill-input');
+            if (searchPillInput) {
+                searchPillInput.value = course.title;
+            }
+            autocompleteContainer.style.display = 'none';
+            desktopHighlightIndex = -1;
+            
+            // Perform the search with the selected course title
+            performSearch(course.title);
+        });
+        
+        innerContainer.appendChild(item);
+    });
+    
+    autocompleteContainer.style.display = 'block';
+    desktopHighlightIndex = -1;
+}
+
+// Handle keyboard navigation for desktop pill autocomplete
+function handleDesktopPillAutocompleteNavigation(event, autocompleteContainer) {
+    if (!autocompleteContainer) return;
+    
+    // Look for items inside the inner container
+    const innerContainer = autocompleteContainer.querySelector('.search-pill-autocomplete-inner');
+    const items = innerContainer ? innerContainer.querySelectorAll('.search-autocomplete-item') : autocompleteContainer.querySelectorAll('.search-autocomplete-item');
+    
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        desktopHighlightIndex = Math.min(desktopHighlightIndex + 1, items.length - 1);
+        updateDesktopPillHighlight(items);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        desktopHighlightIndex = Math.max(desktopHighlightIndex - 1, -1);
+        updateDesktopPillHighlight(items);
+    }
+}
+
+// Update highlight for desktop pill autocomplete
+function updateDesktopPillHighlight(items) {
+    items.forEach((item, index) => {
+        if (index === desktopHighlightIndex) {
+            item.classList.add('highlighted');
+        } else {
+            item.classList.remove('highlighted');
         }
     });
 }
@@ -2574,6 +2793,13 @@ export async function initializeDashboard() {
   const searchBtns = document.querySelectorAll('.search-btn');
   searchBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
   
+  // Reset desktop search pill listener flag
+  const searchPillInput = document.getElementById('search-pill-input');
+  if (searchPillInput) {
+    searchPillInput.dataset.listenerAttached = 'false';
+  }
+  desktopSearchPillInitialized = false;
+  
   // Populate semester dropdown (this also sets term/year hidden inputs)
   await populateSemesterDropdown();
   
@@ -2613,6 +2839,7 @@ window.performSearch = performSearch;
 window.applySearchAndFilters = applySearchAndFilters;
 window.initializeDashboard = initializeDashboard;
 window.updateCoursesAndFilters = updateCoursesAndFilters;
+window.showCourse = showCourse;
 
 // Export search state for global access
 Object.defineProperty(window, 'currentSearchQuery', {
