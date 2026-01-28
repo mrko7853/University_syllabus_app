@@ -19,6 +19,13 @@
 <body>
 
     <app-navigation></app-navigation>
+    <div class="app-header">
+        <div class="app-logo"></div>
+        <div class="app-misc">
+            <button id="help-mobile"></button>
+            <button id="settings-mobile"></button>
+        </div>
+    </div>
 
     <!-- Start with guest-dashboard class by default, router will remove it if authenticated -->
     <div id="app-content" class="guest-dashboard">
@@ -97,7 +104,11 @@
                                             </div>
                                             <div class="checkbox-content">
                                                 <input type="checkbox" id="filter-academic" name="filter-academic" class="filter-checkbox" value="academic">
-                                                <label for="filter-academic">Foundation Courses</label>
+                                                <label for="filter-academic">Academic and Research Skills</label>
+                                            </div>
+                                            <div class="checkbox-content">
+                                                <input type="checkbox" id="filter-understanding" name="filter-understanding" class="filter-checkbox" value="understanding">
+                                                <label for="filter-understanding">Understanding Japan and Kyoto</label>
                                             </div>
                                             <div class="checkbox-content">
                                                 <input type="checkbox" id="filter-special" name="filter-special" class="filter-checkbox" value="special">
@@ -176,7 +187,7 @@
                             <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                         </div>
                     </div>
-                    <button class="filter-btn">Filter</button>
+                    <button class="filter-btn"><div></div><span>Filter</span></button>
                 </div>
             </div>
             <div class="main-container" id="course-main-div" style="margin-top: 20px;">
@@ -213,7 +224,7 @@
                                 <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                             </div>
                         </div>
-                        <button class="filter-btn">Filter</button>
+                        <button class="filter-btn"><div></div><span>Filter</span></button>
                     </div>
                 </div>
                 <!-- Hidden inputs to store parsed term and year values (shared) -->

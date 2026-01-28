@@ -406,6 +406,30 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const hasProfessorChanged = professorChanges.has(course.course_code);
         const professorName = getRomanizedProfessorName(course.professor);
         const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
+        
+        // Determine top 3 GPA grades for mobile display
+        const gpaGrades = [
+            { grade: 'A', percent: course.gpa_a_percent },
+            { grade: 'B', percent: course.gpa_b_percent },
+            { grade: 'C', percent: course.gpa_c_percent },
+            { grade: 'D', percent: course.gpa_d_percent },
+            { grade: 'F', percent: course.gpa_f_percent }
+        ];
+        
+        // Sort by percentage descending and get top 3 grades (excluding 0%)
+        const top3Grades = new Set(
+            gpaGrades
+                .filter(g => g.percent !== null && g.percent > 0)
+                .sort((a, b) => b.percent - a.percent)
+                .slice(0, 3)
+                .map(g => g.grade)
+        );
+        
+        // Helper function to get mobile GPA display text
+        const getMobileGpaText = (grade, percent) => {
+            if (percent === null || percent === 0) return grade;
+            return top3Grades.has(grade) ? `${grade} ${percent}%` : grade;
+        };
 
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
@@ -420,11 +444,11 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             </div>
             <!-- Mobile GPA bar outside class-container -->
             <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>${getMobileGpaText('A', course.gpa_a_percent)}</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>${getMobileGpaText('B', course.gpa_b_percent)}</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>${getMobileGpaText('C', course.gpa_c_percent)}</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>${getMobileGpaText('D', course.gpa_d_percent)}</p></div>
+                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>${getMobileGpaText('F', course.gpa_f_percent)}</p></div>
             </div>
             <!-- Desktop GPA bar outside class-container -->
             <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
@@ -581,7 +605,7 @@ function convertTimeSlotToContainerFormat(timeSlot) {
 }
 
 // Helper function to check if a container matches current filters
-function containerMatchesFilters(container) {
+function containerMatchesFilters(container, courseData = null) {
     // Get filter elements dynamically
     const filterByDays = document.getElementById("filter-by-days");
     const filterByTime = document.getElementById("filter-by-time");  
@@ -604,7 +628,7 @@ function containerMatchesFilters(container) {
         .filter(checkbox => checkbox.checked)
         .map(checkbox => checkbox.value);
 
-    // Concentration filter
+    // Concentration/Type filter
     const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
     const selectedConcentrations = Array.from(concCheckboxes)
         .filter(checkbox => checkbox.checked)
@@ -623,8 +647,38 @@ function containerMatchesFilters(container) {
     // Check if matches time filter
     const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
 
-    // Concentration/Type filter - if no filters selected, show all courses
-    const concMatch = selectedConcentrations.length === 0;
+    // Concentration/Type filter - match against course.type from database
+    let concMatch = selectedConcentrations.length === 0;
+    
+    if (!concMatch && courseData) {
+        const courseType = courseData.type || '';
+        
+        // Map filter checkbox values to database type values
+        const typeMatches = selectedConcentrations.some(filterValue => {
+            switch(filterValue) {
+                case 'culture':
+                    return courseType === 'Japanese Society and Global Culture Concentration';
+                case 'economy':
+                    return courseType === 'Japanese Business and the Global Economy Concentration';
+                case 'politics':
+                    return courseType === 'Japanese Politics and Global Studies Concentration';
+                case 'seminar':
+                    return courseType === 'Introductory Seminars' || 
+                           courseType === 'Intermediate Seminars' || 
+                           courseType === 'Advanced Seminars and Honors Thesis';
+                case 'academic':
+                    return courseType === 'Academic and Research Skills';
+                case 'understanding':
+                    return courseType === 'Understanding Japan and Kyoto';
+                case 'special':
+                    return courseType === 'Other Elective Courses';
+                default:
+                    return false;
+            }
+        });
+        
+        concMatch = typeMatches;
+    }
 
     return dayMatch && timeMatch && concMatch;
 }
@@ -680,13 +734,14 @@ async function applySearchAndFilters(searchQuery) {
     classContainers.forEach(container => {
         let shouldShow = true;
         
-        // First check if it matches current filters
-        const filterMatches = containerMatchesFilters(container);
+        // Parse course data from the container
+        const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
+        
+        // First check if it matches current filters (pass courseData for type filtering)
+        const filterMatches = containerMatchesFilters(container, courseData);
         
         // If there's an active search query, also check search criteria
         if (searchQuery && searchQuery.trim()) {
-            const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
-            
             const title = normalizeCourseTitle(courseData.title || '').toLowerCase();
             const professorOriginal = (courseData.professor || '').toLowerCase();
             const professorRomanized = romanizeProfessorName(courseData.professor || '').toLowerCase();
@@ -722,7 +777,7 @@ async function applySearchAndFilters(searchQuery) {
                         id: convertedTimeSlot,
                         dataset: { color: getCourseColorByType(course.type) }
                     };
-                    return containerMatchesFilters(tempContainer);
+                    return containerMatchesFilters(tempContainer, course);
                 });
                 
                 const similarCoursesWithRelevance = findSimilarCourses(searchQuery, filteredCourses, 8);

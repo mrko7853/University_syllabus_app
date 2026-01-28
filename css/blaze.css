@@ -336,6 +336,7 @@ button#help {
     opacity: 0;
     visibility: hidden;
     transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none; /* Disable mouse interaction on the dropdown */
 }
 
 .accessibility-dropdown:hover button#dashboard,
@@ -1041,14 +1042,13 @@ table#calendar-main {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    min-width: max-content;
+    min-width: 150px;
     width: 100%;
-    height: 40px;
+    height: 50px;
     border-radius: 50px;
     font-weight: 100;
     color: black;
     background-color: white;
-    border: 2px solid #E3D5E9;
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
@@ -1056,6 +1056,9 @@ table#calendar-main {
     padding: 10px 20px;
     font-size: var(--p);
     font-family: 'Libre Bodoni', sans-serif;
+    transition: box-shadow .2s, filter .2s;
+    box-shadow: 0 -2px 6px #0a254059 inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
 }
 
 #filter-year-term .custom-select-trigger:focus,
@@ -1063,7 +1066,6 @@ table#calendar-main {
 #filter-year-term-mobile .custom-select-trigger:focus,
 #filter-year-term-mobile .custom-select.open .custom-select-trigger {
     background-color: #E3D5E9;
-    border: 2px solid #E3D5E9;
     outline: none;
 }
 
@@ -1219,6 +1221,15 @@ table#calendar-main {
     background-size: 30px;
     filter: brightness(0) saturate(100%);
     height: 100%;
+}
+
+/* Filter button - text on desktop, icon on mobile */
+.filter-btn div {
+    display: none;
+}
+
+.filter-btn span {
+    display: inline;
 }
 
 /* Sort dropdown styles */
@@ -1751,12 +1762,33 @@ td p {
     .search-btn div, .sort-btn div {
         background-size: 20px !important;
     }
+
+    /* Filter button icon-only on mobile */
+    .filter-btn {
+        width: 50px !important;
+        height: 50px !important;
+    }
+    
+    .filter-btn span {
+        display: none;
+    }
+    
+    .filter-btn div {
+        display: block;
+        background-image: url(/assets/filter.png);
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 20px;
+        filter: brightness(0) saturate(100%);
+        height: 100%;
+        width: 100%;
+    }
     
     /* When container-above is moved outside main-container on mobile */
     .main-content > .container-above {
         background: white;
         margin: 0;
-        padding: 20px 15px;
+        padding: 15px;
         border-radius: 0px;
         position: sticky;
         top: 0;
@@ -2135,7 +2167,6 @@ td p {
     body {
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
     }
 
     section {
@@ -2551,9 +2582,13 @@ td p {
         display: flex;
         align-items: center;
         justify-content: center;
-        min-width: 20px;
-        font-size: 12px;
+        min-width: min-content;
+        padding: 0 4px;
+        font-size: 16px;
+        font-family: Roboto, sans-serif;
         font-weight: bold;
+        overflow: hidden;
+        white-space: nowrap;
     }
 
     /* Mobile GPA null overlay */
@@ -2579,8 +2614,10 @@ td p {
 
     .gpa-fill-mobile p {
         margin: 0;
+        padding: 0 2px;
         color: #333;
         font-weight: bold;
+        font-size: 16px;
     }
 
     .class-info-header {
@@ -4340,4 +4377,57 @@ calendar-page .mobile-day-buttons {
     .sort-wrapper {
         display: none !important;
     }
+
+    .app-header {
+        display: flex !important;
+        width: 100%;
+        height: auto;
+        padding: 15px;
+        background-color: #FFFFFF;
+        border-bottom: 1px solid #E3E2E2;
+        justify-content: space-between;
+        align-items: center;
+        box-sizing: border-box;
+    }
+
+    .app-misc {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .app-logo {
+        background-image: url(/assets/logo.svg);
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+        width: 130px;
+        height: 40px;
+    }
+
+    button#settings-mobile {
+        background-image: url(/assets/settings.svg);
+        background-position: center;
+        background-repeat: no-repeat;
+        box-shadow: none;
+        filter: none;
+        border-radius: 0px;
+        width: 30px;
+        height: 30px;
+    }
+
+    button#help-mobile {
+        background-image: url(/assets/help.svg);
+        background-position: center;
+        background-repeat: no-repeat;
+        box-shadow: none;
+        filter: none;
+        border-radius: 0px;
+        width: 30px;
+        height: 30px;
+    }
+}
+
+.app-header {
+    display: none;
 }

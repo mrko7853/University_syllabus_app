@@ -942,52 +942,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         });
     }
 
-    const cultureColor = "#C6E0B4";
-    const economyColor = "#FFE699";
-    const politicsColor = "#FFCCCC";
-    const seminarColor = "#FFFF99";
-    const academicColor = "#CCFFFF";
-    const specialColor = "#CCCCFF";
-
-    // Function to determine course type based on color
-    function getCourseType(courseColor) {
-        switch(courseColor) {
-            case cultureColor:
-                return "Culture";
-            case economyColor:
-                return "Economy";
-            case politicsColor:
-                return "Politics";
-            case seminarColor:
-                return "Seminar";
-            case academicColor:
-                return "Foundation";
-            case specialColor:
-                return "Special Lecture";
-            default:
-                return "General";
-        }
-    }
-
-    // Get course color from the course data or determine it
-    let courseColor = course.color || "#FFFFFF"; // Default to white if no color
-    if (course.course_code) {
-        // Try to find the course element in the DOM to get its color
-        const courseElements = document.querySelectorAll('.class-container');
-        for (let element of courseElements) {
-            if (element.textContent.includes(course.course_code)) {
-                courseColor = element.style.backgroundColor || 
-                            window.getComputedStyle(element).backgroundColor;
-                // Convert rgb to hex if needed
-                if (courseColor.startsWith('rgb')) {
-                    courseColor = rgbToHex(courseColor);
-                }
-                break;
-            }
-        }
-    }
-
-    const courseType = getCourseType(courseColor);
+    // Get course color from the course data based on type
+    const courseColor = getCourseColorByType(course.type);
+    
+    // Use the type directly from the database
+    const courseType = course.type || 'General';
 
     // Check if course is already selected by user (for time slot background color)
     let isAlreadySelected = false;
