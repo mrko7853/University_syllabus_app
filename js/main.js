@@ -428,7 +428,14 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         // Helper function to get mobile GPA display text
         const getMobileGpaText = (grade, percent) => {
             if (percent === null || percent === 0) return grade;
-            return top3Grades.has(grade) ? `${grade} ${percent}%` : grade;
+            const roundedPercent = Math.round(percent);
+            return top3Grades.has(grade) ? `${grade} ${roundedPercent}%` : grade;
+        };
+
+        // Helper function to format GPA percentage (remove decimals)
+        const formatGpaPercent = (percent) => {
+            if (percent === null) return 'N/A';
+            return Math.round(percent);
         };
 
         courseHTML += `
@@ -452,11 +459,11 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             </div>
             <!-- Desktop GPA bar outside class-container -->
             <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
-                <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
-                <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
-                <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
-                <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+                <div class="gpa-fill"><p>A ${formatGpaPercent(course.gpa_a_percent)}%</p></div>
+                <div class="gpa-fill"><p>B ${formatGpaPercent(course.gpa_b_percent)}%</p></div>
+                <div class="gpa-fill"><p>C ${formatGpaPercent(course.gpa_c_percent)}%</p></div>
+                <div class="gpa-fill"><p>D ${formatGpaPercent(course.gpa_d_percent)}%</p></div>
+                <div class="gpa-fill"><p>F ${formatGpaPercent(course.gpa_f_percent)}%</p></div>
             </div>
         </div>
         `;
@@ -1836,10 +1843,11 @@ function initializeCustomSelects() {
                 });
             }
             
-            // Close sort dropdown when clicking outside
-            const sortWrapper = document.querySelector('.sort-wrapper');
-            if (sortWrapper && !sortWrapper.contains(e.target)) {
-                sortWrapper.classList.remove("open");
+            // Close all sort dropdowns when clicking outside
+            if (!e.target.closest('.sort-wrapper')) {
+                document.querySelectorAll('.sort-wrapper').forEach(sortWrapper => {
+                    sortWrapper.classList.remove("open");
+                });
             }
         });
     }
@@ -2589,11 +2597,11 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
             </div>
             <!-- Desktop GPA bar outside class-container -->
             <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill"><p>A ${course.gpa_a_percent}%</p></div>
-                <div class="gpa-fill"><p>B ${course.gpa_b_percent}%</p></div>
-                <div class="gpa-fill"><p>C ${course.gpa_c_percent}%</p></div>
-                <div class="gpa-fill"><p>D ${course.gpa_d_percent}%</p></div>
-                <div class="gpa-fill"><p>F ${course.gpa_f_percent}%</p></div>
+                <div class="gpa-fill"><p>A ${course.gpa_a_percent !== null ? Math.round(course.gpa_a_percent) : 'N/A'}%</p></div>
+                <div class="gpa-fill"><p>B ${course.gpa_b_percent !== null ? Math.round(course.gpa_b_percent) : 'N/A'}%</p></div>
+                <div class="gpa-fill"><p>C ${course.gpa_c_percent !== null ? Math.round(course.gpa_c_percent) : 'N/A'}%</p></div>
+                <div class="gpa-fill"><p>D ${course.gpa_d_percent !== null ? Math.round(course.gpa_d_percent) : 'N/A'}%</p></div>
+                <div class="gpa-fill"><p>F ${course.gpa_f_percent !== null ? Math.round(course.gpa_f_percent) : 'N/A'}%</p></div>
             </div>
         </div>
         `;
