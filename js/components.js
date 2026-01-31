@@ -51,17 +51,7 @@ class AppNavigation extends HTMLElement {
         this.innerHTML = `
             <nav class="test">
                 <ul>
-                    <div class="profile-menu-container">
-                    <li><button class="nav-btn" id="profile" data-route="/profile">
-                        <span class="nav-icon"></span>
-                        <span class="navigation-text">Profile</span>
-                    </button></li>
-                      <div class="profile-dropdown-menu">
-                        <a href="#view-profile">View Profile</a>
-                        <a href="#settings">Settings</a>
-                        <a href="#logout">Logout</a>
-                      </div>
-                    </div>
+                    <li><div class="desktop-app-logo"></div></li>
                     <li><button class="nav-btn" id="dashboard" data-route="/courses">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Courses</span>
@@ -74,6 +64,17 @@ class AppNavigation extends HTMLElement {
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Search</span>
                     </button></li>
+                    <div class="profile-menu-container">
+                    <li><button class="nav-btn" id="profile" data-route="/profile">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Profile</span>
+                    </button></li>
+                      <div class="profile-dropdown-menu">
+                        <a href="#view-profile">View Profile</a>
+                        <a href="#settings">Settings</a>
+                        <a href="#logout">Logout</a>
+                      </div>
+                    </div>
                     <li><button class="nav-btn" id="settings" data-route="/settings">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Settings</span>
