@@ -1,5 +1,5 @@
 // Calendar Page Component - Dedicated component for calendar page with mobile support
-import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "/js/shared.js";
 import { supabase } from "/supabase.js";
 
 class CalendarPageComponent extends HTMLElement {
@@ -23,45 +23,45 @@ class CalendarPageComponent extends HTMLElement {
               <thead>
                 <tr>
                   <th><p style="display: none;">empty</p></th>
-                  <th id="calendar-monday"><p>M</p></th>
-                  <th id="calendar-tuesday"><p>Tu</p></th>
-                  <th id="calendar-wednesday"><p>W</p></th>
-                  <th id="calendar-thursday"><p>Th</p></th>
-                  <th id="calendar-friday"><p>F</p></th>
+                  <th id="calendar-monday"><p>Mon</p></th>
+                  <th id="calendar-tuesday"><p>Tue</p></th>
+                  <th id="calendar-wednesday"><p>Wed</p></th>
+                  <th id="calendar-thursday"><p>Thu</p></th>
+                  <th id="calendar-friday"><p>Fri</p></th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td id="calendar-period-1">
-                    <p class="time-full">09:00 - 10:30</p>
+                    <p class="time-full"><small>period 1</small></br>09:00 - 10:30</p>
                     <p class="time-short">1h</p>
                   </td>
                   <td></td><td></td><td></td><td></td><td></td>
                 </tr>
                 <tr>
                   <td id="calendar-period-2">
-                    <p class="time-full">10:45 - 12:15</p>
+                    <p class="time-full"><small>period 2</small></br>10:45 - 12:15</p>
                     <p class="time-short">2h</p>
                   </td>
                   <td></td><td></td><td></td><td></td><td></td>
                 </tr>
                 <tr>
                   <td id="calendar-period-3">
-                    <p class="time-full">13:10 - 14:40</p>
+                    <p class="time-full"><small>period 3</small></br>13:10 - 14:40</p>
                     <p class="time-short">3h</p>
                   </td>
                   <td></td><td></td><td></td><td></td><td></td>
                 </tr>
                 <tr>
                   <td id="calendar-period-4">
-                    <p class="time-full">14:55 - 16:25</p>
+                    <p class="time-full"><small>period 4</small></br>14:55 - 16:25</p>
                     <p class="time-short">4h</p>
                   </td>
                   <td></td><td></td><td></td><td></td><td></td>
                 </tr>
                 <tr>
                   <td id="calendar-period-5">
-                    <p class="time-full">16:40 - 18:10</p>
+                    <p class="time-full"><small>period 5</small></br>16:40 - 18:10</p>
                     <p class="time-short">5h</p>
                   </td>
                   <td></td><td></td><td></td><td></td><td></td>
@@ -247,13 +247,28 @@ class CalendarPageComponent extends HTMLElement {
       // Initial highlight
       this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
       this.highlightPeriod();
+      this.highlightCurrentTimePeriod();
 
-      // Set current term
-      const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
-      const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
-        const currentMonth = new Date().getMonth() + 1;
-        return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring";
-      })();
+      // Set current term - wait for semester selector or use defaults
+      let currentYear, currentTerm;
+      
+      // Try to get from selectors (might not be ready yet)
+      const yearSelect = document.getElementById('year-select');
+      const termSelect = document.getElementById('term-select');
+      
+      if (yearSelect && yearSelect.value && !isNaN(parseInt(yearSelect.value))) {
+        currentYear = parseInt(yearSelect.value);
+      } else {
+        // Default to 2025 (latest available semester)
+        currentYear = 2025;
+      }
+      
+      if (termSelect && termSelect.value) {
+        currentTerm = termSelect.value;
+      } else {
+        // Default to Fall (latest available semester)
+        currentTerm = "Fall";
+      }
       
       console.log(`Calendar page: Loading courses for ${currentYear} ${currentTerm}`);
 
@@ -325,14 +340,22 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   highlightDay(dayShort) {
-    this.calendar.querySelectorAll('thead th, tbody td').forEach(el => el.classList.remove('highlight-day'));
+    // Remove previous highlights
+    this.calendar.querySelectorAll('thead th, tbody td').forEach(el => {
+      el.classList.remove('highlight-day', 'highlight-current-day');
+    });
+    
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
+    
+    // Highlight the header
     const header = this.calendarHeader[colIndex];
     if (header) header.classList.add('highlight-day');
+    
+    // Highlight entire column for current day
     this.calendar.querySelectorAll(`tbody tr`).forEach(row => {
       const cell = row.querySelector(`td:nth-child(${colIndex + 1})`);
-      if (cell) cell.classList.add('highlight-day');
+      if (cell) cell.classList.add('highlight-current-day');
     });
   }
 
@@ -342,6 +365,39 @@ class CalendarPageComponent extends HTMLElement {
       const cell = row.querySelector("td:nth-child(1)");
       if (cell) cell.classList.add("calendar-first");
     });
+  }
+
+  highlightCurrentTimePeriod() {
+    // Get current time
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute; // minutes since midnight
+    const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
+    
+    // Time periods in minutes
+    const periods = [
+      { start: 9 * 60, end: 10 * 60 + 30, row: 0 },      // 09:00-10:30 (period 1)
+      { start: 10 * 60 + 45, end: 12 * 60 + 15, row: 1 }, // 10:45-12:15 (period 2)
+      { start: 13 * 60 + 10, end: 14 * 60 + 40, row: 2 }, // 13:10-14:40 (period 3)
+      { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 }, // 14:55-16:25 (period 4)
+      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }  // 16:40-18:10 (period 5)
+    ];
+    
+    // Find current period
+    const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
+    if (!currentPeriod) return; // Not during class time
+    
+    // Get column index for current day
+    const colIndex = this.getColIndexByDayEN(currentDay);
+    if (colIndex === -1) return;
+    
+    // Highlight the cell
+    const rows = this.calendar.querySelectorAll('tbody tr');
+    if (rows[currentPeriod.row]) {
+      const cell = rows[currentPeriod.row].querySelector(`td:nth-child(${colIndex + 1})`);
+      if (cell) cell.classList.add('highlight-current-time');
+    }
   }
 
   async showCourse(year, term) {
@@ -449,18 +505,23 @@ class CalendarPageComponent extends HTMLElement {
         div_title.classList.add("course-title");
         div_classroom.classList.add("course-classroom");
         
-        // Set content
-        div_title.textContent = course.title_short ? course.title_short.normalize("NFKC").toUpperCase() : course.course_code;
-        div_classroom.textContent = course.classroom || "";
+        // Set content - normalize and truncate title for calendar cell
+        const displayTitle = course.title ? 
+          course.title.normalize("NFKC").substring(0, 40) + (course.title.length > 40 ? '...' : '') : 
+          course.course_code;
+        div_title.textContent = displayTitle;
+        div_classroom.textContent = course.location || "";
         
         if (div_classroom.textContent === "") {
           div_classroom.classList.add("empty-classroom");
           div_title.classList.add("empty-classroom-title");
         }
         
-        // Set background color
-        div.style.backgroundColor = course.color || "#E3D5E9";
+        // Set background color based on course type from database
+        const courseColor = getCourseColorByType(course.type);
+        div.style.backgroundColor = courseColor;
         div.dataset.courseIdentifier = course.course_code;
+        div.dataset.courseType = course.type || 'unknown';
         
         cell.appendChild(div);
         div.appendChild(div_title);

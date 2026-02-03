@@ -438,6 +438,9 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             return Math.round(percent);
         };
 
+        // Determine GPA class - hide GPA for new professors (professor changed)
+        const gpaClass = course.gpa_a_percent === null ? "gpa-null" : (hasProfessorChanged ? "gpa-new-professor" : "");
+
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
             <div class="class-container" style="background-color: ${courseColor}" data-course='${escapedCourseJSON}'>
@@ -450,7 +453,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                 <h3 id="course-time"><div class="course-time-icon"></div>${displayTimeSlot}</h3>
             </div>
             <!-- Mobile GPA bar outside class-container -->
-            <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+            <div class="gpa-bar-mobile ${gpaClass}">
                 <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>${getMobileGpaText('A', course.gpa_a_percent)}</p></div>
                 <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>${getMobileGpaText('B', course.gpa_b_percent)}</p></div>
                 <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>${getMobileGpaText('C', course.gpa_c_percent)}</p></div>
@@ -458,7 +461,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                 <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>${getMobileGpaText('F', course.gpa_f_percent)}</p></div>
             </div>
             <!-- Desktop GPA bar outside class-container -->
-            <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
+            <div class="gpa-bar gpa-bar-desktop ${gpaClass}">
                 <div class="gpa-fill"><p>A ${formatGpaPercent(course.gpa_a_percent)}%</p></div>
                 <div class="gpa-fill"><p>B ${formatGpaPercent(course.gpa_b_percent)}%</p></div>
                 <div class="gpa-fill"><p>C ${formatGpaPercent(course.gpa_c_percent)}%</p></div>
@@ -969,22 +972,68 @@ function setupDashboardEventListeners() {
     semesterSelects.forEach(semesterSelect => {
         // Check if already initialized using data attribute
         if (semesterSelect.dataset.listenerAttached !== 'true') {
-            semesterSelect.addEventListener("change", (e) => {
+            semesterSelect.addEventListener("change", async (e) => {
+                console.log('🔔 SEMESTER CHANGE EVENT FIRED');
+                console.log('  → Event target:', e.target.id);
+                console.log('  → Selected value:', e.target.value);
+                
                 // Parse the semester value and update hidden inputs
                 const { term, year } = parseSemesterValue(e.target.value);
+                console.log('  → Parsed term:', term);
+                console.log('  → Parsed year:', year);
+                
                 const termSelect = document.getElementById("term-select");
                 const yearSelect = document.getElementById("year-select");
                 
-                if (termSelect) termSelect.value = term;
-                if (yearSelect) yearSelect.value = year;
+                if (termSelect) {
+                    termSelect.value = term;
+                    console.log('  → Updated term-select to:', termSelect.value);
+                }
+                if (yearSelect) {
+                    yearSelect.value = year;
+                    console.log('  → Updated year-select to:', yearSelect.value);
+                }
                 
                 console.log('Semester changed to:', term, year);
                 
                 // Sync both dropdowns (mobile and desktop)
                 syncSemesterDropdowns(e.target.value);
+                console.log('  → Dropdowns synced');
                 
-                // Update courses
-                updateCoursesAndFilters();
+                // Check if we're on the calendar page
+                const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+                console.log('  → Is calendar page?', isCalendarPage);
+                console.log('  → Current pathname:', window.location.pathname);
+                console.log('  → Calendar component exists?', !!document.querySelector('calendar-page'));
+                
+                if (isCalendarPage) {
+                    // On calendar page - refresh the calendar with new semester
+                    console.log('✅ CALENDAR PAGE DETECTED - Refreshing for:', year, term);
+                    
+                    // Update search courses for the new semester
+                    console.log('  → Calling getAllCourses()...');
+                    await getAllCourses();
+                    console.log('  → getAllCourses() completed');
+                    
+                    const calendarComponent = document.querySelector('calendar-page');
+                    console.log('  → Calendar component:', calendarComponent);
+                    
+                    if (calendarComponent && calendarComponent.showCourseWithRetry) {
+                        console.log('  → Calling showCourseWithRetry with:', year, term);
+                        await calendarComponent.showCourseWithRetry(year, term);
+                        console.log('  → showCourseWithRetry completed');
+                    } else {
+                        console.error('❌ Calendar component or showCourseWithRetry not found');
+                        console.error('   Component:', calendarComponent);
+                        console.error('   Method exists:', calendarComponent ? !!calendarComponent.showCourseWithRetry : false);
+                    }
+                } else {
+                    // On courses page - update courses
+                    console.log('📄 COURSES PAGE - Calling updateCoursesAndFilters()');
+                    updateCoursesAndFilters();
+                }
+                
+                console.log('🏁 SEMESTER CHANGE HANDLER COMPLETED');
             });
             semesterSelect.dataset.listenerAttached = 'true';
             console.log('Semester select change listener attached');
@@ -1609,8 +1658,18 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
             autocompleteContainer.style.display = 'none';
             desktopHighlightIndex = -1;
             
-            // Perform the search with the selected course title
-            performSearch(course.title);
+            // Check if we're on the calendar page
+            const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+            
+            if (isCalendarPage) {
+                // On calendar page - open course info modal directly without navigation
+                if (window.openCourseInfoMenu) {
+                    window.openCourseInfoMenu(course);
+                }
+            } else {
+                // On courses page - perform search as normal
+                performSearch(course.title);
+            }
         });
         
         innerContainer.appendChild(item);
@@ -1824,10 +1883,15 @@ function initializeCustomSelects() {
             if (valueElement) valueElement.textContent = text;
             
             // Update actual select
+            console.log('  → Setting', targetSelectId, 'value to:', value);
             targetSelect.value = value;
+            console.log('  → Value set. Current value:', targetSelect.value);
             
-            // Trigger change event
-            targetSelect.dispatchEvent(new Event('change'));
+            // Trigger change event with bubbles: true
+            console.log('  → Dispatching change event on', targetSelectId);
+            const changeEvent = new Event('change', { bubbles: true });
+            targetSelect.dispatchEvent(changeEvent);
+            console.log('  → Change event dispatched');
             
             // Close dropdown
             customSelect.classList.remove('open');
@@ -2186,17 +2250,30 @@ let currentHighlightIndex = -1;
 // Function to get all courses for autocomplete
 async function getAllCourses() {
     try {
+        console.log('📚 getAllCourses() called');
         const yearSelect = document.getElementById("year-select");
         const termSelect = document.getElementById("term-select");
-        if (!yearSelect || !termSelect) return [];
+        console.log('  → year-select element:', yearSelect);
+        console.log('  → term-select element:', termSelect);
+        
+        if (!yearSelect || !termSelect) {
+            console.error('  ❌ Year or term select not found!');
+            return [];
+        }
         
         const year = yearSelect.value;
         const term = termSelect.value;
+        console.log('  → Year value:', year);
+        console.log('  → Term value:', term);
+        console.log('  → Fetching courses for:', year, term);
+        
         const courses = await fetchCourseData(year, term);
+        console.log('  → Fetched courses count:', courses.length);
         allCourses = courses;
+        console.log('  → allCourses updated with', allCourses.length, 'courses');
         return courses;
     } catch (error) {
-        console.error('Error fetching courses for autocomplete:', error);
+        console.error('❌ Error fetching courses for autocomplete:', error);
         return [];
     }
 }
@@ -2267,6 +2344,19 @@ function showAutocomplete(query, searchAutocomplete) {
             if (searchInput) searchInput.value = course.title;
             if (searchAutocomplete) searchAutocomplete.style.display = 'none';
             currentHighlightIndex = -1;
+            
+            // Check if we're on the calendar page
+            const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+            
+            if (isCalendarPage) {
+                // On calendar page - open course info modal directly without navigation
+                if (window.openCourseInfoMenu) {
+                    window.openCourseInfoMenu(course);
+                }
+            } else {
+                // On courses page - perform search
+                performSearch(course.title);
+            }
         });
         
         searchAutocomplete.appendChild(item);
@@ -2612,14 +2702,20 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 
 // Function to perform search
 function performSearch(searchQuery) {
-    // Update the global search state
-    currentSearchQuery = searchQuery && searchQuery.trim() ? searchQuery : null;
+    // Check if we're on the calendar page
+    const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
     
-    // Update the course filter paragraph to show search status
-    updateCourseFilterParagraph();
-    
-    // Use the unified search and filter function
-    return applySearchAndFilters(currentSearchQuery);
+    if (!isCalendarPage) {
+        // Update the global search state (only on courses page)
+        currentSearchQuery = searchQuery && searchQuery.trim() ? searchQuery : null;
+        
+        // Update the course filter paragraph to show search status
+        updateCourseFilterParagraph();
+        
+        // Use the unified search and filter function
+        return applySearchAndFilters(currentSearchQuery);
+    }
+    // On calendar page, don't perform search
 }
 
 // Mobile navigation positioning fix
@@ -2775,6 +2871,9 @@ export async function initializeDashboard() {
   restructureReviewDatesForMobile();
   setViewportHeight();
   
+  // Initialize sticky observer for filter buttons
+  initStickyObserver();
+  
   // Reset the custom select initialization flags so they can be reinitialized (for both mobile and desktop)
   const semesterCustomSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
   semesterCustomSelects.forEach(customSelect => {
@@ -2848,6 +2947,31 @@ window.applySearchAndFilters = applySearchAndFilters;
 window.initializeDashboard = initializeDashboard;
 window.updateCoursesAndFilters = updateCoursesAndFilters;
 window.showCourse = showCourse;
+window.populateSemesterDropdown = populateSemesterDropdown;
+window.initializeCustomSelects = initializeCustomSelects;
+window.setupDashboardEventListeners = setupDashboardEventListeners;
+window.parseSemesterValue = parseSemesterValue;
+window.getAllCourses = getAllCourses;
+
+// Create initializeSearch wrapper function
+window.initializeSearch = function() {
+  console.log('Initializing search...');
+  const searchInput = document.getElementById('search-input');
+  const searchAutocomplete = document.getElementById('search-autocomplete');
+  const searchPillInput = document.getElementById('search-pill-input');
+  const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
+  
+  if (searchInput && searchAutocomplete) {
+    setupSearchAutocomplete(searchInput, searchAutocomplete);
+  }
+  
+  if (searchPillInput && searchPillAutocomplete) {
+    setupSearchAutocomplete(searchPillInput, searchPillAutocomplete);
+  }
+  
+  setupDesktopSearchPill();
+  console.log('Search initialized');
+};
 
 // Export search state for global access
 Object.defineProperty(window, 'currentSearchQuery', {

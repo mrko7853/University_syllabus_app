@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, target-densitydpi=device-dpi">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
     <title>Calendar - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
     <!-- Import components first to ensure web components are defined -->
@@ -18,29 +18,118 @@
   <app-navigation></app-navigation>
 
   <div id="app-content">
-    <section id="course-summary">
-      <div class="main-content">
-        <div class="main-container calendar-container">
-          <div class="main-container" id="calendar-container">
-            <calendar-page></calendar-page>
+    
+    <!-- Search modal (shared component) -->
+    <div class="search-container hidden">
+      <div class="search-background">
+        <div class="search-modal">
+          <div class="swipe-indicator"></div>
+          <h2><div></div>Search Courses</h2>
+          <div class="search-input-container">
+            <input type="text" class="search-input" id="search-input" placeholder="Enter course title, professor name, or course code..." autocomplete="off">
+            <div class="search-autocomplete" id="search-autocomplete"></div>
+          </div>
+          <div class="search-buttons">
+            <button class="search-submit" id="search-submit">Search</button>
+            <button class="search-cancel" id="search-cancel">Cancel</button>
           </div>
         </div>
+      </div>
+    </div>
+    
+    <section id="course-summary">
+
+        <!-- Desktop semester selector -->
+        <div class="container-above container-above-desktop">
+          <div class="title-box">
+            <div id="filter-year-term">
+              <div class="filter-year-term-container">
+                <div class="custom-select" data-target="semester-select">
+                  <div class="custom-select-trigger" tabindex="0">
+                    <span class="custom-select-value">Loading...</span>
+                    <div class="custom-select-arrow"></div>
+                  </div>
+                  <div class="custom-select-options">
+                    <!-- Options populated dynamically from database -->
+                  </div>
+                </div>
+                <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                  <!-- Options populated dynamically from database -->
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="buttons-box">
+            <!-- Desktop inline search pill -->
+            <div class="search-pill-container">
+              <div class="search-pill">
+                <div class="search-pill-icon"></div>
+                <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..." autocomplete="off">
+              </div>
+              <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+            </div>
+            <!-- Mobile search button (hidden on desktop) -->
+            <button class="search-btn"><div></div></button>
+          </div>
+        </div>
+
+      <div class="main-content">
+
+        <!-- Mobile semester selector -->
+        <div class="container-above container-above-mobile">
+          <div class="title-box">
+            <h2 class="course-main-title">Calendar</h2>
+            <div id="filter-year-term-mobile">
+              <div class="filter-year-term-container">
+                <div class="custom-select" data-target="semester-select-mobile">
+                  <div class="custom-select-trigger" tabindex="0">
+                    <span class="custom-select-value">Loading...</span>
+                    <div class="custom-select-arrow"></div>
+                  </div>
+                  <div class="custom-select-options">
+                    <!-- Options populated dynamically from database -->
+                  </div>
+                </div>
+                <select name="semester" id="semester-select-mobile" class="semester-select" style="display: none;">
+                  <!-- Options populated dynamically from database -->
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="buttons-box">
+            <button class="search-btn"><div></div></button>
+          </div>
+        </div>
+        
+        <div class="main-container calendar-container" id="calendar-main-div">
+          <calendar-page></calendar-page>
+        </div>
+        
+        <!-- Hidden inputs for year/term values -->
+        <input type="hidden" id="term-select" value="Fall">
+        <input type="hidden" id="year-select" value="">
+        
+        <!-- Hidden placeholder for course list (required for initialization) -->
+        <div id="course-list" style="display: none;"></div>
       </div>
     </section>
 
     <div class="class-info" id="class-info">
-        <div class="swipe-indicator"></div>
-        <div class="class-header">
-            <button id="class-close">x</button>
-            <h2>Class Info</h2>
+        <div class="class-info-header">
+            <div class="swipe-indicator"></div>
+            <div class="class-header">
+                <button id="class-close">x</button>
+                <h2>Class Info</h2>
+                <button id="class-add-remove"></button>
+            </div>
         </div>
         
         <div class="class-content-wrapper">
             <div class="class-content" id="class-content">
             </div>
-            <div class="class-gpa-graph" id="class-gpa-graph">
+            <div class="class-content" id="class-gpa-graph">
             </div>
-            <div class="class-review" id="class-review">
+            <div class="class-content" id="class-review">
             </div>
         </div>
     </div>

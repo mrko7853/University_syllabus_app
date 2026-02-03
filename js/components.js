@@ -22,6 +22,30 @@ function normalizeCourseTitle(title) {
     return normalized;
 }
 
+// Helper function to normalize short titles for Next Class display
+function normalizeShortTitle(shortTitle) {
+    if (!shortTitle) return shortTitle;
+    
+    // Convert full-width characters to normal width
+    let normalized = shortTitle.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+    });
+    
+    // Convert full-width spaces to normal spaces
+    normalized = normalized.replace(/　/g, ' ');
+    
+    // Remove ○ symbol
+    normalized = normalized.replace(/○/g, '');
+    
+    // Remove parentheses
+    normalized = normalized.replace(/[()（）]/g, '');
+    
+    // Clean up extra spaces and convert to UPPERCASE
+    normalized = normalized.replace(/\s+/g, ' ').trim().toUpperCase();
+    
+    return normalized;
+}
+
 // Initialize session state - will be updated by components as needed
 window.globalSession = null;
 window.globalUser = null;
@@ -232,49 +256,101 @@ class TermBox extends HTMLElement {
   constructor() {
     super();
 
-    this.innerHTML = `
-      <div class="total-courses">
-        <div class="total-courses-container" id="#year-courses">
-          <h2 class="total-count" id="term-semester"></h2>
-          <h2 class="total-text" id="term-year"></h2>
+    // ====================================================================
+    // NEXT CLASS FEATURE - ENABLED
+    // Semester end check is DISABLED for styling purposes
+    // ====================================================================
+    this.enableNextClass = true;
+    
+    // Temporary HTML for styling (shows old term/year display)
+    if (!this.enableNextClass) {
+      this.innerHTML = `
+        <div class="total-courses">
+          <div class="total-courses-container" id="#year-courses">
+            <h2 class="total-count" id="term-semester">Fall</h2>
+            <h2 class="total-text" id="term-year">2025</h2>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      // New Next Class HTML (will be used once enabled)
+      this.innerHTML = `
+        <div class="total-courses">
+          <div class="total-courses-container">
+            <h2 class="total-text" id="next-class-label">Next class:</h2>
+            <h2 class="total-count" id="next-class-name">Loading...</h2>
+            <h2 class="total-text" id="next-class-time">Calculating...</h2>
+          </div>
+        </div>
+      `;
+    }
 
-    this.handleSelectChange = () => this.updateDisplayTerm();
+    this.updateInterval = null;
+    this.courses = [];
   }
 
   connectedCallback() {
-    // Always reinitialize when connected
-    this.updateDisplayTerm();
-    this.initConcentration();
+    // ====================================================================
+    // ENABLE NEXT CLASS FEATURE BY CHANGING enableNextClass to true
+    // ====================================================================
+    if (!this.enableNextClass) {
+      // Old behavior: show term and year
+      this.showOldTermDisplay();
+      return;
+    }
+    
+    // New behavior: show next class
+    this.updateNextClass();
+    
+    // Update every minute
+    this.updateInterval = setInterval(() => {
+      this.updateNextClass();
+    }, 60000); // 60 seconds
 
-    // Set up refresh on router navigation
+    // Listen for selector changes
+    const yearSelect = document.getElementById('year-select');
+    const termSelect = document.getElementById('term-select');
+    
+    if (yearSelect) {
+      yearSelect.addEventListener('change', () => this.updateNextClass());
+    }
+    
+    if (termSelect) {
+      termSelect.addEventListener('change', () => this.updateNextClass());
+    }
+
+    // Refresh on page navigation
     document.addEventListener('pageLoaded', () => {
-      setTimeout(() => {
-        this.updateDisplayTerm();
-        this.initConcentration();
-      }, 100);
+      setTimeout(() => this.updateNextClass(), 100);
     });
-
-    // Attach listeners to keep display updated on changes
-    this._ys = document.getElementById('year-select');
-    this._ts = document.getElementById('term-select');
-    this._termSemesterDisplay = this.querySelector('#term-semester');
-    this._termYearDisplay = this.querySelector('#term-year');
-
-    if (this._ys) this._ys.addEventListener('change', this.handleSelectChange);
-    if (this._ts) this._ts.addEventListener('change', this.handleSelectChange);
   }
 
   disconnectedCallback() {
-    if (this._ys) this._ys.removeEventListener('change', this.handleSelectChange);
-    if (this._ts) this._ts.removeEventListener('change', this.handleSelectChange);
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+    }
   }
 
-  translateTerm(termRaw) {
-    // Terms are now just 'Spring' or 'Fall' in the database
-    return (termRaw || '').trim();
+  // ====================================================================
+  // OLD TERM DISPLAY (temporary for styling)
+  // ====================================================================
+  showOldTermDisplay() {
+    this.updateDisplayTerm();
+    
+    const yearSelect = document.getElementById('year-select');
+    const termSelect = document.getElementById('term-select');
+    
+    if (yearSelect) {
+      yearSelect.addEventListener('change', () => this.updateDisplayTerm());
+    }
+    
+    if (termSelect) {
+      termSelect.addEventListener('change', () => this.updateDisplayTerm());
+    }
+
+    document.addEventListener('pageLoaded', () => {
+      setTimeout(() => this.updateDisplayTerm(), 100);
+    });
   }
 
   updateDisplayTerm() {
@@ -296,18 +372,263 @@ class TermBox extends HTMLElement {
       }
     }
 
-    const term = this.translateTerm(termRaw);
+    const term = termRaw.trim();
     displayTermSemester.textContent = term;
     displayTermYear.textContent = year;
   }
 
-  async initConcentration() {
-    const concentrationText = this.querySelector('#concentration-text-id');
-    const containerDiv = this.querySelector('.total-courses');
+  // ====================================================================
+  // NEW NEXT CLASS FUNCTIONALITY (will run when enableNextClass = true)
+  // ====================================================================
+
+  async updateNextClass() {
+    const labelEl = this.querySelector('#next-class-label');
+    const nameEl = this.querySelector('#next-class-name');
+    const timeEl = this.querySelector('#next-class-time');
+    
+    if (!labelEl || !nameEl || !timeEl) return;
+
+    try {
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        nameEl.textContent = 'Please log in';
+        timeEl.textContent = '';
+        return;
+      }
+
+      // Get selected semester
+      const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+      const termRaw = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+      const term = termRaw.includes('/') ? termRaw.split('/')[1] : termRaw;
+
+      // Get user's selected courses
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('courses_selection')
+        .eq('id', session.user.id)
+        .single();
+
+      const selectedCourses = profile?.courses_selection || [];
+      const normalizedTerm = term.trim();
+      
+      // Filter for current semester
+      const semesterCourses = selectedCourses.filter(course => {
+        const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
+        return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
+      });
+
+      if (semesterCourses.length === 0) {
+        labelEl.textContent = 'Next class:';
+        nameEl.textContent = 'No classes scheduled';
+        timeEl.textContent = '';
+        return;
+      }
+
+      // Fetch full course data
+      const allCoursesInSemester = await fetchCourseData(year, term);
+      const userCourses = allCoursesInSemester.filter(course =>
+        semesterCourses.some(sc => sc.code === course.course_code)
+      );
+
+      // Find next class
+      const nextClass = this.findNextClass(userCourses, year, term);
+      
+      if (!nextClass) {
+        labelEl.textContent = 'Next class:';
+        nameEl.textContent = 'No classes scheduled';
+        timeEl.textContent = '';
+        return;
+      }
+
+      // Display the class info
+      let displayName = nextClass.course.title || nextClass.course.course_code;
+      
+      // Truncate to 30 characters if needed
+      if (displayName.length > 22) {
+        displayName = displayName.substring(0, 22) + '...';
+      }
+      
+      if (nextClass.isCurrent) {
+        labelEl.textContent = 'Current class:';
+        nameEl.textContent = displayName;
+        timeEl.textContent = '';
+      } else {
+        labelEl.textContent = 'Next class:';
+        nameEl.textContent = displayName;
+        timeEl.textContent = nextClass.timeRemaining;
+      }
+    } catch (error) {
+      console.error('Error updating next class:', error);
+      nameEl.textContent = 'Error loading';
+      timeEl.textContent = '';
+    }
+  }
+
+  findNextClass(courses, year, term) {
+    const now = new Date();
+    const currentDay = now.getDay(); // 0=Sunday, 1=Monday, etc.
+    const currentTime = now.getHours() * 60 + now.getMinutes(); // minutes since midnight
+
+    // ====================================================================
+    // SEMESTER END CHECK - TEMPORARILY DISABLED FOR STYLING
+    // To enable: Uncomment the lines below
+    // ====================================================================
+    /*
+    const semesterEnd = this.getSemesterEnd(year, term);
+    if (now > semesterEnd) {
+      return null;
+    }
+    */
+
+    const dayMap = {
+      'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5,
+      '月': 1, '火': 2, '水': 3, '木': 4, '金': 5
+    };
+
+    const scheduledClasses = [];
+
+    courses.forEach(course => {
+      const parsed = this.parseTimeSlot(course.time_slot);
+      if (!parsed) return;
+
+      const { day, startTime, endTime } = parsed;
+      const dayNum = dayMap[day];
+      if (!dayNum) return;
+
+      scheduledClasses.push({
+        course,
+        dayNum,
+        startTime,
+        endTime
+      });
+    });
+
+    if (scheduledClasses.length === 0) return null;
+
+    // Check for current class (within first 30 minutes)
+    const currentClasses = scheduledClasses.filter(cls => {
+      return cls.dayNum === currentDay && 
+             currentTime >= cls.startTime && 
+             currentTime < cls.startTime + 30;
+    });
+
+    if (currentClasses.length > 0) {
+      return {
+        course: currentClasses[0].course,
+        isCurrent: true,
+        timeRemaining: ''
+      };
+    }
+
+    // Find next upcoming class
+    let nextClass = null;
+    let minDiff = Infinity;
+
+    for (let daysAhead = 0; daysAhead < 14; daysAhead++) {
+      const targetDate = new Date(now);
+      targetDate.setDate(targetDate.getDate() + daysAhead);
+      const targetDay = targetDate.getDay();
+
+      if (targetDay === 0 || targetDay === 6) continue; // Skip weekends
+
+      scheduledClasses.forEach(cls => {
+        if (cls.dayNum !== targetDay) return;
+
+        let timeDiff;
+        if (daysAhead === 0) {
+          // Today: only consider future classes
+          if (cls.startTime <= currentTime) return;
+          timeDiff = cls.startTime - currentTime;
+        } else {
+          // Future days
+          timeDiff = (daysAhead * 24 * 60) + (cls.startTime - currentTime);
+        }
+
+        if (timeDiff > 0 && timeDiff < minDiff) {
+          minDiff = timeDiff;
+          nextClass = cls;
+        }
+      });
+
+      if (nextClass) break; // Found a class this week
+    }
+
+    if (!nextClass) return null;
+
+    // Calculate time remaining string
+    const days = Math.floor(minDiff / (24 * 60));
+    const hours = Math.floor((minDiff % (24 * 60)) / 60);
+    const minutes = Math.floor(minDiff % 60);
+
+    let timeStr = 'in ';
+    if (days > 0) timeStr += `${days}d `;
+    if (hours > 0) timeStr += `${hours}h `;
+    if (minutes > 0 || (days === 0 && hours === 0)) timeStr += `${minutes}m`;
+
+    return {
+      course: nextClass.course,
+      isCurrent: false,
+      timeRemaining: timeStr.trim()
+    };
+  }
+
+  parseTimeSlot(timeSlot) {
+    if (!timeSlot) return null;
+
+    // Try Japanese format: (月1講時) or (月曜日1講時)
+    let match = timeSlot.match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
+    if (match) {
+      const dayJP = match[1];
+      const period = parseInt(match[2], 10);
+      
+      const timeSlots = {
+        1: { start: 9 * 60, end: 10 * 60 + 30 },      // 09:00-10:30
+        2: { start: 10 * 60 + 45, end: 12 * 60 + 15 }, // 10:45-12:15
+        3: { start: 13 * 60 + 10, end: 14 * 60 + 40 }, // 13:10-14:40
+        4: { start: 14 * 60 + 55, end: 16 * 60 + 25 }, // 14:55-16:25
+        5: { start: 16 * 60 + 40, end: 18 * 60 + 10 }  // 16:40-18:10
+      };
+
+      const slot = timeSlots[period];
+      if (!slot) return null;
+
+      return {
+        day: dayJP,
+        startTime: slot.start,
+        endTime: slot.end
+      };
+    }
+
+    // Try English format: "Mon 09:00 - 10:30"
+    const engMatch = timeSlot.match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
+    if (engMatch) {
+      const day = engMatch[1];
+      const startHour = parseInt(engMatch[2], 10);
+      const startMin = parseInt(engMatch[3], 10);
+      const endHour = parseInt(engMatch[4], 10);
+      const endMin = parseInt(engMatch[5], 10);
+
+      return {
+        day,
+        startTime: startHour * 60 + startMin,
+        endTime: endHour * 60 + endMin
+      };
+    }
+
+    return null;
+  }
+
+  getSemesterEnd(year, term) {
+    // Spring semester: April 1 - July 31
+    // Fall semester: October 1 - January 31 (next year)
+    if (term === 'Spring') {
+      return new Date(year, 6, 31, 23, 59, 59); // July 31 (month is 0-indexed)
+    } else {
+      return new Date(parseInt(year) + 1, 0, 31, 23, 59, 59); // January 31 next year
+    }
   }
 }
-
-// Remove the old ConcentrationBox class since it's now integrated into TermBox
 
 class CourseCalendar extends HTMLElement {
   constructor() {
@@ -407,11 +728,34 @@ class CourseCalendar extends HTMLElement {
       document.addEventListener('pageLoaded', () => {
         setTimeout(() => this.initializeCalendar(), 100);
       });
+      
+      // Listen for year/term selector changes
+      const yearSelect = document.getElementById('year-select');
+      const termSelect = document.getElementById('term-select');
+      
+      if (yearSelect) {
+        yearSelect.addEventListener('change', () => {
+          this.refreshFromSelectors();
+        });
+      }
+      
+      if (termSelect) {
+        termSelect.addEventListener('change', () => {
+          this.refreshFromSelectors();
+        });
+      }
     }
   }
 
   disconnectedCallback() {
     // Clean up event listeners if needed
+  }
+  
+  refreshFromSelectors() {
+    const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+    const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+    console.log('Mini calendar: Refreshing from selectors:', year, term);
+    this.showCourseWithRetry(year, term);
   }
 
   async initializeCalendar() {
@@ -425,17 +769,16 @@ class CourseCalendar extends HTMLElement {
       // Initial highlight
       this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
       this.highlightPeriod();
+      this.highlightCurrentTimePeriod();
 
-      // Set current term
-      const currentYear = new Date().getFullYear();
-      const currentMonth = new Date().getMonth() + 1;
-      let term = "Spring";
-      if (currentMonth >= 8 || currentMonth <= 2) {
-        term = "Fall";
-      }
+      // Use selected year/term from selectors instead of current date
+      const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+      const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+      
+      console.log('Mini calendar: Initializing with year/term:', year, term);
 
       // Load courses with retry mechanism
-      await this.showCourseWithRetry(currentYear, term);
+      await this.showCourseWithRetry(year, term);
       this.isInitialized = true;
       this.hideLoading();
     } catch (error) {
@@ -506,15 +849,22 @@ class CourseCalendar extends HTMLElement {
   }
 
   highlightDay(dayShort) {
-    // Minimal highlight: add a class to the selected header and column cells
-    this.calendar.querySelectorAll('thead th, tbody td').forEach(el => el.classList.remove('highlight-day'));
+    // Remove previous highlights
+    this.calendar.querySelectorAll('thead th, tbody td').forEach(el => {
+      el.classList.remove('highlight-day', 'highlight-current-day');
+    });
+    
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
+    
+    // Highlight the header
     const header = this.calendarHeader[colIndex];
     if (header) header.classList.add('highlight-day');
+    
+    // Highlight entire column for current day
     this.calendar.querySelectorAll(`tbody tr`).forEach(row => {
       const cell = row.querySelector(`td:nth-child(${colIndex + 1})`);
-      if (cell) cell.classList.add('highlight-day');
+      if (cell) cell.classList.add('highlight-current-day');
     });
   }
 
@@ -525,6 +875,39 @@ class CourseCalendar extends HTMLElement {
       const cell = row.querySelector("td:nth-child(1)");
       if (cell) cell.classList.add("calendar-first");
     });
+  }
+
+  highlightCurrentTimePeriod() {
+    // Get current time
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute; // minutes since midnight
+    const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
+    
+    // Time periods in minutes
+    const periods = [
+      { start: 9 * 60, end: 10 * 60 + 30, row: 0 },      // 09:00-10:30 (period 1)
+      { start: 10 * 60 + 45, end: 12 * 60 + 15, row: 1 }, // 10:45-12:15 (period 2)
+      { start: 13 * 60 + 10, end: 14 * 60 + 40, row: 2 }, // 13:10-14:40 (period 3)
+      { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 }, // 14:55-16:25 (period 4)
+      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }  // 16:40-18:10 (period 5)
+    ];
+    
+    // Find current period
+    const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
+    if (!currentPeriod) return; // Not during class time
+    
+    // Get column index for current day
+    const colIndex = this.getColIndexByDayEN(currentDay);
+    if (colIndex === -1) return;
+    
+    // Highlight the cell
+    const rows = this.calendar.querySelectorAll('tbody tr');
+    if (rows[currentPeriod.row]) {
+      const cell = rows[currentPeriod.row].querySelector(`td:nth-child(${colIndex + 1})`);
+      if (cell) cell.classList.add('highlight-current-time');
+    }
   }
 
   async showCourse(year, term) {
@@ -548,10 +931,16 @@ class CourseCalendar extends HTMLElement {
         if (profileError) throw profileError;
         selectedCourses = profile?.courses_selection || [];
         
+        // Normalize term for comparison (handle both "Fall" and "秋学期/Fall" formats)
+        const normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
+        
         // Filter to only show courses for the current year and term
         selectedCourses = selectedCourses.filter(course => {
-          return course.year === parseInt(year) && (!course.term || course.term === term);
+          const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
+          return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
         });
+        
+        console.log('Mini calendar: Selected courses for', year, normalizedTerm, ':', selectedCourses.length);
       }
 
       this.clearCourseCells();
@@ -569,6 +958,9 @@ class CourseCalendar extends HTMLElement {
           profileCourse.code === course.course_code
         )
       );
+
+      console.log('Mini calendar: Courses to show:', coursesToShow.length);
+      console.log('Mini calendar: Course details:', coursesToShow.map(c => ({ code: c.course_code, time: c.time_slot })));
 
       coursesToShow.forEach(course => {
         // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
@@ -721,6 +1113,8 @@ class WeeklyCalendar extends HTMLElement {
 
   async connectedCallback() {
     await this.render();
+    this.highlightToday();
+    this.highlightCurrentTimePeriod();
     this.setupMobile();
     await this.loadCourses();
   }
@@ -878,6 +1272,71 @@ class WeeklyCalendar extends HTMLElement {
 
   setupMobile() {
     this.checkMobile();
+  }
+
+  highlightToday() {
+    const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
+    const headers = this.querySelectorAll('#calendar thead th');
+    
+    // Find column index for today
+    let todayIndex = -1;
+    headers.forEach((header, index) => {
+      if (header.textContent.trim() === today) {
+        todayIndex = index;
+        header.classList.add('highlight-day');
+      }
+    });
+    
+    if (todayIndex === -1) return;
+    
+    // Highlight entire column
+    const rows = this.querySelectorAll('#calendar tbody tr');
+    rows.forEach(row => {
+      const cells = row.children;
+      if (cells[todayIndex]) {
+        cells[todayIndex].classList.add('highlight-current-day');
+      }
+    });
+  }
+
+  highlightCurrentTimePeriod() {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute;
+    const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
+    
+    // Time periods in minutes
+    const periods = [
+      { start: 9 * 60, end: 10 * 60 + 30, row: 0 },
+      { start: 10 * 60 + 45, end: 12 * 60 + 15, row: 1 },
+      { start: 13 * 60 + 10, end: 14 * 60 + 40, row: 2 },
+      { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 },
+      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }
+    ];
+    
+    const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
+    if (!currentPeriod) return;
+    
+    // Find today's column
+    const headers = this.querySelectorAll('#calendar thead th');
+    let todayIndex = -1;
+    headers.forEach((header, index) => {
+      if (header.textContent.trim() === today) {
+        todayIndex = index;
+      }
+    });
+    
+    if (todayIndex === -1) return;
+    
+    // Highlight the specific cell
+    const rows = this.querySelectorAll('#calendar tbody tr');
+    if (rows[currentPeriod.row]) {
+      const cells = rows[currentPeriod.row].children;
+      if (cells[todayIndex]) {
+        cells[todayIndex].classList.add('highlight-current-time');
+      }
+    }
   }
 
   async getCurrentUser() {

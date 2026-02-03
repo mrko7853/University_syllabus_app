@@ -32,6 +32,10 @@ class SimpleRouter {
       filters: null
     }
     
+    // Page caching - keeps pages in DOM but hidden
+    this.pageCache = new Map()
+    this.pageCacheInitialized = new Map()
+    
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
     
@@ -87,12 +91,15 @@ class SimpleRouter {
     const basePath = this.extractBasePath(currentPath)
     
     if (basePath === '/' || basePath === '' || basePath === '/courses' || basePath === '/dashboard') {
-      // For courses page on initial load, skip HTML replacement and just initialize
-      // This prevents the "bump" caused by re-fetching and replacing content
+      // For courses page on initial load, just initialize without modifying DOM
       this.currentPath = '/courses'
       this.initializeCurrentPageOnly('/courses')
     } else {
-      // Load current page to initialize components
+      // For non-index pages loaded directly, clear the default content and load the correct page
+      const appContent = document.querySelector('#app-content')
+      if (appContent) {
+        appContent.innerHTML = ''
+      }
       this.loadPage(currentPath)
     }
     
@@ -208,8 +215,8 @@ class SimpleRouter {
         // Clean up current page first
         this.cleanupCurrentPage()
         
-        // Load dashboard HTML
-        const response = await fetch('/index.html')
+        // Load dashboard HTML with cache busting
+        const response = await fetch('/index.html?t=' + Date.now())
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
         
         const html = await response.text()
@@ -263,9 +270,6 @@ class SimpleRouter {
     }
 
     try {
-      // Clean up current page first
-      this.cleanupCurrentPage()
-      
       // If protected route and user not authenticated, show locked message
       if (isProtectedRoute && !isAuthenticated) {
         this.showLockedPage(basePath)
@@ -277,7 +281,7 @@ class SimpleRouter {
       this.updateLoadingProgress(30)
       
       // Fetch the HTML content
-      const response = await fetch(htmlFile)
+      const response = await fetch(htmlFile + '?t=' + Date.now())
       if (!response.ok) {
         throw new Error(`Failed to load ${htmlFile}`)
       }
@@ -294,24 +298,19 @@ class SimpleRouter {
       // Extract the content we want (everything except navigation)
       const newContent = doc.querySelector('#app-content') || doc.querySelector('section') || doc.body
       
-      // Update the page content - PROPERLY for custom elements
-      const mainContent = document.querySelector('#app-content') || document.querySelector('section') || document.body
-      if (newContent && mainContent) {
+      // Update the page content
+      const appContent = document.querySelector('#app-content')
+      if (newContent && appContent) {
         // Clear existing content first
-        mainContent.replaceChildren()
+        appContent.innerHTML = ''
         
-        // Clone and append nodes to ensure custom elements are properly connected
+        // Clone and append nodes
         Array.from(newContent.childNodes).forEach(node => {
           const clonedNode = node.cloneNode(true)
-          mainContent.appendChild(clonedNode)
+          appContent.appendChild(clonedNode)
         })
         
-        console.log('Router: Page content updated with proper DOM methods for custom elements')
-      }
-      
-      // Update the page title
-      if (doc.title) {
-        document.title = doc.title
+        console.log('Router: Page content updated')
       }
       
       // Update loading progress
@@ -426,6 +425,15 @@ class SimpleRouter {
 
   async initializeDashboard() {
     try {
+      // Check if we're actually on a dashboard/courses page
+      const courseList = document.getElementById('course-list');
+      const semesterSelect = document.getElementById('semester-select');
+      
+      if (!courseList && !semesterSelect) {
+        console.log('Router: Not on dashboard page, skipping dashboard initialization');
+        return;
+      }
+      
       // Check if we have saved state to restore
       const hasSavedState = this.coursesPageState.year || this.coursesPageState.term
       
@@ -739,6 +747,122 @@ class SimpleRouter {
 
   async initializeCalendar() {
     try {
+      console.log('Router: Initializing calendar page...');
+      
+      // Wait for DOM to be ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if we have the required elements
+      const semesterSelect = document.getElementById('semester-select');
+      const courseListPlaceholder = document.getElementById('course-list');
+      
+      console.log('Router: Found elements:', {
+        semesterSelect: !!semesterSelect,
+        courseListPlaceholder: !!courseListPlaceholder
+      });
+      
+      // Populate semester dropdown - MUST happen first
+      console.log('Router: Calling populateSemesterDropdown...');
+      if (window.populateSemesterDropdown) {
+        await window.populateSemesterDropdown();
+        console.log('Router: Semester dropdown populated');
+      } else {
+        console.error('Router: populateSemesterDropdown not available');
+      }
+      
+      // Initialize custom selects - MUST happen after dropdown population
+      console.log('Router: Calling initializeCustomSelects...');
+      if (window.initializeCustomSelects) {
+        window.initializeCustomSelects();
+        console.log('Router: Custom selects initialized');
+      } else {
+        console.error('Router: initializeCustomSelects not available');
+      }
+      
+      // Attach semester change listener for calendar page
+      console.log('Router: Attaching semester change listener...');
+      const semesterSelects = document.querySelectorAll('.semester-select');
+      semesterSelects.forEach(semesterSelect => {
+        if (semesterSelect.dataset.calendarListenerAttached !== 'true') {
+          semesterSelect.addEventListener('change', async (e) => {
+            console.log('🔔 CALENDAR SEMESTER CHANGE EVENT FIRED');
+            console.log('  → Select value:', e.target.value);
+            
+            // Parse the semester value
+            const parsedValue = window.parseSemesterValue ? window.parseSemesterValue(e.target.value) : null;
+            console.log('  → Parsed value:', parsedValue);
+            
+            if (!parsedValue || !parsedValue.term || !parsedValue.year) {
+              console.error('  ❌ Failed to parse semester value');
+              return;
+            }
+            
+            const { term, year } = parsedValue;
+            const yearInt = parseInt(year);
+            
+            console.log('  → Updating hidden inputs to:', yearInt, term);
+            
+            // Update hidden inputs
+            const termSelect = document.getElementById('term-select');
+            const yearSelect = document.getElementById('year-select');
+            
+            if (termSelect) {
+              termSelect.value = term;
+              console.log('  → term-select updated to:', termSelect.value);
+            }
+            if (yearSelect) {
+              yearSelect.value = yearInt;
+              console.log('  → year-select updated to:', yearSelect.value);
+            }
+            
+            // Update calendar FIRST (so it doesn't interrupt search update)
+            const calendarComponent = document.querySelector('calendar-page');
+            if (calendarComponent && calendarComponent.showCourseWithRetry) {
+              console.log('  → Refreshing calendar with:', yearInt, term);
+              try {
+                await calendarComponent.showCourseWithRetry(yearInt, term);
+                console.log('  → Calendar refreshed successfully');
+              } catch (error) {
+                console.error('  ❌ Calendar refresh error:', error);
+              }
+            } else {
+              console.error('  ❌ Calendar component not found');
+            }
+            
+            // Update search courses AFTER calendar (ensures clean update)
+            console.log('  → Updating search courses...');
+            console.log('  → window.getAllCourses exists?', !!window.getAllCourses);
+            console.log('  → typeof window.getAllCourses:', typeof window.getAllCourses);
+            
+            if (window.getAllCourses) {
+              try {
+                console.log('  → About to call getAllCourses()');
+                const result = await window.getAllCourses();
+                console.log('  → getAllCourses() returned:', result);
+                console.log('  → Search courses updated successfully');
+              } catch (error) {
+                console.error('  ❌ Search courses update error:', error);
+              }
+            } else {
+              console.error('  ❌ getAllCourses function not available');
+            }
+            
+            console.log('  ✅ Semester change completed');
+          });
+          semesterSelect.dataset.calendarListenerAttached = 'true';
+          console.log('Router: Semester change listener attached to', semesterSelect.id);
+        }
+      });
+      
+      // Initialize search functionality
+      console.log('Router: Calling initializeSearch...');
+      if (window.initializeSearch) {
+        window.initializeSearch();
+        console.log('Router: Search initialized');
+      } else {
+        console.error('Router: initializeSearch not available');
+      }
+      
       // Initialize calendar-specific functionality using web component
       this.initializeCalendarComponents()
       

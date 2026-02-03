@@ -1083,6 +1083,17 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                            course.gpa_d_percent !== null && 
                            course.gpa_f_percent !== null;
 
+    // Check if professor has changed (new professor means GPA from previous semester not applicable)
+    let hasProfessorChanged = false;
+    if (course.course_code) {
+        try {
+            const professorChanges = await fetchProfessorChanges([course.course_code]);
+            hasProfessorChanged = professorChanges.has(course.course_code);
+        } catch (error) {
+            console.warn('Could not check professor changes:', error);
+        }
+    }
+
     console.log('Course GPA data check:', {
         courseCode: course.course_code,
         gpa_a_percent: course.gpa_a_percent,
@@ -1090,10 +1101,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         gpa_c_percent: course.gpa_c_percent,
         gpa_d_percent: course.gpa_d_percent,
         gpa_f_percent: course.gpa_f_percent,
-        hasValidGpaData
+        hasValidGpaData,
+        hasProfessorChanged
     });
 
-    if (hasValidGpaData) {
+    // Show GPA only if we have valid data AND professor hasn't changed
+    if (hasValidGpaData && !hasProfessorChanged) {
         // Show the GPA element and restore the id if it was removed
         if (classGPA) {
             classGPA.style.display = 'block';
@@ -1114,8 +1127,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             `;
         }
     } else {
-        // If no valid GPA data, ensure the element stays hidden with no content and no ID
-        console.log('No valid GPA data found for course:', course.course_code, '- element should be hidden');
+        // If no valid GPA data or professor has changed, ensure the element stays hidden
+        const reason = hasProfessorChanged ? 'new professor (previous GPA not applicable)' : 'no valid GPA data';
+        console.log(`GPA hidden for course ${course.course_code}: ${reason}`);
     }
 
     // Function to load course reviews
@@ -2898,7 +2912,7 @@ function getCurrentTerm() {
         return termSelect.value;
     }
     // Fallback to current term logic
-    return '秋学期/Fall'; // Adjust as needed
+    return 'Fall'; // Adjust as needed
 }
 
 // Check if the currently selected year/term is the current semester
@@ -2906,16 +2920,26 @@ function isCurrentSemester() {
     const selectedYear = getCurrentYear();
     const selectedTerm = getCurrentTerm();
     
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1; // 0-indexed, so add 1
+    // Normalize selectedTerm (handle both "Fall" and "秋学期/Fall" formats)
+    const normalizedSelectedTerm = selectedTerm.includes('/') ? selectedTerm.split('/')[1] : selectedTerm;
     
-    // Determine current term based on month
-    let actualCurrentTerm = "春学期/Spring";
-    if (currentMonth >= 8 || currentMonth <= 2) {
-        actualCurrentTerm = "秋学期/Fall";
+    const today = new Date();
+    
+    // Calculate semester start and end dates
+    let semesterStart, semesterEnd;
+    
+    if (normalizedSelectedTerm === 'Spring') {
+        // Spring: April 1 - July 31
+        semesterStart = new Date(selectedYear, 3, 1); // April 1 (month is 0-indexed)
+        semesterEnd = new Date(selectedYear, 6, 31, 23, 59, 59); // July 31
+    } else {
+        // Fall: October 1 - January 31 (next year)
+        semesterStart = new Date(selectedYear, 9, 1); // October 1
+        semesterEnd = new Date(selectedYear + 1, 1, 28, 23, 59, 59); // January 31 next year
     }
     
-    return selectedYear === currentYear && selectedTerm === actualCurrentTerm;
+    // Check if today is within the semester date range
+    return today >= semesterStart && today <= semesterEnd;
 }
 
 // Filter courses selection by current year and term
@@ -3465,3 +3489,4 @@ window.addSwipeToCloseSimple = addSwipeToCloseSimple;
 window.fetchCourseData = fetchCourseData;
 window.fetchProfessorChanges = fetchProfessorChanges;
 window.clearProfessorChangeCache = clearProfessorChangeCache;
+window.openCourseInfoMenu = openCourseInfoMenu;
