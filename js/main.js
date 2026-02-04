@@ -720,6 +720,13 @@ async function applySearchAndFilters(searchQuery) {
         await showCourse(yearSelect.value, termSelect.value);
         suggestionsDisplayed = false;
         
+        // Remove the suggestion header if it exists
+        const courseMainDiv = document.getElementById("course-main-div");
+        if (courseMainDiv) {
+            const existingHeader = courseMainDiv.querySelector('.suggestion-header');
+            if (existingHeader) existingHeader.remove();
+        }
+        
         // Re-apply current sort if one is selected
         if (currentSortMethod) {
             sortCourses(currentSortMethod);
@@ -775,6 +782,15 @@ async function applySearchAndFilters(searchQuery) {
             container.style.display = "none";
         }
     });
+    
+    // Remove suggestion header if we have results
+    if (hasResults) {
+        const courseMainDiv = document.getElementById("course-main-div");
+        if (courseMainDiv) {
+            const existingHeader = courseMainDiv.querySelector('.suggestion-header');
+            if (existingHeader) existingHeader.remove();
+        }
+    }
     
     // Handle no results case
     if (!hasResults) {
@@ -1030,6 +1046,12 @@ function setupDashboardEventListeners() {
                 } else {
                     // On courses page - update courses
                     console.log('📄 COURSES PAGE - Calling updateCoursesAndFilters()');
+                    
+                    // Refresh allCourses for autocomplete with new semester
+                    console.log('  → Calling getAllCourses()...');
+                    await getAllCourses();
+                    console.log('  → getAllCourses() completed');
+                    
                     updateCoursesAndFilters();
                 }
                 
@@ -1461,12 +1483,44 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
     });
 
     // Allow Enter key to submit search and handle autocomplete navigation
-    searchInput.addEventListener("keydown", (event) => {
+    searchInput.addEventListener("keydown", async (event) => {
         if (searchAutocomplete.style.display === 'block' && 
             (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             handleAutocompleteNavigation(event, searchAutocomplete);
         } else if (event.key === "Enter") {
             event.preventDefault();
+            
+            // If search is empty, clear the search and show all courses
+            if (!searchInput.value.trim()) {
+                searchAutocomplete.style.display = 'none';
+                currentHighlightIndex = -1;
+                
+                // Clear search state
+                currentSearchQuery = null;
+                
+                // Apply filters which will reload courses if suggestions were displayed
+                await applySearchAndFilters();
+                
+                // Close the search modal
+                const searchContainer = document.querySelector(".search-container");
+                const searchModal = document.querySelector(".search-modal");
+                if (window.innerWidth <= 780) {
+                    hideModalWithMobileAnimation(searchModal, searchContainer, () => {
+                        searchContainer.classList.add("hidden");
+                    });
+                } else {
+                    searchContainer.style.transition = "opacity 0.3s ease";
+                    searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+                    searchContainer.style.opacity = "0";
+                    searchModal.style.transform = "translate(-50%, -60%)";
+                    setTimeout(() => {
+                        searchContainer.classList.add("hidden");
+                        unlockBodyScroll();
+                    }, 300);
+                }
+                return;
+            }
+            
             if (searchAutocomplete.style.display === 'block' && currentHighlightIndex >= 0) {
                 const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
                 if (items[currentHighlightIndex]) {
@@ -1546,7 +1600,7 @@ function setupDesktopSearchPill() {
     });
     
     // Keyboard navigation
-    searchPillInput.addEventListener("keydown", (event) => {
+    searchPillInput.addEventListener("keydown", async (event) => {
         if (searchPillAutocomplete.style.display === 'block' && 
             (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             handleDesktopPillAutocompleteNavigation(event, searchPillAutocomplete);
@@ -1568,6 +1622,12 @@ function setupDesktopSearchPill() {
                 performSearch(searchQuery);
                 searchPillAutocomplete.style.display = 'none';
                 desktopHighlightIndex = -1;
+            } else {
+                // Empty search - clear search and show all courses
+                searchPillAutocomplete.style.display = 'none';
+                desktopHighlightIndex = -1;
+                currentSearchQuery = null;
+                await applySearchAndFilters();
             }
         } else if (event.key === "Escape") {
             event.preventDefault();
@@ -2600,6 +2660,7 @@ function findSimilarCourses(searchQuery, courses, limit = 8) {
 // Function to display suggested courses with relevance information
 function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
     const courseList = document.getElementById("course-list");
+    const courseMainDiv = document.getElementById("course-main-div");
     
     if (coursesWithRelevance.length === 0) {
         courseList.innerHTML = `
@@ -2615,15 +2676,28 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                 </ul>
             </div>
         `;
+        // Remove any existing suggestion header
+        const existingHeader = courseMainDiv.querySelector('.suggestion-header');
+        if (existingHeader) existingHeader.remove();
         return;
     }
     
-    let suggestionsHTML = `
-        <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #E3D5E9; margin-bottom: 20px;">
-            <h3 style="color: #666; margin-bottom: 10px;">No exact matches found for "${searchQuery}"</h3>
-            <p style="color: #999; margin-bottom: 0;">Here are the most similar courses we found:</p>
+    // Create or update the suggestion header outside course-list
+    let suggestionHeader = courseMainDiv.querySelector('.suggestion-header');
+    if (!suggestionHeader) {
+        suggestionHeader = document.createElement('div');
+        suggestionHeader.className = 'suggestion-header';
+        courseMainDiv.insertBefore(suggestionHeader, courseList);
+    }
+    
+    suggestionHeader.innerHTML = `
+        <div class="no-courses-container">
+            <h3>No exact matches found for "${searchQuery}"</h3>
+            <p>Here are the most similar courses we found:</p>
         </div>
     `;
+    
+    let coursesHTML = '';
     
     coursesWithRelevance.forEach(function({ course, relevanceScore }) {
         const days = {
@@ -2661,7 +2735,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
         
-        suggestionsHTML += `
+        coursesHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
             <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
                 <div class="class-suggestion">
@@ -2697,7 +2771,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         `;
     });
     
-    courseList.innerHTML = suggestionsHTML;
+    courseList.innerHTML = coursesHTML;
 }
 
 // Function to perform search

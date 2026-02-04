@@ -422,6 +422,7 @@ class TermBox extends HTMLElement {
         labelEl.textContent = 'Next class:';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
+        timeEl.style.display = 'none';
         return;
       }
 
@@ -438,6 +439,7 @@ class TermBox extends HTMLElement {
         labelEl.textContent = 'Next class:';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
+        timeEl.style.display = 'none';
         return;
       }
 
@@ -453,10 +455,12 @@ class TermBox extends HTMLElement {
         labelEl.textContent = 'Current class:';
         nameEl.textContent = displayName;
         timeEl.textContent = '';
+        timeEl.style.display = 'none';
       } else {
         labelEl.textContent = 'Next class:';
         nameEl.textContent = displayName;
         timeEl.textContent = nextClass.timeRemaining;
+        timeEl.style.display = nextClass.timeRemaining ? 'block' : 'none';
       }
     } catch (error) {
       console.error('Error updating next class:', error);

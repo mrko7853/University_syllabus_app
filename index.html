@@ -185,21 +185,6 @@
                     </div>
                 </div>
 
-    <div class="main-content">
-
-        <!-- Hidden by default for guest users, shown via JS if authenticated -->
-        <div class="top-content" style="display: none;">
-            <div class="main-container">
-                <div class="top-content-two">
-                    <term-box></term-box>
-                    <total-courses></total-courses>
-                </div>
-            </div>
-            <div class="main-container" id="calendar-container">
-                <course-calendar></course-calendar>
-            </div>
-        </div>
-
             <!-- Mobile version: container-above outside course-main-div -->
             <div class="container-above container-above-mobile">
                 <div class="title-box">
@@ -236,6 +221,22 @@
                     <button class="filter-btn"><div></div></button>
                 </div>
             </div>
+
+    <div class="main-content">
+
+        <!-- Hidden by default for guest users, shown via JS if authenticated -->
+        <div class="top-content" style="display: none;">
+            <div class="main-container">
+                <div class="top-content-two">
+                    <term-box></term-box>
+                    <total-courses></total-courses>
+                </div>
+            </div>
+            <div class="main-container" id="calendar-container">
+                <course-calendar></course-calendar>
+            </div>
+        </div>
+
             <div class="main-container" id="course-main-div">
                 <!-- Hidden inputs to store parsed term and year values (shared) -->
                 <input type="hidden" id="term-select" value="Fall">
