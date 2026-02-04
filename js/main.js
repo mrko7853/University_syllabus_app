@@ -24,11 +24,11 @@ window.addEventListener('orientationchange', () => {
 if (window.innerWidth <= 780) {
     // Handle virtual keyboard appearance/disappearance
     let initialViewportHeight = window.innerHeight;
-    
+
     window.addEventListener('resize', () => {
         const currentHeight = window.innerHeight;
         const heightDifference = initialViewportHeight - currentHeight;
-        
+
         // If height difference is significant (likely keyboard), maintain app positioning
         if (heightDifference > 150) {
             // Virtual keyboard is probably visible
@@ -39,7 +39,7 @@ if (window.innerWidth <= 780) {
             setTimeout(setViewportHeight, 100); // Recalculate after keyboard hides
         }
     });
-    
+
     // Force proper positioning on focus/blur of input elements
     document.addEventListener('focusin', (e) => {
         if (e.target.matches('input, textarea, select')) {
@@ -54,7 +54,7 @@ if (window.innerWidth <= 780) {
             }, 100);
         }
     });
-    
+
     document.addEventListener('focusout', (e) => {
         if (e.target.matches('input, textarea, select')) {
             setTimeout(() => {
@@ -75,7 +75,7 @@ const japaneseNameMapping = {
     '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
     '八木': 'Yagi', '木': 'Ki',
     '和田': 'Wada', '田': 'Da', '和': 'Wa',
-    '張': 'Chou', 
+    '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
     '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
@@ -100,7 +100,7 @@ const japaneseNameMapping = {
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
     '橋本': 'Hashimoto', '橋': 'Hashi',
-    
+
     // Common given names
     '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
     '匡': 'Tadashi',
@@ -114,14 +114,14 @@ const japaneseNameMapping = {
     '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
     '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
     '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
-    
+
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
     'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
     'なかま': 'Nakama', 'かわむら': 'Kawamura', 'いまにし': 'Imanishi',
     'いしい': 'Ishii', 'こにし': 'Konishi', 'いずみ': 'Izumi',
     'たなか': 'Tanaka', 'さとう': 'Satou', 'やまだ': 'Yamada',
     'すずき': 'Suzuki', 'いとう': 'Itou', 'わたなべ': 'Watanabe',
-    
+
     // Common Katakana names (these will mostly be handled by WanaKana, but added for completeness)
     'タカハシ': 'Takahashi', 'ヤギ': 'Yagi', 'ワダ': 'Wada',
     'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
@@ -136,7 +136,7 @@ function refreshCalendarComponent() {
     if (calendarComponent && calendarComponent.refreshCalendar) {
         calendarComponent.refreshCalendar();
     }
-    
+
     // Also handle the new calendar-page component
     const calendarPageComponent = document.querySelector('calendar-page');
     if (calendarPageComponent && calendarPageComponent.refreshCalendar) {
@@ -156,41 +156,41 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
-    
+
     // Check cache first
     if (romanizedProfessorCache.has(name)) {
         return romanizedProfessorCache.get(name);
     }
-    
+
     // Check if the name contains Japanese characters
     const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
-    
+
     if (!hasJapanese) {
         // Capitalize non-Japanese names properly
         const capitalized = name.toUpperCase();
         romanizedProfessorCache.set(name, capitalized);
         return capitalized;
     }
-    
+
     let romanized = name;
-    
+
     try {
         // Split the name and process each part
         let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
         let romanizedParts = [];
-        
+
         for (let part of parts) {
             let romanizedPart = part;
-            
+
             // First, try WanaKana for Hiragana/Katakana conversion
             const wanaKanaResult = wanakana.toRomaji(part);
-            
+
             // If WanaKana converted it (no more Japanese characters), use that
             if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
                 romanizedPart = wanaKanaResult;
             } else {
                 // Still has Kanji, try our custom mapping
-                
+
                 // Try exact match first
                 if (japaneseNameMapping[part]) {
                     romanizedPart = japaneseNameMapping[part];
@@ -213,22 +213,22 @@ function romanizeProfessorName(name) {
                     romanizedPart = characterMapped;
                 }
             }
-            
+
             romanizedParts.push(romanizedPart);
         }
-        
+
         romanized = romanizedParts.join(' ');
-        
+
         // Clean up and capitalize properly
         romanized = romanized.replace(/\s+/g, ' ').trim();
         // Convert to full caps (uppercase)
         romanized = romanized.toUpperCase();
-        
+
     } catch (error) {
         console.warn('Error romanizing name:', error);
         romanized = name;
     }
-    
+
     // Cache the result
     romanizedProfessorCache.set(name, romanized);
     return romanized;
@@ -252,21 +252,21 @@ function getRomanizedProfessorName(name) {
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
     if (!title) return title;
-    
+
     // Convert full-width characters to normal characters
-    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
         return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
     });
-    
+
     // Convert full-width spaces to normal spaces
     normalized = normalized.replace(/　/g, ' ');
-    
+
     // Remove parentheses and their contents
     normalized = normalized.replace(/[()（）]/g, '');
-    
+
     // Clean up extra spaces
     normalized = normalized.replace(/\s+/g, ' ').trim();
-    
+
     return normalized;
 }
 
@@ -292,21 +292,21 @@ async function showCourse(year, term) {
         console.error('Invalid year value:', year);
         return;
     }
-    
+
     if (!term || term === '') {
         console.error('Invalid term value:', term);
         return;
     }
-    
+
     // Get courseList element dynamically to ensure it exists
     const courseList = document.getElementById("course-list");
-    
+
     // Check if courseList element exists
     if (!courseList) {
         console.error('Course list element not found');
         return;
     }
-    
+
     // If we have cached courses for the same year/term, render them immediately
     // This handles the case where DOM was replaced but we already have the data
     if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term && !isLoadingCourses) {
@@ -314,7 +314,7 @@ async function showCourse(year, term) {
         renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges);
         return;
     }
-    
+
     // If already loading the same year/term, wait for it then render
     if (isLoadingCourses && lastLoadedYear === year && lastLoadedTerm === term) {
         console.log('Waiting for in-progress course load to complete');
@@ -325,7 +325,7 @@ async function showCourse(year, term) {
         }
         return;
     }
-    
+
     try {
         const courses = await fetchCourseDataWithRetry(year, term);
         if (!courses || courses.length === 0) {
@@ -339,22 +339,22 @@ async function showCourse(year, term) {
             `;
             return;
         }
-        
+
         courses.sort((a, b) => normalizeCourseTitle(a.title).localeCompare(normalizeCourseTitle(b.title)));
-        
+
         // Pre-romanize all professor names
         preromanizeCourseData(courses);
-        
+
         // Fetch professor change data for all courses
         const courseCodes = courses.map(c => c.course_code).filter(Boolean);
         const professorChanges = await fetchProfessorChanges(courseCodes);
-        
+
         // Cache the loaded courses and professor changes
         lastLoadedCourses = courses;
         lastLoadedYear = year;
         lastLoadedTerm = term;
         lastLoadedProfessorChanges = professorChanges;
-        
+
         // Re-get courseList in case DOM changed during fetch
         const currentCourseList = document.getElementById("course-list");
         if (currentCourseList) {
@@ -370,7 +370,7 @@ async function showCourse(year, term) {
 function renderCourses(courses, courseList, year, term, professorChanges = new Set()) {
     const days = {
         "月曜日": "Mon", "月": "Mon",
-        "火曜日": "Tue", "火": "Tue", 
+        "火曜日": "Tue", "火": "Tue",
         "水曜日": "Wed", "水": "Wed",
         "木曜日": "Thu", "木": "Thu",
         "金曜日": "Fri", "金": "Fri"
@@ -382,13 +382,13 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
         "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
     };
-    
+
     let courseHTML = "";
-    courses.forEach(function(course) {
+    courses.forEach(function (course) {
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
         const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
-        
+
         let displayTimeSlot = course.time_slot;
         if (specialMatch) {
             displayTimeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
@@ -398,15 +398,15 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
 
         // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
-        
+
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
-        
+
         // Check if professor has changed across semesters
         const hasProfessorChanged = professorChanges.has(course.course_code);
         const professorName = getRomanizedProfessorName(course.professor);
         const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
-        
+
         // Determine top 3 GPA grades for mobile display
         const gpaGrades = [
             { grade: 'A', percent: course.gpa_a_percent },
@@ -415,7 +415,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             { grade: 'D', percent: course.gpa_d_percent },
             { grade: 'F', percent: course.gpa_f_percent }
         ];
-        
+
         // Sort by percentage descending and get top 3 grades (excluding 0%)
         const top3Grades = new Set(
             gpaGrades
@@ -424,7 +424,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                 .slice(0, 3)
                 .map(g => g.grade)
         );
-        
+
         // Helper function to get mobile GPA display text
         const getMobileGpaText = (grade, percent) => {
             if (percent === null || percent === 0) return grade;
@@ -471,15 +471,15 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         </div>
         `;
     });
-    
+
     courseList.innerHTML = courseHTML;
-    
+
     // Remove loading class to restore normal margin
     courseList.classList.remove('loading');
-    
+
     // Reset suggestions flag when courses are reloaded
     suggestionsDisplayed = false;
-    
+
     console.log(`Successfully rendered ${courses.length} courses for ${term} ${year}`);
 }
 // Robust course data fetching with retry mechanism
@@ -488,20 +488,20 @@ async function fetchCourseDataWithRetry(year, term, retryCount = 0) {
         showCourseLoadingState();
         const courses = await fetchCourseData(year, term);
         hideCourseLoadingState();
-        
+
         if (!courses || courses.length === 0) {
             throw new Error('No courses returned from database');
         }
-        
+
         courseLoadRetryCount = 0; // Reset retry count on success
         return courses;
     } catch (error) {
         console.error(`Course loading attempt ${retryCount + 1} failed:`, error);
-        
+
         if (retryCount < MAX_COURSE_LOAD_RETRIES) {
             const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
             console.log(`Retrying course loading in ${delay}ms...`);
-            
+
             await new Promise(resolve => setTimeout(resolve, delay));
             return fetchCourseDataWithRetry(year, term, retryCount + 1);
         } else {
@@ -537,22 +537,22 @@ function createSkeletonCourse() {
 
 function showCourseLoadingState() {
     if (isLoadingCourses) return; // Prevent multiple loading indicators
-    
+
     isLoadingCourses = true;
-    
+
     // Get courseList element dynamically
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
-    
+
     // Add loading class for increased margin during loading
     courseList.classList.add('loading');
-    
+
     // Create multiple skeleton courses as direct children for grid layout
     let skeletonHTML = '';
     for (let i = 0; i < 6; i++) {
         skeletonHTML += createSkeletonCourse();
     }
-    
+
     courseList.innerHTML = skeletonHTML;
 }
 
@@ -563,7 +563,7 @@ function hideCourseLoadingState() {
 function showCourseLoadError() {
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
-    
+
     courseList.innerHTML = `
         <div class="course-error-state">
             <div>
@@ -575,7 +575,7 @@ function showCourseLoadError() {
 }
 
 // Global retry function
-window.retryLoadCourses = function() {
+window.retryLoadCourses = function () {
     const yearSelect = document.getElementById("year-select");
     const termSelect = document.getElementById("term-select");
     if (yearSelect && termSelect) {
@@ -601,11 +601,11 @@ function convertTimeSlotToContainerFormat(timeSlot) {
         "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
         "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
     };
-    
+
     // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
     const match = timeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
     const specialMatch = timeSlot.match(/(月曜日3講時・木曜日3講時)/);
-    
+
     if (specialMatch) {
         return "Mon 13:10 - 14:40"; // Just return the first occurrence for filter matching
     } else if (match) {
@@ -618,14 +618,14 @@ function convertTimeSlotToContainerFormat(timeSlot) {
 function containerMatchesFilters(container, courseData = null) {
     // Get filter elements dynamically
     const filterByDays = document.getElementById("filter-by-days");
-    const filterByTime = document.getElementById("filter-by-time");  
+    const filterByTime = document.getElementById("filter-by-time");
     const filterByConcentration = document.getElementById("filter-by-concentration");
-    
+
     if (!filterByDays || !filterByTime || !filterByConcentration) {
         // Filter elements not found, show all courses
         return true;
     }
-    
+
     // Days filter
     const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
     const selectedDays = Array.from(dayCheckboxes)
@@ -659,13 +659,13 @@ function containerMatchesFilters(container, courseData = null) {
 
     // Concentration/Type filter - match against course.type from database
     let concMatch = selectedConcentrations.length === 0;
-    
+
     if (!concMatch && courseData) {
         const courseType = courseData.type || '';
-        
+
         // Map filter checkbox values to database type values
         const typeMatches = selectedConcentrations.some(filterValue => {
-            switch(filterValue) {
+            switch (filterValue) {
                 case 'culture':
                     return courseType === 'Japanese Society and Global Culture Concentration';
                 case 'economy':
@@ -673,9 +673,9 @@ function containerMatchesFilters(container, courseData = null) {
                 case 'politics':
                     return courseType === 'Japanese Politics and Global Studies Concentration';
                 case 'seminar':
-                    return courseType === 'Introductory Seminars' || 
-                           courseType === 'Intermediate Seminars' || 
-                           courseType === 'Advanced Seminars and Honors Thesis';
+                    return courseType === 'Introductory Seminars' ||
+                        courseType === 'Intermediate Seminars' ||
+                        courseType === 'Advanced Seminars and Honors Thesis';
                 case 'academic':
                     return courseType === 'Academic and Research Skills';
                 case 'understanding':
@@ -686,7 +686,7 @@ function containerMatchesFilters(container, courseData = null) {
                     return false;
             }
         });
-        
+
         concMatch = typeMatches;
     }
 
@@ -705,58 +705,58 @@ async function applySearchAndFilters(searchQuery) {
         console.log('Skipping filter application - courses still loading');
         return;
     }
-    
+
     // Get courseList element dynamically
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
-    
+
     // Get yearSelect and termSelect dynamically
     const yearSelect = document.getElementById("year-select");
     const termSelect = document.getElementById("term-select");
     if (!yearSelect || !termSelect) return;
-    
+
     // If suggestions are currently displayed, reload the courses first
     if (suggestionsDisplayed) {
         await showCourse(yearSelect.value, termSelect.value);
         suggestionsDisplayed = false;
-        
+
         // Remove the suggestion header if it exists
         const courseMainDiv = document.getElementById("course-main-div");
         if (courseMainDiv) {
             const existingHeader = courseMainDiv.querySelector('.suggestion-header');
             if (existingHeader) existingHeader.remove();
         }
-        
+
         // Re-apply current sort if one is selected
         if (currentSortMethod) {
             sortCourses(currentSortMethod);
         }
     }
-    
+
     const classContainers = courseList.querySelectorAll(".class-outside");
-    
+
     // If no course containers exist yet, don't show "no results" message
     // This can happen during initial load or race conditions
     if (classContainers.length === 0) {
         console.log('No course containers found - skipping filter application');
         return;
     }
-    
+
     let hasResults = false;
-    
+
     // Remove any existing no-results message
     const existingNoResults = courseList.querySelector(".no-results");
     if (existingNoResults) existingNoResults.remove();
-    
+
     classContainers.forEach(container => {
         let shouldShow = true;
-        
+
         // Parse course data from the container
         const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
-        
+
         // First check if it matches current filters (pass courseData for type filtering)
         const filterMatches = containerMatchesFilters(container, courseData);
-        
+
         // If there's an active search query, also check search criteria
         if (searchQuery && searchQuery.trim()) {
             const title = normalizeCourseTitle(courseData.title || '').toLowerCase();
@@ -764,17 +764,17 @@ async function applySearchAndFilters(searchQuery) {
             const professorRomanized = romanizeProfessorName(courseData.professor || '').toLowerCase();
             const courseCode = (courseData.course_code || '').toLowerCase();
             const query = searchQuery.toLowerCase().trim();
-            
-            const searchMatches = title.includes(query) || 
-                                 professorOriginal.includes(query) ||
-                                 professorRomanized.includes(query) || 
-                                 courseCode.includes(query);
-            
+
+            const searchMatches = title.includes(query) ||
+                professorOriginal.includes(query) ||
+                professorRomanized.includes(query) ||
+                courseCode.includes(query);
+
             shouldShow = filterMatches && searchMatches;
         } else {
             shouldShow = filterMatches;
         }
-        
+
         if (shouldShow) {
             container.style.display = "flex";
             hasResults = true;
@@ -782,7 +782,7 @@ async function applySearchAndFilters(searchQuery) {
             container.style.display = "none";
         }
     });
-    
+
     // Remove suggestion header if we have results
     if (hasResults) {
         const courseMainDiv = document.getElementById("course-main-div");
@@ -791,7 +791,7 @@ async function applySearchAndFilters(searchQuery) {
             if (existingHeader) existingHeader.remove();
         }
     }
-    
+
     // Handle no results case
     if (!hasResults) {
         if (searchQuery && searchQuery.trim()) {
@@ -805,7 +805,7 @@ async function applySearchAndFilters(searchQuery) {
                     };
                     return containerMatchesFilters(tempContainer, course);
                 });
-                
+
                 const similarCoursesWithRelevance = findSimilarCourses(searchQuery, filteredCourses, 8);
                 displaySuggestedCourses(similarCoursesWithRelevance, searchQuery);
                 suggestionsDisplayed = true;
@@ -835,7 +835,7 @@ async function applySearchAndFilters(searchQuery) {
             noResults.style.display = "block";
         }
     }
-    
+
     // Update the course filter paragraph after applying filters
     updateCourseFilterParagraph();
 }
@@ -847,7 +847,7 @@ async function updateCoursesAndFilters() {
             console.log('Course loading already in progress, waiting...');
             await new Promise(resolve => setTimeout(resolve, 200));
         }
-        
+
         // Get selectors dynamically
         const yearSelect = document.getElementById("year-select");
         const termSelect = document.getElementById("term-select");
@@ -855,23 +855,23 @@ async function updateCoursesAndFilters() {
             console.error('Year or term selector not found');
             return;
         }
-        
+
         // Validate year and term values before fetching
         const year = yearSelect.value;
         const term = termSelect.value;
-        
+
         if (!year || year === '' || year === 'Loading...') {
             console.log('Year not yet populated, skipping course fetch');
             return;
         }
-        
+
         if (!term || term === '') {
             console.log('Term not yet populated, skipping course fetch');
             return;
         }
-        
+
         await showCourse(year, term);
-        
+
         // Re-apply current sort if one is selected
         if (currentSortMethod) {
             sortCourses(currentSortMethod);
@@ -879,7 +879,7 @@ async function updateCoursesAndFilters() {
             // Apply both current search and filters
             await applySearchAndFilters(currentSearchQuery);
         }
-        
+
         refreshCalendarComponent(); // Refresh calendar when year/term changes
     } catch (error) {
         console.error('Error updating courses and filters:', error);
@@ -891,7 +891,7 @@ async function updateCoursesAndFilters() {
 function setupCourseListClickListener() {
     const courseList = document.getElementById("course-list");
     if (courseList) {
-        courseList.addEventListener("click", function(event) {
+        courseList.addEventListener("click", function (event) {
             const clickedContainer = event.target.closest(".class-container");
             if (clickedContainer) {
                 // Parse the course data and open the shared menu
@@ -906,63 +906,70 @@ function setupCourseListClickListener() {
 // Initialize courses with robust loading
 (async function initializeCourses() {
     try {
+        // Only run on courses/index page - check for key element
+        const courseMainDiv = document.getElementById("course-main-div");
+        if (!courseMainDiv) {
+            // Not on courses page, skip initialization silently
+            return;
+        }
+
         console.log('Initializing course loading...');
-        
+
         // Ensure DOM is ready
         if (document.readyState === 'loading') {
             await new Promise(resolve => {
                 document.addEventListener('DOMContentLoaded', resolve, { once: true });
             });
         }
-        
+
         // Additional delay to ensure all components and custom elements are mounted
         await new Promise(resolve => setTimeout(resolve, 200));
-        
+
         // Find elements dynamically  
         let semesterSelect = document.getElementById("semester-select");
         let yearSelect = document.getElementById("year-select");
         let termSelect = document.getElementById("term-select");
         let courseList = document.getElementById("course-list");
-        
+
         // Check if required elements exist
         if (!semesterSelect || !courseList) {
             console.error('Required DOM elements not found on first try:', {
                 semesterSelect: !!semesterSelect,
                 courseList: !!courseList
             });
-            
+
             // Try to find them again with a longer delay
             await new Promise(resolve => setTimeout(resolve, 500));
             semesterSelect = document.getElementById("semester-select");
             yearSelect = document.getElementById("year-select");
             termSelect = document.getElementById("term-select");
             courseList = document.getElementById("course-list");
-            
+
             console.log('Second element search:', {
                 semesterSelect: !!semesterSelect,
                 courseList: !!courseList
             });
-            
+
             if (!semesterSelect || !courseList) {
                 throw new Error('Critical DOM elements missing after retry');
             }
         }
-        
+
         // Populate semester dropdown from database before loading courses
         await populateSemesterDropdown();
-        
+
         // Re-query values after population
         const default_year = document.getElementById("year-select").value || "2025";
         const default_term = document.getElementById("term-select").value || "Fall";
-        
+
         console.log('Loading courses for:', { year: default_year, term: default_term });
-        
+
         await showCourse(default_year, default_term);
         console.log('Initial course loading completed successfully');
-        
+
         // Update the course filter paragraph to show initial state
         updateCourseFilterParagraph();
-        
+
         // Initialize URL-based course routing after courses are loaded
         initializeCourseRouting();
     } catch (error) {
@@ -981,7 +988,7 @@ let dashboardEventListenersInitialized = false;
 // Function to set up all dashboard event listeners
 function setupDashboardEventListeners() {
     console.log('Setting up dashboard event listeners... already initialized:', dashboardEventListenersInitialized);
-    
+
     // Set up event listeners for all semester selects (mobile and desktop)
     const semesterSelects = document.querySelectorAll(".semester-select");
 
@@ -992,15 +999,15 @@ function setupDashboardEventListeners() {
                 console.log('🔔 SEMESTER CHANGE EVENT FIRED');
                 console.log('  → Event target:', e.target.id);
                 console.log('  → Selected value:', e.target.value);
-                
+
                 // Parse the semester value and update hidden inputs
                 const { term, year } = parseSemesterValue(e.target.value);
                 console.log('  → Parsed term:', term);
                 console.log('  → Parsed year:', year);
-                
+
                 const termSelect = document.getElementById("term-select");
                 const yearSelect = document.getElementById("year-select");
-                
+
                 if (termSelect) {
                     termSelect.value = term;
                     console.log('  → Updated term-select to:', termSelect.value);
@@ -1009,31 +1016,31 @@ function setupDashboardEventListeners() {
                     yearSelect.value = year;
                     console.log('  → Updated year-select to:', yearSelect.value);
                 }
-                
+
                 console.log('Semester changed to:', term, year);
-                
+
                 // Sync both dropdowns (mobile and desktop)
                 syncSemesterDropdowns(e.target.value);
                 console.log('  → Dropdowns synced');
-                
+
                 // Check if we're on the calendar page
                 const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
                 console.log('  → Is calendar page?', isCalendarPage);
                 console.log('  → Current pathname:', window.location.pathname);
                 console.log('  → Calendar component exists?', !!document.querySelector('calendar-page'));
-                
+
                 if (isCalendarPage) {
                     // On calendar page - refresh the calendar with new semester
                     console.log('✅ CALENDAR PAGE DETECTED - Refreshing for:', year, term);
-                    
+
                     // Update search courses for the new semester
                     console.log('  → Calling getAllCourses()...');
                     await getAllCourses();
                     console.log('  → getAllCourses() completed');
-                    
+
                     const calendarComponent = document.querySelector('calendar-page');
                     console.log('  → Calendar component:', calendarComponent);
-                    
+
                     if (calendarComponent && calendarComponent.showCourseWithRetry) {
                         console.log('  → Calling showCourseWithRetry with:', year, term);
                         await calendarComponent.showCourseWithRetry(year, term);
@@ -1046,22 +1053,22 @@ function setupDashboardEventListeners() {
                 } else {
                     // On courses page - update courses
                     console.log('📄 COURSES PAGE - Calling updateCoursesAndFilters()');
-                    
+
                     // Refresh allCourses for autocomplete with new semester
                     console.log('  → Calling getAllCourses()...');
                     await getAllCourses();
                     console.log('  → getAllCourses() completed');
-                    
+
                     updateCoursesAndFilters();
                 }
-                
+
                 console.log('🏁 SEMESTER CHANGE HANDLER COMPLETED');
             });
             semesterSelect.dataset.listenerAttached = 'true';
             console.log('Semester select change listener attached');
         }
     });
-    
+
     // Set up button event listeners for both mobile and desktop containers
     const filterBtns = document.querySelectorAll(".filter-btn");
     const filterContainer = document.querySelector(".filter-container");
@@ -1072,7 +1079,7 @@ function setupDashboardEventListeners() {
     const searchModal = document.querySelector(".search-modal");
     const sortBtns = document.querySelectorAll(".sort-btn");
     const sortDropdowns = document.querySelectorAll(".sort-dropdown");
-    
+
     // Sort button click handlers - for both mobile and desktop
     sortBtns.forEach(sortBtn => {
         if (sortBtn && filterContainer && sortBtn.dataset.listenerAttached !== 'true') {
@@ -1081,7 +1088,7 @@ function setupDashboardEventListeners() {
             sortBtn.addEventListener("click", (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                
+
                 // Close other dropdowns/modals
                 if (!filterContainer.classList.contains("hidden")) {
                     filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
@@ -1091,20 +1098,20 @@ function setupDashboardEventListeners() {
                         filterContainer.classList.add("hidden");
                     }, 300);
                 }
-                
+
                 // Close any open custom selects
                 const customSelects = document.querySelectorAll('.custom-select');
                 customSelects.forEach(customSelect => {
                     customSelect.classList.remove('open');
                 });
-                
+
                 // Toggle sort dropdown
                 const sortWrapper = sortBtn.closest('.sort-wrapper');
                 sortWrapper.classList.toggle("open");
             });
         }
     });
-    
+
     // Sort option selection - for both mobile and desktop
     sortDropdowns.forEach(sortDropdown => {
         if (sortDropdown && sortDropdown.dataset.listenerAttached !== 'true') {
@@ -1113,9 +1120,9 @@ function setupDashboardEventListeners() {
             sortDropdown.addEventListener("click", (event) => {
                 const option = event.target.closest('.sort-option');
                 if (!option) return;
-                
+
                 const sortMethod = option.dataset.sort;
-                
+
                 // Update selected state in all sort dropdowns
                 document.querySelectorAll('.sort-dropdown').forEach(dropdown => {
                     dropdown.querySelectorAll('.sort-option').forEach(opt => {
@@ -1125,18 +1132,18 @@ function setupDashboardEventListeners() {
                         }
                     });
                 });
-                
+
                 // Apply sorting
                 currentSortMethod = sortMethod;
                 sortCourses(sortMethod);
-                
+
                 // Close dropdown
                 const sortWrapper = sortDropdown.closest('.sort-wrapper');
                 sortWrapper.classList.remove("open");
             });
         }
     });
-    
+
     // Filter button click handlers - for both mobile and desktop
     filterBtns.forEach(filterBtn => {
         if (filterBtn && filterContainer && filterBtn.dataset.listenerAttached !== 'true') {
@@ -1144,10 +1151,10 @@ function setupDashboardEventListeners() {
             console.log('Attaching filter button listener');
             filterBtn.addEventListener("click", () => {
                 const filterPopup = filterContainer.querySelector('.filter-popup');
-                
+
                 if (filterContainer.classList.contains("hidden")) {
                     filterContainer.classList.remove("hidden");
-                    
+
                     if (window.innerWidth <= 780) {
                         // Mobile full-screen animation
                         showModalWithMobileAnimation(filterPopup, filterContainer);
@@ -1155,10 +1162,10 @@ function setupDashboardEventListeners() {
                         // Desktop animation
                         filterContainer.style.opacity = "0";
                         filterContainer.style.transform = "translateY(-10px)";
-                        
+
                         // Simple direct overflow lock for filter modal
                         document.body.style.overflow = "hidden";
-                        
+
                         requestAnimationFrame(() => {
                             filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
                             filterContainer.style.opacity = "1";
@@ -1169,7 +1176,7 @@ function setupDashboardEventListeners() {
             });
         }
     });
-        
+
     // Close filter modal when clicking outside
     if (filterBackground) {
         filterBackground.addEventListener("click", (event) => {
@@ -1185,7 +1192,7 @@ function setupDashboardEventListeners() {
                     filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
                     filterContainer.style.opacity = "0";
                     filterContainer.style.transform = "translateY(-10px)";
-                    
+
                     setTimeout(() => {
                         filterContainer.classList.add("hidden");
                         // Simple direct overflow unlock for filter modal
@@ -1196,11 +1203,11 @@ function setupDashboardEventListeners() {
             }
         });
     }
-    
+
     // Set up filter action buttons
     const seeResultsBtn = document.getElementById("see-results-btn");
     const clearAllBtn = document.getElementById("clear-all-btn");
-    
+
     if (seeResultsBtn && filterContainer) {
         seeResultsBtn.addEventListener("click", () => {
             if (window.innerWidth <= 780) {
@@ -1214,7 +1221,7 @@ function setupDashboardEventListeners() {
                 filterContainer.style.transition = "opacity 0.3s ease, transform 0.3s ease";
                 filterContainer.style.opacity = "0";
                 filterContainer.style.transform = "translateY(-10px)";
-                
+
                 setTimeout(() => {
                     filterContainer.classList.add("hidden");
                     filterContainer.style.transition = "";
@@ -1227,14 +1234,14 @@ function setupDashboardEventListeners() {
             }
         });
     }
-    
+
     if (clearAllBtn) {
         clearAllBtn.addEventListener("click", async () => {
             // Get filter elements dynamically
             const filterByDays = document.getElementById("filter-by-days");
             const filterByTime = document.getElementById("filter-by-time");
             const filterByConcentration = document.getElementById("filter-by-concentration");
-            
+
             // Clear day filters
             if (filterByDays) {
                 const dayCheckboxes = filterByDays.querySelectorAll("input[type='checkbox']");
@@ -1242,7 +1249,7 @@ function setupDashboardEventListeners() {
                     checkbox.checked = false;
                 });
             }
-            
+
             // Clear time filters  
             if (filterByTime) {
                 const timeCheckboxes = filterByTime.querySelectorAll("input[type='checkbox']");
@@ -1250,7 +1257,7 @@ function setupDashboardEventListeners() {
                     checkbox.checked = false;
                 });
             }
-            
+
             // Clear concentration filters
             if (filterByConcentration) {
                 const concentrationCheckboxes = filterByConcentration.querySelectorAll("input[type='checkbox']");
@@ -1258,18 +1265,18 @@ function setupDashboardEventListeners() {
                     checkbox.checked = false;
                 });
             }
-            
+
             // Reset custom dropdowns to default values
             const termSelect = document.getElementById("term-select");
             const yearSelect = document.getElementById("year-select");
             const termCustomSelect = document.querySelector('[data-target="term-select"]');
             const yearCustomSelect = document.querySelector('[data-target="year-select"]');
-            
+
             if (termCustomSelect) {
                 const termValue = termCustomSelect.querySelector('.custom-select-value');
                 const termOptions = termCustomSelect.querySelectorAll('.custom-select-option');
                 termOptions.forEach(option => option.classList.remove('selected'));
-                
+
                 // Set default to Fall
                 const fallOption = termCustomSelect.querySelector('[data-value="Fall"]');
                 if (fallOption) {
@@ -1278,12 +1285,12 @@ function setupDashboardEventListeners() {
                     termSelect.value = 'Fall';
                 }
             }
-            
+
             if (yearCustomSelect) {
                 const yearValue = yearCustomSelect.querySelector('.custom-select-value');
                 const yearOptions = yearCustomSelect.querySelectorAll('.custom-select-option');
                 yearOptions.forEach(option => option.classList.remove('selected'));
-                
+
                 // Set default to current year (2025)
                 const currentYearOption = yearCustomSelect.querySelector('[data-value="2025"]');
                 if (currentYearOption) {
@@ -1292,7 +1299,7 @@ function setupDashboardEventListeners() {
                     yearSelect.value = '2025';
                 }
             }
-            
+
             // Reset sorting to default (Course A-Z)
             currentSortMethod = 'title-az';
             const sortOptions = document.querySelectorAll('.sort-option');
@@ -1301,30 +1308,30 @@ function setupDashboardEventListeners() {
             if (defaultSortOption) {
                 defaultSortOption.classList.add('selected');
             }
-            
+
             // Clear search input and search state
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
                 searchInput.value = "";
             }
-            
+
             // Clear desktop search pill input
             const searchPillInput = document.getElementById('search-pill-input');
             if (searchPillInput) {
                 searchPillInput.value = "";
             }
-            
+
             // Clear global search state
             currentSearchQuery = null;
-            
+
             // Update course filter paragraph to show default text
             updateCourseFilterParagraph();
-            
+
             // Apply filters (this will show all courses since no filters are active and search is cleared)
             await applySearchAndFilters();
         });
     }
-    
+
     // Search button and modal setup - for both mobile and desktop
     searchBtns.forEach(searchBtn => {
         if (searchBtn && searchContainer && searchModal && searchBtn.dataset.listenerAttached !== 'true') {
@@ -1332,7 +1339,7 @@ function setupDashboardEventListeners() {
             searchBtn.addEventListener("click", async () => {
                 if (searchContainer.classList.contains("hidden")) {
                     searchContainer.classList.remove("hidden");
-                    
+
                     if (window.innerWidth <= 780) {
                         // Mobile full-screen animation
                         showModalWithMobileAnimation(searchModal, searchContainer);
@@ -1341,7 +1348,7 @@ function setupDashboardEventListeners() {
                         searchContainer.style.opacity = "0";
                         searchModal.style.transform = "translate(-50%, -60%)";
                         lockBodyScroll();
-                        
+
                         requestAnimationFrame(() => {
                             searchContainer.style.transition = "opacity 0.3s ease";
                             searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
@@ -1349,10 +1356,10 @@ function setupDashboardEventListeners() {
                             searchModal.style.transform = "translate(-50%, -50%)";
                         });
                     }
-                    
+
                     // Load courses for autocomplete
                     await getAllCourses();
-                    
+
                     // Focus on search input after animation
                     setTimeout(() => {
                         const searchInput = document.getElementById('search-input');
@@ -1362,19 +1369,19 @@ function setupDashboardEventListeners() {
             });
         }
     });
-    
+
     // Set up additional search event listeners (only once, not per button)
     if (searchContainer && searchModal) {
         const searchSubmit = document.getElementById('search-submit');
         const searchCancel = document.getElementById('search-cancel');
         const searchInput = document.getElementById('search-input');
         const searchAutocomplete = document.getElementById('search-autocomplete');
-        
+
         if (searchSubmit) {
             searchSubmit.addEventListener("click", async () => {
                 const searchQuery = searchInput ? searchInput.value : '';
                 await performSearch(searchQuery);
-                
+
                 if (window.innerWidth <= 780) {
                     // Mobile full-screen animation
                     hideModalWithMobileAnimation(searchModal, searchContainer, () => {
@@ -1386,7 +1393,7 @@ function setupDashboardEventListeners() {
                     searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
                     searchContainer.style.opacity = "0";
                     searchModal.style.transform = "translate(-50%, -60%)";
-                    
+
                     setTimeout(() => {
                         searchContainer.classList.add("hidden");
                         unlockBodyScroll();
@@ -1394,7 +1401,7 @@ function setupDashboardEventListeners() {
                 }
             });
         }
-        
+
         if (searchCancel) {
             searchCancel.addEventListener("click", () => {
                 if (window.innerWidth <= 780) {
@@ -1408,7 +1415,7 @@ function setupDashboardEventListeners() {
                     searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
                     searchContainer.style.opacity = "0";
                     searchModal.style.transform = "translate(-50%, -60%)";
-                    
+
                     setTimeout(() => {
                         searchContainer.classList.add("hidden");
                         unlockBodyScroll();
@@ -1416,7 +1423,7 @@ function setupDashboardEventListeners() {
                 }
             });
         }
-        
+
         // Close search modal when clicking outside
         if (searchBackground) {
             searchBackground.addEventListener("click", (event) => {
@@ -1432,7 +1439,7 @@ function setupDashboardEventListeners() {
                         searchModal.style.transition = "transform 0.3s ease, opacity 0.3s ease";
                         searchContainer.style.opacity = "0";
                         searchModal.style.transform = "translate(-50%, -60%)";
-                        
+
                         setTimeout(() => {
                             searchContainer.classList.add("hidden");
                             unlockBodyScroll();
@@ -1441,20 +1448,20 @@ function setupDashboardEventListeners() {
                 }
             });
         }
-        
+
         // Search input and autocomplete
         if (searchInput && searchAutocomplete) {
             setupSearchAutocomplete(searchInput, searchAutocomplete);
         }
     }
-    
+
     // Desktop Search Pill Setup
     setupDesktopSearchPill();
-    
+
     // Initialize custom select dropdowns and filter checkboxes
     initializeCustomSelects();
     initializeFilterCheckboxes();
-    
+
     dashboardEventListenersInitialized = true;
     console.log('Dashboard event listeners initialization complete');
 }
@@ -1462,7 +1469,7 @@ function setupDashboardEventListeners() {
 // Function to set up search autocomplete event listeners
 function setupSearchAutocomplete(searchInput, searchAutocomplete) {
     if (!searchInput || !searchAutocomplete) return;
-    
+
     // Search input event handlers for autocomplete
     searchInput.addEventListener("input", (event) => {
         showAutocomplete(event.target.value, searchAutocomplete);
@@ -1484,23 +1491,23 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
 
     // Allow Enter key to submit search and handle autocomplete navigation
     searchInput.addEventListener("keydown", async (event) => {
-        if (searchAutocomplete.style.display === 'block' && 
+        if (searchAutocomplete.style.display === 'block' &&
             (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             handleAutocompleteNavigation(event, searchAutocomplete);
         } else if (event.key === "Enter") {
             event.preventDefault();
-            
+
             // If search is empty, clear the search and show all courses
             if (!searchInput.value.trim()) {
                 searchAutocomplete.style.display = 'none';
                 currentHighlightIndex = -1;
-                
+
                 // Clear search state
                 currentSearchQuery = null;
-                
+
                 // Apply filters which will reload courses if suggestions were displayed
                 await applySearchAndFilters();
-                
+
                 // Close the search modal
                 const searchContainer = document.querySelector(".search-container");
                 const searchModal = document.querySelector(".search-modal");
@@ -1520,7 +1527,7 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
                 }
                 return;
             }
-            
+
             if (searchAutocomplete.style.display === 'block' && currentHighlightIndex >= 0) {
                 const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
                 if (items[currentHighlightIndex]) {
@@ -1550,63 +1557,63 @@ let desktopHighlightIndex = -1;
 function setupDesktopSearchPill() {
     const searchPillInput = document.getElementById('search-pill-input');
     const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
-    
+
     if (!searchPillInput || !searchPillAutocomplete) {
         console.log('Desktop search pill elements not found');
         return;
     }
-    
+
     if (desktopSearchPillInitialized && searchPillInput.dataset.listenerAttached === 'true') {
         console.log('Desktop search pill already initialized');
         return;
     }
-    
+
     console.log('Initializing desktop search pill');
     searchPillInput.dataset.listenerAttached = 'true';
-    
+
     // Load courses for autocomplete when user starts typing
     let coursesLoaded = false;
-    
+
     // Input event for autocomplete
     searchPillInput.addEventListener("input", async (event) => {
         const query = event.target.value;
-        
+
         // Load courses on first interaction if not already loaded
         if (!coursesLoaded && query.length >= 1) {
             await getAllCourses();
             coursesLoaded = true;
         }
-        
+
         showDesktopPillAutocomplete(query, searchPillAutocomplete);
     });
-    
+
     // Focus event - load courses and show autocomplete if has content
     searchPillInput.addEventListener("focus", async (event) => {
         if (!coursesLoaded) {
             await getAllCourses();
             coursesLoaded = true;
         }
-        
+
         if (event.target.value.trim() && event.target.value.length >= 2) {
             showDesktopPillAutocomplete(event.target.value, searchPillAutocomplete);
         }
     });
-    
+
     // Click event - show autocomplete if has content
     searchPillInput.addEventListener("click", (event) => {
         if (event.target.value.trim() && event.target.value.length >= 2) {
             showDesktopPillAutocomplete(event.target.value, searchPillAutocomplete);
         }
     });
-    
+
     // Keyboard navigation
     searchPillInput.addEventListener("keydown", async (event) => {
-        if (searchPillAutocomplete.style.display === 'block' && 
+        if (searchPillAutocomplete.style.display === 'block' &&
             (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             handleDesktopPillAutocompleteNavigation(event, searchPillAutocomplete);
         } else if (event.key === "Enter") {
             event.preventDefault();
-            
+
             // If autocomplete is open and item is highlighted, select it
             if (searchPillAutocomplete.style.display === 'block' && desktopHighlightIndex >= 0) {
                 const items = searchPillAutocomplete.querySelectorAll('.search-autocomplete-item');
@@ -1615,7 +1622,7 @@ function setupDesktopSearchPill() {
                     return;
                 }
             }
-            
+
             // Otherwise perform search
             const searchQuery = searchPillInput.value.trim();
             if (searchQuery) {
@@ -1636,7 +1643,7 @@ function setupDesktopSearchPill() {
             searchPillInput.blur();
         }
     });
-    
+
     // Close autocomplete when clicking outside
     document.addEventListener("click", (event) => {
         const searchPillContainer = document.querySelector('.search-pill-container');
@@ -1645,7 +1652,7 @@ function setupDesktopSearchPill() {
             desktopHighlightIndex = -1;
         }
     });
-    
+
     desktopSearchPillInitialized = true;
     console.log('Desktop search pill initialized');
 }
@@ -1653,55 +1660,55 @@ function setupDesktopSearchPill() {
 // Show autocomplete for desktop search pill
 function showDesktopPillAutocomplete(query, autocompleteContainer) {
     if (!autocompleteContainer) return;
-    
+
     if (!query.trim() || query.length < 2) {
         autocompleteContainer.style.display = 'none';
         return;
     }
-    
+
     const normalizedQuery = query.toLowerCase().trim();
-    
+
     // First, try exact substring matches
     let suggestions = allCourses.filter(course => {
         const title = normalizeCourseTitle(course.title || '').toLowerCase();
         const professor = romanizeProfessorName(course.professor || '').toLowerCase();
         const courseCode = (course.course_code || '').toLowerCase();
-        
-        return title.includes(normalizedQuery) || 
-               professor.includes(normalizedQuery) || 
-               courseCode.includes(normalizedQuery);
+
+        return title.includes(normalizedQuery) ||
+            professor.includes(normalizedQuery) ||
+            courseCode.includes(normalizedQuery);
     }).slice(0, 6);
-    
+
     // If no exact matches found, use fuzzy matching
     if (suggestions.length === 0) {
         const coursesWithRelevance = allCourses.map(course => {
             const relevance = calculateCourseRelevance(normalizedQuery, course);
             return { course, relevance };
         })
-        .filter(item => item.relevance > 0.15)
-        .sort((a, b) => b.relevance - a.relevance)
-        .slice(0, 6);
-        
+            .filter(item => item.relevance > 0.15)
+            .sort((a, b) => b.relevance - a.relevance)
+            .slice(0, 6);
+
         suggestions = coursesWithRelevance.map(item => item.course);
     }
-    
+
     if (suggestions.length === 0) {
         autocompleteContainer.style.display = 'none';
         return;
     }
-    
+
     // Create inner wrapper for proper scrolling with inner shadow
     autocompleteContainer.innerHTML = '<div class="search-pill-autocomplete-inner"></div>';
     const innerContainer = autocompleteContainer.querySelector('.search-pill-autocomplete-inner');
-    
+
     suggestions.forEach((course, index) => {
         const item = document.createElement('div');
         item.className = 'search-autocomplete-item';
-        
+
         // Highlight matching parts in the title
         const title = course.title || '';
         const highlightedTitle = highlightMatches(title, query);
-        
+
         item.innerHTML = `
             <div class="item-title">${highlightedTitle}</div>
             <div class="item-details">
@@ -1709,7 +1716,7 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
                 <span class="item-professor">${romanizeProfessorName(course.professor)}</span>
             </div>
         `;
-        
+
         item.addEventListener('click', () => {
             const searchPillInput = document.getElementById('search-pill-input');
             if (searchPillInput) {
@@ -1717,10 +1724,10 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
             }
             autocompleteContainer.style.display = 'none';
             desktopHighlightIndex = -1;
-            
+
             // Check if we're on the calendar page
             const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
-            
+
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
                 if (window.openCourseInfoMenu) {
@@ -1731,10 +1738,10 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
                 performSearch(course.title);
             }
         });
-        
+
         innerContainer.appendChild(item);
     });
-    
+
     autocompleteContainer.style.display = 'block';
     desktopHighlightIndex = -1;
 }
@@ -1742,11 +1749,11 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
 // Handle keyboard navigation for desktop pill autocomplete
 function handleDesktopPillAutocompleteNavigation(event, autocompleteContainer) {
     if (!autocompleteContainer) return;
-    
+
     // Look for items inside the inner container
     const innerContainer = autocompleteContainer.querySelector('.search-pill-autocomplete-inner');
     const items = innerContainer ? innerContainer.querySelectorAll('.search-autocomplete-item') : autocompleteContainer.querySelectorAll('.search-autocomplete-item');
-    
+
     if (event.key === 'ArrowDown') {
         event.preventDefault();
         desktopHighlightIndex = Math.min(desktopHighlightIndex + 1, items.length - 1);
@@ -1780,13 +1787,13 @@ function syncSemesterDropdowns(value) {
             select.value = value;
         }
     });
-    
+
     // Also sync the custom dropdown visual states
     const customSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
     customSelects.forEach(customSelect => {
         const valueElement = customSelect.querySelector('.custom-select-value');
         const options = customSelect.querySelectorAll('.custom-select-option');
-        
+
         options.forEach(option => {
             option.classList.remove('selected');
             if (option.dataset.value === value) {
@@ -1801,24 +1808,24 @@ function syncSemesterDropdowns(value) {
 async function populateSemesterDropdown() {
     const semesters = await fetchAvailableSemesters();
     console.log('Populating semester dropdown with semesters:', semesters);
-    
+
     // Get all semester selects (mobile and desktop)
     const semesterSelects = document.querySelectorAll('.semester-select');
     const termSelect = document.getElementById('term-select');
     const yearSelect = document.getElementById('year-select');
-    
+
     // Get all custom select dropdowns for semester
     const customSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
-    
+
     if (semesterSelects.length === 0 || customSelects.length === 0) {
         console.error('Semester select elements not found');
         return;
     }
-    
+
     // Populate each semester select (hidden <select> elements)
     semesterSelects.forEach(semesterSelect => {
         semesterSelect.innerHTML = '';
-        
+
         semesters.forEach((semester, index) => {
             const value = `${semester.term}-${semester.year}`;
             const option = document.createElement('option');
@@ -1828,16 +1835,16 @@ async function populateSemesterDropdown() {
             semesterSelect.appendChild(option);
         });
     });
-    
+
     // Populate each custom dropdown
     customSelects.forEach(customSelect => {
         const optionsContainer = customSelect.querySelector('.custom-select-options');
         const valueElement = customSelect.querySelector('.custom-select-value');
-        
+
         if (!optionsContainer || !valueElement) return;
-        
+
         optionsContainer.innerHTML = '';
-        
+
         semesters.forEach((semester, index) => {
             const value = `${semester.term}-${semester.year}`;
             const customOption = document.createElement('div');
@@ -1846,20 +1853,20 @@ async function populateSemesterDropdown() {
             customOption.textContent = semester.label;
             optionsContainer.appendChild(customOption);
         });
-        
+
         // Set the displayed value for the first (most recent) semester
         if (semesters.length > 0) {
             valueElement.textContent = semesters[0].label;
         }
     });
-    
+
     // Update hidden term and year inputs for the first (most recent) semester
     if (semesters.length > 0) {
         const firstSemester = semesters[0];
         if (termSelect) termSelect.value = firstSemester.term;
         if (yearSelect) yearSelect.value = firstSemester.year;
     }
-    
+
     console.log('Semester dropdown populated successfully');
 }
 
@@ -1882,82 +1889,82 @@ function initializeCustomSelects() {
         console.log('No custom selects found');
         return;
     }
-    
+
     console.log('Initializing custom selects:', customSelects.length, 'already initialized:', customSelectsInitialized);
-    
+
     customSelects.forEach(customSelect => {
         const trigger = customSelect.querySelector('.custom-select-trigger');
         const options = customSelect.querySelector('.custom-select-options');
         const targetSelectId = customSelect.dataset.target;
         const targetSelect = document.getElementById(targetSelectId);
-        
+
         if (!trigger || !options || !targetSelect) {
             console.log('Missing elements for custom select:', targetSelectId);
             return;
         }
-        
+
         // Skip if already initialized (check for marker)
         if (customSelect.dataset.initialized === 'true') {
             console.log('Custom select already initialized:', targetSelectId);
             return;
         }
-        
+
         console.log('Setting up custom select for:', targetSelectId);
-        
+
         // Mark as initialized
         customSelect.dataset.initialized = 'true';
-        
+
         // Click handler for opening/closing dropdown
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
-            
+
             // Close other custom selects
             document.querySelectorAll('.custom-select').forEach(otherSelect => {
                 if (otherSelect !== customSelect) {
                     otherSelect.classList.remove('open');
                 }
             });
-            
+
             customSelect.classList.toggle('open');
             console.log('Custom select toggled:', targetSelectId, customSelect.classList.contains('open'));
         });
-        
+
         // Option selection handler
         options.addEventListener('click', (e) => {
             const option = e.target.closest('.custom-select-option');
             if (!option) return;
-            
+
             const value = option.dataset.value;
             const text = option.textContent;
-            
+
             console.log('Custom select option clicked:', targetSelectId, value);
-            
+
             // Update visual state
             options.querySelectorAll('.custom-select-option').forEach(opt => {
                 opt.classList.remove('selected');
             });
             option.classList.add('selected');
-            
+
             // Update trigger text
             const valueElement = trigger.querySelector('.custom-select-value');
             if (valueElement) valueElement.textContent = text;
-            
+
             // Update actual select
             console.log('  → Setting', targetSelectId, 'value to:', value);
             targetSelect.value = value;
             console.log('  → Value set. Current value:', targetSelect.value);
-            
+
             // Trigger change event with bubbles: true
             console.log('  → Dispatching change event on', targetSelectId);
             const changeEvent = new Event('change', { bubbles: true });
             targetSelect.dispatchEvent(changeEvent);
             console.log('  → Change event dispatched');
-            
+
             // Close dropdown
             customSelect.classList.remove('open');
         });
     });
-    
+
     // Close dropdowns when clicking outside (only add once)
     if (!customSelectsInitialized) {
         document.addEventListener('click', (e) => {
@@ -1966,7 +1973,7 @@ function initializeCustomSelects() {
                     customSelect.classList.remove('open');
                 });
             }
-            
+
             // Close all sort dropdowns when clicking outside
             if (!e.target.closest('.sort-wrapper')) {
                 document.querySelectorAll('.sort-wrapper').forEach(sortWrapper => {
@@ -1975,7 +1982,7 @@ function initializeCustomSelects() {
             }
         });
     }
-    
+
     customSelectsInitialized = true;
     console.log('Custom selects initialization complete');
 }
@@ -1983,7 +1990,7 @@ function initializeCustomSelects() {
 // Function to initialize filter checkboxes
 function initializeFilterCheckboxes() {
     const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
-    
+
     filterCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', async () => {
             // Apply filters when any checkbox changes
@@ -2011,7 +2018,7 @@ async function calendarSchedule(year, term) {
         }
 
         const selectedCourses = profile?.courses_selection || [];
-        
+
         // Filter to only show courses for the current year and term being displayed
         const currentDisplayCourses = selectedCourses.filter(course => {
             return course.year === parseInt(year) && (!course.term || course.term === term);
@@ -2147,13 +2154,13 @@ let modalCount = 0; // Track how many modals are open
 function lockBodyScroll() {
     modalCount++;
     console.log('Lock body scroll called, modal count:', modalCount);
-    
+
     if (window.innerWidth <= 780) {
         if (modalCount === 1) { // Only lock on first modal
             scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
             document.body.classList.add('modal-open');
             document.body.style.top = `-${scrollPosition}px`;
-            
+
             // Additional prevention for iOS
             document.addEventListener('touchmove', preventBodyScroll, { passive: false });
         }
@@ -2167,9 +2174,9 @@ function lockBodyScroll() {
 function unlockBodyScroll() {
     modalCount = Math.max(0, modalCount - 1);
     console.log('Unlock body scroll called, modal count:', modalCount);
-    
+
     if (modalCount > 0) return; // Don't unlock if other modals are open
-    
+
     if (window.innerWidth <= 780) {
         document.body.classList.remove('modal-open');
         document.body.style.top = '';
@@ -2177,13 +2184,13 @@ function unlockBodyScroll() {
         document.body.style.width = '';
         document.body.style.height = '';
         document.body.style.overflow = '';
-        
+
         // Restore scroll position
         window.scrollTo(0, scrollPosition);
-        
+
         // Remove iOS prevention
         document.removeEventListener('touchmove', preventBodyScroll);
-        
+
         // Force a repaint to ensure styles are applied
         document.body.offsetHeight;
     } else {
@@ -2191,7 +2198,7 @@ function unlockBodyScroll() {
         document.body.style.position = "";
         document.body.style.width = "";
         document.body.style.height = "";
-        
+
         // Force style recalculation
         document.body.offsetHeight;
         console.log('Body overflow reset to:', document.body.style.overflow);
@@ -2202,7 +2209,7 @@ function preventBodyScroll(e) {
     // Allow scrolling inside modal elements
     const target = e.target;
     const modal = target.closest('.filter-popup, .search-modal');
-    
+
     if (!modal) {
         e.preventDefault();
         return false;
@@ -2211,11 +2218,11 @@ function preventBodyScroll(e) {
 
 function showModalWithMobileAnimation(modal, container, callback = null) {
     const isMobile = window.innerWidth <= 780;
-    
+
     if (isMobile) {
         modal.classList.add('show');
         lockBodyScroll();
-        
+
         // Add swipe functionality for filter and search modals
         if (modal.classList.contains('filter-popup')) {
             console.log('Adding swipe to filter modal');
@@ -2242,7 +2249,7 @@ function showModalWithMobileAnimation(modal, container, callback = null) {
                 console.error('addSwipeToCloseSimple function not found');
             }
         }
-        
+
         if (callback) callback();
     } else {
         // Desktop animation logic
@@ -2253,7 +2260,7 @@ function showModalWithMobileAnimation(modal, container, callback = null) {
 
 function hideModalWithMobileAnimation(modal, container, callback = null) {
     const isMobile = window.innerWidth <= 780;
-    
+
     if (isMobile) {
         modal.classList.remove('show');
         setTimeout(() => {
@@ -2271,14 +2278,14 @@ function hideModalWithMobileAnimation(modal, container, callback = null) {
 function sortCourses(method) {
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
-    
+
     const courseContainers = Array.from(courseList.querySelectorAll(".class-outside"));
-    
+
     courseContainers.sort((a, b) => {
         const courseA = JSON.parse(a.querySelector('.class-container').dataset.course);
         const courseB = JSON.parse(b.querySelector('.class-container').dataset.course);
-        
-        switch(method) {
+
+        switch (method) {
             case 'title-az':
                 return normalizeCourseTitle(courseA.title || '').localeCompare(normalizeCourseTitle(courseB.title || ''));
             case 'title-za':
@@ -2291,13 +2298,13 @@ function sortCourses(method) {
                 return 0;
         }
     });
-    
+
     // Clear and re-append sorted courses
     courseList.innerHTML = '';
     courseContainers.forEach(container => {
         courseList.appendChild(container);
     });
-    
+
     // Re-apply current filters after sorting
     applyFilters();
 }
@@ -2315,18 +2322,18 @@ async function getAllCourses() {
         const termSelect = document.getElementById("term-select");
         console.log('  → year-select element:', yearSelect);
         console.log('  → term-select element:', termSelect);
-        
+
         if (!yearSelect || !termSelect) {
             console.error('  ❌ Year or term select not found!');
             return [];
         }
-        
+
         const year = yearSelect.value;
         const term = termSelect.value;
         console.log('  → Year value:', year);
         console.log('  → Term value:', term);
         console.log('  → Fetching courses for:', year, term);
-        
+
         const courses = await fetchCourseData(year, term);
         console.log('  → Fetched courses count:', courses.length);
         allCourses = courses;
@@ -2343,54 +2350,54 @@ function showAutocomplete(query, searchAutocomplete) {
     if (!searchAutocomplete) {
         searchAutocomplete = document.getElementById('search-autocomplete');
     }
-    
+
     if (!query.trim() || query.length < 2) {
         if (searchAutocomplete) searchAutocomplete.style.display = 'none';
         return;
     }
-    
+
     const normalizedQuery = query.toLowerCase().trim();
-    
+
     // First, try exact substring matches
     let suggestions = allCourses.filter(course => {
         const title = normalizeCourseTitle(course.title || '').toLowerCase();
         const professor = romanizeProfessorName(course.professor || '').toLowerCase();
         const courseCode = (course.course_code || '').toLowerCase();
-        
-        return title.includes(normalizedQuery) || 
-               professor.includes(normalizedQuery) || 
-               courseCode.includes(normalizedQuery);
+
+        return title.includes(normalizedQuery) ||
+            professor.includes(normalizedQuery) ||
+            courseCode.includes(normalizedQuery);
     }).slice(0, 5);
-    
+
     // If no exact matches found, use fuzzy matching
     if (suggestions.length === 0) {
         const coursesWithRelevance = allCourses.map(course => {
             const relevance = calculateCourseRelevance(normalizedQuery, course);
             return { course, relevance };
         })
-        .filter(item => item.relevance > 0.15) // Threshold for autocomplete suggestions
-        .sort((a, b) => b.relevance - a.relevance)
-        .slice(0, 6); // Get more fuzzy matches
-        
+            .filter(item => item.relevance > 0.15) // Threshold for autocomplete suggestions
+            .sort((a, b) => b.relevance - a.relevance)
+            .slice(0, 6); // Get more fuzzy matches
+
         suggestions = coursesWithRelevance.map(item => item.course);
     }
-    
+
     if (suggestions.length === 0) {
         if (searchAutocomplete) searchAutocomplete.style.display = 'none';
         return;
     }
-    
+
     if (!searchAutocomplete) return;
-    
+
     searchAutocomplete.innerHTML = '';
     suggestions.forEach((course, index) => {
         const item = document.createElement('div');
         item.className = 'search-autocomplete-item';
-        
+
         // Highlight matching parts in the title
         const title = course.title || '';
         const highlightedTitle = highlightMatches(title, query);
-        
+
         item.innerHTML = `
             <div class="item-title">${highlightedTitle}</div>
             <div class="item-details">
@@ -2398,16 +2405,16 @@ function showAutocomplete(query, searchAutocomplete) {
                 <span class="item-professor">${romanizeProfessorName(course.professor)}</span>
             </div>
         `;
-        
+
         item.addEventListener('click', () => {
             const searchInput = document.getElementById('search-input');
             if (searchInput) searchInput.value = course.title;
             if (searchAutocomplete) searchAutocomplete.style.display = 'none';
             currentHighlightIndex = -1;
-            
+
             // Check if we're on the calendar page
             const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
-            
+
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
                 if (window.openCourseInfoMenu) {
@@ -2418,10 +2425,10 @@ function showAutocomplete(query, searchAutocomplete) {
                 performSearch(course.title);
             }
         });
-        
+
         searchAutocomplete.appendChild(item);
     });
-    
+
     searchAutocomplete.style.display = 'block';
     currentHighlightIndex = -1;
 }
@@ -2429,20 +2436,20 @@ function showAutocomplete(query, searchAutocomplete) {
 // Function to highlight matching characters in text
 function highlightMatches(text, query) {
     if (!query || query.length < 2) return text;
-    
+
     const queryLower = query.toLowerCase();
     const textLower = text.toLowerCase();
-    
+
     // Simple highlighting for substring matches
     if (textLower.includes(queryLower)) {
         const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return text.replace(regex, '<mark style="background: #E3D5E9; padding: 0 2px; border-radius: 3px;">$1</mark>');
     }
-    
+
     // For fuzzy matches, highlight individual matching characters
     let result = '';
     let queryIndex = 0;
-    
+
     for (let i = 0; i < text.length && queryIndex < query.length; i++) {
         if (textLower[i] === queryLower[queryIndex]) {
             result += `<mark style="background: #E3D5E9; padding: 0 1px; border-radius: 2px;">${text[i]}</mark>`;
@@ -2451,12 +2458,12 @@ function highlightMatches(text, query) {
             result += text[i];
         }
     }
-    
+
     // Add remaining characters
     if (queryIndex < query.length || result.length < text.length) {
         result += text.slice(result.replace(/<[^>]*>/g, '').length);
     }
-    
+
     return result;
 }
 
@@ -2466,9 +2473,9 @@ function handleAutocompleteNavigation(event, searchAutocomplete) {
         searchAutocomplete = document.getElementById('search-autocomplete');
     }
     if (!searchAutocomplete) return;
-    
+
     const items = searchAutocomplete.querySelectorAll('.search-autocomplete-item');
-    
+
     if (event.key === 'ArrowDown') {
         event.preventDefault();
         currentHighlightIndex = Math.min(currentHighlightIndex + 1, items.length - 1);
@@ -2534,13 +2541,13 @@ function levenshteinDistance(str1, str2) {
 function characterSimilarity(str1, str2) {
     const chars1 = str1.toLowerCase().split('');
     const chars2 = str2.toLowerCase().split('');
-    
+
     const set1 = new Set(chars1);
     const set2 = new Set(chars2);
-    
+
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
-    
+
     return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
@@ -2548,39 +2555,39 @@ function characterSimilarity(str1, str2) {
 function substringSimilarity(query, target) {
     const queryLower = query.toLowerCase();
     const targetLower = target.toLowerCase();
-    
+
     // Check if query is a substring of target
     if (targetLower.includes(queryLower)) {
         return queryLower.length / targetLower.length;
     }
-    
+
     // Check if target is a substring of query
     if (queryLower.includes(targetLower)) {
         return targetLower.length / queryLower.length;
     }
-    
+
     return 0;
 }
 
 // Enhanced word similarity with multiple algorithms
 function calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
-    
+
     const query = str1.toLowerCase().trim();
     const target = str2.toLowerCase().trim();
-    
+
     // Exact match gets highest score
     if (query === target) return 1.0;
-    
+
     // Substring match gets high score
     const substringScore = substringSimilarity(query, target);
     if (substringScore > 0) return 0.8 + (substringScore * 0.2);
-    
+
     // Calculate different similarity metrics
     const maxLength = Math.max(query.length, target.length);
     const levenshteinScore = maxLength === 0 ? 0 : 1 - (levenshteinDistance(query, target) / maxLength);
     const charScore = characterSimilarity(query, target);
-    
+
     // Word-based Jaccard similarity
     const words1 = query.split(/\s+/).filter(word => word.length > 1);
     const words2 = target.split(/\s+/).filter(word => word.length > 1);
@@ -2589,71 +2596,71 @@ function calculateSimilarity(str1, str2) {
     const intersection = new Set([...set1].filter(x => set2.has(x)));
     const union = new Set([...set1, ...set2]);
     const jaccardScore = union.size === 0 ? 0 : intersection.size / union.size;
-    
+
     // Combine scores with different weights
     const combinedScore = (levenshteinScore * 0.4) + (charScore * 0.3) + (jaccardScore * 0.3);
-    
+
     return Math.max(combinedScore, 0);
 }
 
 // Advanced fuzzy matching for course fields
 function calculateCourseRelevance(query, course) {
     if (!query.trim()) return 0;
-    
+
     const normalizedQuery = query.toLowerCase().trim();
     const title = normalizeCourseTitle(course.title || '').toLowerCase();
     const professorOriginal = (course.professor || '').toLowerCase();
     const professorRomanized = romanizeProfessorName(course.professor || '').toLowerCase();
     const courseCode = (course.course_code || '').toLowerCase();
-    
+
     // Exact matches get bonus scores
-    if (title.includes(normalizedQuery) || 
+    if (title.includes(normalizedQuery) ||
         professorOriginal.includes(normalizedQuery) ||
-        professorRomanized.includes(normalizedQuery) || 
+        professorRomanized.includes(normalizedQuery) ||
         courseCode.includes(normalizedQuery)) {
         return 0.9;
     }
-    
+
     // Calculate similarity for each field
     const titleSimilarity = calculateSimilarity(normalizedQuery, title);
     const professorOriginalSimilarity = calculateSimilarity(normalizedQuery, professorOriginal);
     const professorRomanizedSimilarity = calculateSimilarity(normalizedQuery, professorRomanized);
     const codeSimilarity = calculateSimilarity(normalizedQuery, courseCode);
-    
+
     // Take the best professor similarity score (either original or romanized)
     const professorSimilarity = Math.max(professorOriginalSimilarity, professorRomanizedSimilarity);
-    
+
     // Special handling for course codes (they're often abbreviated)
     let codeBonus = 0;
     if (normalizedQuery.length >= 2 && courseCode.includes(normalizedQuery.substring(0, 2))) {
         codeBonus = 0.3;
     }
-    
+
     // Weight different fields differently
     const overallSimilarity = Math.max(
         titleSimilarity * 0.6,
         professorSimilarity * 0.4,
         codeSimilarity * 0.5 + codeBonus
     );
-    
+
     return overallSimilarity;
 }
 
 // Enhanced function to find similar courses with better fuzzy matching
 function findSimilarCourses(searchQuery, courses, limit = 8) {
     if (!searchQuery.trim() || courses.length === 0) return [];
-    
+
     const coursesWithRelevance = courses.map(course => {
         const relevance = calculateCourseRelevance(searchQuery, course);
         return { course, relevance };
     })
-    .filter(item => item.relevance > 0.05) // Lower threshold for more inclusive results
-    .sort((a, b) => b.relevance - a.relevance) // Sort by relevance descending
-    .slice(0, limit); // Limit results
-    
-    return coursesWithRelevance.map(item => ({ 
-        course: item.course, 
-        relevanceScore: item.relevance 
+        .filter(item => item.relevance > 0.05) // Lower threshold for more inclusive results
+        .sort((a, b) => b.relevance - a.relevance) // Sort by relevance descending
+        .slice(0, limit); // Limit results
+
+    return coursesWithRelevance.map(item => ({
+        course: item.course,
+        relevanceScore: item.relevance
     }));
 }
 
@@ -2661,7 +2668,7 @@ function findSimilarCourses(searchQuery, courses, limit = 8) {
 function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
     const courseList = document.getElementById("course-list");
     const courseMainDiv = document.getElementById("course-main-div");
-    
+
     if (coursesWithRelevance.length === 0) {
         courseList.innerHTML = `
             <div style="text-align: center; padding: 40px;">
@@ -2681,7 +2688,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         if (existingHeader) existingHeader.remove();
         return;
     }
-    
+
     // Create or update the suggestion header outside course-list
     let suggestionHeader = courseMainDiv.querySelector('.suggestion-header');
     if (!suggestionHeader) {
@@ -2689,17 +2696,17 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         suggestionHeader.className = 'suggestion-header';
         courseMainDiv.insertBefore(suggestionHeader, courseList);
     }
-    
+
     suggestionHeader.innerHTML = `
         <div class="no-courses-container">
             <h3>No exact matches found for "${searchQuery}"</h3>
             <p>Here are the most similar courses we found:</p>
         </div>
     `;
-    
+
     let coursesHTML = '';
-    
-    coursesWithRelevance.forEach(function({ course, relevanceScore }) {
+
+    coursesWithRelevance.forEach(function ({ course, relevanceScore }) {
         const days = {
             "月曜日": "Mon", "月": "Mon",
             "火曜日": "Tue", "火": "Tue",
@@ -2714,12 +2721,12 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
             "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
             "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
         };
-        
+
         let timeSlot = course.time_slot;
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
         const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
-        
+
         if (specialMatch) {
             timeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
         } else if (match) {
@@ -2734,7 +2741,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const suggestedCourseColor = getCourseColorByType(course.type);
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
-        
+
         coursesHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
             <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
@@ -2770,7 +2777,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         </div>
         `;
     });
-    
+
     courseList.innerHTML = coursesHTML;
 }
 
@@ -2778,14 +2785,14 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 function performSearch(searchQuery) {
     // Check if we're on the calendar page
     const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
-    
+
     if (!isCalendarPage) {
         // Update the global search state (only on courses page)
         currentSearchQuery = searchQuery && searchQuery.trim() ? searchQuery : null;
-        
+
         // Update the course filter paragraph to show search status
         updateCourseFilterParagraph();
-        
+
         // Use the unified search and filter function
         return applySearchAndFilters(currentSearchQuery);
     }
@@ -2796,10 +2803,10 @@ function performSearch(searchQuery) {
 function ensureMobileNavigationPositioning() {
     const appNavigation = document.querySelector('app-navigation');
     if (!appNavigation) return;
-    
+
     // Check if we're on mobile
     const isMobile = window.innerWidth <= 780;
-    
+
     if (isMobile) {
         // Force bottom positioning with JavaScript
         appNavigation.style.position = 'fixed';
@@ -2808,11 +2815,11 @@ function ensureMobileNavigationPositioning() {
         appNavigation.style.right = '0';
         appNavigation.style.width = '100%';
         appNavigation.style.zIndex = '10000';
-        
+
         // Force hardware acceleration
         appNavigation.style.transform = 'translateZ(0)';
         appNavigation.style.webkitTransform = 'translateZ(0)';
-        
+
         // Ensure it stays at the bottom during scroll
         const forceBottomPosition = () => {
             if (window.innerWidth <= 780) {
@@ -2820,24 +2827,24 @@ function ensureMobileNavigationPositioning() {
                 appNavigation.style.position = 'fixed';
             }
         };
-        
+
         // Apply on scroll events
         let scrollTimeout;
         window.addEventListener('scroll', () => {
             clearTimeout(scrollTimeout);
             scrollTimeout = setTimeout(forceBottomPosition, 10);
         }, { passive: true });
-        
+
         // Apply on orientation change
         window.addEventListener('orientationchange', () => {
             setTimeout(forceBottomPosition, 100);
         });
-        
+
         // Apply on resize
         window.addEventListener('resize', () => {
             setTimeout(forceBottomPosition, 50);
         });
-        
+
         // Initial positioning
         forceBottomPosition();
     }
@@ -2847,42 +2854,42 @@ function ensureMobileNavigationPositioning() {
 function restructureReviewDatesForMobile() {
     if (window.innerWidth <= 780) {
         const reviewContainers = document.querySelectorAll('.review-dates');
-        
+
         reviewContainers.forEach(container => {
             // Skip if already restructured
             if (container.dataset.mobileRestructured === 'true') return;
-            
+
             const reviewDate = container.querySelector('.review-date');
             const reviewHeader = container.closest('.review-header');
             const reviewActions = reviewHeader ? reviewHeader.querySelector('.review-actions') : null;
-            
+
             if (reviewDate && reviewHeader) {
                 // Create a new wrapper div for mobile
                 const mobileWrapper = document.createElement('div');
                 mobileWrapper.className = 'review-mobile-date-actions';
                 mobileWrapper.dataset.mobileRestructured = 'true';
-                
+
                 // Clone the review-date element
                 const clonedReviewDate = reviewDate.cloneNode(true);
                 clonedReviewDate.dataset.mobileRestructured = 'true';
                 mobileWrapper.appendChild(clonedReviewDate);
-                
+
                 // If review-actions exists, clone and add it to the wrapper
                 if (reviewActions) {
                     const clonedReviewActions = reviewActions.cloneNode(true);
                     clonedReviewActions.dataset.mobileRestructured = 'true';
                     mobileWrapper.appendChild(clonedReviewActions);
-                    
+
                     // Remove original review-actions
                     reviewActions.remove();
                 }
-                
+
                 // Insert the wrapper after the review-header
                 reviewHeader.parentNode.insertBefore(mobileWrapper, reviewHeader.nextSibling);
-                
+
                 // Remove the original review-date from inside the container
                 reviewDate.remove();
-                
+
                 // Mark as restructured
                 container.dataset.mobileRestructured = 'true';
             }
@@ -2890,33 +2897,33 @@ function restructureReviewDatesForMobile() {
     } else {
         // Restore original structure on desktop
         const mobileWrappers = document.querySelectorAll('.review-mobile-date-actions[data-mobile-restructured="true"]');
-        
+
         mobileWrappers.forEach(wrapper => {
             const reviewDate = wrapper.querySelector('.review-date[data-mobile-restructured="true"]');
             const reviewActions = wrapper.querySelector('.review-actions[data-mobile-restructured="true"]');
-            
+
             // Find the corresponding review item
             const reviewItem = wrapper.closest('.review-item') || wrapper.parentNode.closest('.review-item');
             if (reviewItem) {
                 const reviewDatesContainer = reviewItem.querySelector('.review-dates[data-mobile-restructured="true"]');
                 const reviewHeader = reviewItem.querySelector('.review-header');
-                
+
                 if (reviewDate && reviewDatesContainer) {
                     // Move the review-date back inside the review-dates container
                     reviewDatesContainer.appendChild(reviewDate);
                     delete reviewDate.dataset.mobileRestructured;
                 }
-                
+
                 if (reviewActions && reviewHeader) {
                     // Move the review-actions back inside the review-header
                     reviewHeader.appendChild(reviewActions);
                     delete reviewActions.dataset.mobileRestructured;
                 }
-                
+
                 if (reviewDatesContainer) {
                     delete reviewDatesContainer.dataset.mobileRestructured;
                 }
-                
+
                 // Remove the mobile wrapper
                 wrapper.remove();
             }
@@ -2938,81 +2945,81 @@ window.addEventListener('resize', restructureReviewDatesForMobile);
 
 // Export initialization functions for the router
 export async function initializeDashboard() {
-  console.log('initializeDashboard called');
-  
-  // Re-run mobile navigation positioning
-  ensureMobileNavigationPositioning();
-  restructureReviewDatesForMobile();
-  setViewportHeight();
-  
-  // Initialize sticky observer for filter buttons
-  initStickyObserver();
-  
-  // Reset the custom select initialization flags so they can be reinitialized (for both mobile and desktop)
-  const semesterCustomSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
-  semesterCustomSelects.forEach(customSelect => {
-    customSelect.dataset.initialized = 'false';
-  });
-  
-  // Reset semester select listener flags (for both mobile and desktop)
-  const semesterSelects = document.querySelectorAll('.semester-select');
-  semesterSelects.forEach(select => {
-    select.dataset.listenerAttached = 'false';
-  });
-  
-  // Reset sort button and dropdown listener flags (for both mobile and desktop)
-  const sortBtns = document.querySelectorAll('.sort-btn');
-  const sortDropdowns = document.querySelectorAll('.sort-dropdown');
-  sortBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
-  sortDropdowns.forEach(dropdown => dropdown.dataset.listenerAttached = 'false');
-  
-  // Reset filter button listener flags (for both mobile and desktop)
-  const filterBtns = document.querySelectorAll('.filter-btn');
-  filterBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
-  
-  // Reset search button listener flags (for both mobile and desktop)
-  const searchBtns = document.querySelectorAll('.search-btn');
-  searchBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
-  
-  // Reset desktop search pill listener flag
-  const searchPillInput = document.getElementById('search-pill-input');
-  if (searchPillInput) {
-    searchPillInput.dataset.listenerAttached = 'false';
-  }
-  desktopSearchPillInitialized = false;
-  
-  // Populate semester dropdown (this also sets term/year hidden inputs)
-  await populateSemesterDropdown();
-  
-  // Initialize custom selects (dropdown behavior)
-  initializeCustomSelects();
-  
-  // Set up course list click listener
-  setupCourseListClickListener();
-  
-  // Set up button event listeners for router-based navigation
-  setupDashboardEventListeners();
-  
-  // Load courses with current semester values
-  const yearSelect = document.getElementById("year-select");
-  const termSelect = document.getElementById("term-select");
-  console.log('Loading courses with:', { year: yearSelect?.value, term: termSelect?.value });
-  
-  if (yearSelect && termSelect && yearSelect.value && termSelect.value) {
-    await showCourse(yearSelect.value, termSelect.value);
-  }
-  
-  // Update the course filter paragraph to show current state
-  updateCourseFilterParagraph();
-  
-  console.log('initializeDashboard completed');
+    console.log('initializeDashboard called');
+
+    // Re-run mobile navigation positioning
+    ensureMobileNavigationPositioning();
+    restructureReviewDatesForMobile();
+    setViewportHeight();
+
+    // Initialize sticky observer for filter buttons
+    initStickyObserver();
+
+    // Reset the custom select initialization flags so they can be reinitialized (for both mobile and desktop)
+    const semesterCustomSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
+    semesterCustomSelects.forEach(customSelect => {
+        customSelect.dataset.initialized = 'false';
+    });
+
+    // Reset semester select listener flags (for both mobile and desktop)
+    const semesterSelects = document.querySelectorAll('.semester-select');
+    semesterSelects.forEach(select => {
+        select.dataset.listenerAttached = 'false';
+    });
+
+    // Reset sort button and dropdown listener flags (for both mobile and desktop)
+    const sortBtns = document.querySelectorAll('.sort-btn');
+    const sortDropdowns = document.querySelectorAll('.sort-dropdown');
+    sortBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+    sortDropdowns.forEach(dropdown => dropdown.dataset.listenerAttached = 'false');
+
+    // Reset filter button listener flags (for both mobile and desktop)
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    filterBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+
+    // Reset search button listener flags (for both mobile and desktop)
+    const searchBtns = document.querySelectorAll('.search-btn');
+    searchBtns.forEach(btn => btn.dataset.listenerAttached = 'false');
+
+    // Reset desktop search pill listener flag
+    const searchPillInput = document.getElementById('search-pill-input');
+    if (searchPillInput) {
+        searchPillInput.dataset.listenerAttached = 'false';
+    }
+    desktopSearchPillInitialized = false;
+
+    // Populate semester dropdown (this also sets term/year hidden inputs)
+    await populateSemesterDropdown();
+
+    // Initialize custom selects (dropdown behavior)
+    initializeCustomSelects();
+
+    // Set up course list click listener
+    setupCourseListClickListener();
+
+    // Set up button event listeners for router-based navigation
+    setupDashboardEventListeners();
+
+    // Load courses with current semester values
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+    console.log('Loading courses with:', { year: yearSelect?.value, term: termSelect?.value });
+
+    if (yearSelect && termSelect && yearSelect.value && termSelect.value) {
+        await showCourse(yearSelect.value, termSelect.value);
+    }
+
+    // Update the course filter paragraph to show current state
+    updateCourseFilterParagraph();
+
+    console.log('initializeDashboard completed');
 }
 
 export function reinitializeMainJS() {
-  // Re-run all main initialization
-  setViewportHeight();
-  ensureMobileNavigationPositioning();
-  restructureReviewDatesForMobile();
+    // Re-run all main initialization
+    setViewportHeight();
+    ensureMobileNavigationPositioning();
+    restructureReviewDatesForMobile();
 }
 
 // Export search function for global use
@@ -3028,89 +3035,89 @@ window.parseSemesterValue = parseSemesterValue;
 window.getAllCourses = getAllCourses;
 
 // Create initializeSearch wrapper function
-window.initializeSearch = function() {
-  console.log('Initializing search...');
-  const searchInput = document.getElementById('search-input');
-  const searchAutocomplete = document.getElementById('search-autocomplete');
-  const searchPillInput = document.getElementById('search-pill-input');
-  const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
-  
-  if (searchInput && searchAutocomplete) {
-    setupSearchAutocomplete(searchInput, searchAutocomplete);
-  }
-  
-  if (searchPillInput && searchPillAutocomplete) {
-    setupSearchAutocomplete(searchPillInput, searchPillAutocomplete);
-  }
-  
-  setupDesktopSearchPill();
-  console.log('Search initialized');
+window.initializeSearch = function () {
+    console.log('Initializing search...');
+    const searchInput = document.getElementById('search-input');
+    const searchAutocomplete = document.getElementById('search-autocomplete');
+    const searchPillInput = document.getElementById('search-pill-input');
+    const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
+
+    if (searchInput && searchAutocomplete) {
+        setupSearchAutocomplete(searchInput, searchAutocomplete);
+    }
+
+    if (searchPillInput && searchPillAutocomplete) {
+        setupSearchAutocomplete(searchPillInput, searchPillAutocomplete);
+    }
+
+    setupDesktopSearchPill();
+    console.log('Search initialized');
 };
 
 // Export search state for global access
 Object.defineProperty(window, 'currentSearchQuery', {
-  get: () => currentSearchQuery,
-  set: (value) => { currentSearchQuery = value; },
-  enumerable: true,
-  configurable: true
+    get: () => currentSearchQuery,
+    set: (value) => { currentSearchQuery = value; },
+    enumerable: true,
+    configurable: true
 });
 
 // Function to update the course filter paragraph with search/filter info
 function updateCourseFilterParagraph() {
-  // Update all course filter paragraphs (mobile and desktop)
-  const courseFilterParagraphs = document.querySelectorAll(".course-filter-paragraph");
-  if (courseFilterParagraphs.length === 0) return;
-  
-  let message = "";
-  
-  // Check if there's an active search
-  if (currentSearchQuery && currentSearchQuery.trim()) {
-    const searchTerm = currentSearchQuery.trim();
-    
-    // Check if there are active day filters
-    const filterDaysDiv = document.getElementById("filter-by-days");
-    const activeDays = [];
-    
-    if (filterDaysDiv) {
-      const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
-      checkedInputs.forEach((input) => {
-        if (input.value === "Mon") activeDays.push("Monday");
-        else if (input.value === "Tue") activeDays.push("Tuesday");
-        else if (input.value === "Wed") activeDays.push("Wednesday");
-        else if (input.value === "Thu") activeDays.push("Thursday");
-        else if (input.value === "Fri") activeDays.push("Friday");
-      });
-    }
-    
-    // Construct message for search results
-    if (activeDays.length > 0) {
-      message = `Showing searched courses for "${searchTerm}" on ${activeDays.join(", ")}`;
+    // Update all course filter paragraphs (mobile and desktop)
+    const courseFilterParagraphs = document.querySelectorAll(".course-filter-paragraph");
+    if (courseFilterParagraphs.length === 0) return;
+
+    let message = "";
+
+    // Check if there's an active search
+    if (currentSearchQuery && currentSearchQuery.trim()) {
+        const searchTerm = currentSearchQuery.trim();
+
+        // Check if there are active day filters
+        const filterDaysDiv = document.getElementById("filter-by-days");
+        const activeDays = [];
+
+        if (filterDaysDiv) {
+            const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
+            checkedInputs.forEach((input) => {
+                if (input.value === "Mon") activeDays.push("Monday");
+                else if (input.value === "Tue") activeDays.push("Tuesday");
+                else if (input.value === "Wed") activeDays.push("Wednesday");
+                else if (input.value === "Thu") activeDays.push("Thursday");
+                else if (input.value === "Fri") activeDays.push("Friday");
+            });
+        }
+
+        // Construct message for search results
+        if (activeDays.length > 0) {
+            message = `Showing searched courses for "${searchTerm}" on ${activeDays.join(", ")}`;
+        } else {
+            message = `Showing searched courses for "${searchTerm}"`;
+        }
     } else {
-      message = `Showing searched courses for "${searchTerm}"`;
+        // No search, show filter info
+        const filterDaysDiv = document.getElementById("filter-by-days");
+        const activeDays = [];
+
+        if (filterDaysDiv) {
+            const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
+            checkedInputs.forEach((input) => {
+                if (input.value === "Mon") activeDays.push("Monday");
+                else if (input.value === "Tue") activeDays.push("Tuesday");
+                else if (input.value === "Wed") activeDays.push("Wednesday");
+                else if (input.value === "Thu") activeDays.push("Thursday");
+                else if (input.value === "Fri") activeDays.push("Friday");
+            });
+        }
+
+        message = `Showing ${activeDays.join(", ") || "All Days"} Courses`;
     }
-  } else {
-    // No search, show filter info
-    const filterDaysDiv = document.getElementById("filter-by-days");
-    const activeDays = [];
-    
-    if (filterDaysDiv) {
-      const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
-      checkedInputs.forEach((input) => {
-        if (input.value === "Mon") activeDays.push("Monday");
-        else if (input.value === "Tue") activeDays.push("Tuesday");
-        else if (input.value === "Wed") activeDays.push("Wednesday");
-        else if (input.value === "Thu") activeDays.push("Thursday");
-        else if (input.value === "Fri") activeDays.push("Friday");
-      });
-    }
-    
-    message = `Showing ${activeDays.join(", ") || "All Days"} Courses`;
-  }
-  
-  // Update all instances
-  courseFilterParagraphs.forEach(paragraph => {
-    paragraph.innerHTML = message;
-  });
+
+    // Update all instances
+    courseFilterParagraphs.forEach(paragraph => {
+        paragraph.innerHTML = message;
+    });
 }
 
 // Export the update function globally

@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    
-<meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
+
+    <meta name="viewport"
+        content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
 
     <title>Dashboard - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
@@ -30,187 +32,181 @@
     <!-- Start with guest-dashboard class by default, router will remove it if authenticated -->
     <div id="app-content" class="guest-dashboard">
 
-                    <div class="filter-container hidden">
-                        <div class="filter-background">
-                            <div class="filter-popup">
-                                <div class="filter-header">
-                                    <div class="swipe-indicator"></div>
-                                    <div class="filter-buttons">
-                                        <button id="see-results-btn">See Results</button>
-                                        <button id="clear-all-btn">Clear All</button>
-                                    </div>
-                                </div>
-                                <div class="filter-content">
-
-
-                                    <div id="filter-by-days">
-                                        <h3 class="filter-title">Day of the Week</h3>
-                                        <div class="checkboxes-container" id="filter-by-days-container">
-                                            <input type="checkbox" id="filter-monday" name="filter-monday" class="filter-checkbox" value="Mon">
-                                            <label for="filter-monday">Monday</label>
-                                            
-                                            <input type="checkbox" id="filter-tuesday" name="filter-tuesday" class="filter-checkbox" value="Tue">
-                                            <label for="filter-tuesday">Tuesday</label>
-                                            
-                                            <input type="checkbox" id="filter-wednesday" name="filter-wednesday" class="filter-checkbox" value="Wed">
-                                            <label for="filter-wednesday">Wednesday</label>
-                                            
-                                            <input type="checkbox" id="filter-thursday" name="filter-thursday" class="filter-checkbox" value="Thu">
-                                            <label for="filter-thursday">Thursday</label>
-                                            
-                                            <input type="checkbox" id="filter-friday" name="filter-friday" class="filter-checkbox" value="Fri">
-                                            <label for="filter-friday">Friday</label>
-                                        </div>
-                                    </div>
-
-                                    <div id="filter-by-time">
-                                        <h3 class="filter-title">Period</h3>
-                                        <div class="checkboxes-container" id="filter-by-time-container">
-                                            <input type="checkbox" id="filter-period-1" name="filter-period-1" class="filter-checkbox" value="09:00">
-                                            <label for="filter-period-1">1st <small>09:00 - 10:30</small></label>
-                                            
-                                            <input type="checkbox" id="filter-period-2" name="filter-period-2" class="filter-checkbox" value="10:45">
-                                            <label for="filter-period-2">2nd<small>10:45 - 12:15</small></label>
-                                            
-                                            <input type="checkbox" id="filter-period-3" name="filter-period-3" class="filter-checkbox" value="13:10">
-                                            <label for="filter-period-3">3rd<small>13:10 - 14:40</small></label>
-                                            
-                                            <input type="checkbox" id="filter-period-4" name="filter-period-4" class="filter-checkbox" value="14:55">
-                                            <label for="filter-period-4">4th<small>14:55 - 16:25</small></label>
-                                            
-                                            <input type="checkbox" id="filter-period-5" name="filter-period-5" class="filter-checkbox" value="16:40">
-                                            <label for="filter-period-5">5th<small>16:40 - 18:10</small></label>
-                                        </div>
-                                    </div>
-
-                                    <div id="filter-by-concentration">
-                                        <h3 class="filter-title">Course Type</h3>
-                                        <div class="checkboxes-container">
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-culture" name="filter-culture" class="filter-checkbox" value="culture">
-                                                <label for="filter-culture">Global Culture<small>Japanese Society and Global Culture Concentration</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-economy" name="filter-economy" class="filter-checkbox" value="economy">
-                                                <label for="filter-economy">Business<small>Japanese Business and the Global Economy Concentration</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-politics" name="filter-politics" class="filter-checkbox" value="politics">
-                                                <label for="filter-politics">Politics<small>Japanese Politics and Global Studies Concentration</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-seminar" name="filter-seminar" class="filter-checkbox" value="seminar">
-                                                <label for="filter-seminar">Seminars<small>Seminars and Honors Thesis</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-academic" name="filter-academic" class="filter-checkbox" value="academic">
-                                                <label for="filter-academic">Academic Skills<small>Foundation Courses</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-understanding" name="filter-understanding" class="filter-checkbox" value="understanding">
-                                                <label for="filter-understanding">Understanding Japan and Kyoto<small>Foundation Courses</small></label>
-                                            </div>
-                                            <div class="checkbox-content">
-                                                <input type="checkbox" id="filter-special" name="filter-special" class="filter-checkbox" value="special">
-                                                <label for="filter-special">Special Lecture Series</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+        <div class="filter-container hidden">
+            <div class="filter-background">
+                <div class="filter-popup">
+                    <div class="filter-header">
+                        <div class="swipe-indicator"></div>
+                        <div class="filter-buttons">
+                            <button id="see-results-btn">See Results</button>
+                            <button id="clear-all-btn">Clear All</button>
                         </div>
                     </div>
+                    <div class="filter-content">
 
-                    <div class="search-container hidden">
-                        <div class="search-background">
-                            <div class="search-modal">
-                                <div class="swipe-indicator"></div>
-                                <h2><div></div>Search Courses</h2>
-                                <div class="search-input-container">
-                                    <input type="text" class="search-input" id="search-input" placeholder="Enter course title, professor name, or course code..." autocomplete="off">
-                                    <div class="search-autocomplete" id="search-autocomplete"></div>
-                                </div>
-                                <div class="search-buttons">
-                                    <button class="search-submit" id="search-submit">Search</button>
-                                    <button class="search-cancel" id="search-cancel">Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
-    <section id="syllabus-main">
-                <!-- Desktop version: container-above inside course-main-div -->
-                <div class="container-above container-above-desktop">
-                    <div class="title-box">
-                        <h2 class="course-main-title"></h2>
-                            <div id="filter-year-term">
-                                        <div class="filter-year-term-container">
-                                            <div class="custom-select" data-target="semester-select">
-                                                <div class="custom-select-trigger" tabindex="0">
-                                                    <span class="custom-select-value">Loading...</span>
-                                                    <div class="custom-select-arrow"></div>
-                                                </div>
-                                                <div class="custom-select-options">
-                                                    <!-- Options populated dynamically from database -->
-                                                </div>
-                                            </div>
-                                            <select name="semester" id="semester-select" class="semester-select" style="display: none;">
-                                                <!-- Options populated dynamically from database -->
-                                            </select>
-                                        </div>
+                        <div id="filter-by-days">
+                            <h3 class="filter-title">Day of the Week</h3>
+                            <div class="checkboxes-container" id="filter-by-days-container">
+                                <input type="checkbox" id="filter-monday" name="filter-monday" class="filter-checkbox"
+                                    value="Mon">
+                                <label for="filter-monday">Monday</label>
+
+                                <input type="checkbox" id="filter-tuesday" name="filter-tuesday" class="filter-checkbox"
+                                    value="Tue">
+                                <label for="filter-tuesday">Tuesday</label>
+
+                                <input type="checkbox" id="filter-wednesday" name="filter-wednesday"
+                                    class="filter-checkbox" value="Wed">
+                                <label for="filter-wednesday">Wednesday</label>
+
+                                <input type="checkbox" id="filter-thursday" name="filter-thursday"
+                                    class="filter-checkbox" value="Thu">
+                                <label for="filter-thursday">Thursday</label>
+
+                                <input type="checkbox" id="filter-friday" name="filter-friday" class="filter-checkbox"
+                                    value="Fri">
+                                <label for="filter-friday">Friday</label>
+                            </div>
+                        </div>
+
+                        <div id="filter-by-time">
+                            <h3 class="filter-title">Period</h3>
+                            <div class="checkboxes-container" id="filter-by-time-container">
+                                <input type="checkbox" id="filter-period-1" name="filter-period-1"
+                                    class="filter-checkbox" value="09:00">
+                                <label for="filter-period-1">1st <small>09:00 - 10:30</small></label>
+
+                                <input type="checkbox" id="filter-period-2" name="filter-period-2"
+                                    class="filter-checkbox" value="10:45">
+                                <label for="filter-period-2">2nd<small>10:45 - 12:15</small></label>
+
+                                <input type="checkbox" id="filter-period-3" name="filter-period-3"
+                                    class="filter-checkbox" value="13:10">
+                                <label for="filter-period-3">3rd<small>13:10 - 14:40</small></label>
+
+                                <input type="checkbox" id="filter-period-4" name="filter-period-4"
+                                    class="filter-checkbox" value="14:55">
+                                <label for="filter-period-4">4th<small>14:55 - 16:25</small></label>
+
+                                <input type="checkbox" id="filter-period-5" name="filter-period-5"
+                                    class="filter-checkbox" value="16:40">
+                                <label for="filter-period-5">5th<small>16:40 - 18:10</small></label>
+                            </div>
+                        </div>
+
+                        <div id="filter-by-concentration">
+                            <h3 class="filter-title">Course Type</h3>
+                            <div class="checkboxes-container">
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-culture" name="filter-culture"
+                                        class="filter-checkbox" value="culture">
+                                    <label for="filter-culture">Global Culture<small>Japanese Society and Global Culture
+                                            Concentration</small></label>
                                 </div>
-                        <h3 class="course-main-paragraph course-filter-paragraph"></h3>
-                    </div>
-                    <div class="buttons-box">
-                        <!-- Desktop inline search pill -->
-                        <div class="search-pill-container">
-                            <div class="search-pill">
-                                <div class="search-pill-icon"></div>
-                                <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..." autocomplete="off">
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-economy" name="filter-economy"
+                                        class="filter-checkbox" value="economy">
+                                    <label for="filter-economy">Business<small>Japanese Business and the Global Economy
+                                            Concentration</small></label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-politics" name="filter-politics"
+                                        class="filter-checkbox" value="politics">
+                                    <label for="filter-politics">Politics<small>Japanese Politics and Global Studies
+                                            Concentration</small></label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-seminar" name="filter-seminar"
+                                        class="filter-checkbox" value="seminar">
+                                    <label for="filter-seminar">Seminars<small>Seminars and Honors
+                                            Thesis</small></label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-academic" name="filter-academic"
+                                        class="filter-checkbox" value="academic">
+                                    <label for="filter-academic">Academic Skills<small>Foundation
+                                            Courses</small></label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-understanding" name="filter-understanding"
+                                        class="filter-checkbox" value="understanding">
+                                    <label for="filter-understanding">Understanding Japan and Kyoto<small>Foundation
+                                            Courses</small></label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-special" name="filter-special"
+                                        class="filter-checkbox" value="special">
+                                    <label for="filter-special">Special Lecture Series</label>
+                                </div>
                             </div>
-                            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
                         </div>
-                        <!-- Mobile search button (hidden on desktop) -->
-                        <button class="search-btn"><div></div></button>
-                        <div class="sort-wrapper">
-                            <button class="sort-btn"><div></div></button>
-                            <div class="sort-dropdown">
-                                <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
-                                <div class="sort-option" data-sort="title-za">Course Z-A</div>
-                                <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
-                                <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
-                            </div>
-                        </div>
-                        <button class="filter-btn"><div></div></button>
                     </div>
                 </div>
+            </div>
+        </div>
 
-            <!-- Mobile version: container-above outside course-main-div -->
-            <div class="container-above container-above-mobile">
+        <div class="search-container hidden">
+            <div class="search-background">
+                <div class="search-modal">
+                    <div class="swipe-indicator"></div>
+                    <h2>
+                        <div></div>Search Courses
+                    </h2>
+                    <div class="search-input-container">
+                        <input type="text" class="search-input" id="search-input"
+                            placeholder="Enter course title, professor name, or course code..." autocomplete="off">
+                        <div class="search-autocomplete" id="search-autocomplete"></div>
+                    </div>
+                    <div class="search-buttons">
+                        <button class="search-submit" id="search-submit">Search</button>
+                        <button class="search-cancel" id="search-cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section id="syllabus-main">
+            <!-- Desktop version: container-above inside course-main-div -->
+            <div class="container-above container-above-desktop">
                 <div class="title-box">
                     <h2 class="course-main-title"></h2>
-                        <div id="filter-year-term-mobile">
-                                    <div class="filter-year-term-container">
-                                        <div class="custom-select" data-target="semester-select-mobile">
-                                            <div class="custom-select-trigger" tabindex="0">
-                                                <span class="custom-select-value">Loading...</span>
-                                                <div class="custom-select-arrow"></div>
-                                            </div>
-                                            <div class="custom-select-options">
-                                                <!-- Options populated dynamically from database -->
-                                            </div>
-                                        </div>
-                                        <select name="semester" id="semester-select-mobile" class="semester-select" style="display: none;">
-                                            <!-- Options populated dynamically from database -->
-                                        </select>
-                                    </div>
+                    <div id="filter-year-term">
+                        <div class="filter-year-term-container">
+                            <div class="custom-select" data-target="semester-select">
+                                <div class="custom-select-trigger" tabindex="0">
+                                    <span class="custom-select-value">Loading...</span>
+                                    <div class="custom-select-arrow"></div>
+                                </div>
+                                <div class="custom-select-options">
+                                    <!-- Options populated dynamically from database -->
+                                </div>
                             </div>
+                            <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                                <!-- Options populated dynamically from database -->
+                            </select>
+                        </div>
+                    </div>
                     <h3 class="course-main-paragraph course-filter-paragraph"></h3>
                 </div>
                 <div class="buttons-box">
-                    <button class="search-btn"><div></div></button>
+                    <!-- Desktop inline search pill -->
+                    <div class="search-pill-container">
+                        <div class="search-pill">
+                            <div class="search-pill-icon"></div>
+                            <input type="text" class="search-pill-input" id="search-pill-input"
+                                placeholder="Search courses..." autocomplete="off">
+                        </div>
+                        <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+                    </div>
+                    <!-- Mobile search button (hidden on desktop) -->
+                    <button class="search-btn">
+                        <div></div>
+                    </button>
                     <div class="sort-wrapper">
-                        <button class="sort-btn"><div></div></button>
+                        <button class="sort-btn">
+                            <div></div>
+                        </button>
                         <div class="sort-dropdown">
                             <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
                             <div class="sort-option" data-sort="title-za">Course Z-A</div>
@@ -218,170 +214,220 @@
                             <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                         </div>
                     </div>
-                    <button class="filter-btn"><div></div></button>
+                    <button class="filter-btn">
+                        <div></div>
+                    </button>
                 </div>
             </div>
 
-    <div class="main-content">
-
-        <!-- Hidden by default for guest users, shown via JS if authenticated -->
-        <div class="top-content" style="display: none;">
-            <div class="main-container">
-                <div class="top-content-two">
-                    <term-box></term-box>
-                    <total-courses></total-courses>
+            <!-- Mobile version: container-above outside course-main-div -->
+            <div class="container-above container-above-mobile">
+                <div class="title-box">
+                    <h2 class="course-main-title"></h2>
+                    <div id="filter-year-term-mobile">
+                        <div class="filter-year-term-container">
+                            <div class="custom-select" data-target="semester-select-mobile">
+                                <div class="custom-select-trigger" tabindex="0">
+                                    <span class="custom-select-value">Loading...</span>
+                                    <div class="custom-select-arrow"></div>
+                                </div>
+                                <div class="custom-select-options">
+                                    <!-- Options populated dynamically from database -->
+                                </div>
+                            </div>
+                            <select name="semester" id="semester-select-mobile" class="semester-select"
+                                style="display: none;">
+                                <!-- Options populated dynamically from database -->
+                            </select>
+                        </div>
+                    </div>
+                    <h3 class="course-main-paragraph course-filter-paragraph"></h3>
+                </div>
+                <div class="buttons-box">
+                    <button class="search-btn">
+                        <div></div>
+                    </button>
+                    <div class="sort-wrapper">
+                        <button class="sort-btn">
+                            <div></div>
+                        </button>
+                        <div class="sort-dropdown">
+                            <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
+                            <div class="sort-option" data-sort="title-za">Course Z-A</div>
+                            <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
+                            <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
+                        </div>
+                    </div>
+                    <button class="filter-btn">
+                        <div></div>
+                    </button>
                 </div>
             </div>
-            <div class="main-container" id="calendar-container">
-                <course-calendar></course-calendar>
-            </div>
-        </div>
 
-            <div class="main-container" id="course-main-div">
-                <!-- Hidden inputs to store parsed term and year values (shared) -->
-                <input type="hidden" id="term-select" value="Fall">
-                <input type="hidden" id="year-select" value="">
-                <div id="course-list" class="loading">
-                    <!-- Initial skeleton placeholders - will be replaced when courses load -->
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
+            <div class="main-content">
+
+                <!-- Hidden by default for guest users, shown via JS if authenticated -->
+                <div class="top-content" style="display: none;">
+                    <div class="main-container">
+                        <div class="top-content-two">
+                            <term-box></term-box>
+                            <total-courses></total-courses>
                         </div>
                     </div>
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                        </div>
-                    </div>
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                        </div>
-                    </div>
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                        </div>
-                    </div>
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                        </div>
-                    </div>
-                    <div class="skeleton-class-outside">
-                        <div class="skeleton-class-container">
-                            <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                            <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                            <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                            <div style="margin: 40px 0;"></div>
-                            <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                            <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                        </div>
-                        <div class="skeleton-gpa-bar">
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                            <div class="skeleton-gpa-section"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="class-info" id="class-info">
-                <div class="class-info-header">
-                    <div class="swipe-indicator"></div>
-                    <div class="class-header">
-                        <button id="class-close">x</button>
-                        <h2>Class Info</h2>
-                        <button id="class-add-remove"></button>
+                    <div class="main-container" id="calendar-container">
+                        <course-calendar></course-calendar>
                     </div>
                 </div>
 
-                <div class="class-content-wrapper">
-                    <div class="class-content" id="class-content">
+                <div class="main-container" id="course-main-div">
+                    <!-- Hidden inputs to store parsed term and year values (shared) -->
+                    <input type="hidden" id="term-select" value="Fall">
+                    <input type="hidden" id="year-select" value="">
+                    <div id="course-list" class="loading">
+                        <!-- Initial skeleton placeholders - will be replaced when courses load -->
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-class-outside">
+                            <div class="skeleton-class-container">
+                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
+                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
+                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
+                                <div style="margin: 40px 0;"></div>
+                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
+                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
+                            </div>
+                            <div class="skeleton-gpa-bar">
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-gpa-section"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="class-info" id="class-info">
+                    <div class="class-info-header">
+                        <div class="swipe-indicator"></div>
+                        <div class="class-header">
+                            <button id="class-close">x</button>
+                            <h2>Class Info</h2>
+                            <button id="class-add-remove"></button>
+                        </div>
                     </div>
 
-                    <div class="class-content" id="class-gpa-graph">
-                    </div>
-                    
-                    <div class="class-content" id="class-review">
+                    <div class="class-content-wrapper">
+                        <div class="class-content" id="class-content">
+                        </div>
+
+                        <div class="class-content" id="class-gpa-graph">
+                        </div>
+
+                        <div class="class-content" id="class-review">
+                        </div>
+
+                        <div class="class-content" id="class-assignments">
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <script type="module" src="js/shared.js"></script>
-    <script type="module" src="js/auth.js"></script>
-    <script type="module" src="js/main.js"></script>
+        <script type="module" src="js/shared.js"></script>
+        <script type="module" src="js/auth.js"></script>
+        <script type="module" src="js/main.js"></script>
 
     </div>
 
 </body>
+
 </html>

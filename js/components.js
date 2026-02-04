@@ -3,47 +3,47 @@ import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "/js/s
 
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
-    if (!title) return title;
-    
-    // Convert full-width characters to normal characters
-    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
-        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
-    });
-    
-    // Convert full-width spaces to normal spaces
-    normalized = normalized.replace(/　/g, ' ');
-    
-    // Remove parentheses and their contents
-    normalized = normalized.replace(/[()（）]/g, '');
-    
-    // Clean up extra spaces
-    normalized = normalized.replace(/\s+/g, ' ').trim();
-    
-    return normalized;
+  if (!title) return title;
+
+  // Convert full-width characters to normal characters
+  let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
+    return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+  });
+
+  // Convert full-width spaces to normal spaces
+  normalized = normalized.replace(/　/g, ' ');
+
+  // Remove parentheses and their contents
+  normalized = normalized.replace(/[()（）]/g, '');
+
+  // Clean up extra spaces
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
 }
 
 // Helper function to normalize short titles for Next Class display
 function normalizeShortTitle(shortTitle) {
-    if (!shortTitle) return shortTitle;
-    
-    // Convert full-width characters to normal width
-    let normalized = shortTitle.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
-        return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
-    });
-    
-    // Convert full-width spaces to normal spaces
-    normalized = normalized.replace(/　/g, ' ');
-    
-    // Remove ○ symbol
-    normalized = normalized.replace(/○/g, '');
-    
-    // Remove parentheses
-    normalized = normalized.replace(/[()（）]/g, '');
-    
-    // Clean up extra spaces and convert to UPPERCASE
-    normalized = normalized.replace(/\s+/g, ' ').trim().toUpperCase();
-    
-    return normalized;
+  if (!shortTitle) return shortTitle;
+
+  // Convert full-width characters to normal width
+  let normalized = shortTitle.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
+    return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+  });
+
+  // Convert full-width spaces to normal spaces
+  normalized = normalized.replace(/　/g, ' ');
+
+  // Remove ○ symbol
+  normalized = normalized.replace(/○/g, '');
+
+  // Remove parentheses
+  normalized = normalized.replace(/[()（）]/g, '');
+
+  // Clean up extra spaces and convert to UPPERCASE
+  normalized = normalized.replace(/\s+/g, ' ').trim().toUpperCase();
+
+  return normalized;
 }
 
 // Initialize session state - will be updated by components as needed
@@ -68,11 +68,11 @@ const termSelect = document.getElementById("term-select");
 const user = window.globalUser;
 
 class AppNavigation extends HTMLElement {
-    constructor() {
-        super();
-        
-        // Use regular DOM instead of Shadow DOM to avoid CSS import issues
-        this.innerHTML = `
+  constructor() {
+    super();
+
+    // Use regular DOM instead of Shadow DOM to avoid CSS import issues
+    this.innerHTML = `
             <nav class="test">
                 <ul>
                     <li><div class="desktop-app-logo"></div></li>
@@ -83,6 +83,10 @@ class AppNavigation extends HTMLElement {
                     <li><button class="nav-btn" id="calendar-btn" data-route="/calendar">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Calendar</span>
+                    </button></li>
+                    <li><button class="nav-btn" id="assignments-btn" data-route="/assignments">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Assignments</span>
                     </button></li>
                     <li><button class="nav-btn" id="search" data-route="/search">
                         <span class="nav-icon"></span>
@@ -110,72 +114,72 @@ class AppNavigation extends HTMLElement {
                 </ul>
             </nav>
         `;
-    }
+  }
 
-    connectedCallback() {
-        // Add event listener for logout link
-        const logoutLink = this.querySelector('a[href="#logout"]');
+  connectedCallback() {
+    // Add event listener for logout link
+    const logoutLink = this.querySelector('a[href="#logout"]');
+    if (logoutLink) {
+      logoutLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.handleLogout();
+      });
+    }
+  }
+
+  async handleLogout() {
+    try {
+      // Show loading state on the logout link
+      const logoutLink = this.querySelector('a[href="#logout"]');
+      if (logoutLink) {
+        logoutLink.textContent = 'Logging out...';
+        logoutLink.style.pointerEvents = 'none';
+      }
+
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error('Error during logout:', error);
+        alert('Error during logout. Please try again.');
+
+        // Reset logout link state
         if (logoutLink) {
-            logoutLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleLogout();
-            });
+          logoutLink.textContent = 'Logout';
+          logoutLink.style.pointerEvents = 'auto';
         }
+        return;
+      }
+
+      // Clear any local storage if needed
+      localStorage.removeItem('token');
+
+      // Update global session variables
+      window.globalSession = null;
+      window.globalUser = null;
+
+      // Redirect to login page
+      window.location.href = 'login.html';
+
+    } catch (error) {
+      console.error('Unexpected error during logout:', error);
+      alert('An unexpected error occurred during logout.');
+
+      // Reset logout link state
+      const logoutLink = this.querySelector('a[href="#logout"]');
+      if (logoutLink) {
+        logoutLink.textContent = 'Logout';
+        logoutLink.style.pointerEvents = 'auto';
+      }
     }
-
-    async handleLogout() {
-        try {
-            // Show loading state on the logout link
-            const logoutLink = this.querySelector('a[href="#logout"]');
-            if (logoutLink) {
-                logoutLink.textContent = 'Logging out...';
-                logoutLink.style.pointerEvents = 'none';
-            }
-
-            // Sign out from Supabase
-            const { error } = await supabase.auth.signOut();
-            
-            if (error) {
-                console.error('Error during logout:', error);
-                alert('Error during logout. Please try again.');
-                
-                // Reset logout link state
-                if (logoutLink) {
-                    logoutLink.textContent = 'Logout';
-                    logoutLink.style.pointerEvents = 'auto';
-                }
-                return;
-            }
-
-            // Clear any local storage if needed
-            localStorage.removeItem('token');
-            
-            // Update global session variables
-            window.globalSession = null;
-            window.globalUser = null;
-            
-            // Redirect to login page
-            window.location.href = 'login.html';
-
-        } catch (error) {
-            console.error('Unexpected error during logout:', error);
-            alert('An unexpected error occurred during logout.');
-            
-            // Reset logout link state
-            const logoutLink = this.querySelector('a[href="#logout"]');
-            if (logoutLink) {
-                logoutLink.textContent = 'Logout';
-                logoutLink.style.pointerEvents = 'auto';
-            }
-        }
-    }
+  }
 }
 
 class TotalCourses extends HTMLElement {
-    constructor() {
-        super();
+  constructor() {
+    super();
 
-        this.innerHTML = `
+    this.innerHTML = `
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
                 <h2 class="total-count">0</h2>
@@ -183,28 +187,28 @@ class TotalCourses extends HTMLElement {
                 </div>
             </div>
         `;
-    }
+  }
 
   connectedCallback() {
     // Always reinitialize when connected
     this.updateTotalCourses();
-    
+
     // Set up refresh on router navigation
     document.addEventListener('pageLoaded', () => {
       setTimeout(() => this.updateTotalCourses(), 100);
     });
-  }    async updateTotalCourses() {
-        const totalCountEl = this.querySelector('.total-count');
+  } async updateTotalCourses() {
+    const totalCountEl = this.querySelector('.total-count');
 
-        const fetchTotalCourses = async () => {
-            try {
-                // Get fresh session data
-                const { data: { session } } = await supabase.auth.getSession();
-                const currentUser = session?.user || null;
+    const fetchTotalCourses = async () => {
+      try {
+        // Get fresh session data
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user || null;
 
-                if (!currentUser) {
-                  // For guest users, show a placeholder instead of error
-                  return (this.innerHTML = `
+        if (!currentUser) {
+          // For guest users, show a placeholder instead of error
+          return (this.innerHTML = `
                     <div class="total-courses" id="total-registered-courses">
                       <div class="total-courses-container">
                       <h2 class="total-count">--</h2>
@@ -212,44 +216,44 @@ class TotalCourses extends HTMLElement {
                       </div>
                     </div>
                   `);
-                }
-
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('courses_selection')
-                    .eq('id', currentUser.id)
-                    .single();
-
-                if (profileError) {
-                    throw profileError;
-                }
-
-                const selectedCourses = profile?.courses_selection || [];
-                
-                // Filter to only count courses for the current year and term using utility functions
-                const currentDisplayCourses = selectedCourses.filter(course => {
-                    const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear());
-                    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
-                    return course.year === currentYear && (!course.term || course.term === currentTerm);
-                });
-                
-                return currentDisplayCourses.length;
-            } catch (error) {
-                console.error('Error fetching total courses:', error);
-                return 0; // Return 0 if there's an error
-            }
-        };
-
-        try {
-            const count = await fetchTotalCourses();
-            if (typeof count === 'number') {
-                totalCountEl.textContent = String(count);
-            }
-        } catch (error) {
-            console.error('Error updating total courses display:', error);
-            totalCountEl.textContent = '--';
         }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('courses_selection')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        const selectedCourses = profile?.courses_selection || [];
+
+        // Filter to only count courses for the current year and term using utility functions
+        const currentDisplayCourses = selectedCourses.filter(course => {
+          const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear());
+          const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
+          return course.year === currentYear && (!course.term || course.term === currentTerm);
+        });
+
+        return currentDisplayCourses.length;
+      } catch (error) {
+        console.error('Error fetching total courses:', error);
+        return 0; // Return 0 if there's an error
+      }
+    };
+
+    try {
+      const count = await fetchTotalCourses();
+      if (typeof count === 'number') {
+        totalCountEl.textContent = String(count);
+      }
+    } catch (error) {
+      console.error('Error updating total courses display:', error);
+      totalCountEl.textContent = '--';
     }
+  }
 }
 
 class TermBox extends HTMLElement {
@@ -261,7 +265,7 @@ class TermBox extends HTMLElement {
     // Semester end check is DISABLED for styling purposes
     // ====================================================================
     this.enableNextClass = true;
-    
+
     // Temporary HTML for styling (shows old term/year display)
     if (!this.enableNextClass) {
       this.innerHTML = `
@@ -298,10 +302,10 @@ class TermBox extends HTMLElement {
       this.showOldTermDisplay();
       return;
     }
-    
+
     // New behavior: show next class
     this.updateNextClass();
-    
+
     // Update every minute
     this.updateInterval = setInterval(() => {
       this.updateNextClass();
@@ -310,11 +314,11 @@ class TermBox extends HTMLElement {
     // Listen for selector changes
     const yearSelect = document.getElementById('year-select');
     const termSelect = document.getElementById('term-select');
-    
+
     if (yearSelect) {
       yearSelect.addEventListener('change', () => this.updateNextClass());
     }
-    
+
     if (termSelect) {
       termSelect.addEventListener('change', () => this.updateNextClass());
     }
@@ -336,14 +340,14 @@ class TermBox extends HTMLElement {
   // ====================================================================
   showOldTermDisplay() {
     this.updateDisplayTerm();
-    
+
     const yearSelect = document.getElementById('year-select');
     const termSelect = document.getElementById('term-select');
-    
+
     if (yearSelect) {
       yearSelect.addEventListener('change', () => this.updateDisplayTerm());
     }
-    
+
     if (termSelect) {
       termSelect.addEventListener('change', () => this.updateDisplayTerm());
     }
@@ -385,7 +389,7 @@ class TermBox extends HTMLElement {
     const labelEl = this.querySelector('#next-class-label');
     const nameEl = this.querySelector('#next-class-name');
     const timeEl = this.querySelector('#next-class-time');
-    
+
     if (!labelEl || !nameEl || !timeEl) return;
 
     try {
@@ -411,7 +415,7 @@ class TermBox extends HTMLElement {
 
       const selectedCourses = profile?.courses_selection || [];
       const normalizedTerm = term.trim();
-      
+
       // Filter for current semester
       const semesterCourses = selectedCourses.filter(course => {
         const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
@@ -434,7 +438,7 @@ class TermBox extends HTMLElement {
 
       // Find next class
       const nextClass = this.findNextClass(userCourses, year, term);
-      
+
       if (!nextClass) {
         labelEl.textContent = 'Next class:';
         nameEl.textContent = 'No classes scheduled';
@@ -445,12 +449,12 @@ class TermBox extends HTMLElement {
 
       // Display the class info
       let displayName = nextClass.course.title || nextClass.course.course_code;
-      
+
       // Truncate to 30 characters if needed
       if (displayName.length > 22) {
         displayName = displayName.substring(0, 22) + '...';
       }
-      
+
       if (nextClass.isCurrent) {
         labelEl.textContent = 'Current class:';
         nameEl.textContent = displayName;
@@ -512,9 +516,9 @@ class TermBox extends HTMLElement {
 
     // Check for current class (within first 30 minutes)
     const currentClasses = scheduledClasses.filter(cls => {
-      return cls.dayNum === currentDay && 
-             currentTime >= cls.startTime && 
-             currentTime < cls.startTime + 30;
+      return cls.dayNum === currentDay &&
+        currentTime >= cls.startTime &&
+        currentTime < cls.startTime + 30;
     });
 
     if (currentClasses.length > 0) {
@@ -585,7 +589,7 @@ class TermBox extends HTMLElement {
     if (match) {
       const dayJP = match[1];
       const period = parseInt(match[2], 10);
-      
+
       const timeSlots = {
         1: { start: 9 * 60, end: 10 * 60 + 30 },      // 09:00-10:30
         2: { start: 10 * 60 + 45, end: 12 * 60 + 15 }, // 10:45-12:15
@@ -725,24 +729,24 @@ class CourseCalendar extends HTMLElement {
     if (!this.isInitialized) {
       this.initializeCalendar();
     }
-    
+
     // Set up refresh on router navigation only once
     if (!this.pageLoadedListenerAdded) {
       this.pageLoadedListenerAdded = true;
       document.addEventListener('pageLoaded', () => {
         setTimeout(() => this.initializeCalendar(), 100);
       });
-      
+
       // Listen for year/term selector changes
       const yearSelect = document.getElementById('year-select');
       const termSelect = document.getElementById('term-select');
-      
+
       if (yearSelect) {
         yearSelect.addEventListener('change', () => {
           this.refreshFromSelectors();
         });
       }
-      
+
       if (termSelect) {
         termSelect.addEventListener('change', () => {
           this.refreshFromSelectors();
@@ -754,7 +758,7 @@ class CourseCalendar extends HTMLElement {
   disconnectedCallback() {
     // Clean up event listeners if needed
   }
-  
+
   refreshFromSelectors() {
     const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
@@ -765,7 +769,7 @@ class CourseCalendar extends HTMLElement {
   async initializeCalendar() {
     try {
       this.showLoading();
-      
+
       // Get fresh session data
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
@@ -778,7 +782,7 @@ class CourseCalendar extends HTMLElement {
       // Use selected year/term from selectors instead of current date
       const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
       const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
-      
+
       console.log('Mini calendar: Initializing with year/term:', year, term);
 
       // Load courses with retry mechanism
@@ -846,7 +850,7 @@ class CourseCalendar extends HTMLElement {
     this.clearCourseCells();
     this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
       const emptyDiv = document.createElement('div');
-      
+
       emptyDiv.classList.add('course-cell-main');
       cell.appendChild(emptyDiv);
     });
@@ -857,14 +861,14 @@ class CourseCalendar extends HTMLElement {
     this.calendar.querySelectorAll('thead th, tbody td').forEach(el => {
       el.classList.remove('highlight-day', 'highlight-current-day');
     });
-    
+
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
-    
+
     // Highlight the header
     const header = this.calendarHeader[colIndex];
     if (header) header.classList.add('highlight-day');
-    
+
     // Highlight entire column for current day
     this.calendar.querySelectorAll(`tbody tr`).forEach(row => {
       const cell = row.querySelector(`td:nth-child(${colIndex + 1})`);
@@ -888,7 +892,7 @@ class CourseCalendar extends HTMLElement {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute; // minutes since midnight
     const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
-    
+
     // Time periods in minutes
     const periods = [
       { start: 9 * 60, end: 10 * 60 + 30, row: 0 },      // 09:00-10:30 (period 1)
@@ -897,15 +901,15 @@ class CourseCalendar extends HTMLElement {
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 }, // 14:55-16:25 (period 4)
       { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }  // 16:40-18:10 (period 5)
     ];
-    
+
     // Find current period
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
     if (!currentPeriod) return; // Not during class time
-    
+
     // Get column index for current day
     const colIndex = this.getColIndexByDayEN(currentDay);
     if (colIndex === -1) return;
-    
+
     // Highlight the cell
     const rows = this.calendar.querySelectorAll('tbody tr');
     if (rows[currentPeriod.row]) {
@@ -934,16 +938,16 @@ class CourseCalendar extends HTMLElement {
           .single();
         if (profileError) throw profileError;
         selectedCourses = profile?.courses_selection || [];
-        
+
         // Normalize term for comparison (handle both "Fall" and "秋学期/Fall" formats)
         const normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
-        
+
         // Filter to only show courses for the current year and term
         selectedCourses = selectedCourses.filter(course => {
           const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
           return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
         });
-        
+
         console.log('Mini calendar: Selected courses for', year, normalizedTerm, ':', selectedCourses.length);
       }
 
@@ -970,7 +974,7 @@ class CourseCalendar extends HTMLElement {
         // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
         let match = course.time_slot?.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
         let dayEN, period;
-        
+
         if (match) {
           // Japanese format
           const dayJP = match[1];
@@ -984,7 +988,7 @@ class CourseCalendar extends HTMLElement {
             dayEN = englishMatch[1];
             const startHour = parseInt(englishMatch[2], 10);
             const startMin = parseInt(englishMatch[3], 10);
-            
+
             // Map time to period based on start time
             const timeToSlot = startHour * 100 + startMin;
             if (timeToSlot >= 900 && timeToSlot < 1030) period = 1;
@@ -995,7 +999,7 @@ class CourseCalendar extends HTMLElement {
             else period = -1; // Invalid time slot
           }
         }
-        
+
         if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
           return;
         }
@@ -1032,11 +1036,11 @@ class CourseCalendar extends HTMLElement {
         div_box.classList.add("course-cell-box");
         div_title.classList.add("course-title");
         div_classroom.classList.add("course-classroom");
-        
+
         // Set the course content
         // div_title.textContent = course.short_title || course.title || course.course_code;
         // div_classroom.textContent = course.classroom || '';
-        
+
         //if (div_classroom.textContent === "") {
         //  div_classroom.classList.add("empty-classroom");
         //  div_title.classList.add("empty-classroom-title");
@@ -1068,7 +1072,7 @@ class CourseCalendar extends HTMLElement {
     if (!clickedCell) return;
     const courseCode = clickedCell.dataset.courseIdentifier;
     if (!this.displayedYear || !this.displayedTerm || !courseCode) return;
-    
+
     try {
       const courses = await fetchCourseData(this.displayedYear, this.displayedTerm);
       const clickedCourse = courses.find(c => c.course_code === courseCode);
@@ -1081,14 +1085,14 @@ class CourseCalendar extends HTMLElement {
   // Public method to refresh calendar data
   async refreshCalendar() {
     console.log('Refreshing calendar...');
-    
+
     // Clear current user to force fresh session fetch
     this.currentUser = null;
-    
+
     if (!this.isInitialized) {
       return this.initializeCalendar();
     }
-    
+
     // Use utility functions to get current year and term from selectors
     const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
@@ -1214,15 +1218,15 @@ class WeeklyCalendar extends HTMLElement {
 
     const dayHeaders = this.querySelectorAll("#calendar thead th");
     dayHeaders.forEach((header, index) => {
-        if (index === 0) return; // Skip the first column (time)
-        
-        const button = document.createElement("div");
-        button.className = "day-button";
-        button.textContent = header.textContent.trim().substring(0, 1);
-        button.dataset.day = header.textContent.trim();
-        mobileButtonsContainer.appendChild(button);
+      if (index === 0) return; // Skip the first column (time)
 
-        button.addEventListener("click", () => this.showDay(header.textContent.trim()));
+      const button = document.createElement("div");
+      button.className = "day-button";
+      button.textContent = header.textContent.trim().substring(0, 1);
+      button.dataset.day = header.textContent.trim();
+      mobileButtonsContainer.appendChild(button);
+
+      button.addEventListener("click", () => this.showDay(header.textContent.trim()));
     });
   }
 
@@ -1235,40 +1239,40 @@ class WeeklyCalendar extends HTMLElement {
     let columnIndexToShow = -1;
 
     dayHeaders.forEach((header, index) => {
-        if (header.textContent.trim() === day) {
-            columnIndexToShow = index;
-        }
+      if (header.textContent.trim() === day) {
+        columnIndexToShow = index;
+      }
     });
 
     if (columnIndexToShow === -1) return;
 
     this.querySelectorAll("#calendar tr").forEach(row => {
-        const cells = row.children;
-        for (let i = 0; i < cells.length; i++) {
-            if (i === 0 || i === columnIndexToShow) {
-                cells[i].style.display = "";
-            } else {
-                cells[i].style.display = "none";
-            }
+      const cells = row.children;
+      for (let i = 0; i < cells.length; i++) {
+        if (i === 0 || i === columnIndexToShow) {
+          cells[i].style.display = "";
+        } else {
+          cells[i].style.display = "none";
         }
+      }
     });
 
     // Update day button styles
     dayButtons.forEach((button, index) => {
-        if (button.textContent === day.substring(0, 1)) {
-            button.classList.add("active");
-        } else {
-            button.classList.remove("active");
-        }
+      if (button.textContent === day.substring(0, 1)) {
+        button.classList.add("active");
+      } else {
+        button.classList.remove("active");
+      }
     });
 
     // Update header highlighting
     dayHeaders.forEach((header, index) => {
-        if (index === columnIndexToShow) {
-            header.classList.add("highlight-day");
-        } else {
-            header.classList.remove("highlight-day");
-        }
+      if (index === columnIndexToShow) {
+        header.classList.add("highlight-day");
+      } else {
+        header.classList.remove("highlight-day");
+      }
     });
 
     window.currentDay = day;
@@ -1281,7 +1285,7 @@ class WeeklyCalendar extends HTMLElement {
   highlightToday() {
     const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
     const headers = this.querySelectorAll('#calendar thead th');
-    
+
     // Find column index for today
     let todayIndex = -1;
     headers.forEach((header, index) => {
@@ -1290,9 +1294,9 @@ class WeeklyCalendar extends HTMLElement {
         header.classList.add('highlight-day');
       }
     });
-    
+
     if (todayIndex === -1) return;
-    
+
     // Highlight entire column
     const rows = this.querySelectorAll('#calendar tbody tr');
     rows.forEach(row => {
@@ -1309,7 +1313,7 @@ class WeeklyCalendar extends HTMLElement {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
-    
+
     // Time periods in minutes
     const periods = [
       { start: 9 * 60, end: 10 * 60 + 30, row: 0 },
@@ -1318,10 +1322,10 @@ class WeeklyCalendar extends HTMLElement {
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 },
       { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }
     ];
-    
+
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
     if (!currentPeriod) return;
-    
+
     // Find today's column
     const headers = this.querySelectorAll('#calendar thead th');
     let todayIndex = -1;
@@ -1330,9 +1334,9 @@ class WeeklyCalendar extends HTMLElement {
         todayIndex = index;
       }
     });
-    
+
     if (todayIndex === -1) return;
-    
+
     // Highlight the specific cell
     const rows = this.querySelectorAll('#calendar tbody tr');
     if (rows[currentPeriod.row]) {
@@ -1345,7 +1349,7 @@ class WeeklyCalendar extends HTMLElement {
 
   async getCurrentUser() {
     if (this.currentUser) return this.currentUser;
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
@@ -1375,7 +1379,7 @@ class WeeklyCalendar extends HTMLElement {
 
       const courses = await fetchCourseData(currentYear, currentTerm);
       console.log('Courses fetched for weekly calendar:', courses);
-      
+
       if (courses && courses.length > 0) {
         this.renderCourses(courses);
         this.retryCount = 0; // Reset retry count on success
@@ -1385,7 +1389,7 @@ class WeeklyCalendar extends HTMLElement {
       }
     } catch (error) {
       console.error('Error loading courses for weekly calendar:', error);
-      
+
       // Retry logic
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
@@ -1479,15 +1483,15 @@ customElements.define('weekly-calendar', WeeklyCalendar);
 window.refreshCalendar = () => {
   const calendar = document.querySelector('course-calendar');
   const weeklyCalendar = document.querySelector('weekly-calendar');
-  
+
   if (calendar) {
     calendar.forceReinit();
   }
-  
+
   if (weeklyCalendar) {
     weeklyCalendar.refresh();
   }
-  
+
   if (!calendar && !weeklyCalendar) {
     console.log('No calendar components found');
   }

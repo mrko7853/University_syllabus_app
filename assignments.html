@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
+    <title>Assignments - BlazeArchive</title>
+    <link rel="stylesheet" href="css/blaze.css">
+    <script type="module" src="/js/components.js"></script>
+    <script type="module" src="/js/shared.js"></script>
+    <script type="module" src="/js/assignments.js"></script>
+    <script type="module" src="/js/router.js"></script>
+</head>
+
+<body>
+    <app-navigation></app-navigation>
+    <div class="app-header">
+        <div class="app-logo"></div>
+        <div class="app-misc">
+            <button id="help-mobile"></button>
+            <button id="settings-mobile"></button>
+        </div>
+    </div>
+
+    <div id="app-content">
+        <section id="assignments-main">
+            <div class="assignments-container">
+                <!-- Header -->
+                <div class="assignments-header">
+                    <h1 class="assignments-title">Assignments</h1>
+                    <div class="assignments-tabs">
+                        <button class="tab-btn active" data-view="all-assignments">
+                            <span class="tab-icon">📋</span> All Assignments
+                        </button>
+                        <button class="tab-btn" data-view="by-due-date">
+                            <span class="tab-icon">📅</span> By Due Date
+                        </button>
+                    </div>
+                    <div class="assignments-actions">
+                        <button class="new-assignment-btn" id="new-assignment-btn">
+                            <span>+ New</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- All Assignments View (Table) -->
+                <div class="assignments-view" id="all-assignments-view">
+                    <div class="assignments-table-wrapper">
+                        <table class="assignments-table" id="assignments-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-title">
+                                        <span class="col-icon">Aa</span> Assignment Name
+                                    </th>
+                                    <th class="col-due-date">
+                                        <span class="col-icon">📅</span> Due Date
+                                    </th>
+                                    <th class="col-subject">
+                                        <span class="col-icon">📚</span> Subject
+                                    </th>
+                                    <th class="col-status">
+                                        <span class="col-icon">📊</span> Status
+                                    </th>
+                                    <th class="col-actions"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignments-tbody">
+                                <!-- Assignments will be rendered here -->
+                            </tbody>
+                        </table>
+                        <div class="quick-add-row" id="quick-add-row">
+                            <span class="quick-add-icon">+</span>
+                            <span class="quick-add-text">New item</span>
+                        </div>
+                    </div>
+                    <div class="assignments-empty" id="assignments-empty" style="display: none;">
+                        <div class="empty-icon">📝</div>
+                        <h3>No assignments yet</h3>
+                        <p>Click "New" to create your first assignment</p>
+                    </div>
+                </div>
+
+                <!-- By Due Date View (Calendar) -->
+                <div class="assignments-view" id="by-due-date-view" style="display: none;">
+                    <div class="calendar-view-container">
+                        <div class="calendar-nav">
+                            <button class="calendar-nav-btn" id="calendar-prev-month">‹</button>
+                            <h2 class="calendar-month-title" id="calendar-month-title">February 2026</h2>
+                            <button class="calendar-nav-btn" id="calendar-next-month">›</button>
+                            <button class="calendar-today-btn" id="calendar-today-btn">Today</button>
+                        </div>
+                        <div class="calendar-grid" id="assignments-calendar-grid">
+                            <div class="calendar-header">
+                                <div class="calendar-day-header">Sun</div>
+                                <div class="calendar-day-header">Mon</div>
+                                <div class="calendar-day-header">Tue</div>
+                                <div class="calendar-day-header">Wed</div>
+                                <div class="calendar-day-header">Thu</div>
+                                <div class="calendar-day-header">Fri</div>
+                                <div class="calendar-day-header">Sat</div>
+                            </div>
+                            <div class="calendar-body" id="calendar-body">
+                                <!-- Calendar cells will be rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assignment Detail Modal -->
+            <div class="assignment-modal-overlay" id="assignment-modal-overlay" style="display: none;">
+                <div class="assignment-modal">
+                    <div class="assignment-modal-header">
+                        <input type="text" class="assignment-modal-title" id="assignment-modal-title"
+                            placeholder="Assignment Title">
+                        <button class="assignment-modal-close" id="assignment-modal-close">×</button>
+                    </div>
+                    <div class="assignment-modal-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">📅 Due Date</span>
+                            <input type="date" class="meta-value" id="assignment-modal-due-date">
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">📚 Subject</span>
+                            <div class="subject-selector" id="assignment-modal-subject">
+                                <div class="subject-current" id="subject-current">
+                                    <span class="subject-tag" id="subject-tag">Select course</span>
+                                    <span class="subject-arrow">▼</span>
+                                </div>
+                                <div class="subject-dropdown" id="subject-dropdown" style="display: none;">
+                                    <!-- Course options will be rendered here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">📊 Status</span>
+                            <select class="meta-value status-select" id="assignment-modal-status">
+                                <option value="not_started">Not Started</option>
+                                <option value="ongoing">Ongoing</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="assignment-modal-body">
+                        <div class="instructions-section">
+                            <h3 class="section-title">Instructions</h3>
+                            <textarea class="instructions-editor" id="assignment-modal-instructions"
+                                placeholder="Add instructions, notes, or any details here..."></textarea>
+                        </div>
+                    </div>
+                    <div class="assignment-modal-footer">
+                        <button class="delete-btn" id="assignment-delete-btn">Delete</button>
+                        <button class="save-btn" id="assignment-save-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date Picker Popup -->
+            <div class="date-picker-popup" id="date-picker-popup" style="display: none;">
+                <div class="date-picker-header">
+                    <input type="text" class="date-picker-input" id="date-picker-input" readonly>
+                    <div class="date-picker-nav">
+                        <span class="date-picker-today" id="date-picker-today">Today</span>
+                        <button class="date-picker-prev" id="date-picker-prev">‹</button>
+                        <button class="date-picker-next" id="date-picker-next">›</button>
+                    </div>
+                </div>
+                <div class="date-picker-month" id="date-picker-month">Feb 2026</div>
+                <div class="date-picker-grid">
+                    <div class="date-picker-weekdays">
+                        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                    </div>
+                    <div class="date-picker-days" id="date-picker-days">
+                        <!-- Days will be rendered here -->
+                    </div>
+                </div>
+                <div class="date-picker-footer">
+                    <button class="date-picker-clear" id="date-picker-clear">Clear</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="js/auth.js"></script>
+</body>
+
+</html>

@@ -29,7 +29,7 @@ const japaneseNameMapping = {
     '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
     '八木': 'Yagi', '木': 'Ki',
     '和田': 'Wada', '田': 'Da', '和': 'Wa',
-    '張': 'Chou', 
+    '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
     '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
@@ -54,7 +54,7 @@ const japaneseNameMapping = {
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
     '橋本': 'Hashimoto', '橋': 'Hashi',
-    
+
     // Common given names
     '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
     '匡': 'Tadashi',
@@ -68,14 +68,14 @@ const japaneseNameMapping = {
     '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
     '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
     '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
-    
+
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
     'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
     'なかま': 'Nakama', 'かわむら': 'Kawamura', 'いまにし': 'Imanishi',
     'いしい': 'Ishii', 'こにし': 'Konishi', 'いずみ': 'Izumi',
     'たなか': 'Tanaka', 'さとう': 'Satou', 'やまだ': 'Yamada',
     'すずき': 'Suzuki', 'いとう': 'Itou', 'わたなべ': 'Watanabe',
-    
+
     // Common Katakana names (these will mostly be handled by WanaKana, but added for completeness)
     'タカハシ': 'Takahashi', 'ヤギ': 'Yagi', 'ワダ': 'Wada',
     'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
@@ -93,41 +93,41 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
-    
+
     // Check cache first
     if (romanizedProfessorCache.has(name)) {
         return romanizedProfessorCache.get(name);
     }
-    
+
     // Check if the name contains Japanese characters
     const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
-    
+
     if (!hasJapanese) {
         // Capitalize non-Japanese names properly
         const capitalized = name.toUpperCase();
         romanizedProfessorCache.set(name, capitalized);
         return capitalized;
     }
-    
+
     let romanized = name;
-    
+
     try {
         // Split the name and process each part
         let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
         let romanizedParts = [];
-        
+
         for (let part of parts) {
             let romanizedPart = part;
-            
+
             // First, try WanaKana for Hiragana/Katakana conversion
             const wanaKanaResult = wanakana.toRomaji(part);
-            
+
             // If WanaKana converted it (no more Japanese characters), use that
             if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
                 romanizedPart = wanaKanaResult;
             } else {
                 // Still has Kanji, try our custom mapping
-                
+
                 // Try exact match first
                 if (japaneseNameMapping[part]) {
                     romanizedPart = japaneseNameMapping[part];
@@ -150,22 +150,22 @@ function romanizeProfessorName(name) {
                     romanizedPart = characterMapped;
                 }
             }
-            
+
             romanizedParts.push(romanizedPart);
         }
-        
+
         romanized = romanizedParts.join(' ');
-        
+
         // Clean up and capitalize properly
         romanized = romanized.replace(/\s+/g, ' ').trim();
         // Convert to full caps (uppercase)
         romanized = romanized.toUpperCase();
-        
+
     } catch (error) {
         console.warn('Error romanizing name:', error);
         romanized = name;
     }
-    
+
     // Cache the result
     romanizedProfessorCache.set(name, romanized);
     return romanized;
@@ -179,21 +179,21 @@ function getRomanizedProfessorName(name) {
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
     if (!title) return title;
-    
+
     // Convert full-width characters to normal characters
-    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
         return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
     });
-    
+
     // Convert full-width spaces to normal spaces
     normalized = normalized.replace(/　/g, ' ');
-    
+
     // Remove parentheses and their contents
     normalized = normalized.replace(/[()（）]/g, '');
-    
+
     // Clean up extra spaces
     normalized = normalized.replace(/\s+/g, ' ').trim();
-    
+
     return normalized;
 }
 
@@ -236,16 +236,16 @@ function parseCourseURL() {
     const path = window.location.pathname;
     // Look for clean URL pattern: /course/courseCode/year/term
     const match = path.match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)\/?$/);
-    
+
     if (match) {
         const courseCode = decodeURIComponent(match[1]).replace(/_/g, ' ');
         const year = parseInt(match[2]);
         const termParam = match[3].toLowerCase();
         const term = termParam === 'fall' ? 'Fall' : 'Spring';
-        
+
         return { courseCode, year, term };
     }
-    
+
     return null;
 }
 
@@ -255,45 +255,45 @@ async function findCourseByParams(courseCode, year, term) {
         console.log('Searching for course:', { courseCode, year, term });
         const courses = await fetchCourseData(year, term);
         console.log('Total courses available:', courses.length);
-        
+
         // Try exact match first (case insensitive)
-        let course = courses.find(c => 
+        let course = courses.find(c =>
             c.course_code && c.course_code.toLowerCase() === courseCode.toLowerCase()
         );
         console.log('Exact match result:', course);
-        
+
         // If not found, try partial match on title
         if (!course) {
             const searchTerm = courseCode.toLowerCase().replace(/_/g, ' ');
-            course = courses.find(c => 
+            course = courses.find(c =>
                 (c.title && c.title.toLowerCase().includes(searchTerm)) ||
                 (c.title && c.title.toLowerCase().replace(/\s+/g, '_').includes(courseCode.toLowerCase()))
             );
             console.log('Title match result:', course);
         }
-        
+
         // If still not found, try matching by course code parts or containing
         if (!course) {
-            course = courses.find(c => 
+            course = courses.find(c =>
                 (c.course_code && c.course_code.toLowerCase().includes(courseCode.toLowerCase())) ||
                 (c.course_code && courseCode.toLowerCase().includes(c.course_code.toLowerCase()))
             );
             console.log('Partial code match result:', course);
         }
-        
+
         // If still not found, try to find by any numeric match (for codes like 12001104003)
         if (!course && /^\d+$/.test(courseCode)) {
-            course = courses.find(c => 
+            course = courses.find(c =>
                 c.course_code && c.course_code.replace(/[^\d]/g, '') === courseCode
             );
             console.log('Numeric match result:', course);
         }
-        
+
         // Log all available course codes for debugging
         if (!course) {
             console.log('Available course codes:', courses.slice(0, 10).map(c => c.course_code));
         }
-        
+
         return course;
     } catch (error) {
         console.error('Error finding course:', error);
@@ -314,16 +314,16 @@ export async function fetchAvailableSemesters() {
         console.log('Using cached available semesters:', availableSemestersCache);
         return availableSemestersCache;
     }
-    
+
     try {
         console.log('Fetching available semesters from database...');
-        
+
         // Query distinct term and academic_year combinations from courses table
         const { data, error } = await supabase
             .from('courses')
             .select('term, academic_year')
             .order('academic_year', { ascending: false });
-        
+
         if (error) {
             console.error('Error fetching available semesters:', error);
             // Return default semesters if query fails
@@ -333,7 +333,7 @@ export async function fetchAvailableSemesters() {
                 { term: 'Fall', year: 2024, label: 'Fall 2024' }
             ];
         }
-        
+
         if (!data || data.length === 0) {
             console.warn('No semesters found in database, using defaults');
             return [
@@ -341,7 +341,7 @@ export async function fetchAvailableSemesters() {
                 { term: 'Spring', year: 2025, label: 'Spring 2025' }
             ];
         }
-        
+
         // Extract unique term-year combinations
         const semesterMap = new Map();
         data.forEach(item => {
@@ -356,7 +356,7 @@ export async function fetchAvailableSemesters() {
                 }
             }
         });
-        
+
         // Convert to array and sort: by year descending, then Fall before Spring
         const semesters = Array.from(semesterMap.values()).sort((a, b) => {
             if (a.year !== b.year) return b.year - a.year;
@@ -365,12 +365,12 @@ export async function fetchAvailableSemesters() {
             if (a.term === 'Spring' && b.term === 'Fall') return 1;
             return 0;
         });
-        
+
         console.log('Available semesters from database:', semesters);
-        
+
         // Cache the result
         availableSemestersCache = semesters;
-        
+
         return semesters;
     } catch (error) {
         console.error('Error in fetchAvailableSemesters:', error);
@@ -388,37 +388,37 @@ export async function fetchAvailableYears() {
         console.log('Using cached available years:', availableYearsCache);
         return availableYearsCache;
     }
-    
+
     try {
         console.log('Fetching available years from database...');
-        
+
         // Query distinct academic_year values from courses table
         const { data, error } = await supabase
             .from('courses')
             .select('academic_year')
             .order('academic_year', { ascending: false });
-        
+
         if (error) {
             console.error('Error fetching available years:', error);
             // Return default years if query fails
             return [2025, 2024];
         }
-        
+
         if (!data || data.length === 0) {
             console.warn('No years found in database, using defaults');
             return [2025, 2024];
         }
-        
+
         // Extract unique years and sort descending
         const uniqueYears = [...new Set(data.map(item => item.academic_year))]
             .filter(year => year !== null)
             .sort((a, b) => b - a);
-        
+
         console.log('Available years from database:', uniqueYears);
-        
+
         // Cache the result
         availableYearsCache = uniqueYears;
-        
+
         return uniqueYears;
     } catch (error) {
         console.error('Error in fetchAvailableYears:', error);
@@ -432,13 +432,13 @@ export async function fetchCourseData(year, term) {
         console.log(`Using cached courses for ${term} ${year}`);
         return courseCache[cacheKey];
     }
-    
+
     try {
         console.log(`Fetching courses for ${term} ${year}...`);
-        
+
         // Skip the problematic RPC and use direct table queries instead
         return await fetchCourseDataFallback(year, term);
-        
+
         /* Original RPC call - disabled due to temp_courses permission issues
         const { data: courses, error } = await supabase.rpc('get_courses_with_fallback_gpa', {
             p_year: year,
@@ -473,13 +473,13 @@ export async function fetchCourseData(year, term) {
         */
     } catch (error) {
         console.error(`Error fetching course data for ${term} ${year}:`, error);
-        
+
         // Check if we have stale cache data as fallback
         if (courseCache[cacheKey]) {
             console.log(`Using stale cached data as fallback for ${term} ${year}`);
             return courseCache[cacheKey];
         }
-        
+
         // Re-throw the error for retry mechanisms to handle
         throw error;
     }
@@ -489,20 +489,20 @@ export async function fetchCourseData(year, term) {
 async function fetchCourseDataFallback(year, term) {
     try {
         console.log(`Attempting fallback fetch for term="${term}" year=${year}...`);
-        
+
         // First, let's see what terms actually exist in the database
         const { data: termCheck, error: termError } = await supabase
             .from('courses')
             .select('term')
             .eq('academic_year', year)
             .limit(5);
-        
+
         if (termCheck && termCheck.length > 0) {
             console.log('Sample terms in database for year', year, ':', termCheck.map(c => c.term));
         } else {
             console.log('No courses found for year', year, 'at all');
         }
-        
+
         // First, try to get courses WITH GPA columns directly
         const { data: courses, error: coursesError } = await supabase
             .from('courses')
@@ -521,14 +521,14 @@ async function fetchCourseDataFallback(year, term) {
             console.error("Courses fallback query error:", coursesError);
             throw new Error(`Courses fallback query failed: ${coursesError.message}`);
         }
-        
+
         if (!courses || courses.length === 0) {
             console.warn(`No courses found in fallback method for term="${term}" year=${year}`);
             return [];
         }
-        
+
         console.log(`Successfully fetched ${courses.length} courses with embedded GPA data for ${term} ${year}`);
-        
+
         // Debug: Let's see what the first course looks like
         if (courses.length > 0) {
             console.log('Sample course data structure:', courses[0]);
@@ -541,7 +541,7 @@ async function fetchCourseDataFallback(year, term) {
                 gpa_f_percent: courses[0].gpa_f_percent
             });
         }
-        
+
         // Check if GPA data is present (checking for non-null AND non-zero values)
         const coursesWithGPA = courses.filter(course => {
             const hasValidGPA = (
@@ -553,7 +553,7 @@ async function fetchCourseDataFallback(year, term) {
             );
             return hasValidGPA;
         });
-        
+
         const coursesWithoutGPA = courses.filter(course => {
             const hasValidGPA = (
                 (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
@@ -564,17 +564,17 @@ async function fetchCourseDataFallback(year, term) {
             );
             return !hasValidGPA;
         });
-        
+
         if (coursesWithGPA.length > 0) {
             console.log(`Found GPA data for ${coursesWithGPA.length} out of ${courses.length} courses`);
         }
-        
+
         if (coursesWithoutGPA.length > 0) {
             console.log(`${coursesWithoutGPA.length} courses missing GPA data - attempting to find historical GPA data...`);
-            
+
             // Get historical GPA data for courses that don't have current GPA data
             const historicalGpaData = await fetchHistoricalGpaData(coursesWithoutGPA.map(c => c.course_code));
-            
+
             // Apply historical GPA data to courses that need it
             coursesWithoutGPA.forEach(course => {
                 const historicalGpa = historicalGpaData[course.course_code];
@@ -588,7 +588,7 @@ async function fetchCourseDataFallback(year, term) {
                     course.gpa_term_source = historicalGpa.term;
                 }
             });
-            
+
             const coursesWithHistoricalGpa = coursesWithoutGPA.filter(course => course.gpa_year_source);
             if (coursesWithHistoricalGpa.length > 0) {
                 console.log(`Found historical GPA data for ${coursesWithHistoricalGpa.length} additional courses`);
@@ -597,14 +597,14 @@ async function fetchCourseDataFallback(year, term) {
                 console.log('No historical GPA data found for courses missing current GPA');
             }
         }
-        
+
         const cacheKey = `${year}-${term}`;
         courseCache[cacheKey] = courses;
-        
+
         return courses;
     } catch (error) {
         console.error(`Fallback method failed for ${term} ${year}:`, error);
-        
+
         // Last resort: return courses with minimal data structure
         try {
             console.log('Attempting minimal fallback...');
@@ -623,7 +623,7 @@ async function fetchCourseDataFallback(year, term) {
                 `)
                 .eq('academic_year', year)
                 .eq('term', term);
-            
+
             if (!minimalError && minimalCourses && minimalCourses.length > 0) {
                 console.log(`Minimal fallback successful: ${minimalCourses.length} courses`);
                 const minimalProcessed = minimalCourses.map(course => ({
@@ -634,7 +634,7 @@ async function fetchCourseDataFallback(year, term) {
                     gpa_d_percent: null,
                     gpa_f_percent: null
                 }));
-                
+
                 const cacheKey = `${year}-${term}`;
                 courseCache[cacheKey] = minimalProcessed;
                 return minimalProcessed;
@@ -642,7 +642,7 @@ async function fetchCourseDataFallback(year, term) {
         } catch (minimalFallbackError) {
             console.error('Even minimal fallback failed:', minimalFallbackError);
         }
-        
+
         throw error;
     }
 }
@@ -651,9 +651,9 @@ async function fetchCourseDataFallback(year, term) {
 async function fetchHistoricalGpaData(courseCodes) {
     try {
         if (courseCodes.length === 0) return {};
-        
+
         console.log(`Fetching historical GPA data for ${courseCodes.length} course codes...`);
-        
+
         // Query for historical GPA data, ordered by most recent first
         const { data: historicalData, error } = await supabase
             .from('courses')
@@ -671,17 +671,17 @@ async function fetchHistoricalGpaData(courseCodes) {
             .not('gpa_a_percent', 'is', null)
             .order('academic_year', { ascending: false })
             .order('term', { ascending: false });
-        
+
         if (error) {
             console.error('Error fetching historical GPA data:', error);
             return {};
         }
-        
+
         if (!historicalData || historicalData.length === 0) {
             console.log('No historical GPA data found');
             return {};
         }
-        
+
         // Create a map of course_code to most recent GPA data
         const gpaMap = {};
         historicalData.forEach(course => {
@@ -695,16 +695,16 @@ async function fetchHistoricalGpaData(courseCodes) {
                     (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
                     (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
                 );
-                
+
                 if (hasValidGPA) {
                     gpaMap[course.course_code] = course;
                 }
             }
         });
-        
+
         console.log(`Found historical GPA data for ${Object.keys(gpaMap).length} courses`);
         return gpaMap;
-        
+
     } catch (error) {
         console.error('Failed to fetch historical GPA data:', error);
         return {};
@@ -726,10 +726,10 @@ export async function fetchProfessorChanges(courseCodes) {
     if (!courseCodes || courseCodes.length === 0) {
         return new Set();
     }
-    
+
     // Check cache first - filter out already cached course codes
     const uncachedCodes = courseCodes.filter(code => !(code in professorChangeCache));
-    
+
     if (uncachedCodes.length === 0) {
         // All codes are cached, build result from cache
         const changedCourses = new Set();
@@ -740,10 +740,10 @@ export async function fetchProfessorChanges(courseCodes) {
         });
         return changedCourses;
     }
-    
+
     try {
         console.log(`Checking professor changes for ${uncachedCodes.length} courses...`);
-        
+
         // Fetch all instances of these courses across all semesters
         const { data: courseHistory, error } = await supabase
             .from('courses')
@@ -751,12 +751,12 @@ export async function fetchProfessorChanges(courseCodes) {
             .in('course_code', uncachedCodes)
             .order('academic_year', { ascending: false })
             .order('term', { ascending: false });
-        
+
         if (error) {
             console.error('Error fetching professor history:', error);
             return new Set();
         }
-        
+
         if (!courseHistory || courseHistory.length === 0) {
             // No history found, cache as no change
             uncachedCodes.forEach(code => {
@@ -764,7 +764,7 @@ export async function fetchProfessorChanges(courseCodes) {
             });
             return new Set();
         }
-        
+
         // Group courses by course_code
         const coursesByCode = {};
         courseHistory.forEach(course => {
@@ -773,17 +773,17 @@ export async function fetchProfessorChanges(courseCodes) {
             }
             coursesByCode[course.course_code].push(course);
         });
-        
+
         // Check each course code for professor changes
         const changedCourses = new Set();
-        
+
         Object.entries(coursesByCode).forEach(([code, instances]) => {
             if (instances.length <= 1) {
                 // Only one instance, no change possible
                 professorChangeCache[code] = false;
                 return;
             }
-            
+
             // Get unique professors for this course (normalize for comparison)
             const professors = new Set(
                 instances
@@ -791,7 +791,7 @@ export async function fetchProfessorChanges(courseCodes) {
                     .filter(p => p && p.trim() !== '')
                     .map(p => p.trim().toLowerCase())
             );
-            
+
             // If there's more than one unique professor, mark as changed
             if (professors.size > 1) {
                 changedCourses.add(code);
@@ -801,17 +801,17 @@ export async function fetchProfessorChanges(courseCodes) {
                 professorChangeCache[code] = false;
             }
         });
-        
+
         // Cache any codes that weren't found as no change
         uncachedCodes.forEach(code => {
             if (!(code in professorChangeCache)) {
                 professorChangeCache[code] = false;
             }
         });
-        
+
         console.log(`Found ${changedCourses.size} courses with professor changes`);
         return changedCourses;
-        
+
     } catch (error) {
         console.error('Error checking professor changes:', error);
         return new Set();
@@ -820,31 +820,31 @@ export async function fetchProfessorChanges(courseCodes) {
 
 export async function openCourseInfoMenu(course, updateURL = true) {
     console.log('Opening course info menu for:', course);
-    
+
     // Function to properly format time slots from Japanese to English
     function formatTimeSlot(timeSlot) {
         if (!timeSlot) return 'TBA';
-        
+
         // Japanese day mappings
         const dayMap = {
             "月": "Monday",
-            "火": "Tuesday", 
+            "火": "Tuesday",
             "水": "Wednesday",
             "木": "Thursday",
             "金": "Friday",
             "土": "Saturday",
             "日": "Sunday"
         };
-        
+
         // Period time mappings
         const timeMap = {
             "1": "09:00 - 10:30",
-            "2": "10:45 - 12:15", 
+            "2": "10:45 - 12:15",
             "3": "13:10 - 14:40",
             "4": "14:55 - 16:25",
             "5": "16:40 - 18:10"
         };
-        
+
         // Try to match Japanese format: (月曜日1講時) or variants
         let match = timeSlot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
         if (match) {
@@ -852,12 +852,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             const period = match[2];
             const dayName = dayMap[dayChar];
             const timeRange = timeMap[period];
-            
+
             if (dayName && timeRange) {
                 return `${dayName} ${timeRange}`;
             }
         }
-        
+
         // Try to match English format that's already converted: "Mon 10:45 - 12:15" etc
         const englishMatch = timeSlot.match(/(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
         if (englishMatch) {
@@ -866,7 +866,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             const fullDayMap = {
                 "Mon": "Monday",
                 "Tue": "Tuesday",
-                "Wed": "Wednesday", 
+                "Wed": "Wednesday",
                 "Thu": "Thursday",
                 "Fri": "Friday",
                 "Sat": "Saturday",
@@ -874,11 +874,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             };
             return `${fullDayMap[dayAbbr]} ${timeRange}`;
         }
-        
+
         // If it's already in a good format or unrecognized, return as-is
         return timeSlot;
     }
-    
+
     const classInfo = document.getElementById("class-info");
     const classContent = document.getElementById("class-content");
     const classGPA = document.getElementById("class-gpa-graph");
@@ -888,16 +888,16 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     if (!classInfo || !classContent || !classClose) {
         console.error("Could not find the class info menu elements in the HTML.");
         console.error("classInfo:", classInfo);
-        console.error("classContent:", classContent); 
+        console.error("classContent:", classContent);
         console.error("classClose:", classClose);
-        
+
         // Try to wait a bit for DOM to be ready and retry once
         setTimeout(() => {
             console.log('Retrying after DOM delay...');
             const retryClassInfo = document.getElementById("class-info");
             const retryClassContent = document.getElementById("class-content");
             const retryClassClose = document.getElementById("class-close");
-            
+
             if (retryClassInfo && retryClassContent && retryClassClose) {
                 openCourseInfoMenu(course, updateURL);
             } else {
@@ -919,22 +919,22 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         classInfoBackground = document.createElement("div");
         classInfoBackground.id = "class-info-background";
         document.body.appendChild(classInfoBackground);
-        
+
         // Close menu when clicking background
-        classInfoBackground.addEventListener("click", function() {
+        classInfoBackground.addEventListener("click", function () {
             // Use smooth closing animation by removing show class
             classInfo.classList.remove("show");
-            
+
             setTimeout(() => {
                 document.body.style.overflow = "auto";
                 // Clear URL when closing - go back to home
                 window.history.pushState({}, '', '/');
-                
+
                 // Reset any inline styles before removing
                 classInfo.style.transform = '';
                 classInfo.style.transition = '';
                 classInfo.style.opacity = '';
-                
+
                 if (classInfoBackground.parentNode) {
                     classInfoBackground.parentNode.removeChild(classInfoBackground);
                 }
@@ -944,7 +944,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     // Get course color from the course data based on type
     const courseColor = getCourseColorByType(course.type);
-    
+
     // Use the type directly from the database
     const courseType = course.type || 'General';
 
@@ -957,20 +957,20 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             .select('courses_selection')
             .eq('id', session.user.id)
             .single();
-        
+
         if (profileData?.courses_selection) {
             // Filter courses by current year and term, then check if this course is selected
             const currentYearCourses = filterCoursesByCurrentYearTerm(profileData.courses_selection);
-            isAlreadySelected = currentYearCourses.some(selected => 
+            isAlreadySelected = currentYearCourses.some(selected =>
                 selected.code === course.course_code
             );
         }
     }
-    
+
     // Set background color based on selection status and whether modifications are allowed
     let timeBackgroundColor;
     const canModify = window.isCurrentSemester ? window.isCurrentSemester() : true; // Default to true if function not available yet
-    
+
     if (!canModify) {
         // Gray for non-current semesters (locked)
         timeBackgroundColor = isAlreadySelected ? '#B0B0B0' : '#D3D3D3';
@@ -978,7 +978,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         // Red for already selected, Green for available
         timeBackgroundColor = isAlreadySelected ? '#ED7F81' : '#92ECB0';
     }
-    
+
     // Reference to the exported checkTimeConflict function defined later in the file
     const checkTimeConflictForModal = async (timeSlot, courseCode, academicYear) => {
         // This will reference the exported function defined at the bottom of the file
@@ -990,19 +990,19 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
-            
+
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('courses_selection')
                 .eq('id', session.user.id)
                 .single();
-            
+
             const currentSelection = profile?.courses_selection || [];
             const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
-            const isCurrentlySelected = currentYearCourses.some(selected => 
+            const isCurrentlySelected = currentYearCourses.some(selected =>
                 selected.code === course.course_code
             );
-            
+
             if (isCurrentlySelected) {
                 button.textContent = "Remove Course";
                 button.style.background = "#ED7F81";
@@ -1057,12 +1057,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         classGPA.innerHTML = '';
         classGPA.style.display = 'none';
         classGPA.removeAttribute('id');
-        
+
         // Also clear any nested elements that might have been created
         while (classGPA.firstChild) {
             classGPA.removeChild(classGPA.firstChild);
         }
-        
+
         // Force DOM update to ensure changes are applied
         void classGPA.offsetHeight;
     }
@@ -1077,11 +1077,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     });
 
     // Check if we have valid GPA data (all percentages must be non-null)
-    const hasValidGpaData = course.gpa_a_percent !== null && 
-                           course.gpa_b_percent !== null && 
-                           course.gpa_c_percent !== null && 
-                           course.gpa_d_percent !== null && 
-                           course.gpa_f_percent !== null;
+    const hasValidGpaData = course.gpa_a_percent !== null &&
+        course.gpa_b_percent !== null &&
+        course.gpa_c_percent !== null &&
+        course.gpa_d_percent !== null &&
+        course.gpa_f_percent !== null;
 
     // Check if professor has changed (new professor means GPA from previous semester not applicable)
     let hasProfessorChanged = false;
@@ -1097,7 +1097,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     console.log('Course GPA data check:', {
         courseCode: course.course_code,
         gpa_a_percent: course.gpa_a_percent,
-        gpa_b_percent: course.gpa_b_percent, 
+        gpa_b_percent: course.gpa_b_percent,
         gpa_c_percent: course.gpa_c_percent,
         gpa_d_percent: course.gpa_d_percent,
         gpa_f_percent: course.gpa_f_percent,
@@ -1111,10 +1111,10 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         if (classGPA) {
             classGPA.style.display = 'block';
             classGPA.id = 'class-gpa-graph'; // Restore the id attribute
-            
+
             // Force DOM update before setting innerHTML
             void classGPA.offsetHeight;
-            
+
             classGPA.innerHTML = `
                 <p class="class-subtitle">Grade Point Average</p>
                 <div class="class-info-container gpa-layout">
@@ -1142,12 +1142,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 .eq('course_code', courseCode)
                 .eq('term', term)
                 .order('created_at', { ascending: false });
-            
+
             // Only filter by academic year if it's provided
             if (academicYear !== null) {
                 query = query.eq('academic_year', academicYear);
             }
-            
+
             const { data: reviews, error: reviewsError } = await query;
 
             if (reviewsError) {
@@ -1161,27 +1161,27 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
             // Then, get user profiles for each review
             const userIds = reviews.map(review => review.user_id);
-            
+
             // Get user profiles from profiles table
             let profiles = null;
             let profilesError = null;
-            
+
             // Try common column name variations for profiles table
             const possibleSelects = [
                 'id, display_name, avatar_url',
-                'id, name, avatar_url', 
+                'id, name, avatar_url',
                 'id, full_name, avatar_url',
                 'id, username, avatar_url',
                 'id, email, avatar_url',
                 '*'
             ];
-            
+
             for (let selectString of possibleSelects) {
                 const { data: profilesData, error: err } = await supabase
                     .from('profiles')
                     .select(selectString)
                     .in('id', userIds);
-                
+
                 if (!err) {
                     profiles = profilesData;
                     break;
@@ -1198,11 +1198,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                     if (userIds.includes(session.user.id)) {
                         profiles = [{
                             id: session.user.id,
-                            display_name: session.user.user_metadata?.display_name || 
-                                         session.user.user_metadata?.name || 
-                                         session.user.user_metadata?.full_name ||
-                                         session.user.email?.split('@')[0] ||
-                                         'Current User',
+                            display_name: session.user.user_metadata?.display_name ||
+                                session.user.user_metadata?.name ||
+                                session.user.user_metadata?.full_name ||
+                                session.user.email?.split('@')[0] ||
+                                'Current User',
                             avatar_url: session.user.user_metadata?.avatar_url || null,
                             email: session.user.email
                         }];
@@ -1225,15 +1225,15 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             // Combine reviews with profile data
             const reviewsWithProfiles = reviews.map(review => {
                 const profile = profiles?.find(p => p.id === review.user_id);
-                
+
                 if (profile) {
                     // Try different possible column names for the display name
-                    let displayName = profile.display_name || 
-                                    profile.name || 
-                                    profile.full_name || 
-                                    profile.username || 
-                                    profile.email;
-                    
+                    let displayName = profile.display_name ||
+                        profile.name ||
+                        profile.full_name ||
+                        profile.username ||
+                        profile.email;
+
                     // If display_name is null/undefined and we still don't have a name, try to get it from session
                     if (!displayName || displayName === null) {
                         if (session && session.user && session.user.id === review.user_id) {
@@ -1242,12 +1242,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                             displayName = 'Anonymous User';
                         }
                     }
-                    
+
                     return {
                         ...review,
-                        profiles: { 
-                            display_name: displayName, 
-                            avatar_url: profile.avatar_url || null 
+                        profiles: {
+                            display_name: displayName,
+                            avatar_url: profile.avatar_url || null
                         }
                     };
                 } else {
@@ -1256,13 +1256,13 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                         const displayName = session.user.email?.split('@')[0] || 'Current User';
                         return {
                             ...review,
-                            profiles: { 
-                                display_name: displayName, 
-                                avatar_url: null 
+                            profiles: {
+                                display_name: displayName,
+                                avatar_url: null
                             }
                         };
                     }
-                    
+
                     return {
                         ...review,
                         profiles: { display_name: 'Anonymous User', avatar_url: null }
@@ -1290,7 +1290,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
         const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
         const averageRating = (totalRating / reviews.length).toFixed(2);
-        
+
         const ratingDistribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
         reviews.forEach(review => {
             ratingDistribution[review.rating]++;
@@ -1307,7 +1307,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     function renderStarRating(rating, size = 'small') {
         const stars = [];
         const sizeClass = size === 'large' ? 'star-large' : 'star-small';
-        
+
         for (let i = 1; i <= 5; i++) {
             if (i <= rating) {
                 stars.push(`<span class="star ${sizeClass} filled"></span>`);
@@ -1321,10 +1321,10 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     // Function to format date
     function formatDate(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
         });
     }
 
@@ -1337,26 +1337,26 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             canvas.width = 40;
             canvas.height = 40;
             const ctx = canvas.getContext('2d');
-            
+
             // Create a circular background
             ctx.fillStyle = '#cccccc';
             ctx.fillRect(0, 0, 40, 40);
-            
+
             // Add initial text
             ctx.fillStyle = '#666666';
             ctx.font = '18px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(initial, 20, 20);
-            
+
             return canvas.toDataURL();
         };
-        
+
         // Use provided anonymous name and avatar, or create defaults
         const displayName = anonymousName || (review.profiles?.display_name || 'Anonymous User');
         const avatarUrl = avatarSrc || (review.profiles?.avatar_url || createAvatarPlaceholder(displayName));
         const isOwnReview = currentUserId && review.user_id === currentUserId;
-        
+
         return `
             <div class="review-item">
                 <div class="review-header">
@@ -1389,25 +1389,25 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     // Load reviews for this course (from all years, just matching course code and term)
     const allReviews = await loadCourseReviews(course.course_code, null, course.term);
-    
+
     // Get current user ID for edit functionality (using session already declared above)
     const currentUserId = session?.user?.id;
-    
+
     // Check if current user has already written a review for this course
     const userHasReviewed = currentUserId && allReviews.some(review => review.user_id === currentUserId);
-    
+
     // Sort reviews to put user's own review first, then by creation date
     const sortedReviews = allReviews.sort((a, b) => {
         const aIsOwn = currentUserId && a.user_id === currentUserId;
         const bIsOwn = currentUserId && b.user_id === currentUserId;
-        
+
         if (aIsOwn && !bIsOwn) return -1;  // User's review goes first
         if (!aIsOwn && bIsOwn) return 1;   // Other user's review goes second
-        
+
         // If both are user's or both are others', sort by date (newest first)
         return new Date(b.created_at) - new Date(a.created_at);
     });
-    
+
     const stats = calculateReviewStats(sortedReviews);
     const initialReviewsToShow = 3;
     const reviewsToShow = sortedReviews.slice(0, initialReviewsToShow);
@@ -1446,9 +1446,9 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 <!-- Rating Distribution -->
                 <div class="rating-distribution">
                     ${[5, 4, 3, 2, 1].map(rating => {
-                        const count = stats.ratingDistribution[rating];
-                        const percentage = stats.totalReviews > 0 ? (count / stats.totalReviews * 100).toFixed(1) : 0;
-                        return `
+        const count = stats.ratingDistribution[rating];
+        const percentage = stats.totalReviews > 0 ? (count / stats.totalReviews * 100).toFixed(1) : 0;
+        return `
                             <div class="rating-bar">
                                 <span class="rating-label"><p>${rating}</p> <div class="star star-extrasmall"></div></span>
                                 <div class="bar-container">
@@ -1457,7 +1457,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                                 <span class="rating-count">${count}</span>
                             </div>
                         `;
-                    }).join('')}
+    }).join('')}
                 </div>
             </div>
             
@@ -1466,14 +1466,14 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 <h3 class="reviews-header">Reviews</h3>
                 <div class="reviews-list" id="reviews-list-${course.course_code}">
                     ${reviewsToShow.map((review, index) => {
-            const isOwnReview = currentUserId && review.user_id === currentUserId;
-            // Count only non-user reviews for Student numbering
-            const nonUserReviewsBeforeThis = reviewsToShow.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
-            const anonymousName = isOwnReview ? "Your review" : `Student ${nonUserReviewsBeforeThis + 1}`;
-            const avatarSrc = "/user.svg";  // Use user icon for all reviews
-            
-            return renderReview(review, currentUserId, anonymousName, avatarSrc);
-        }).join('')}
+        const isOwnReview = currentUserId && review.user_id === currentUserId;
+        // Count only non-user reviews for Student numbering
+        const nonUserReviewsBeforeThis = reviewsToShow.slice(0, index).filter(r => !(currentUserId && r.user_id === currentUserId)).length;
+        const anonymousName = isOwnReview ? "Your review" : `Student ${nonUserReviewsBeforeThis + 1}`;
+        const avatarSrc = "/user.svg";  // Use user icon for all reviews
+
+        return renderReview(review, currentUserId, anonymousName, avatarSrc);
+    }).join('')}
                 </div>
                 
                 ${hasMoreReviews ? `
@@ -1490,31 +1490,181 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         `}
     `;
 
+    // Load and display assignments for this course
+    const classAssignments = document.getElementById('class-assignments');
+    if (classAssignments) {
+        // Check if user is logged in
+        const { data: { session: assignmentSession } } = await supabase.auth.getSession();
+
+        if (assignmentSession?.user) {
+            try {
+                // First check if user is registered for this course
+                const { data: userProfile } = await supabase
+                    .from('profiles')
+                    .select('courses_selection')
+                    .eq('id', assignmentSession.user.id)
+                    .single();
+
+                const userCourseCodes = (userProfile?.courses_selection || []).map(c => c.code);
+                const isRegisteredForCourse = userCourseCodes.includes(course.course_code);
+
+                // Only show assignments if user is registered for this course
+                if (!isRegisteredForCourse) {
+                    classAssignments.style.display = 'none';
+                } else {
+                    // Fetch assignments tagged with this course
+                    const { data: courseAssignments, error: assignmentsError } = await supabase
+                        .from('assignments')
+                        .select('*')
+                        .eq('user_id', assignmentSession.user.id)
+                        .eq('course_code', course.course_code)
+                        .order('due_date', { ascending: true });
+
+                    if (assignmentsError) {
+                        console.error('Error loading course assignments:', assignmentsError);
+                        classAssignments.innerHTML = '';
+                        classAssignments.style.display = 'none';
+                    } else if (courseAssignments && courseAssignments.length > 0) {
+                        // Helper function for status display
+                        const getStatusInfo = (status) => {
+                            const statusMap = {
+                                'not_started': { text: 'Not Started', class: 'status-not-started' },
+                                'ongoing': { text: 'Ongoing', class: 'status-ongoing' },
+                                'completed': { text: 'Completed', class: 'status-completed' }
+                            };
+                            return statusMap[status] || { text: status, class: 'status-not-started' };
+                        };
+
+                        // Helper function for date display
+                        const formatDueDate = (dateStr) => {
+                            if (!dateStr) return 'No due date';
+                            const date = new Date(dateStr);
+                            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        };
+
+                        classAssignments.style.display = 'block';
+                        classAssignments.innerHTML = `
+                            <div class="class-subtitle-assignments">
+                                <p class="subtitle-opacity">Your Assignments</p>
+                                <a href="/assignments" class="view-all-assignments-btn" id="view-all-assignments-link">
+                                    <div class="button-icon">
+                                        <p>View All</p>
+                                        <div class="external-link-icon"></div>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="course-assignments-list">
+                                ${courseAssignments.map(assignment => {
+                            const statusInfo = getStatusInfo(assignment.status);
+                            return `
+                                        <div class="course-assignment-item" data-assignment-id="${assignment.id}" style="cursor: pointer;">
+                                            <div class="assignment-item-left">
+                                                <span class="assignment-item-icon">📄</span>
+                                                <div class="assignment-item-details">
+                                                    <p class="assignment-item-title">${assignment.title || 'Untitled'}</p>
+                                                    <p class="assignment-item-due">${formatDueDate(assignment.due_date)}</p>
+                                                </div>
+                                            </div>
+                                            <span class="status-badge ${statusInfo.class}">${statusInfo.text}</span>
+                                        </div>
+                                    `;
+                        }).join('')}
+                            </div>
+                        `;
+
+                        // Add click handlers to open assignment details
+                        classAssignments.querySelectorAll('.course-assignment-item').forEach(item => {
+                            item.addEventListener('click', async (e) => {
+                                e.preventDefault();
+                                const assignmentId = item.dataset.assignmentId;
+                                // Close the course modal first
+                                const classInfo = document.getElementById('class-info');
+                                const classInfoBackground = document.getElementById('class-info-background');
+                                if (classInfo) classInfo.classList.remove('show');
+                                if (classInfoBackground) classInfoBackground.remove();
+                                document.body.style.overflow = 'auto';
+                                // Navigate to assignments page with assignment ID in hash
+                                window.location.href = `/assignments#assignment-${assignmentId}`;
+                            });
+                        });
+
+                        // Add click handler to close modal when clicking View All
+                        const viewAllLink = document.getElementById('view-all-assignments-link');
+                        if (viewAllLink) {
+                            viewAllLink.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                // Close the course modal
+                                const classInfo = document.getElementById('class-info');
+                                const classInfoBackground = document.getElementById('class-info-background');
+                                if (classInfo) classInfo.classList.remove('show');
+                                if (classInfoBackground) classInfoBackground.remove();
+                                document.body.style.overflow = 'auto';
+                                // Navigate to assignments page
+                                window.location.href = '/assignments';
+                            });
+                        }
+                    } else {
+                        // No assignments for this course - show helpful message
+                        classAssignments.style.display = 'block';
+                        classAssignments.innerHTML = `
+                            <div class="class-subtitle-assignments">
+                                <p class="subtitle-opacity">Your Assignments</p>
+                            </div>
+                            <div class="no-course-assignments">
+                                <p>No assignments for this course yet.</p>
+                                <a href="/assignments" class="add-assignment-link" id="add-assignment-link">Add an assignment →</a>
+                            </div>
+                        `;
+
+                        // Add click handler to close modal when clicking add assignment link
+                        const addLink = document.getElementById('add-assignment-link');
+                        if (addLink) {
+                            addLink.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                const classInfo = document.getElementById('class-info');
+                                const classInfoBackground = document.getElementById('class-info-background');
+                                if (classInfo) classInfo.classList.remove('show');
+                                if (classInfoBackground) classInfoBackground.remove();
+                                document.body.style.overflow = 'auto';
+                                window.location.href = '/assignments';
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading assignments:', error);
+                classAssignments.style.display = 'none';
+            }
+        } else {
+            // User not logged in - hide assignments section
+            classAssignments.style.display = 'none';
+        }
+    }
+
     classInfo.classList.add("show");
-    
+
     // On mobile, start in semi-open state; on desktop, no change needed
     if (window.innerWidth <= 780) {
         // Remove fully-open class in case it was set previously
-        classInfo.classList.remove("fully-open");
     }
-    
+
     document.body.style.overflow = "hidden";
-    
+
     // Reset any leftover inline styles from previous interactions
     classInfo.style.transform = '';
     classInfo.style.transition = '';
     classInfo.style.opacity = '';
-    
+
     // Add mobile swipe-to-close functionality
     if (window.innerWidth <= 780) {
         addSwipeToClose(classInfo, classInfoBackground);
     }
-    
+
     // Restructure review dates for mobile after modal content is loaded
     if (typeof restructureReviewDatesForMobile === 'function') {
         setTimeout(() => restructureReviewDatesForMobile(), 10);
     }
-    
+
     // Show background with fade-in animation
     setTimeout(() => {
         classInfoBackground.style.opacity = "1";
@@ -1522,35 +1672,35 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     // Set up add/remove course button functionality
     const addRemoveButton = document.getElementById("class-add-remove");
-    
+
     if (addRemoveButton) {
         // Always remove existing listener and set up fresh
         const newButton = addRemoveButton.cloneNode(true);
         addRemoveButton.parentNode.replaceChild(newButton, addRemoveButton);
-        
+
         // Simple function to check if course is selected
         async function isCourseSelected(courseCode, year) {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return false;
-            
+
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('courses_selection')
                 .eq('id', session.user.id)
                 .single();
-            
+
             if (!profile?.courses_selection) return false;
-            
+
             // Filter by current year and term, then check for the course
             const currentYearCourses = filterCoursesByCurrentYearTerm(profile.courses_selection);
             return currentYearCourses.some(selected => selected.code === courseCode);
         }
-        
+
         // Simple function to update button appearance
         async function updateButton() {
             const isSelected = await isCourseSelected(course.course_code, course.academic_year);
             const canModify = isCurrentSemester();
-            
+
             if (!canModify) {
                 // For non-current semesters, show a disabled state
                 newButton.textContent = "Semester Locked";
@@ -1572,20 +1722,20 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 newButton.disabled = false;
             }
         }
-        
+
         // Set initial button state
         await updateButton();
-        
+
         // Add click handler
-        newButton.addEventListener("click", async function(e) {
+        newButton.addEventListener("click", async function (e) {
             e.preventDefault();
-            
+
             // Check if we can modify courses for this semester
             if (!isCurrentSemester()) {
                 alert('You can only add or remove courses for the current semester. Please switch to the current semester to make changes.');
                 return;
             }
-            
+
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) {
                 // Use authentication modal system
@@ -1601,7 +1751,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 }
                 return;
             }
-            
+
             try {
                 // Get current profile
                 const { data: profile } = await supabase
@@ -1609,32 +1759,32 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                     .select('courses_selection')
                     .eq('id', session.user.id)
                     .single();
-                
+
                 const currentSelection = profile?.courses_selection || [];
-                
+
                 // Filter to get only courses for current year and term
                 const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
-                const isCurrentlySelected = currentYearCourses.some(selected => 
+                const isCurrentlySelected = currentYearCourses.some(selected =>
                     selected.code === course.course_code
                 );
-                
+
                 if (isCurrentlySelected) {
                     // Remove course - remove from the full selection, not just current year
-                    const updatedSelection = currentSelection.filter(selected => 
+                    const updatedSelection = currentSelection.filter(selected =>
                         !(selected.code === course.course_code && selected.year === getCurrentYear() && (!selected.term || selected.term === getCurrentTerm()))
                     );
-                    
+
                     const { error } = await supabase
                         .from('profiles')
                         .update({ courses_selection: updatedSelection })
                         .eq('id', session.user.id);
-                    
+
                     if (error) {
                         console.error('Error removing course:', error);
                         alert('Failed to remove course. Please try again.');
                         return;
                     }
-                    
+
                     alert('Course removed successfully!');
                     // Update button state after successful removal
                     await updateCourseButtonState(course, newButton);
@@ -1643,7 +1793,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                     console.log('Checking for conflicts for course:', course.course_code, 'time:', course.time_slot);
                     const conflictResult = await checkTimeConflictForModal(course.time_slot, course.course_code, course.academic_year);
                     console.log('Conflict result:', conflictResult);
-                    
+
                     if (conflictResult.hasConflict) {
                         console.log('Conflict detected, showing modal');
                         showTimeConflictModal(conflictResult.conflictingCourses, course, async (shouldReplace, conflictingCourses) => {
@@ -1652,12 +1802,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                                 let updatedSelection = currentSelection.filter(selected => {
                                     return !conflictingCourses.some(conflict => {
                                         // Remove conflicting courses from current year/term only
-                                        return conflict.course_code === selected.code && 
-                                               selected.year === getCurrentYear() && 
-                                               (!selected.term || selected.term === getCurrentTerm());
+                                        return conflict.course_code === selected.code &&
+                                            selected.year === getCurrentYear() &&
+                                            (!selected.term || selected.term === getCurrentTerm());
                                     });
                                 });
-                                
+
                                 // Add the new course with current year and term
                                 updatedSelection = [
                                     ...updatedSelection,
@@ -1667,18 +1817,18 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                                         term: getCurrentTerm()
                                     }
                                 ];
-                                
+
                                 const { error } = await supabase
                                     .from('profiles')
                                     .update({ courses_selection: updatedSelection })
                                     .eq('id', session.user.id);
-                                
+
                                 if (error) {
                                     console.error('Error updating courses:', error);
                                     alert('Failed to update courses. Please try again.');
                                     return;
                                 }
-                                
+
                                 alert('Course replaced successfully!');
                                 await updateButton();
                                 // Also update the button state specifically
@@ -1690,7 +1840,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                         });
                         return;
                     }
-                    
+
                     // Add course with current year and term
                     const updatedSelection = [
                         ...currentSelection,
@@ -1700,21 +1850,21 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                             term: getCurrentTerm()
                         }
                     ];
-                    
+
                     const { error } = await supabase
                         .from('profiles')
                         .update({ courses_selection: updatedSelection })
                         .eq('id', session.user.id);
-                    
+
                     if (error) {
                         console.error('Error adding course:', error);
                         alert('Failed to add course. Please try again.');
                         return;
                     }
-                    
+
                     alert('Course added successfully!');
                 }
-                
+
                 // Update button and refresh calendar
                 await updateButton();
                 // Also update the button state specifically
@@ -1722,7 +1872,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                 if (window.refreshCalendarComponent) {
                     window.refreshCalendarComponent();
                 }
-                
+
             } catch (error) {
                 console.error('Error managing course:', error);
                 alert('An error occurred. Please try again.');
@@ -1731,22 +1881,22 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     }
 
     if (!classClose.dataset.listenerAttached) {
-        classClose.addEventListener("click", function() {
+        classClose.addEventListener("click", function () {
             const currentBackground = document.getElementById("class-info-background");
-            
+
             // Use smooth closing animation by removing show class
             classInfo.classList.remove("show");
-            
+
             setTimeout(() => {
                 document.body.style.overflow = "auto";
                 // Clear URL when closing - go back to home
                 window.history.pushState({}, '', '/');
-                
+
                 // Reset any inline styles before removing
                 classInfo.style.transform = '';
                 classInfo.style.transition = '';
                 classInfo.style.opacity = '';
-                
+
                 if (currentBackground && currentBackground.parentNode) {
                     currentBackground.parentNode.removeChild(currentBackground);
                 }
@@ -1757,7 +1907,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 }
 
 // Global function to load more reviews
-window.loadMoreReviews = async function(courseCode, academicYear, term, currentlyShowing) {
+window.loadMoreReviews = async function (courseCode, academicYear, term, currentlyShowing) {
     try {
         // Build the query - if academicYear is null, get reviews from all years
         let query = supabase
@@ -1766,12 +1916,12 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
             .eq('course_code', courseCode)
             .eq('term', term)
             .order('created_at', { ascending: false });
-        
+
         // Only filter by academic year if it's provided
         if (academicYear !== null) {
             query = query.eq('academic_year', academicYear);
         }
-        
+
         const { data: reviews, error: reviewsError } = await query;
 
         if (reviewsError) {
@@ -1785,27 +1935,27 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
 
         // Then, get user profiles for each review
         const userIds = reviews.map(review => review.user_id);
-        
+
         // Get user profiles from profiles table  
         let profiles = null;
         let profilesError = null;
-        
+
         // Try common column name variations
         const possibleSelects = [
             'id, display_name, avatar_url',
-            'id, name, avatar_url', 
+            'id, name, avatar_url',
             'id, full_name, avatar_url',
             'id, username, avatar_url',
             'id, email, avatar_url',
             '*'
         ];
-        
+
         for (let selectString of possibleSelects) {
             const { data: profilesData, error: err } = await supabase
                 .from('profiles')
                 .select(selectString)
                 .in('id', userIds);
-            
+
             if (!err) {
                 profiles = profilesData;
                 break;
@@ -1824,15 +1974,15 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
         // Combine reviews with profile data (but we'll anonymize them later)
         const reviewsWithProfiles = reviews.map(review => {
             const profile = profiles?.find(p => p.id === review.user_id);
-            
+
             if (profile) {
                 // Try different possible column names for the display name
-                let displayName = profile.display_name || 
-                                profile.name || 
-                                profile.full_name || 
-                                profile.username || 
-                                profile.email;
-                
+                let displayName = profile.display_name ||
+                    profile.name ||
+                    profile.full_name ||
+                    profile.username ||
+                    profile.email;
+
                 // If display_name is null/undefined and we still don't have a name, try to get it from session
                 if (!displayName || displayName === null) {
                     if (session && session.user && session.user.id === review.user_id) {
@@ -1841,12 +1991,12 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
                         displayName = 'Anonymous User';
                     }
                 }
-                
+
                 return {
                     ...review,
-                    profiles: { 
-                        display_name: displayName, 
-                        avatar_url: profile.avatar_url || null 
+                    profiles: {
+                        display_name: displayName,
+                        avatar_url: profile.avatar_url || null
                     }
                 };
             } else {
@@ -1855,13 +2005,13 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
                     const displayName = session.user.email?.split('@')[0] || 'Current User';
                     return {
                         ...review,
-                        profiles: { 
-                            display_name: displayName, 
-                            avatar_url: null 
+                        profiles: {
+                            display_name: displayName,
+                            avatar_url: null
                         }
                     };
                 }
-                
+
                 return {
                     ...review,
                     profiles: { display_name: 'Anonymous User', avatar_url: null }
@@ -1871,29 +2021,29 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
 
         // Use the session already obtained above for current user ID
         const currentUserId = session?.user?.id;
-        
+
         // Sort reviews to put user's own review first, then by creation date
         const sortedReviews = reviewsWithProfiles.sort((a, b) => {
             const aIsOwn = currentUserId && a.user_id === currentUserId;
             const bIsOwn = currentUserId && b.user_id === currentUserId;
-            
+
             if (aIsOwn && !bIsOwn) return -1;  // User's review goes first
             if (!aIsOwn && bIsOwn) return 1;   // Other user's review goes second
-            
+
             // If both are user's or both are others', sort by date (newest first)
             return new Date(b.created_at) - new Date(a.created_at);
         });
 
         const reviewsList = document.getElementById(`reviews-list-${courseCode}`);
         const loadMoreBtn = document.querySelector('.load-more-reviews');
-        
+
         if (reviewsList && sortedReviews) {
             const nextBatch = sortedReviews.slice(currentlyShowing, currentlyShowing + 3);
-            
+
             // Count non-user reviews that have already been shown to continue numbering correctly
             const reviewsShownSoFar = sortedReviews.slice(0, currentlyShowing);
             const nonUserReviewsShownSoFar = reviewsShownSoFar.filter(r => !(currentUserId && r.user_id === currentUserId)).length;
-            
+
             nextBatch.forEach((review, index) => {
                 const isOwnReview = currentUserId && review.user_id === currentUserId;
                 // Count non-user reviews in the current batch before this one
@@ -1901,14 +2051,14 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
                 const studentNumber = nonUserReviewsShownSoFar + nonUserReviewsInBatchBeforeThis + 1;
                 const anonymousName = isOwnReview ? "Your review" : `Student ${studentNumber}`;
                 const avatarSrc = "/user.svg";
-                
+
                 const reviewElement = document.createElement('div');
                 reviewElement.innerHTML = renderReview(review, currentUserId, anonymousName, avatarSrc);
                 reviewsList.appendChild(reviewElement.firstElementChild);
             });
-            
+
             const newCurrentlyShowing = currentlyShowing + nextBatch.length;
-            
+
             if (newCurrentlyShowing >= sortedReviews.length) {
                 loadMoreBtn.remove();
             } else {
@@ -1922,10 +2072,10 @@ window.loadMoreReviews = async function(courseCode, academicYear, term, currentl
 };
 
 // Global function to open add review modal
-window.openAddReviewModal = async function(courseCode, academicYear, term, courseTitle) {
+window.openAddReviewModal = async function (courseCode, academicYear, term, courseTitle) {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
             // Use authentication modal system
             if (window.requireAuth) {
@@ -1973,7 +2123,7 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
         // Create and show add review modal
         const modal = document.createElement('div');
         modal.className = 'review-modal';
-        
+
         modal.innerHTML = `
             <div class="review-modal-content">
                 <div class="review-modal-header">
@@ -1986,23 +2136,23 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
                         <select id="course-year">
                             <option value="">Select year...</option>
                             ${(() => {
-                                const currentYear = new Date().getFullYear();
-                                let options = '';
-                                for (let year = currentYear; year >= currentYear - 10; year--) {
-                                    const selected = year === academicYear ? 'selected' : '';
-                                    options += `<option value="${year}" ${selected}>${year}</option>`;
-                                }
-                                return options;
-                            })()}
+                const currentYear = new Date().getFullYear();
+                let options = '';
+                for (let year = currentYear; year >= currentYear - 10; year--) {
+                    const selected = year === academicYear ? 'selected' : '';
+                    options += `<option value="${year}" ${selected}>${year}</option>`;
+                }
+                return options;
+            })()}
                         </select>
                         <div class="review-field-error" id="course-year-error" style="display: none;"></div>
                     </div>
                     <div class="rating-input">
                         <label>Rating:</label>
                         <div class="star-rating-input" id="star-rating-input">
-                            ${[1, 2, 3, 4, 5].map(rating => 
-                                `<span class="star-input" data-rating="${rating}" onclick="setRating(${rating})" onmouseover="hoverRating(${rating})" onmouseout="unhoverRating()">☆</span>`
-                            ).join('')}
+                            ${[1, 2, 3, 4, 5].map(rating =>
+                `<span class="star-input" data-rating="${rating}" onclick="setRating(${rating})" onmouseover="hoverRating(${rating})" onmouseout="unhoverRating()">☆</span>`
+            ).join('')}
                         </div>
                         <div class="review-field-error" id="star-rating-error" style="display: none;"></div>
                     </div>
@@ -2023,12 +2173,12 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
         modal.classList.add('hidden'); // Start hidden for animation
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
-        
+
         // Trigger animation by removing hidden class (same as search modal pattern)
         setTimeout(() => {
             modal.classList.remove('hidden');
         }, 10);
-        
+
     } catch (error) {
         console.error('Error opening review modal:', error);
         alert('Error opening review form. Please try again.');
@@ -2036,16 +2186,16 @@ window.openAddReviewModal = async function(courseCode, academicYear, term, cours
 };
 
 // Global function to close review modal
-window.closeReviewModal = function() {
+window.closeReviewModal = function () {
     const modal = document.querySelector('.review-modal');
     if (modal) {
         modal.classList.add('hidden');
-        
+
         // Remove modal after animation completes (300ms to match CSS)
         setTimeout(() => {
             modal.remove();
         }, 300);
-        
+
         // Only restore body overflow if the main course info modal is not open
         const classInfo = document.getElementById("class-info");
         if (!classInfo || !classInfo.classList.contains("show")) {
@@ -2074,10 +2224,10 @@ function clearReviewFieldErrors() {
 }
 
 // Global function to open edit review modal
-window.openEditReviewModal = async function(reviewId, courseCode, term, currentRating, currentContent, currentYear) {
+window.openEditReviewModal = async function (reviewId, courseCode, term, currentRating, currentContent, currentYear) {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
             alert('Please log in to edit your review.');
             return;
@@ -2086,7 +2236,7 @@ window.openEditReviewModal = async function(reviewId, courseCode, term, currentR
         // Create and show edit review modal
         const modal = document.createElement('div');
         modal.className = 'review-modal';
-        
+
         modal.innerHTML = `
             <div class="review-modal-content">
                 <div class="review-modal-header">
@@ -2099,22 +2249,22 @@ window.openEditReviewModal = async function(reviewId, courseCode, term, currentR
                         <select id="course-year-edit">
                             <option value="">Select year...</option>
                             ${(() => {
-                                const currentYearDate = new Date().getFullYear();
-                                let options = '';
-                                for (let year = currentYearDate; year >= currentYearDate - 10; year--) {
-                                    const selected = year === currentYear ? 'selected' : '';
-                                    options += `<option value="${year}" ${selected}>${year}</option>`;
-                                }
-                                return options;
-                            })()}
+                const currentYearDate = new Date().getFullYear();
+                let options = '';
+                for (let year = currentYearDate; year >= currentYearDate - 10; year--) {
+                    const selected = year === currentYear ? 'selected' : '';
+                    options += `<option value="${year}" ${selected}>${year}</option>`;
+                }
+                return options;
+            })()}
                         </select>
                     </div>
                     <div class="rating-input">
                         <label>Rating:</label>
                         <div class="star-rating-input" id="star-rating-input-edit" data-selected-rating="${currentRating}">
-                            ${[1, 2, 3, 4, 5].map(rating => 
-                                `<span class="star-input ${rating <= currentRating ? 'selected' : ''}" data-rating="${rating}" onclick="setEditRating(${rating})" onmouseover="hoverEditRating(${rating})" onmouseout="unhoverEditRating()">${rating <= currentRating ? '★' : '☆'}</span>`
-                            ).join('')}
+                            ${[1, 2, 3, 4, 5].map(rating =>
+                `<span class="star-input ${rating <= currentRating ? 'selected' : ''}" data-rating="${rating}" onclick="setEditRating(${rating})" onmouseover="hoverEditRating(${rating})" onmouseout="unhoverEditRating()">${rating <= currentRating ? '★' : '☆'}</span>`
+            ).join('')}
                         </div>
                     </div>
                     <div class="review-text-input">
@@ -2135,12 +2285,12 @@ window.openEditReviewModal = async function(reviewId, courseCode, term, currentR
         modal.classList.add('hidden'); // Start hidden for animation  
         document.body.appendChild(modal);
         document.body.style.overflow = 'hidden';
-        
+
         // Trigger animation by removing hidden class (same as search modal pattern)
         setTimeout(() => {
             modal.classList.remove('hidden');
         }, 10);
-        
+
     } catch (error) {
         console.error('Error opening edit review modal:', error);
         alert('Error opening edit form. Please try again.');
@@ -2148,7 +2298,7 @@ window.openEditReviewModal = async function(reviewId, courseCode, term, currentR
 };
 
 // Global function to set rating in edit modal
-window.setEditRating = function(rating) {
+window.setEditRating = function (rating) {
     const stars = document.querySelectorAll('#star-rating-input-edit .star-input');
     stars.forEach((star, index) => {
         if (index < rating) {
@@ -2161,13 +2311,13 @@ window.setEditRating = function(rating) {
             star.classList.remove('selected');
         }
     });
-    
+
     // Store the selected rating
     document.getElementById('star-rating-input-edit').dataset.selectedRating = rating;
 };
 
 // Global function to handle star hover in edit modal
-window.hoverEditRating = function(rating) {
+window.hoverEditRating = function (rating) {
     const stars = document.querySelectorAll('#star-rating-input-edit .star-input');
     stars.forEach((star, index) => {
         if (index < rating) {
@@ -2181,10 +2331,10 @@ window.hoverEditRating = function(rating) {
 };
 
 // Global function to remove hover effect in edit modal
-window.unhoverEditRating = function() {
+window.unhoverEditRating = function () {
     const ratingInput = document.getElementById('star-rating-input-edit');
     const selectedRating = parseInt(ratingInput?.dataset.selectedRating || 0);
-    
+
     if (selectedRating > 0) {
         setEditRating(selectedRating); // Restore the selected rating
     } else {
@@ -2196,7 +2346,7 @@ window.unhoverEditRating = function() {
         });
     }
 };
-window.setRating = function(rating) {
+window.setRating = function (rating) {
     const stars = document.querySelectorAll('.star-input');
     stars.forEach((star, index) => {
         if (index < rating) {
@@ -2209,13 +2359,13 @@ window.setRating = function(rating) {
             star.classList.remove('selected');
         }
     });
-    
+
     // Store the selected rating
     document.getElementById('star-rating-input').dataset.selectedRating = rating;
 };
 
 // Global function to handle star hover
-window.hoverRating = function(rating) {
+window.hoverRating = function (rating) {
     const stars = document.querySelectorAll('.star-input');
     stars.forEach((star, index) => {
         if (index < rating) {
@@ -2229,10 +2379,10 @@ window.hoverRating = function(rating) {
 };
 
 // Global function to remove hover effect
-window.unhoverRating = function() {
+window.unhoverRating = function () {
     const ratingInput = document.getElementById('star-rating-input');
     const selectedRating = parseInt(ratingInput?.dataset.selectedRating || 0);
-    
+
     if (selectedRating > 0) {
         setRating(selectedRating); // Restore the selected rating
     } else {
@@ -2246,10 +2396,10 @@ window.unhoverRating = function() {
 };
 
 // Global function to update review
-window.updateReview = async function(reviewId) {
+window.updateReview = async function (reviewId) {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
             alert('Please log in to update your review.');
             return;
@@ -2258,16 +2408,16 @@ window.updateReview = async function(reviewId) {
         const ratingInput = document.getElementById('star-rating-input-edit');
         const contentInput = document.getElementById('review-content-edit');
         const yearInput = document.getElementById('course-year-edit');
-        
+
         const rating = parseInt(ratingInput.dataset.selectedRating);
         const content = contentInput.value.trim();
         const selectedYear = parseInt(yearInput.value);
-        
+
         if (!rating) {
             alert('Please select a rating.');
             return;
         }
-        
+
         if (!selectedYear) {
             alert('Please select the year when you took this course.');
             return;
@@ -2297,10 +2447,10 @@ window.updateReview = async function(reviewId) {
 
         alert('Review updated successfully!');
         closeReviewModal();
-        
+
         // Reload the page to show updated review
         window.location.reload();
-        
+
     } catch (error) {
         console.error('Error updating review:', error);
         alert('Error updating review. Please try again.');
@@ -2308,10 +2458,10 @@ window.updateReview = async function(reviewId) {
 };
 
 // Global function to delete review
-window.deleteReview = async function(reviewId) {
+window.deleteReview = async function (reviewId) {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
             alert('Please log in to delete your review.');
             return;
@@ -2341,10 +2491,10 @@ window.deleteReview = async function(reviewId) {
 
         alert('Review deleted successfully!');
         closeReviewModal();
-        
+
         // Reload the page to show updated reviews
         window.location.reload();
-        
+
     } catch (error) {
         console.error('Error deleting review:', error);
         alert('Error deleting review. Please try again.');
@@ -2354,19 +2504,19 @@ window.deleteReview = async function(reviewId) {
 // Function to initialize URL-based course routing
 export async function initializeCourseRouting() {
     console.log('Initializing course routing with History API...');
-    
+
     try {
         // Handle route changes (both initial load and popstate events)
         const handleRouteChange = async () => {
             console.log('Handling route change for path:', window.location.pathname);
-            
+
             const params = parseCourseURL();
             if (params) {
                 console.log('Found course parameters in URL:', params);
-                
+
                 console.log('Searching for course...');
                 const course = await findCourseByParams(params.courseCode, params.year, params.term);
-                
+
                 if (course) {
                     console.log('Course found:', course.title);
                     await openCourseInfoMenu(course, false); // false to prevent URL update loop
@@ -2386,13 +2536,13 @@ export async function initializeCourseRouting() {
                 }
             }
         };
-        
+
         // Listen for popstate events (back/forward button)
         window.addEventListener('popstate', handleRouteChange);
-        
+
         // Handle initial page load
         await handleRouteChange();
-        
+
         // Intercept clicks on course links to use History API
         document.addEventListener('click', (event) => {
             const target = event.target.closest('a[href*="/course/"]');
@@ -2403,19 +2553,19 @@ export async function initializeCourseRouting() {
                 handleRouteChange();
             }
         });
-        
+
         console.log('Course routing initialized successfully');
-        
+
     } catch (error) {
         console.error('Error initializing course routing:', error);
     }
 }
 
 // Debug function to test course routing manually
-window.testCourseRouting = function() {
+window.testCourseRouting = function () {
     console.log('Testing course routing...');
     console.log('Current path:', window.location.pathname);
-    
+
     const params = parseCourseURL();
     if (params) {
         console.log('Parsed parameters:', params);
@@ -2433,9 +2583,9 @@ window.testCourseRouting = function() {
 };
 
 // Global function to share course URL
-window.shareCourseURL = function() {
+window.shareCourseURL = function () {
     const currentURL = window.location.href;
-    
+
     // Simple notification function
     function showNotification(message) {
         const notification = document.createElement('div');
@@ -2443,7 +2593,7 @@ window.shareCourseURL = function() {
         notification.textContent = message;
         notification.classList.add('show');
         document.body.appendChild(notification);
-        
+
         // Remove after 2 seconds
         setTimeout(() => {
             if (notification.parentNode) {
@@ -2451,7 +2601,7 @@ window.shareCourseURL = function() {
             }
         }, 2000);
     }
-    
+
     // Try to copy URL to clipboard
     if (navigator.clipboard) {
         navigator.clipboard.writeText(currentURL).then(() => {
@@ -2478,10 +2628,10 @@ window.shareCourseURL = function() {
 };
 
 // Global function to open course by URL programmatically
-window.openCourseByURL = function(courseCode, academicYear, term) {
+window.openCourseByURL = function (courseCode, academicYear, term) {
     const courseURL = generateCourseURL(courseCode, academicYear, term);
     window.history.pushState({}, '', courseURL);
-    
+
     // Trigger route change handling
     const params = parseCourseURL();
     if (params) {
@@ -2494,10 +2644,10 @@ window.openCourseByURL = function(courseCode, academicYear, term) {
             .catch(console.error);
     }
 };
-window.submitReview = async function(courseCode, academicYear, term) {
+window.submitReview = async function (courseCode, academicYear, term) {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
             // Use auth modal instead of alert
             if (window.authManager) {
@@ -2511,30 +2661,30 @@ window.submitReview = async function(courseCode, academicYear, term) {
         const ratingInput = document.getElementById('star-rating-input');
         const contentInput = document.getElementById('review-content');
         const yearInput = document.getElementById('course-year');
-        
+
         const rating = parseInt(ratingInput.dataset.selectedRating);
         const content = contentInput.value.trim();
         const selectedYear = parseInt(yearInput.value);
-        
+
         // Clear previous errors
         clearReviewFieldErrors();
-        
+
         let hasErrors = false;
-        
+
         // Validate rating
         if (!rating) {
             showReviewFieldError('star-rating', 'Please select a rating.');
             hasErrors = true;
         }
-        
+
         // Validate year
         if (!selectedYear) {
             showReviewFieldError('course-year', 'Please select the year when you took this course.');
             hasErrors = true;
         }
-        
+
         // Content is optional, so we don't validate it
-        
+
         if (hasErrors) {
             return;
         }
@@ -2564,10 +2714,10 @@ window.submitReview = async function(courseCode, academicYear, term) {
 
         alert('Review submitted successfully!');
         closeReviewModal();
-        
+
         // Refresh the course info to show updated reviews
         // You might want to reload the modal content here
-        
+
     } catch (error) {
         console.error('Error submitting review:', error);
         alert('Error submitting review. Please try again.');
@@ -2575,7 +2725,7 @@ window.submitReview = async function(courseCode, academicYear, term) {
 };
 
 // Helper function to render review (make it global for loadMoreReviews)
-window.renderReview = function(review, currentUserId = null) {
+window.renderReview = function (review, currentUserId = null) {
     // Create a simple data URL for avatar placeholder instead of external URL
     const createAvatarPlaceholder = (name) => {
         const initial = name.charAt(0).toUpperCase();
@@ -2583,29 +2733,29 @@ window.renderReview = function(review, currentUserId = null) {
         canvas.width = 40;
         canvas.height = 40;
         const ctx = canvas.getContext('2d');
-        
+
         // Create a circular background
         ctx.fillStyle = '#cccccc';
         ctx.fillRect(0, 0, 40, 40);
-        
+
         // Add initial text
         ctx.fillStyle = '#666666';
         ctx.font = '18px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(initial, 20, 20);
-        
+
         return canvas.toDataURL();
     };
-    
+
     const displayName = review.profiles?.display_name || 'Anonymous User';
     const avatarUrl = review.profiles?.avatar_url || createAvatarPlaceholder(displayName);
     const isOwnReview = currentUserId && review.user_id === currentUserId;
-    
+
     function renderStarRating(rating, size = 'small') {
         const stars = [];
         const sizeClass = size === 'large' ? 'star-large' : 'star-small';
-        
+
         for (let i = 1; i <= 5; i++) {
             if (i <= rating) {
                 stars.push(`<span class="star ${sizeClass} filled">★</span>`);
@@ -2618,13 +2768,13 @@ window.renderReview = function(review, currentUserId = null) {
 
     function formatDate(dateString) {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
         });
     }
-    
+
     return `
         <div class="review-item">
             <div class="review-header">
@@ -2669,45 +2819,45 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
             console.log('No session found');
             return { hasConflict: false, conflictingCourses: [] };
         }
-        
+
         // Get user profile with selected courses
         const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('courses_selection')
             .eq('id', session.user.id)
             .single();
-        
+
         console.log('Profile data:', profileData);
-        
+
         if (!profileData || !profileData.courses_selection || profileData.courses_selection.length === 0) {
             console.log('No courses selected yet');
             return { hasConflict: false, conflictingCourses: [] };
         }
-        
+
         // Filter courses by current year and term only
         const currentYearCourses = filterCoursesByCurrentYearTerm(profileData.courses_selection);
-        
+
         if (currentYearCourses.length === 0) {
             console.log('No courses selected for current year and term');
             return { hasConflict: false, conflictingCourses: [] };
         }
-        
+
         // Function to parse time slot to day and period
         function parseTimeSlot(slot) {
             console.log('Parsing time slot:', slot);
             if (!slot) return null;
-            
+
             // Japanese day mappings
             const dayMap = {
                 "月": "Monday",
-                "火": "Tuesday", 
+                "火": "Tuesday",
                 "水": "Wednesday",
                 "木": "Thursday",
                 "金": "Friday",
                 "土": "Saturday",
                 "日": "Sunday"
             };
-            
+
             // Try to match Japanese format: (月曜日1講時) or variants
             let match = slot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
             if (match) {
@@ -2721,12 +2871,12 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                 console.log('Japanese format matched:', result);
                 return result;
             }
-            
+
             // Try to match English format: "Monday 09:00 - 10:30" etc (both full and abbreviated day names)
             const englishMatch = slot.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-?\s*\d{2}:\d{2})/);
             if (englishMatch) {
                 const dayMap = {
-                    'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday', 
+                    'Mon': 'Monday', 'Tue': 'Tuesday', 'Wed': 'Wednesday',
                     'Thu': 'Thursday', 'Fri': 'Friday', 'Sat': 'Saturday', 'Sun': 'Sunday'
                 };
                 const fullDay = dayMap[englishMatch[1]] || englishMatch[1];
@@ -2738,26 +2888,26 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                 console.log('English format matched:', result);
                 return result;
             }
-            
+
             console.log('No format matched, returning original:', slot);
             return { original: slot };
         }
-        
+
         const newTimeSlot = parseTimeSlot(timeSlot);
         console.log('Parsed new time slot:', newTimeSlot);
         if (!newTimeSlot) return { hasConflict: false, conflictingCourses: [] };
-        
+
         // Get the current year and term from global variables or the course being checked
         const currentYear = academicYear;
         const currentTerm = getCurrentTerm(); // We'll need this function
         console.log('Current year/term:', currentYear, currentTerm);
-        
+
         // Fetch actual course details for selected courses to get their time slots
         const selectedCourseCodes = currentYearCourses.map(course => course.code);
         console.log('Selected course codes for current year/term:', selectedCourseCodes);
-        
+
         let conflictingCourseDetails = [];
-        
+
         if (selectedCourseCodes.length > 0) {
             // Fetch actual course data to get time slots
             console.log('Fetching course data for conflict check...');
@@ -2767,10 +2917,10 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                 .in('course_code', selectedCourseCodes)
                 .eq('academic_year', currentYear)
                 .eq('term', currentTerm);
-            
+
             console.log('Fetched courses data:', coursesData);
             console.log('Looking for conflicts with new course:', courseCode, 'with time slot:', timeSlot);
-            
+
             if (coursesData) {
                 console.log('Processing', coursesData.length, 'courses for conflicts');
                 // Check for time conflicts with fetched course data
@@ -2780,22 +2930,22 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                     console.log('Course time slot:', courseData.time_slot);
                     console.log('New course being added:', courseCode);
                     console.log('New course time slot:', timeSlot);
-                    
+
                     // Skip if it's the same course
                     if (courseData.course_code === courseCode) {
                         console.log('✓ Skipping same course (codes match):', courseData.course_code);
                         return false;
                     }
-                    
+
                     const existingTimeSlot = parseTimeSlot(courseData.time_slot);
                     console.log('Parsed existing time slot:', JSON.stringify(existingTimeSlot));
                     console.log('Parsed new time slot:', JSON.stringify(newTimeSlot));
-                    
+
                     if (!existingTimeSlot) {
                         console.log('✗ Could not parse existing time slot');
                         return false;
                     }
-                    
+
                     // Check for time conflicts
                     if (newTimeSlot.day && existingTimeSlot.day) {
                         console.log('Comparing days:', newTimeSlot.day, 'vs', existingTimeSlot.day);
@@ -2824,17 +2974,17 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                             // If one has period and one has time range, we need to convert to compare
                             if ((newTimeSlot.period && existingTimeSlot.timeRange) || (newTimeSlot.timeRange && existingTimeSlot.period)) {
                                 console.log('⚠️ Mixed time formats detected, attempting to convert for comparison');
-                                
+
                                 // Convert time ranges to periods for comparison
                                 const convertTimeRangeToPeriod = (timeRange) => {
                                     if (!timeRange) return null;
                                     // Extract start time
                                     const startTimeMatch = timeRange.match(/(\d{2}):(\d{2})/);
                                     if (!startTimeMatch) return null;
-                                    
+
                                     const startHour = parseInt(startTimeMatch[1]);
                                     const startMinute = parseInt(startTimeMatch[2]);
-                                    
+
                                     // Convert to period based on typical Japanese university schedule
                                     // Period 1: 09:00-10:30, Period 2: 10:45-12:15, Period 3: 13:15-14:45, Period 4: 15:00-16:30, Period 5: 16:45-18:15
                                     if (startHour === 9) return 1;
@@ -2843,15 +2993,15 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                                     if (startHour === 14 && startMinute >= 45) return 4;
                                     if (startHour === 15) return 4;  // 14:55-16:25 would be period 4
                                     if (startHour === 16 && startMinute >= 45) return 5;
-                                    
+
                                     return null;
                                 };
-                                
+
                                 let newPeriod = newTimeSlot.period ? parseInt(newTimeSlot.period) : convertTimeRangeToPeriod(newTimeSlot.timeRange);
                                 let existingPeriod = existingTimeSlot.period ? parseInt(existingTimeSlot.period) : convertTimeRangeToPeriod(existingTimeSlot.timeRange);
-                                
+
                                 console.log('Converted periods - New:', newPeriod, 'Existing:', existingPeriod);
-                                
+
                                 if (newPeriod && existingPeriod) {
                                     const isConflict = newPeriod === existingPeriod;
                                     console.log('Mixed format conflict result:', isConflict ? '❌ CONFLICT!' : '✓ No conflict');
@@ -2861,7 +3011,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                                     return false;
                                 }
                             }
-                            
+
                             console.log('⚠️ Unknown time format combination, assuming no conflict');
                             return false;
                         } else {
@@ -2870,23 +3020,23 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                     } else {
                         console.log('⚠️ Missing day information');
                     }
-                    
+
                     console.log('✓ No conflict found for course:', courseData.course_code);
                     return false;
                 });
-                
+
                 console.log('Found conflicts:', conflictingCourseDetails);
             }
         }
-        
+
         const result = {
             hasConflict: conflictingCourseDetails.length > 0,
             conflictingCourses: conflictingCourseDetails
         };
-        
+
         console.log('Final conflict result:', result);
         return result;
-        
+
     } catch (error) {
         console.error('Error checking time conflict:', error);
         return { hasConflict: false, conflictingCourses: [] };
@@ -2919,15 +3069,15 @@ function getCurrentTerm() {
 function isCurrentSemester() {
     const selectedYear = getCurrentYear();
     const selectedTerm = getCurrentTerm();
-    
+
     // Normalize selectedTerm (handle both "Fall" and "秋学期/Fall" formats)
     const normalizedSelectedTerm = selectedTerm.includes('/') ? selectedTerm.split('/')[1] : selectedTerm;
-    
+
     const today = new Date();
-    
+
     // Calculate semester start and end dates
     let semesterStart, semesterEnd;
-    
+
     if (normalizedSelectedTerm === 'Spring') {
         // Spring: April 1 - July 31
         semesterStart = new Date(selectedYear, 3, 1); // April 1 (month is 0-indexed)
@@ -2937,7 +3087,7 @@ function isCurrentSemester() {
         semesterStart = new Date(selectedYear, 9, 1); // October 1
         semesterEnd = new Date(selectedYear + 1, 1, 28, 23, 59, 59); // January 31 next year
     }
-    
+
     // Check if today is within the semester date range
     return today >= semesterStart && today <= semesterEnd;
 }
@@ -2946,7 +3096,7 @@ function isCurrentSemester() {
 function filterCoursesByCurrentYearTerm(coursesSelection) {
     const currentYear = getCurrentYear();
     const currentTerm = getCurrentTerm();
-    
+
     return coursesSelection.filter(course => {
         // Match by year, and if term is specified in the selection, match by term too
         return course.year === currentYear && (!course.term || course.term === currentTerm);
@@ -2966,11 +3116,11 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     if (existingModal) {
         existingModal.remove();
     }
-    
+
     // Create modal container
     const modalContainer = document.createElement('div');
     modalContainer.className = 'conflict-container hidden';
-    
+
     modalContainer.innerHTML = `
         <div class="search-background">
             <div class="search-modal">
@@ -3000,15 +3150,15 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             </div>
         </div>
     `;
-    
+
     // Add to body
     document.body.appendChild(modalContainer);
-    
+
     // Add event listeners
     const cancelBtn = modalContainer.querySelector('.conflict-cancel');
     const replaceBtn = modalContainer.querySelector('.conflict-replace');
     const background = modalContainer.querySelector('.search-background');
-    
+
     function closeModal() {
         modalContainer.classList.add('hidden');
         setTimeout(() => {
@@ -3016,7 +3166,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         }, 300);
         if (onResolve) onResolve(false);
     }
-    
+
     function replaceAndAdd() {
         modalContainer.classList.add('hidden');
         setTimeout(() => {
@@ -3024,7 +3174,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         }, 300);
         if (onResolve) onResolve(true, conflictingCourses);
     }
-    
+
     cancelBtn.addEventListener('click', closeModal);
     replaceBtn.addEventListener('click', replaceAndAdd);
     background.addEventListener('click', (e) => {
@@ -3042,52 +3192,52 @@ function addSwipeToClose(modal, background) {
     let isDragging = false;
     let modalState = 'semi-open'; // 'semi-open', 'fully-open', 'closed'
     let dragStarted = false;
-    
+
     const threshold = 200; // Much higher threshold - user must swipe almost all the way down
     const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
-    
+
     // Get the content wrapper for scroll detection
     const contentWrapper = modal.querySelector('.class-content-wrapper');
-    
+
     // Check if we're on mobile
     const isMobile = () => window.innerWidth <= 780;
-    
+
     function handleTouchStart(e) {
         if (!isMobile()) return;
-        
+
         startY = e.touches[0].clientY;
         currentY = startY;
         startTime = Date.now();
         isDragging = false;
         dragStarted = false;
-        
+
         // Determine current modal state
         if (modal.classList.contains('fully-open')) {
             modalState = 'fully-open';
         } else if (modal.classList.contains('show')) {
             modalState = 'semi-open';
         }
-        
+
         console.log('Touch start, modalState:', modalState);
     }
-    
+
     function handleTouchMove(e) {
         if (!isMobile()) return;
-        
+
         currentY = e.touches[0].clientY;
         const deltaY = currentY - startY;
         const absDeltaY = Math.abs(deltaY);
-        
+
         // Check if content can scroll
         const isAtTop = contentWrapper ? contentWrapper.scrollTop <= 0 : true;
-        const isAtBottom = contentWrapper ? 
+        const isAtBottom = contentWrapper ?
             contentWrapper.scrollTop + contentWrapper.clientHeight >= contentWrapper.scrollHeight - 1 : true;
-        const hasScrollableContent = contentWrapper ? 
+        const hasScrollableContent = contentWrapper ?
             contentWrapper.scrollHeight > contentWrapper.clientHeight : false;
-        
+
         // Determine if we should handle this gesture
         let shouldHandleGesture = false;
-        
+
         if (deltaY < 0) {
             // Swiping up
             if (modalState === 'semi-open' && isAtTop) {
@@ -3110,7 +3260,7 @@ function addSwipeToClose(modal, background) {
                 shouldHandleGesture = true;
             }
         }
-        
+
         if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
             if (!dragStarted) {
                 dragStarted = true;
@@ -3118,10 +3268,10 @@ function addSwipeToClose(modal, background) {
                 modal.classList.add('swiping');
                 console.log('Started gesture, direction:', deltaY < 0 ? 'up' : 'down');
             }
-            
+
             // Prevent scrolling when we're handling the gesture
             e.preventDefault();
-            
+
             // Apply transform based on gesture using CSS custom properties
             if (deltaY < 0 && modalState === 'semi-open') {
                 // Expanding from semi-open to fully-open
@@ -3129,22 +3279,22 @@ function addSwipeToClose(modal, background) {
                 const translateY = 20 - (20 * progress);
                 modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
                 modal.style.transition = 'none';
-                
+
             } else if (deltaY > 0) {
                 // Collapsing or closing - use consistent maxDrag like search-modal
                 const maxDrag = 300; // Same as search-modal for consistent velocity
                 const progress = Math.min(deltaY / maxDrag, 1);
-                
+
                 if (modalState === 'fully-open') {
                     // From fully-open to semi-open - NO fading, just transform
                     const translateY = 0 + (20 * progress);
                     modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
-                    
+
                 } else if (modalState === 'semi-open') {
                     // From semi-open to closing - fade the MODAL itself like search-modal
                     const translateY = 20 + (80 * progress);
                     modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
-                    
+
                     // Fade the modal itself (not background) - same calculation as search-modal
                     const opacity = Math.max(0.2, 1 - progress * 0.8);
                     modal.style.opacity = opacity;
@@ -3156,7 +3306,7 @@ function addSwipeToClose(modal, background) {
             isDragging = false;
             dragStarted = false;
             modal.classList.remove('swiping');
-            
+
             // Snap back to current state using CSS custom properties
             modal.style.transition = 'transform 0.3s ease-out';
             if (modalState === 'fully-open') {
@@ -3165,25 +3315,25 @@ function addSwipeToClose(modal, background) {
                 modal.style.setProperty('--modal-translate-y', '20vh');
             }
             modal.style.opacity = '1'; // Reset modal opacity
-            
+
             console.log('Released gesture, allowing content scroll');
         }
-        
+
         // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
     }
-    
+
     function handleTouchEnd(e) {
         if (!isMobile() || !dragStarted) return;
-        
+
         const deltaY = currentY - startY;
         const duration = Date.now() - startTime;
         const velocity = Math.abs(deltaY) / duration; // pixels per ms
-        
+
         modal.classList.remove('swiping');
         modal.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)'; // Instagram-like easing
-        
+
         console.log('Touch end - deltaY:', deltaY, 'velocity:', velocity, 'modalState:', modalState);
-        
+
         // Determine final state based on distance and velocity using CSS custom properties
         if (deltaY < 0 && modalState === 'semi-open') {
             // Swiping up from semi-open
@@ -3199,7 +3349,7 @@ function addSwipeToClose(modal, background) {
                 modal.style.opacity = '1'; // Reset opacity when snapping back
                 console.log('Snapped back to semi-open');
             }
-            
+
         } else if (deltaY > 0) {
             // Swiping down
             if (modalState === 'fully-open') {
@@ -3214,22 +3364,22 @@ function addSwipeToClose(modal, background) {
                     modal.style.setProperty('--modal-translate-y', '0');
                     console.log('Snapped back to fully open');
                 }
-                
+
             } else if (modalState === 'semi-open') {
                 if (deltaY > threshold || velocity > velocityThreshold) {
                     // Close modal with same animation as search-modal
                     modal.style.setProperty('--modal-translate-y', '100vh');
                     background.style.opacity = '0';
                     background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                    
+
                     setTimeout(() => {
                         document.body.style.overflow = "auto";
                         window.history.pushState({}, '', '/');
-                        
+
                         if (background.parentNode) {
                             background.parentNode.removeChild(background);
                         }
-                        
+
                         // Reset all styles after closing
                         modal.style.removeProperty('--modal-translate-y');
                         modal.style.transition = '';
@@ -3238,7 +3388,7 @@ function addSwipeToClose(modal, background) {
                         background.style.transition = '';
                         modal.classList.remove('show', 'fully-open');
                     }, 400);
-                    
+
                     console.log('Closed class-info modal with swipe');
                     return;
                 } else {
@@ -3249,7 +3399,7 @@ function addSwipeToClose(modal, background) {
                 }
             }
         }
-        
+
         // Reset modal opacity and clear inline styles after animation
         modal.style.opacity = '1';
         setTimeout(() => {
@@ -3261,29 +3411,29 @@ function addSwipeToClose(modal, background) {
                 modal.style.removeProperty('--modal-translate-y');
             }
         }, 400);
-        
+
         isDragging = false;
         dragStarted = false;
     }
-    
+
     function closeModal() {
         console.log('Closing class-info modal');
         const isMobile = window.innerWidth <= 780;
-        
+
         if (isMobile) {
             // Use same closing animation as search-modal - apply CSS custom property for smooth exit
             modal.style.setProperty('--modal-translate-y', '100vh');
             background.style.opacity = '0';
             background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-            
+
             setTimeout(() => {
                 document.body.style.overflow = "auto";
                 window.history.pushState({}, '', '/');
-                
+
                 if (background.parentNode) {
                     background.parentNode.removeChild(background);
                 }
-                
+
                 // Reset all styles after closing
                 modal.style.removeProperty('--modal-translate-y');
                 modal.style.transition = '';
@@ -3295,15 +3445,15 @@ function addSwipeToClose(modal, background) {
         } else {
             // Desktop close
             modal.classList.remove("show");
-            
+
             setTimeout(() => {
                 document.body.style.overflow = "auto";
                 window.history.pushState({}, '', '/');
-                
+
                 if (background.parentNode) {
                     background.parentNode.removeChild(background);
                 }
-                
+
                 // Clean up all styles
                 modal.style.removeProperty('--modal-translate-y');
                 modal.style.transform = '';
@@ -3315,16 +3465,16 @@ function addSwipeToClose(modal, background) {
             }, 400);
         }
     }
-    
+
     // Add touch event listeners
     modal.addEventListener('touchstart', handleTouchStart, { passive: false });
     modal.addEventListener('touchmove', handleTouchMove, { passive: false });
     modal.addEventListener('touchend', handleTouchEnd, { passive: false });
-    
+
     // Clean up listeners when modal is removed
     const originalRemove = background.remove || background.parentNode?.removeChild?.bind(background.parentNode);
     if (originalRemove) {
-        background.remove = function() {
+        background.remove = function () {
             modal.removeEventListener('touchstart', handleTouchStart);
             modal.removeEventListener('touchmove', handleTouchMove);
             modal.removeEventListener('touchend', handleTouchEnd);
@@ -3341,40 +3491,40 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     let startTime = 0;
     let isDragging = false;
     let dragStarted = false;
-    
+
     const threshold = 200; // Much higher threshold - user must swipe almost all the way down
     const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
-    
+
     // Check if we're on mobile
     const isMobile = () => window.innerWidth <= 780;
-    
+
     function handleTouchStart(e) {
         if (!isMobile()) return;
-        
+
         startY = e.touches[0].clientY;
         currentY = startY;
         startTime = Date.now();
         isDragging = false;
         dragStarted = false;
-        
+
         console.log('Simple modal touch start on:', modal.className);
     }
-    
+
     function handleTouchMove(e) {
         if (!isMobile()) return;
-        
+
         currentY = e.touches[0].clientY;
         const deltaY = currentY - startY;
         const absDeltaY = Math.abs(deltaY);
-        
+
         // Find the scrollable content element - for filter modal it's .filter-content
         let scrollableElement = modal.querySelector('.filter-content') || modal;
-        
+
         // Check if modal content can scroll
         const hasScrollableContent = scrollableElement.scrollHeight > scrollableElement.clientHeight;
         const isAtTop = scrollableElement.scrollTop <= 0;
         const isAtBottom = scrollableElement.scrollTop + scrollableElement.clientHeight >= scrollableElement.scrollHeight - 1;
-        
+
         // Only handle gestures appropriately based on scroll position and direction
         let shouldHandleGesture = false;
         if (deltaY > 0) {
@@ -3382,9 +3532,9 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
             shouldHandleGesture = isAtTop || !hasScrollableContent;
         }
         // Note: Upward swipes (deltaY < 0) are never handled - let content scroll naturally
-        
+
         console.log('Touch move - deltaY:', deltaY, 'shouldHandle:', shouldHandleGesture, 'isAtTop:', isAtTop, 'hasScrollable:', hasScrollableContent);
-        
+
         if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
             if (!dragStarted) {
                 dragStarted = true;
@@ -3392,54 +3542,54 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
                 modal.classList.add('swiping');
                 console.log('Started simple modal gesture');
             }
-            
+
             // Prevent scrolling when we're handling the gesture
             e.preventDefault();
-            
+
             // Apply transform using CSS custom property to bypass !important
             const translateY = `${deltaY}px`;
             modal.style.setProperty('--modal-translate-y', translateY);
-            
+
             // Fade background
             const maxDrag = 300;
             const progress = Math.min(deltaY / maxDrag, 1);
             const opacity = Math.max(0.2, 1 - progress * 0.8);
             background.style.opacity = opacity;
-            
+
         } else if (dragStarted && !shouldHandleGesture) {
             // User started gesture but now content should scroll - release gesture
             isDragging = false;
             dragStarted = false;
             modal.classList.remove('swiping');
-            
+
             // Snap back to normal position using CSS custom property
             modal.style.setProperty('--modal-translate-y', '0');
             background.style.opacity = '1';
-            
+
             console.log('Released simple modal gesture, allowing content scroll');
         }
-        
+
         // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
     }
-    
+
     function handleTouchEnd(e) {
         if (!isMobile() || !dragStarted) return;
-        
+
         const deltaY = currentY - startY;
         const duration = Date.now() - startTime;
         const velocity = Math.abs(deltaY) / duration; // pixels per ms
-        
+
         modal.classList.remove('swiping');
-        
+
         console.log('Simple modal touch end - deltaY:', deltaY, 'velocity:', velocity);
-        
+
         // Determine if should close based on distance and velocity
         if (deltaY > threshold || velocity > velocityThreshold) {
             // Close the modal with swipe animation - use CSS custom property
             modal.style.setProperty('--modal-translate-y', '100vh');
             background.style.opacity = '0';
             background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-            
+
             setTimeout(() => {
                 // Call the callback directly to avoid double animation
                 closeCallback();
@@ -3449,33 +3599,33 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
                 background.style.transition = '';
                 modal.classList.remove('show');
             }, 400);
-            
+
             console.log('Closed simple modal');
         } else {
             // Snap back to normal position using CSS custom property
             modal.style.setProperty('--modal-translate-y', '0');
             background.style.opacity = '1';
-            
+
             console.log('Snapped simple modal back');
         }
-        
+
         // Clear transition after animation
         setTimeout(() => {
             if (modal.style.transition) {
                 modal.style.transition = '';
             }
         }, 400);
-        
+
         isDragging = false;
         dragStarted = false;
     }
-    
+
     // Attach event listeners
     console.log('Attaching touch event listeners to modal:', modal.className);
     modal.addEventListener('touchstart', handleTouchStart, { passive: false });
     modal.addEventListener('touchmove', handleTouchMove, { passive: false });
     modal.addEventListener('touchend', handleTouchEnd, { passive: false });
-    
+
     // Store references for cleanup if needed
     modal._swipeHandlers = {
         touchstart: handleTouchStart,

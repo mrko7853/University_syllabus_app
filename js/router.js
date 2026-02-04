@@ -7,23 +7,24 @@ class SimpleRouter {
   constructor() {
     this.routes = {
       '/': '/index.html',
-      '/courses': '/index.html', 
+      '/courses': '/index.html',
       '/dashboard': '/index.html', // Legacy redirect
       '/calendar': '/calendar.html',
+      '/assignments': '/assignments.html',
       '/profile': '/profile.html',
       '/login': '/login.html',
       '/register': '/register.html',
       '/settings': '/profile.html', // For now, settings goes to profile
       '/help': '/profile.html' // For now, help goes to profile
     }
-    
+
     // Course URL pattern: /course/courseCode/year/term
     this.coursePattern = /^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/
-    
+
     this.currentPath = window.location.pathname
     this.isInitialized = false
     this.componentCleanupFunctions = []
-    
+
     // State persistence for courses page
     this.coursesPageState = {
       year: null,
@@ -31,20 +32,20 @@ class SimpleRouter {
       searchQuery: null,
       filters: null
     }
-    
+
     // Page caching - keeps pages in DOM but hidden
     this.pageCache = new Map()
     this.pageCacheInitialized = new Map()
-    
+
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
-    
+
     // Load styles immediately
     this.addLockedPageStyles()
-    
+
     // Create loading bar
     this.createLoadingBar()
-    
+
     this.init()
   }
 
@@ -75,13 +76,13 @@ class SimpleRouter {
       const button = e.target.closest('button[data-route]')
       if (button) {
         e.preventDefault()
-        
+
         // Special handling for search button - open modal instead of navigating
         if (button.dataset.route === '/search') {
           this.openSearchModal()
           return
         }
-        
+
         this.navigate(button.dataset.route)
       }
     })
@@ -89,7 +90,7 @@ class SimpleRouter {
     // Load initial page
     const currentPath = window.location.pathname
     const basePath = this.extractBasePath(currentPath)
-    
+
     if (basePath === '/' || basePath === '' || basePath === '/courses' || basePath === '/dashboard') {
       // For courses page on initial load, just initialize without modifying DOM
       this.currentPath = '/courses'
@@ -102,32 +103,32 @@ class SimpleRouter {
       }
       this.loadPage(currentPath)
     }
-    
+
     this.isInitialized = true
   }
 
   shouldIntercept(link) {
     const href = link.getAttribute('href')
-    
+
     // Skip external links
     if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('tel:')) {
       return false
     }
-    
+
     // Skip links with target="_blank"
     if (link.target === '_blank') {
       return false
     }
-    
+
     return true
   }
 
   // Check if currently on the courses page
   isOnCoursesPage() {
-    return this.currentPath === '/' || 
-           this.currentPath === '/courses' || 
-           this.currentPath === '/dashboard' ||
-           this.currentPath === ''
+    return this.currentPath === '/' ||
+      this.currentPath === '/courses' ||
+      this.currentPath === '/dashboard' ||
+      this.currentPath === ''
   }
 
   navigate(path) {
@@ -135,10 +136,10 @@ class SimpleRouter {
     if (path.includes(window.location.origin)) {
       path = path.replace(window.location.origin, '')
     }
-    
+
     // Handle route parameters (e.g., /profile/uuid)
     const cleanPath = this.extractBasePath(path)
-    
+
     // Normalize path
     if (cleanPath === '' || cleanPath === '/') {
       path = '/courses'
@@ -194,40 +195,40 @@ class SimpleRouter {
   async loadPage(path) {
     // Show loading bar
     this.showLoadingBar()
-    
+
     // Save courses page state before navigating away
     if (this.isOnCoursesPage()) {
       this.saveCoursesPageState()
     }
-    
+
     // Check if this is a course URL first
     const courseMatch = path.match(this.coursePattern)
     if (courseMatch) {
       // This is a course URL - redirect to dashboard and handle course opening
       const [, courseCode, year, term] = courseMatch
       console.log('Course URL detected:', { courseCode, year, term })
-      
+
       // Load courses page first
       const basePath = '/courses'
       this.currentPath = basePath
-      
+
       try {
         // Clean up current page first
         this.cleanupCurrentPage()
-        
+
         // Load dashboard HTML with cache busting
         const response = await fetch('/index.html?t=' + Date.now())
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-        
+
         const html = await response.text()
         document.body.innerHTML = html
-        
+
         // Initialize courses page components
         await this.reinitializeEverything('/courses')
-        
+
         // Update active navigation to show courses as active
         this.updateActiveNav('/courses')
-        
+
         // Wait for components to be ready, then open the course
         setTimeout(async () => {
           try {
@@ -243,7 +244,7 @@ class SimpleRouter {
             console.error('Error opening course from URL:', error)
           }
         }, 1000)
-        
+
         this.hideLoadingBar()
         return
       } catch (error) {
@@ -252,15 +253,15 @@ class SimpleRouter {
         return
       }
     }
-    
+
     // Extract base path for route matching
     const basePath = this.extractBasePath(path)
     this.currentPath = basePath
-    
+
     // Check if user is authenticated for protected routes
     const isProtectedRoute = this.isProtectedRoute(basePath)
     const isAuthenticated = await this.checkAuthentication()
-    
+
     // Get the HTML file for this route
     const htmlFile = this.routes[basePath]
     if (!htmlFile) {
@@ -276,65 +277,65 @@ class SimpleRouter {
         this.hideLoadingBar()
         return
       }
-      
+
       // Update loading progress
       this.updateLoadingProgress(30)
-      
+
       // Fetch the HTML content
       const response = await fetch(htmlFile + '?t=' + Date.now())
       if (!response.ok) {
         throw new Error(`Failed to load ${htmlFile}`)
       }
-      
+
       const html = await response.text()
-      
+
       // Update loading progress
       this.updateLoadingProgress(60)
-      
+
       // Parse the HTML
       const parser = new DOMParser()
       const doc = parser.parseFromString(html, 'text/html')
-      
+
       // Extract the content we want (everything except navigation)
       const newContent = doc.querySelector('#app-content') || doc.querySelector('section') || doc.body
-      
+
       // Update the page content
       const appContent = document.querySelector('#app-content')
       if (newContent && appContent) {
         // Clear existing content first
         appContent.innerHTML = ''
-        
+
         // Clone and append nodes
         Array.from(newContent.childNodes).forEach(node => {
           const clonedNode = node.cloneNode(true)
           appContent.appendChild(clonedNode)
         })
-        
+
         console.log('Router: Page content updated')
       }
-      
+
       // Update loading progress
       this.updateLoadingProgress(80)
-      
+
       // Update active navigation
       this.updateActiveNav(basePath)
-      
+
       // Re-initialize everything for the new content
       await this.reinitializeEverything(basePath)
-      
+
       // Update loading progress
       this.updateLoadingProgress(95)
-      
+
       // ALWAYS check for guest dashboard on ANY courses page load (including first load)
       if (basePath === '/courses' || basePath === '/dashboard' || basePath === '/' || this.routes[basePath] === '/index.html') {
         const isAuthenticated = await this.checkAuthentication()
         this.handleGuestDashboard(isAuthenticated)
       }
-      
+
       // Complete loading
       this.updateLoadingProgress(100)
       setTimeout(() => this.hideLoadingBar(), 200)
-      
+
     } catch (error) {
       console.error('Error loading page:', error)
       this.hideLoadingBar()
@@ -345,23 +346,23 @@ class SimpleRouter {
   async initializeCurrentPageOnly(path) {
     try {
       console.log('Router: Initializing current page only (no HTML fetch):', path)
-      
+
       // Check authentication status
       const isAuthenticated = await this.checkAuthentication()
-      
+
       // Update active navigation
       this.updateActiveNav(path)
-      
+
       // Re-initialize everything for the current content
       await this.reinitializeEverything(path)
-      
+
       // Handle guest dashboard if on courses page
       if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
         this.handleGuestDashboard(isAuthenticated)
       }
-      
+
       console.log('Router: Current page initialized successfully')
-      
+
     } catch (error) {
       console.error('Error initializing current page:', error)
     }
@@ -373,7 +374,7 @@ class SimpleRouter {
       el.classList.remove('active')
       el.classList.add('false')
     })
-    
+
     // Add active class and remove false class from current page button
     const activeButton = document.querySelector(`[data-route="${currentPath}"]`)
     if (activeButton) {
@@ -386,38 +387,43 @@ class SimpleRouter {
     try {
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 10))
-      
+
       // Check authentication status for UI modifications
       const isAuthenticated = await this.checkAuthentication()
-      
+
       // Re-import and reinitialize main.js functionality if on courses/index
       if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
         await this.initializeDashboard()
         // Hide top content for guest users on courses page
         this.handleGuestDashboard(isAuthenticated)
       }
-      
+
       // Re-import and reinitialize calendar.js functionality if on calendar
       if (path === '/calendar' || this.routes[path] === '/calendar.html') {
         await this.initializeCalendar()
       }
-      
+
       // Re-import and reinitialize profile.js functionality if on profile
       if (path === '/profile' || this.routes[path] === '/profile.html') {
         await this.initializeProfile()
       }
 
+      // Re-import and reinitialize assignments.js functionality if on assignments
+      if (path === '/assignments' || this.routes[path] === '/assignments.html') {
+        await this.initializeAssignments()
+      }
+
       // Initialize shared functionality for all pages
       await this.initializeShared()
-      
+
       // Force component reinitialization
       this.forceComponentReinitialization()
-      
+
       // Dispatch page loaded event
-      document.dispatchEvent(new CustomEvent('pageLoaded', { 
-        detail: { path: path } 
+      document.dispatchEvent(new CustomEvent('pageLoaded', {
+        detail: { path: path }
       }))
-      
+
     } catch (error) {
       console.error('Error reinitializing page:', error)
     }
@@ -428,55 +434,55 @@ class SimpleRouter {
       // Check if we're actually on a dashboard/courses page
       const courseList = document.getElementById('course-list');
       const semesterSelect = document.getElementById('semester-select');
-      
+
       if (!courseList && !semesterSelect) {
         console.log('Router: Not on dashboard page, skipping dashboard initialization');
         return;
       }
-      
+
       // Check if we have saved state to restore
       const hasSavedState = this.coursesPageState.year || this.coursesPageState.term
-      
+
       // In production, modules are already bundled and available
       if (this.isProduction()) {
         // Call initialization functions directly if they exist
         if (window.initializeDashboard) {
           await window.initializeDashboard()
         }
-        
+
         // Note: updateCoursesAndFilters is now called inside initializeDashboard
       } else {
         // Re-import main.js to get fresh instances (dev mode only)
         const mainModule = await import('./main.js?' + Date.now())
-        
+
         // Call the initialization function
         if (mainModule.initializeDashboard) {
           await mainModule.initializeDashboard()
         }
       }
-      
+
       // Initialize year/term selectors
       this.initializeYearTermSelectors()
-      
+
       // Initialize course search and filtering
       this.initializeCourseSearch()
-      
+
       // Initialize dashboard-specific components
       this.initializeDashboardComponents()
-      
+
       // Set up global year/term tracking
       this.setupGlobalYearTermTracking()
-      
+
       // Restore saved state AFTER initialization completes
       // This will override the defaults and reload courses with saved year/term
       if (hasSavedState) {
         // Give DOM time to settle, then restore state and reload courses
         setTimeout(() => this.restoreCoursesPageStateWithReload(), 150)
       }
-      
+
       // Set up state persistence listeners
       this.setupCoursesPageStatePersistence()
-      
+
     } catch (error) {
       console.error('Error initializing dashboard:', error)
     }
@@ -485,33 +491,33 @@ class SimpleRouter {
   // Restore state and reload courses with the saved year/term
   async restoreCoursesPageStateWithReload() {
     console.log('Restoring courses page state with reload:', this.coursesPageState)
-    
+
     const yearSelect = document.getElementById('year-select')
     const termSelect = document.getElementById('term-select')
-    
+
     let needsReload = false
-    
+
     // Restore year
     if (this.coursesPageState.year && yearSelect && yearSelect.value !== this.coursesPageState.year) {
       yearSelect.value = this.coursesPageState.year
       needsReload = true
     }
-    
+
     // Restore term
     if (this.coursesPageState.term && termSelect && termSelect.value !== this.coursesPageState.term) {
       termSelect.value = this.coursesPageState.term
       needsReload = true
     }
-    
+
     // Update the custom semester dropdown to match
     if (this.coursesPageState.year && this.coursesPageState.term) {
       this.updateSemesterDropdown(this.coursesPageState.year, this.coursesPageState.term)
     }
-    
+
     // If year/term changed, reload the courses
     if (needsReload) {
       console.log('Reloading courses with saved year/term:', this.coursesPageState.year, this.coursesPageState.term)
-      
+
       // Use window.showCourse to reload courses with the correct year/term
       if (window.showCourse) {
         await window.showCourse(this.coursesPageState.year, this.coursesPageState.term)
@@ -520,38 +526,38 @@ class SimpleRouter {
         await window.updateCoursesAndFilters()
       }
     }
-    
+
     // Restore search query after courses are loaded
     if (this.coursesPageState.searchQuery) {
       setTimeout(() => {
         window.currentSearchQuery = this.coursesPageState.searchQuery
-        
+
         // Update desktop search pill input
         const searchPillInput = document.getElementById('search-pill-input')
         if (searchPillInput) {
           searchPillInput.value = this.coursesPageState.searchQuery
         }
-        
+
         // Update modal search input as well
         const searchInput = document.getElementById('search-input')
         if (searchInput) {
           searchInput.value = this.coursesPageState.searchQuery
         }
-        
+
         // Apply the search
         if (window.performSearch) {
           window.performSearch(this.coursesPageState.searchQuery)
         } else if (window.applySearchAndFilters) {
           window.applySearchAndFilters(this.coursesPageState.searchQuery)
         }
-        
+
         // Update filter paragraph
         if (window.updateCourseFilterParagraph) {
           setTimeout(() => window.updateCourseFilterParagraph(), 100)
         }
       }, 300)
     }
-    
+
     // Restore filters if any
     if (this.coursesPageState.filters) {
       setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
@@ -562,14 +568,14 @@ class SimpleRouter {
   saveCoursesPageState() {
     const yearSelect = document.getElementById('year-select')
     const termSelect = document.getElementById('term-select')
-    
+
     this.coursesPageState = {
       year: yearSelect ? yearSelect.value : null,
       term: termSelect ? termSelect.value : null,
       searchQuery: window.currentSearchQuery || null,
       filters: this.getActiveFilters()
     }
-    
+
     console.log('Saved courses page state:', this.coursesPageState)
   }
 
@@ -580,57 +586,57 @@ class SimpleRouter {
       console.log('No saved courses page state to restore')
       return
     }
-    
+
     console.log('Restoring courses page state:', this.coursesPageState)
-    
+
     const yearSelect = document.getElementById('year-select')
     const termSelect = document.getElementById('term-select')
-    
+
     let needsRefresh = false
-    
+
     // Restore year
     if (this.coursesPageState.year && yearSelect && yearSelect.value !== this.coursesPageState.year) {
       yearSelect.value = this.coursesPageState.year
       needsRefresh = true
     }
-    
+
     // Restore term
     if (this.coursesPageState.term && termSelect && termSelect.value !== this.coursesPageState.term) {
       termSelect.value = this.coursesPageState.term
       needsRefresh = true
     }
-    
+
     // Update the custom semester dropdown if it exists
     if (needsRefresh && this.coursesPageState.year && this.coursesPageState.term) {
       this.updateSemesterDropdown(this.coursesPageState.year, this.coursesPageState.term)
     }
-    
+
     // Trigger refresh if year/term changed
     if (needsRefresh) {
       // Dispatch change events to trigger data refresh
       if (yearSelect) yearSelect.dispatchEvent(new Event('change', { bubbles: true }))
       if (termSelect) termSelect.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    
+
     // Restore search query after a delay to ensure courses are loaded
     if (this.coursesPageState.searchQuery) {
       setTimeout(() => {
         window.currentSearchQuery = this.coursesPageState.searchQuery
-        
+
         // Apply the search
         if (window.performSearch) {
           window.performSearch(this.coursesPageState.searchQuery)
         } else if (window.applySearchAndFilters) {
           window.applySearchAndFilters(this.coursesPageState.searchQuery)
         }
-        
+
         // Update filter paragraph
         if (window.updateCourseFilterParagraph) {
           setTimeout(() => window.updateCourseFilterParagraph(), 100)
         }
       }, 300)
     }
-    
+
     // Restore filters if any
     if (this.coursesPageState.filters) {
       setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
@@ -644,55 +650,55 @@ class SimpleRouter {
       days: [],
       periods: []
     }
-    
+
     // Get type filters
     document.querySelectorAll('#filter-by-type input[type="checkbox"]:checked').forEach(cb => {
       filters.types.push(cb.value)
     })
-    
+
     // Get day filters
     document.querySelectorAll('#filter-by-days input[type="checkbox"]:checked').forEach(cb => {
       filters.days.push(cb.value)
     })
-    
+
     // Get period/time filters
     document.querySelectorAll('#filter-by-time input[type="checkbox"]:checked').forEach(cb => {
       filters.periods.push(cb.value)
     })
-    
+
     // Only return if there are active filters
     if (filters.types.length > 0 || filters.days.length > 0 || filters.periods.length > 0) {
       return filters
     }
-    
+
     return null
   }
 
   // Restore filters
   restoreFilters(filters) {
     if (!filters) return
-    
+
     // Restore type filters
     if (filters.types && filters.types.length > 0) {
       document.querySelectorAll('#filter-by-type input[type="checkbox"]').forEach(cb => {
         cb.checked = filters.types.includes(cb.value)
       })
     }
-    
+
     // Restore day filters
     if (filters.days && filters.days.length > 0) {
       document.querySelectorAll('#filter-by-days input[type="checkbox"]').forEach(cb => {
         cb.checked = filters.days.includes(cb.value)
       })
     }
-    
+
     // Restore period/time filters
     if (filters.periods && filters.periods.length > 0) {
       document.querySelectorAll('#filter-by-time input[type="checkbox"]').forEach(cb => {
         cb.checked = filters.periods.includes(cb.value)
       })
     }
-    
+
     // Apply filters
     if (window.applySearchAndFilters) {
       window.applySearchAndFilters(this.coursesPageState.searchQuery || '')
@@ -703,26 +709,26 @@ class SimpleRouter {
   setupCoursesPageStatePersistence() {
     const yearSelect = document.getElementById('year-select')
     const termSelect = document.getElementById('term-select')
-    
+
     // Listen for year/term changes
     const saveState = () => {
       this.saveCoursesPageState()
     }
-    
+
     if (yearSelect) {
       yearSelect.addEventListener('change', saveState)
       this.componentCleanupFunctions.push(() => {
         yearSelect.removeEventListener('change', saveState)
       })
     }
-    
+
     if (termSelect) {
       termSelect.addEventListener('change', saveState)
       this.componentCleanupFunctions.push(() => {
         termSelect.removeEventListener('change', saveState)
       })
     }
-    
+
     // Listen for search changes via global variable
     const originalPerformSearch = window.performSearch
     if (originalPerformSearch) {
@@ -732,7 +738,7 @@ class SimpleRouter {
         return result
       }
     }
-    
+
     // Also watch for filter changes
     document.querySelectorAll('#filter-by-type input, #filter-by-days input, #filter-by-time input').forEach(input => {
       const filterChangeHandler = () => {
@@ -748,19 +754,19 @@ class SimpleRouter {
   async initializeCalendar() {
     try {
       console.log('Router: Initializing calendar page...');
-      
+
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // Check if we have the required elements
       const semesterSelect = document.getElementById('semester-select');
       const courseListPlaceholder = document.getElementById('course-list');
-      
+
       console.log('Router: Found elements:', {
         semesterSelect: !!semesterSelect,
         courseListPlaceholder: !!courseListPlaceholder
       });
-      
+
       // Populate semester dropdown - MUST happen first
       console.log('Router: Calling populateSemesterDropdown...');
       if (window.populateSemesterDropdown) {
@@ -769,7 +775,7 @@ class SimpleRouter {
       } else {
         console.error('Router: populateSemesterDropdown not available');
       }
-      
+
       // Initialize custom selects - MUST happen after dropdown population
       console.log('Router: Calling initializeCustomSelects...');
       if (window.initializeCustomSelects) {
@@ -778,7 +784,7 @@ class SimpleRouter {
       } else {
         console.error('Router: initializeCustomSelects not available');
       }
-      
+
       // Attach semester change listener for calendar page
       console.log('Router: Attaching semester change listener...');
       const semesterSelects = document.querySelectorAll('.semester-select');
@@ -787,25 +793,25 @@ class SimpleRouter {
           semesterSelect.addEventListener('change', async (e) => {
             console.log('🔔 CALENDAR SEMESTER CHANGE EVENT FIRED');
             console.log('  → Select value:', e.target.value);
-            
+
             // Parse the semester value
             const parsedValue = window.parseSemesterValue ? window.parseSemesterValue(e.target.value) : null;
             console.log('  → Parsed value:', parsedValue);
-            
+
             if (!parsedValue || !parsedValue.term || !parsedValue.year) {
               console.error('  ❌ Failed to parse semester value');
               return;
             }
-            
+
             const { term, year } = parsedValue;
             const yearInt = parseInt(year);
-            
+
             console.log('  → Updating hidden inputs to:', yearInt, term);
-            
+
             // Update hidden inputs
             const termSelect = document.getElementById('term-select');
             const yearSelect = document.getElementById('year-select');
-            
+
             if (termSelect) {
               termSelect.value = term;
               console.log('  → term-select updated to:', termSelect.value);
@@ -814,7 +820,7 @@ class SimpleRouter {
               yearSelect.value = yearInt;
               console.log('  → year-select updated to:', yearSelect.value);
             }
-            
+
             // Update calendar FIRST (so it doesn't interrupt search update)
             const calendarComponent = document.querySelector('calendar-page');
             if (calendarComponent && calendarComponent.showCourseWithRetry) {
@@ -828,12 +834,12 @@ class SimpleRouter {
             } else {
               console.error('  ❌ Calendar component not found');
             }
-            
+
             // Update search courses AFTER calendar (ensures clean update)
             console.log('  → Updating search courses...');
             console.log('  → window.getAllCourses exists?', !!window.getAllCourses);
             console.log('  → typeof window.getAllCourses:', typeof window.getAllCourses);
-            
+
             if (window.getAllCourses) {
               try {
                 console.log('  → About to call getAllCourses()');
@@ -846,14 +852,14 @@ class SimpleRouter {
             } else {
               console.error('  ❌ getAllCourses function not available');
             }
-            
+
             console.log('  ✅ Semester change completed');
           });
           semesterSelect.dataset.calendarListenerAttached = 'true';
           console.log('Router: Semester change listener attached to', semesterSelect.id);
         }
       });
-      
+
       // Initialize search functionality
       console.log('Router: Calling initializeSearch...');
       if (window.initializeSearch) {
@@ -862,10 +868,10 @@ class SimpleRouter {
       } else {
         console.error('Router: initializeSearch not available');
       }
-      
+
       // Initialize calendar-specific functionality using web component
       this.initializeCalendarComponents()
-      
+
       // Initialize the course-calendar web component
       const calendarComponent = document.querySelector('course-calendar')
       if (calendarComponent) {
@@ -880,14 +886,14 @@ class SimpleRouter {
           calendarComponent.showCourse(currentYear, currentTerm)
         }
       }
-      
+
       // Check for calendar-page component 
       const calendarPageComponent = document.querySelector('calendar-page')
       if (calendarPageComponent) {
         console.log('Calendar page component found - it should auto-initialize')
       } else {
         console.log('No calendar page component found in DOM')
-        
+
         // If we're on calendar page but component isn't found, try dynamic import
         if (basePath === '/calendar') {
           console.log('Attempting dynamic import of calendar page component...')
@@ -903,7 +909,7 @@ class SimpleRouter {
           }
         }
       }
-      
+
     } catch (error) {
       console.error('Error initializing calendar:', error)
     }
@@ -920,21 +926,42 @@ class SimpleRouter {
       } else {
         // Re-import profile.js to get fresh instances (dev mode only)
         const profileModule = await import('./profile.js?' + Date.now())
-        
+
         // Call the initialization function
         if (profileModule.initializeProfile) {
           await profileModule.initializeProfile()
         }
       }
-      
+
       // Initialize profile-specific functionality
       this.initializeProfileComponents()
-      
+
       // Set up global year/term tracking (needed for navigation to work)
       this.setupGlobalYearTermTracking()
-      
+
     } catch (error) {
       console.error('Error initializing profile:', error)
+    }
+  }
+
+  async initializeAssignments() {
+    try {
+      console.log('Router: Initializing assignments page...');
+
+      // Always dynamically import the assignments module to ensure it loads
+      // This is necessary because the assignments chunk may not be loaded yet
+      const assignmentsModule = await import('./assignments.js');
+
+      if (assignmentsModule.initializeAssignments) {
+        await assignmentsModule.initializeAssignments();
+      } else if (window.initializeAssignments) {
+        // Fallback to window global if available
+        await window.initializeAssignments();
+      }
+
+      console.log('Router: Assignments page initialized');
+    } catch (error) {
+      console.error('Error initializing assignments:', error);
     }
   }
 
@@ -947,14 +974,14 @@ class SimpleRouter {
       } else {
         // Re-import shared.js to get fresh instances (dev mode only)
         const sharedModule = await import('./shared.js?' + Date.now())
-        
+
         // Initialize shared functionality
         this.initializeSharedComponents()
       }
-      
+
       // Set up global year/term tracking for all pages as fallback
       this.setupGlobalYearTermTracking()
-      
+
     } catch (error) {
       console.error('Error initializing shared:', error)
     }
@@ -963,15 +990,15 @@ class SimpleRouter {
   initializeYearTermSelectors() {
     // Combined semester selector functionality
     const semesterSelect = document.getElementById('semester-select')
-    
+
     if (semesterSelect) {
       // Set up event listener for semester changes
       const handleSelectChange = () => {
         this.refreshAllComponents()
       }
-      
+
       semesterSelect.addEventListener('change', handleSelectChange)
-      
+
       this.componentCleanupFunctions.push(() => {
         semesterSelect.removeEventListener('change', handleSelectChange)
       })
@@ -986,9 +1013,9 @@ class SimpleRouter {
         // Add search functionality here
         console.log('Search triggered:', e.target.value)
       }
-      
+
       searchInput.addEventListener('input', handleSearch)
-      
+
       this.componentCleanupFunctions.push(() => {
         searchInput.removeEventListener('input', handleSearch)
       })
@@ -1002,21 +1029,21 @@ class SimpleRouter {
   setupGlobalYearTermTracking() {
     const yearSelect = document.getElementById('year-select')
     const termSelect = document.getElementById('term-select')
-    
+
     if (yearSelect && termSelect) {
       // Initialize global variables with current values
       window.globalCurrentYear = parseInt(yearSelect.value)
       window.globalCurrentTerm = termSelect.value
-      
+
       // Add listeners to update global variables when selectors change
       const updateGlobals = () => {
         window.globalCurrentYear = parseInt(yearSelect.value)
         window.globalCurrentTerm = termSelect.value
       }
-      
+
       yearSelect.addEventListener('change', updateGlobals)
       termSelect.addEventListener('change', updateGlobals)
-      
+
       // Store cleanup for these listeners
       this.componentCleanupFunctions.push(() => {
         yearSelect.removeEventListener('change', updateGlobals)
@@ -1053,12 +1080,12 @@ class SimpleRouter {
     if (calendarComponent && calendarComponent.refreshCalendar) {
       calendarComponent.refreshCalendar()
     }
-    
+
     const totalCoursesComponent = document.querySelector('total-courses')
     if (totalCoursesComponent && totalCoursesComponent.updateTotalCourses) {
       totalCoursesComponent.updateTotalCourses()
     }
-    
+
     const termBoxComponent = document.querySelector('term-box')
     if (termBoxComponent && termBoxComponent.updateDisplayTerm) {
       termBoxComponent.updateDisplayTerm()
@@ -1083,7 +1110,7 @@ class SimpleRouter {
     if (path.startsWith('/settings/')) {
       return '/settings'
     }
-    
+
     // Return the path as-is for routes without parameters
     return path
   }
@@ -1137,8 +1164,8 @@ class SimpleRouter {
     document.title = `${pageName} - BlazeArchive`
 
     // Show locked message
-            // <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
-           // <button class="register-btn" onclick="window.router.navigate('/register')">Sign Up</button>
+    // <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
+    // <button class="register-btn" onclick="window.router.navigate('/register')">Sign Up</button>
     mainContent.innerHTML = `
       <div class="locked-page-container">
         <div class="locked-page-content">
@@ -1297,13 +1324,13 @@ class SimpleRouter {
     const loadingBar = document.createElement('div')
     loadingBar.id = 'router-loading-bar'
     loadingBar.className = 'router-loading-bar'
-    
+
     const progress = document.createElement('div')
     progress.className = 'router-loading-progress'
-    
+
     loadingBar.appendChild(progress)
     document.body.appendChild(loadingBar)
-    
+
     this.loadingBar = loadingBar
     this.loadingProgress = progress
   }
@@ -1314,7 +1341,7 @@ class SimpleRouter {
       this.loadingProgress.style.width = '0%'
       this.loadingBar.classList.remove('complete')
       this.loadingBar.classList.add('visible')
-      
+
       // Start with a small progress
       setTimeout(() => this.updateLoadingProgress(10), 50)
     }
@@ -1324,7 +1351,7 @@ class SimpleRouter {
   updateLoadingProgress(percentage) {
     if (this.loadingProgress) {
       this.loadingProgress.style.width = `${percentage}%`
-      
+
       if (percentage >= 100) {
         this.loadingBar.classList.add('complete')
       }
@@ -1558,7 +1585,7 @@ class SimpleRouter {
     // Navigate to courses page if not already there
     if (this.currentPath !== '/courses' && this.currentPath !== '/dashboard' && this.currentPath !== '/') {
       await this.navigate('/courses')
-      
+
       // Wait for courses page to load completely
       await new Promise(resolve => setTimeout(resolve, 800))
     }
@@ -1604,16 +1631,16 @@ class SimpleRouter {
   updateSemesterDropdown(year, term) {
     const semesterValue = `${term}-${year}`
     const semesterLabel = `${term} ${year}`
-    
+
     // Update semester custom dropdown
     const semesterCustomSelect = document.querySelector('.custom-select[data-target="semester-select"]')
     if (semesterCustomSelect) {
       const valueElement = semesterCustomSelect.querySelector('.custom-select-value')
       const semesterOptions = semesterCustomSelect.querySelectorAll('.custom-select-option')
-      
+
       // Remove existing selection
       semesterOptions.forEach(option => option.classList.remove('selected'))
-      
+
       // Find and select the correct option
       const targetOption = Array.from(semesterOptions).find(option => option.dataset.value === semesterValue)
       if (targetOption) {
@@ -1623,13 +1650,13 @@ class SimpleRouter {
         }
       }
     }
-    
+
     // Update hidden semester select
     const semesterSelect = document.getElementById('semester-select')
     if (semesterSelect) {
       semesterSelect.value = semesterValue
     }
-    
+
     // Update hidden term and year inputs
     const termSelect = document.getElementById('term-select')
     const yearSelect = document.getElementById('year-select')
@@ -1640,61 +1667,61 @@ class SimpleRouter {
   // Perform search on dashboard
   performDashboardSearch(query) {
     console.log('Performing dashboard search for:', query)
-    
+
     // Set the global search query variable if available
     if (typeof window.currentSearchQuery !== 'undefined') {
       window.currentSearchQuery = query
     }
-    
+
     // Try multiple approaches to ensure search works
-    
+
     // Method 1: Use the global performSearch function if available
     if (window.performSearch) {
       console.log('Using window.performSearch')
       window.performSearch(query)
-      
+
       // Update the course filter paragraph
       if (window.updateCourseFilterParagraph) {
         setTimeout(() => window.updateCourseFilterParagraph(), 100)
       }
       return
     }
-    
+
     // Method 2: Try applySearchAndFilters directly with the query
     if (window.applySearchAndFilters) {
       console.log('Using window.applySearchAndFilters directly')
       window.applySearchAndFilters(query)
-      
+
       // Update the course filter paragraph
       if (window.updateCourseFilterParagraph) {
         setTimeout(() => window.updateCourseFilterParagraph(), 100)
       }
       return
     }
-    
+
     // Method 3: Use the search modal functionality
     const searchBtn = document.getElementById('search-btn')
     const searchInput = document.getElementById('search-input')
     const searchSubmit = document.getElementById('search-submit')
-    
+
     if (searchBtn && searchInput && searchSubmit) {
       console.log('Using search modal approach')
-      
+
       // Open the search modal
       searchBtn.click()
-      
+
       // Wait a bit for modal to open
       setTimeout(() => {
         // Set the search query
         searchInput.value = query
-        
+
         // Trigger input event for autocomplete/validation
         searchInput.dispatchEvent(new Event('input', { bubbles: true }))
-        
+
         // Submit the search
         setTimeout(() => {
           searchSubmit.click()
-          
+
           // Update the course filter paragraph after search
           if (window.updateCourseFilterParagraph) {
             setTimeout(() => window.updateCourseFilterParagraph(), 200)
@@ -1703,20 +1730,20 @@ class SimpleRouter {
       }, 200)
       return
     }
-    
+
     // Method 4: Direct search input fallback
     const directSearchInput = document.getElementById('search-course')
     if (directSearchInput) {
       console.log('Using direct search input')
       directSearchInput.value = query
       directSearchInput.dispatchEvent(new Event('input', { bubbles: true }))
-      
+
       // Try to find and click search submit
       const directSearchSubmit = document.getElementById('search-submit')
       if (directSearchSubmit) {
         setTimeout(() => {
           directSearchSubmit.click()
-          
+
           // Update the course filter paragraph
           if (window.updateCourseFilterParagraph) {
             setTimeout(() => window.updateCourseFilterParagraph(), 200)
@@ -1725,7 +1752,7 @@ class SimpleRouter {
       }
       return
     }
-    
+
     console.warn('No search method available, query:', query)
   }
 
@@ -1744,7 +1771,7 @@ class SimpleRouter {
 
       const yearSelect = modal.querySelector('#search-year-select')
       const termSelect = modal.querySelector('#search-term-select')
-      
+
       const year = yearSelect ? yearSelect.value : new Date().getFullYear()
       const term = termSelect ? termSelect.value : 'Fall'
 
@@ -1776,16 +1803,16 @@ class SimpleRouter {
     }
 
     const normalizedQuery = query.toLowerCase().trim()
-    
+
     // First, try exact substring matches
     let suggestions = this.globalSearchCourses.filter(course => {
       const title = this.normalizeCourseTitle(course.title || '').toLowerCase()
       const professor = this.romanizeProfessorName(course.professor || '').toLowerCase()
       const courseCode = (course.course_code || '').toLowerCase()
-      
-      return title.includes(normalizedQuery) || 
-             professor.includes(normalizedQuery) || 
-             courseCode.includes(normalizedQuery)
+
+      return title.includes(normalizedQuery) ||
+        professor.includes(normalizedQuery) ||
+        courseCode.includes(normalizedQuery)
     }).slice(0, 5)
 
     // If no exact matches found, use fuzzy matching
@@ -1794,10 +1821,10 @@ class SimpleRouter {
         const relevance = this.calculateCourseRelevance(normalizedQuery, course)
         return { course, relevance }
       })
-      .filter(item => item.relevance > 0.15)
-      .sort((a, b) => b.relevance - a.relevance)
-      .slice(0, 6)
-      
+        .filter(item => item.relevance > 0.15)
+        .sort((a, b) => b.relevance - a.relevance)
+        .slice(0, 6)
+
       suggestions = coursesWithRelevance.map(item => item.course)
     }
 
@@ -1811,10 +1838,10 @@ class SimpleRouter {
     suggestions.forEach((course, index) => {
       const item = document.createElement('div')
       item.className = 'global-autocomplete-item'
-      
+
       const title = course.title || ''
       const highlightedTitle = this.highlightMatches(title, query)
-      
+
       item.innerHTML = `
         <div class="item-title">${highlightedTitle}</div>
         <div class="item-details">
@@ -1822,7 +1849,7 @@ class SimpleRouter {
           <span class="item-professor">${this.romanizeProfessorName(course.professor)}</span>
         </div>
       `
-      
+
       item.addEventListener('click', () => {
         const searchInput = document.getElementById('global-search-input')
         if (searchInput) {
@@ -1831,7 +1858,7 @@ class SimpleRouter {
         this.hideGlobalAutocomplete()
         this.globalSearchHighlightIndex = -1
       })
-      
+
       autocompleteContainer.appendChild(item)
     })
 
@@ -1885,27 +1912,27 @@ class SimpleRouter {
   // Helper functions for autocomplete
   normalizeCourseTitle(title) {
     if (!title) return title
-    
+
     // Convert full-width characters to normal characters
-    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(char) {
+    let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
       return String.fromCharCode(char.charCodeAt(0) - 0xFEE0)
     })
-    
+
     // Convert full-width spaces to normal spaces
     normalized = normalized.replace(/　/g, ' ')
-    
+
     // Remove parentheses and their contents
     normalized = normalized.replace(/[()（）]/g, '')
-    
+
     // Clean up extra spaces
     normalized = normalized.replace(/\s+/g, ' ').trim()
-    
+
     return normalized
   }
 
   romanizeProfessorName(name) {
     if (!name) return ''
-    
+
     // Basic romanization mapping (extend as needed)
     const romanizationMap = {
       'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
@@ -1919,12 +1946,12 @@ class SimpleRouter {
       'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
       'わ': 'wa', 'ゐ': 'wi', 'ゑ': 'we', 'を': 'wo', 'ん': 'n'
     }
-    
+
     let romanized = name
     for (const [hiragana, romaji] of Object.entries(romanizationMap)) {
       romanized = romanized.replace(new RegExp(hiragana, 'g'), romaji)
     }
-    
+
     return romanized
   }
 
@@ -1932,18 +1959,18 @@ class SimpleRouter {
     const title = this.normalizeCourseTitle(course.title || '').toLowerCase()
     const professor = this.romanizeProfessorName(course.professor || '').toLowerCase()
     const courseCode = (course.course_code || '').toLowerCase()
-    
+
     let score = 0
-    
+
     // Exact matches get highest score
     if (title.includes(query)) score += 1.0
     if (professor.includes(query)) score += 0.8
     if (courseCode.includes(query)) score += 0.9
-    
+
     // Fuzzy matching for partial matches
     const titleWords = title.split(' ')
     const queryWords = query.split(' ')
-    
+
     for (const queryWord of queryWords) {
       for (const titleWord of titleWords) {
         if (titleWord.includes(queryWord) || queryWord.includes(titleWord)) {
@@ -1951,13 +1978,13 @@ class SimpleRouter {
         }
       }
     }
-    
+
     return Math.min(score, 1.0)
   }
 
   highlightMatches(text, query) {
     if (!query.trim()) return text
-    
+
     const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
     return text.replace(regex, '<mark>$1</mark>')
   }

@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
-    <title>Calendar - BlazeArchive</title>
-    <link rel="stylesheet" href="css/blaze.css">
-    <!-- Import components first to ensure web components are defined -->
-    <script type="module" src="/js/components.js"></script>
-    <script type="module" src="/js/shared.js"></script>
-    <script type="module" src="/js/calendar-page-component.js"></script>
-    <!-- Simple Router -->
-    <script type="module" src="/js/router.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
+  <title>Calendar - BlazeArchive</title>
+  <link rel="stylesheet" href="css/blaze.css">
+  <!-- Import components first to ensure web components are defined -->
+  <script type="module" src="/js/components.js"></script>
+  <script type="module" src="/js/shared.js"></script>
+  <script type="module" src="/js/calendar-page-component.js"></script>
+  <!-- Simple Router -->
+  <script type="module" src="/js/router.js"></script>
 </head>
 
 <body>
@@ -18,15 +20,18 @@
   <app-navigation></app-navigation>
 
   <div id="app-content">
-    
+
     <!-- Search modal (shared component) -->
     <div class="search-container hidden">
       <div class="search-background">
         <div class="search-modal">
           <div class="swipe-indicator"></div>
-          <h2><div></div>Search Courses</h2>
+          <h2>
+            <div></div>Search Courses
+          </h2>
           <div class="search-input-container">
-            <input type="text" class="search-input" id="search-input" placeholder="Enter course title, professor name, or course code..." autocomplete="off">
+            <input type="text" class="search-input" id="search-input"
+              placeholder="Enter course title, professor name, or course code..." autocomplete="off">
             <div class="search-autocomplete" id="search-autocomplete"></div>
           </div>
           <div class="search-buttons">
@@ -36,42 +41,45 @@
         </div>
       </div>
     </div>
-    
+
     <section id="course-summary">
 
-        <!-- Desktop semester selector -->
-        <div class="container-above container-above-desktop">
-          <div class="title-box">
-            <div id="filter-year-term">
-              <div class="filter-year-term-container">
-                <div class="custom-select" data-target="semester-select">
-                  <div class="custom-select-trigger" tabindex="0">
-                    <span class="custom-select-value">Loading...</span>
-                    <div class="custom-select-arrow"></div>
-                  </div>
-                  <div class="custom-select-options">
-                    <!-- Options populated dynamically from database -->
-                  </div>
+      <!-- Desktop semester selector -->
+      <div class="container-above container-above-desktop">
+        <div class="title-box">
+          <div id="filter-year-term">
+            <div class="filter-year-term-container">
+              <div class="custom-select" data-target="semester-select">
+                <div class="custom-select-trigger" tabindex="0">
+                  <span class="custom-select-value">Loading...</span>
+                  <div class="custom-select-arrow"></div>
                 </div>
-                <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                <div class="custom-select-options">
                   <!-- Options populated dynamically from database -->
-                </select>
+                </div>
               </div>
+              <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                <!-- Options populated dynamically from database -->
+              </select>
             </div>
-          </div>
-          <div class="buttons-box">
-            <!-- Desktop inline search pill -->
-            <div class="search-pill-container">
-              <div class="search-pill">
-                <div class="search-pill-icon"></div>
-                <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..." autocomplete="off">
-              </div>
-              <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
-            </div>
-            <!-- Mobile search button (hidden on desktop) -->
-            <button class="search-btn"><div></div></button>
           </div>
         </div>
+        <div class="buttons-box">
+          <!-- Desktop inline search pill -->
+          <div class="search-pill-container">
+            <div class="search-pill">
+              <div class="search-pill-icon"></div>
+              <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..."
+                autocomplete="off">
+            </div>
+            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+          </div>
+          <!-- Mobile search button (hidden on desktop) -->
+          <button class="search-btn">
+            <div></div>
+          </button>
+        </div>
+      </div>
 
       <div class="main-content">
 
@@ -97,43 +105,48 @@
             </div>
           </div>
           <div class="buttons-box">
-            <button class="search-btn"><div></div></button>
+            <button class="search-btn">
+              <div></div>
+            </button>
           </div>
         </div>
-        
+
         <div class="main-container calendar-container" id="calendar-main-div">
           <calendar-page></calendar-page>
         </div>
-        
+
         <!-- Hidden inputs for year/term values -->
         <input type="hidden" id="term-select" value="Fall">
         <input type="hidden" id="year-select" value="">
-        
+
         <!-- Hidden placeholder for course list (required for initialization) -->
         <div id="course-list" style="display: none;"></div>
       </div>
     </section>
 
     <div class="class-info" id="class-info">
-        <div class="class-info-header">
-            <div class="swipe-indicator"></div>
-            <div class="class-header">
-                <button id="class-close">x</button>
-                <h2>Class Info</h2>
-                <button id="class-add-remove"></button>
-            </div>
+      <div class="class-info-header">
+        <div class="swipe-indicator"></div>
+        <div class="class-header">
+          <button id="class-close">x</button>
+          <h2>Class Info</h2>
+          <button id="class-add-remove"></button>
         </div>
-        
-        <div class="class-content-wrapper">
-            <div class="class-content" id="class-content">
-            </div>
-            <div class="class-content" id="class-gpa-graph">
-            </div>
-            <div class="class-content" id="class-review">
-            </div>
+      </div>
+
+      <div class="class-content-wrapper">
+        <div class="class-content" id="class-content">
         </div>
+        <div class="class-content" id="class-gpa-graph">
+        </div>
+        <div class="class-content" id="class-review">
+        </div>
+        <div class="class-content" id="class-assignments">
+        </div>
+      </div>
     </div>
   </div>
 
 </body>
+
 </html>

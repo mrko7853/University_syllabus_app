@@ -6,15 +6,15 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@supabase/supabase-js', 'wanakana'],
   },
-  
+
   server: {
     // Enable history API fallback for client-side routing
     historyApiFallback: true,
   },
-  
+
   // Ensure assets are copied to build
   publicDir: 'assets',
-  
+
   build: {
     rollupOptions: {
       input: {
@@ -23,6 +23,7 @@ export default defineConfig({
         register: resolve(__dirname, 'register.html'),
         profile: resolve(__dirname, 'profile.html'),
         calendar: resolve(__dirname, 'calendar.html'),
+        assignments: resolve(__dirname, 'assignments.html'),
       },
       output: {
         // Ensure proper chunking for components
