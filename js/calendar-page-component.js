@@ -102,6 +102,8 @@ class CalendarPageComponent extends HTMLElement {
     
     // Initialize once when connected
     this.initializeCalendar();
+
+    this.setupSearchButtons();
     
     // Listen for pageLoaded event but don't force refresh (router handles it)
     document.addEventListener('pageLoaded', () => {
@@ -111,6 +113,89 @@ class CalendarPageComponent extends HTMLElement {
 
   disconnectedCallback() {
     window.removeEventListener('resize', () => this.checkMobile());
+  }
+
+  setupSearchButtons() {
+    if (this.searchButtonsInitialized) return;
+    this.searchButtonsInitialized = true;
+
+    const searchButtons = document.querySelectorAll('.search-btn');
+    const searchContainer = document.querySelector('.search-container');
+    const searchModal = document.querySelector('.search-modal');
+    const searchBackground = document.querySelector('.search-background');
+    const searchCancel = document.getElementById('search-cancel');
+
+    if (!searchContainer || !searchModal || searchButtons.length === 0) return;
+
+    const closeSearchAnimated = (immediate = false) => {
+      if (window.innerWidth <= 780) {
+        searchModal.classList.remove('show');
+
+        if (immediate) {
+          searchContainer.classList.add('hidden');
+          document.body.classList.remove('modal-open');
+          return;
+        }
+
+        setTimeout(() => {
+          searchContainer.classList.add('hidden');
+          document.body.classList.remove('modal-open');
+        }, 400);
+        return;
+      }
+
+      searchContainer.classList.add('hidden');
+    };
+
+    const openSearch = () => {
+      searchContainer.classList.remove('hidden');
+
+      if (window.innerWidth <= 780) {
+        searchModal.classList.add('show');
+        document.body.classList.add('modal-open');
+
+        if (!this.searchSwipeBound && typeof window.addSwipeToCloseSimple === 'function' && searchBackground) {
+          this.searchSwipeBound = true;
+          window.addSwipeToCloseSimple(searchModal, searchBackground, () => {
+            closeSearchAnimated(true);
+          });
+        }
+      } else {
+        searchModal.classList.add('show');
+      }
+
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        setTimeout(() => searchInput.focus(), 100);
+      }
+    };
+
+    const closeSearch = () => {
+      closeSearchAnimated();
+    };
+
+    searchButtons.forEach(btn => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openSearch();
+      });
+    });
+
+    if (searchCancel) {
+      searchCancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeSearch();
+      });
+    }
+
+    if (searchBackground) {
+      searchBackground.addEventListener('click', (event) => {
+        if (event.target === searchBackground) {
+          closeSearch();
+        }
+      });
+    }
   }
 
   checkMobile() {

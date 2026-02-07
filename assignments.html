@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi">
+        content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Assignments - BlazeArchive</title>
     <link rel="stylesheet" href="css/blaze.css">
     <script type="module" src="/js/components.js"></script>
@@ -24,22 +24,116 @@
     </div>
 
     <div id="app-content">
+        <!-- Search modal (shared component) -->
+        <div class="search-container hidden">
+            <div class="search-background">
+                <div class="search-modal">
+                    <div class="swipe-indicator"></div>
+                    <h2>
+                        <div></div>Search Courses
+                    </h2>
+                    <div class="search-input-container">
+                        <input type="text" class="search-input" id="search-input"
+                            placeholder="Enter course title, professor name, or course code..." autocomplete="off">
+                        <div class="search-autocomplete" id="search-autocomplete"></div>
+                    </div>
+                    <div class="search-buttons">
+                        <button class="search-submit" id="search-submit">Search</button>
+                        <button class="search-cancel" id="search-cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <section id="assignments-main">
+
+      <!-- Desktop semester selector -->
+      <div class="container-above container-above-desktop">
+        <div class="title-box">
+          <div id="filter-year-term">
+            <div class="filter-year-term-container">
+              <div class="custom-select" data-target="semester-select">
+                <div class="custom-select-trigger" tabindex="0">
+                  <span class="custom-select-value">Loading...</span>
+                  <div class="custom-select-arrow"></div>
+                </div>
+                <div class="custom-select-options">
+                  <!-- Options populated dynamically from database -->
+                </div>
+              </div>
+              <select name="semester" id="semester-select" class="semester-select" style="display: none;">
+                <!-- Options populated dynamically from database -->
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="buttons-box">
+          <!-- Desktop inline search pill -->
+          <div class="search-pill-container">
+            <div class="search-pill">
+              <div class="search-pill-icon"></div>
+              <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..."
+                autocomplete="off">
+            </div>
+            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+          </div>
+          <!-- Mobile search button (hidden on desktop) -->
+          <button class="search-btn">
+            <div></div>
+          </button>
+        </div>
+      </div>
+
             <div class="assignments-container">
+
+        <!-- Mobile semester selector -->
+        <div class="container-above container-above-mobile">
+          <div class="title-box">
+            <div id="filter-year-term-mobile">
+              <div class="filter-year-term-container">
+                <div class="custom-select" data-target="semester-select-mobile">
+                  <div class="custom-select-trigger" tabindex="0">
+                    <span class="custom-select-value">Loading...</span>
+                    <div class="custom-select-arrow"></div>
+                  </div>
+                  <div class="custom-select-options">
+                    <!-- Options populated dynamically from database -->
+                  </div>
+                </div>
+                <select name="semester" id="semester-select-mobile" class="semester-select" style="display: none;">
+                  <!-- Options populated dynamically from database -->
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="buttons-box">
+            <button class="search-btn">
+              <div></div>
+            </button>
+          </div>
+        </div>
                 <!-- Header -->
                 <div class="assignments-header">
-                    <h1 class="assignments-title">Assignments</h1>
                     <div class="assignments-tabs">
                         <button class="tab-btn active" data-view="all-assignments">
-                            <span class="tab-icon">📋</span> All Assignments
+                            <div class="button-icon">
+                                <p>All Assignments</p>
+                                <div class="assignment-all-icon assignment-icons"></div>
+                            </div>
                         </button>
                         <button class="tab-btn" data-view="by-due-date">
-                            <span class="tab-icon">📅</span> By Due Date
+                            <div class="button-icon">
+                                <p>By Due Date</p>
+                                <div class="assignment-calendar-icon assignment-icons"></div>
+                            </div>
                         </button>
                     </div>
                     <div class="assignments-actions">
-                        <button class="new-assignment-btn" id="new-assignment-btn">
-                            <span>+ New</span>
+                        <button class="tab-btn" id="new-assignment-btn">
+                            <div class="button-icon">
+                                <p>New</p>
+                                <div class="assignment-add-icon assignment-icons"></div>
+                            </div>
                         </button>
                     </div>
                 </div>
@@ -51,16 +145,16 @@
                             <thead>
                                 <tr>
                                     <th class="col-title">
-                                        <span class="col-icon">Aa</span> Assignment Name
+                                        <span class="col-icon assignment-name-icon"></span> Assignment Name
                                     </th>
                                     <th class="col-due-date">
-                                        <span class="col-icon">📅</span> Due Date
+                                        <span class="col-icon assignment-due-icon"></span> Due Date
                                     </th>
                                     <th class="col-subject">
-                                        <span class="col-icon">📚</span> Subject
+                                        <span class="col-icon assignment-type-icon"></span> Subject
                                     </th>
                                     <th class="col-status">
-                                        <span class="col-icon">📊</span> Status
+                                        <span class="col-icon assignment-status-icon"></span> Status
                                     </th>
                                     <th class="col-actions"></th>
                                 </tr>
@@ -112,14 +206,71 @@
             <div class="assignment-modal-overlay" id="assignment-modal-overlay" style="display: none;">
                 <div class="assignment-modal">
                     <div class="assignment-modal-header">
+                        <div class="meta-item">
+                            <div class="emoji-selector" id="assignment-emoji-selector">
+                                <button type="button" class="emoji-trigger" id="assignment-emoji-trigger">📄</button>
+                                <div class="emoji-picker" id="assignment-emoji-picker" style="display: none;">
+                                    <div class="emoji-picker-header">
+                                        <div class="emoji-picker-title">Emoji</div>
+                                        <button type="button" class="emoji-picker-remove" id="assignment-emoji-remove">Remove</button>
+                                    </div>
+                                    <div class="emoji-picker-search">
+                                        <input type="text" placeholder="Filter..." id="assignment-emoji-search" />
+                                        <button type="button" class="emoji-picker-random" id="assignment-emoji-random">🔀</button>
+                                        <span class="emoji-picker-preview" id="assignment-emoji-preview">✋</span>
+                                    </div>
+                                    <div class="emoji-picker-section">
+                                        <div class="emoji-picker-section-title">Recent</div>
+                                        <div class="emoji-picker-grid" data-group="recent">
+                                            <button type="button" class="emoji-option" data-keywords="document page paper assignment">📄</button>
+                                            <button type="button" class="emoji-option" data-keywords="memo note writing assignment">📝</button>
+                                        </div>
+                                    </div>
+                                    <div class="emoji-picker-section">
+                                        <div class="emoji-picker-section-title">People</div>
+                                        <div class="emoji-picker-grid" data-group="people">
+                                            <button type="button" class="emoji-option" data-keywords="grin smile happy">😀</button>
+                                            <button type="button" class="emoji-option" data-keywords="grin smile happy">😁</button>
+                                            <button type="button" class="emoji-option" data-keywords="laugh tears funny">😂</button>
+                                            <button type="button" class="emoji-option" data-keywords="rofl laugh funny">🤣</button>
+                                            <button type="button" class="emoji-option" data-keywords="smile happy">😊</button>
+                                            <button type="button" class="emoji-option" data-keywords="angel halo">😇</button>
+                                            <button type="button" class="emoji-option" data-keywords="wink">😉</button>
+                                            <button type="button" class="emoji-option" data-keywords="love heart eyes">😍</button>
+                                            <button type="button" class="emoji-option" data-keywords="cool sunglasses">😎</button>
+                                            <button type="button" class="emoji-option" data-keywords="cry sad">😭</button>
+                                            <button type="button" class="emoji-option" data-keywords="angry mad">😡</button>
+                                            <button type="button" class="emoji-option" data-keywords="thinking">🤔</button>
+                                        </div>
+                                    </div>
+                                    <div class="emoji-picker-footer">
+                                        <button type="button" class="emoji-option" data-keywords="time clock">🕒</button>
+                                        <button type="button" class="emoji-option" data-keywords="grin smile happy">😀</button>
+                                        <button type="button" class="emoji-option" data-keywords="dog pet">🐶</button>
+                                        <button type="button" class="emoji-option" data-keywords="burger food">🍔</button>
+                                        <button type="button" class="emoji-option" data-keywords="soccer ball sport">⚽</button>
+                                        <button type="button" class="emoji-option" data-keywords="airplane flight travel">✈️</button>
+                                        <button type="button" class="emoji-option" data-keywords="idea light">💡</button>
+                                        <button type="button" class="emoji-option" data-keywords="check success">✅</button>
+                                        <button type="button" class="emoji-option" data-keywords="finish flag">🏁</button>
+                                        <button type="button" class="emoji-option" data-keywords="square">🔲</button>
+                                        <button type="button" class="emoji-option" data-keywords="add plus">➕</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <input type="text" class="assignment-modal-title" id="assignment-modal-title"
                             placeholder="Assignment Title">
-                        <button class="assignment-modal-close" id="assignment-modal-close">×</button>
+                        <button class="assignment-modal-close" id="assignment-modal-close">
+                            <div class="button-icon">
+                                <div class="exit-icon"></div>
+                            </div>
+                        </button>
                     </div>
                     <div class="assignment-modal-meta">
                         <div class="meta-item">
                             <span class="meta-label">📅 Due Date</span>
-                            <input type="date" class="meta-value" id="assignment-modal-due-date">
+                            <input type="text" class="meta-value date-picker-trigger" id="assignment-modal-due-date" readonly>
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">📚 Subject</span>
@@ -178,6 +329,27 @@
                 <div class="date-picker-footer">
                     <button class="date-picker-clear" id="date-picker-clear">Clear</button>
                 </div>
+            </div>
+            <div class="class-info" id="class-info">
+        <div class="class-info-header">
+            <div class="swipe-indicator"></div>
+            <div class="class-header">
+                <button id="class-close">x</button>
+                <h2>Class Info</h2>
+                <button id="class-add-remove"></button>
+            </div>
+        </div>
+
+        <div class="class-content-wrapper">
+            <div class="class-content" id="class-content">
+            </div>
+            <div class="class-content" id="class-gpa-graph">
+            </div>
+            <div class="class-content" id="class-review">
+            </div>
+            <div class="class-content" id="class-assignments">
+            </div>
+        </div>
             </div>
         </section>
     </div>

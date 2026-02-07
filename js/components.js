@@ -88,10 +88,6 @@ class AppNavigation extends HTMLElement {
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Assignments</span>
                     </button></li>
-                    <li><button class="nav-btn" id="search" data-route="/search">
-                        <span class="nav-icon"></span>
-                        <span class="navigation-text">Search</span>
-                    </button></li>
                     <div class="profile-menu-container">
                     <li><button class="nav-btn" id="profile" data-route="/profile">
                         <span class="nav-icon"></span>

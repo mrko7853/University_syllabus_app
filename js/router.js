@@ -204,46 +204,43 @@ class SimpleRouter {
     // Check if this is a course URL first
     const courseMatch = path.match(this.coursePattern)
     if (courseMatch) {
-      // This is a course URL - redirect to dashboard and handle course opening
       const [, courseCode, year, term] = courseMatch
       console.log('Course URL detected:', { courseCode, year, term })
 
-      // Load courses page first
-      const basePath = '/courses'
-      this.currentPath = basePath
-
       try {
-        // Clean up current page first
         this.cleanupCurrentPage()
 
-        // Load dashboard HTML with cache busting
-        const response = await fetch('/index.html?t=' + Date.now())
+        const response = await fetch('/course.html?t=' + Date.now())
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         const html = await response.text()
-        document.body.innerHTML = html
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
 
-        // Initialize courses page components
-        await this.reinitializeEverything('/courses')
+        const coursePage = doc.querySelector('#course-page')
+        const classInfo = doc.querySelector('#class-info')
 
-        // Update active navigation to show courses as active
+        let appContent = document.querySelector('#app-content')
+        if (!appContent) {
+          appContent = document.createElement('div')
+          appContent.id = 'app-content'
+          document.body.appendChild(appContent)
+        }
+
+        appContent.innerHTML = ''
+        if (coursePage) appContent.appendChild(coursePage.cloneNode(true))
+        if (classInfo) appContent.appendChild(classInfo.cloneNode(true))
+
+        document.body.classList.add('course-page-mode')
         this.updateActiveNav('/courses')
 
-        // Wait for components to be ready, then open the course
-        setTimeout(async () => {
-          try {
-            // Find the course and open it
-            const courses = await fetchCourseData(parseInt(year), term)
-            const course = courses.find(c => c.course_code === courseCode)
-            if (course) {
-              openCourseInfoMenu(course, false) // false to prevent URL update loop
-            } else {
-              console.warn('Course not found:', courseCode)
-            }
-          } catch (error) {
-            console.error('Error opening course from URL:', error)
-          }
-        }, 1000)
+        await this.initializeShared()
+
+        if (!this.isProduction()) {
+          await import('./course-page.js?' + Date.now())
+        } else {
+          await import('./course-page.js')
+        }
 
         this.hideLoadingBar()
         return
@@ -253,6 +250,9 @@ class SimpleRouter {
         return
       }
     }
+
+    // Clear course page mode when leaving course URLs
+    document.body.classList.remove('course-page-mode')
 
     // Extract base path for route matching
     const basePath = this.extractBasePath(path)
@@ -754,6 +754,8 @@ class SimpleRouter {
   async initializeCalendar() {
     try {
       console.log('Router: Initializing calendar page...');
+
+      const basePath = this.currentPath
 
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 100));

@@ -24,6 +24,7 @@ export default defineConfig({
         profile: resolve(__dirname, 'profile.html'),
         calendar: resolve(__dirname, 'calendar.html'),
         assignments: resolve(__dirname, 'assignments.html'),
+        course: resolve(__dirname, 'course.html'),
       },
       output: {
         // Ensure proper chunking for components

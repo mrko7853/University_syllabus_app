@@ -1505,8 +1505,12 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                     .eq('id', assignmentSession.user.id)
                     .single();
 
-                const userCourseCodes = (userProfile?.courses_selection || []).map(c => c.code);
-                const isRegisteredForCourse = userCourseCodes.includes(course.course_code);
+                const userCourseSelections = (userProfile?.courses_selection || []);
+                const isRegisteredForCourse = userCourseSelections.some(selection =>
+                    selection.code === course.course_code &&
+                    String(selection.year) === String(course.academic_year) &&
+                    String(selection.term).toLowerCase() === String(course.term).toLowerCase()
+                );
 
                 // Only show assignments if user is registered for this course
                 if (!isRegisteredForCourse) {
@@ -1518,6 +1522,8 @@ export async function openCourseInfoMenu(course, updateURL = true) {
                         .select('*')
                         .eq('user_id', assignmentSession.user.id)
                         .eq('course_code', course.course_code)
+                        .eq('course_year', course.academic_year)
+                        .eq('course_term', course.term)
                         .order('due_date', { ascending: true });
 
                     if (assignmentsError) {

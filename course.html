@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Course - BlazeArchive</title>
+  <link rel="stylesheet" href="css/blaze.css">
+  <script type="module" src="/js/components.js"></script>
+  <script type="module" src="/js/shared.js"></script>
+  <script type="module" src="/js/course-page.js"></script>
+</head>
+
+<body>
+  <section id="syllabus-main">
+    <div class="course-page" id="course-page">
+    <div class="course-page-header">
+      <button class="course-page-back" id="course-page-back">← Back to Courses</button>
+      <h1 class="course-page-title" id="course-page-title">Course</h1>
+    </div>
+    <div class="course-page-card" id="course-page-card">
+      <div class="course-page-loading">Loading course…</div>
+    </div>
+    </div>
+
+    <div class="class-info course-fullscreen" id="class-info">
+    <div class="class-info-header">
+      <div class="swipe-indicator"></div>
+      <div class="class-header">
+        <button id="class-close">x</button>
+        <h2>Class Info</h2>
+        <button id="class-add-remove"></button>
+      </div>
+    </div>
+
+    <div class="class-content-wrapper">
+      <div class="class-content" id="class-content"></div>
+      <div class="class-content" id="class-gpa-graph"></div>
+      <div class="class-content" id="class-review"></div>
+      <div class="class-content" id="class-assignments"></div>
+    </div>
+    </div>
+  </section>
+</body>
+
+</html>
