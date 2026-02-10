@@ -57,15 +57,19 @@ async function initCoursePage() {
     if (title) title.textContent = course.title || "Course";
     document.body.classList.add('course-page-mode');
 
-    await openCourseInfoMenu(course, false);
+    await openCourseInfoMenu(course, false, { presentation: 'page' });
 
     const classInfo = document.getElementById('class-info');
     const classContent = document.getElementById('class-content');
+    const loading = document.getElementById('course-page-loading');
     if (classInfo) {
       classInfo.classList.add('show');
       classInfo.style.opacity = '1';
       classInfo.style.transform = 'none';
-      card.style.display = 'none';
+      classInfo.style.display = 'flex';
+      if (loading) {
+        loading.style.display = 'none';
+      }
     } else {
       console.error('Course page: class-info element missing');
       card.innerHTML = "<div class=\"course-page-error\">Course info UI not found.</div>";

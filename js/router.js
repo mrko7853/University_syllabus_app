@@ -157,6 +157,8 @@ class SimpleRouter {
 
   // Clean up existing components before loading new page
   cleanupCurrentPage() {
+    this.cleanupCourseModalArtifacts()
+
     // Run any registered cleanup functions
     this.componentCleanupFunctions.forEach(cleanup => {
       try {
@@ -192,9 +194,35 @@ class SimpleRouter {
     })
   }
 
+  cleanupCourseModalArtifacts() {
+    const classInfoBackground = document.getElementById('class-info-background')
+    if (classInfoBackground && classInfoBackground.parentNode) {
+      classInfoBackground.parentNode.removeChild(classInfoBackground)
+    }
+
+    const classInfo = document.getElementById('class-info')
+    if (classInfo) {
+      // When leaving course fullscreen routes, hide immediately to avoid slide-out animation.
+      if (document.body.classList.contains('course-page-mode')) {
+        classInfo.style.transition = 'none'
+        classInfo.style.transform = 'none'
+        classInfo.style.opacity = '0'
+        classInfo.style.display = 'none'
+      }
+
+      classInfo.classList.remove('show', 'fully-open', 'swiping')
+      classInfo.style.removeProperty('--modal-translate-y')
+    }
+
+    document.body.style.overflow = ''
+  }
+
   async loadPage(path) {
     // Show loading bar
     this.showLoadingBar()
+
+    // Prevent stale class-info overlay from persisting across routes
+    this.cleanupCourseModalArtifacts()
 
     // Save courses page state before navigating away
     if (this.isOnCoursesPage()) {
@@ -218,7 +246,6 @@ class SimpleRouter {
         const doc = parser.parseFromString(html, 'text/html')
 
         const coursePage = doc.querySelector('#course-page')
-        const classInfo = doc.querySelector('#class-info')
 
         let appContent = document.querySelector('#app-content')
         if (!appContent) {
@@ -228,11 +255,15 @@ class SimpleRouter {
         }
 
         appContent.innerHTML = ''
-        if (coursePage) appContent.appendChild(coursePage.cloneNode(true))
-        if (classInfo) appContent.appendChild(classInfo.cloneNode(true))
+        const courseAppContent = document.createElement('div')
+        courseAppContent.id = 'course-app-content'
+
+        if (coursePage) courseAppContent.appendChild(coursePage.cloneNode(true))
+
+        appContent.appendChild(courseAppContent)
 
         document.body.classList.add('course-page-mode')
-        this.updateActiveNav('/courses')
+        this.updateActiveNav('')
 
         await this.initializeShared()
 

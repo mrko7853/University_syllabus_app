@@ -206,6 +206,7 @@ class AssignmentsManager {
         const instructionsTextarea = document.getElementById('assignment-modal-instructions');
         const subjectTag = document.getElementById('subject-tag');
         const subjectDropdown = document.getElementById('subject-dropdown');
+        const subjectCurrent = document.getElementById('subject-current');
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
 
@@ -213,7 +214,10 @@ class AssignmentsManager {
 
         if (titleInput) titleInput.value = '';
         if (dueDateInput) dueDateInput.value = this.formatDateInputValue(new Date());
-        if (statusSelect) statusSelect.value = 'not_started';
+        if (statusSelect) {
+            statusSelect.value = 'not_started';
+            statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         if (instructionsTextarea) instructionsTextarea.value = '';
         if (emojiTrigger) {
             emojiTrigger.textContent = '📄';
@@ -232,6 +236,13 @@ class AssignmentsManager {
             subjectTag.dataset.term = '';
         }
 
+        if (subjectCurrent) {
+            subjectCurrent.style.setProperty('--subject-open-bg', '#e0e0e0');
+        }
+
+        if (subjectDropdown) subjectDropdown.style.display = 'none';
+        if (subjectCurrent) subjectCurrent.classList.remove('open');
+
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
         overlay.style.display = 'flex';
@@ -241,14 +252,15 @@ class AssignmentsManager {
         if (!subjectDropdown) return;
 
         const coursesForSemester = this.getCoursesForSelectedSemester();
+        const selectedCode = subjectTag?.dataset.code || '';
         console.log('Populating dropdown with courses:', coursesForSemester);
 
         subjectDropdown.innerHTML = `
-            <div class="subject-option no-subject" data-code="" data-name="" data-color="">
+            <div class="subject-option no-subject${!selectedCode ? ' selected' : ''}" data-code="" data-name="" data-color="">
                 <span class="option-tag" style="background-color: #e0e0e0">None</span>
             </div>
             ${coursesForSemester.map(course => `
-                <div class="subject-option" 
+                <div class="subject-option${selectedCode === course.code ? ' selected' : ''}" 
                      data-code="${course.code}" 
                      data-name="${this.escapeHtml(course.title)}"
                      data-color="${course.color}"
@@ -266,6 +278,7 @@ class AssignmentsManager {
                 e.stopPropagation();
                 const name = option.dataset.name;
                 const color = option.dataset.color;
+                const current = document.getElementById('subject-current');
 
                 if (subjectTag) {
                     if (name) {
@@ -287,7 +300,15 @@ class AssignmentsManager {
                     }
                 }
 
+                const openBackground = name ? (color || '#e0e0e0') : '#e0e0e0';
+                if (current) {
+                    current.style.setProperty('--subject-open-bg', openBackground);
+                }
+
+                subjectDropdown.querySelectorAll('.subject-option').forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
                 subjectDropdown.style.display = 'none';
+                if (current) current.classList.remove('open');
             });
         });
     }
@@ -356,7 +377,7 @@ class AssignmentsManager {
         window._assignmentsListenersRoot = this.root;
         console.log('Setting up event listeners...');
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        document.querySelectorAll('.tab-btn[data-view]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const view = e.currentTarget.dataset.view;
                 this.switchView(view);
@@ -492,8 +513,10 @@ class AssignmentsManager {
                 e.preventDefault();
                 e.stopPropagation();
                 const dropdown = document.getElementById('subject-dropdown');
+                if (!dropdown) return;
                 const isHidden = dropdown.style.display === 'none' || dropdown.style.display === '';
                 dropdown.style.display = isHidden ? 'block' : 'none';
+                newSubjectCurrent.classList.toggle('open', isHidden);
                 console.log('Dropdown toggled:', isHidden ? 'shown' : 'hidden');
             });
 
@@ -505,6 +528,7 @@ class AssignmentsManager {
                     const current = document.getElementById('subject-current');
                     if (dropdown && current && !current.contains(e.target) && !dropdown.contains(e.target)) {
                         dropdown.style.display = 'none';
+                        current.classList.remove('open');
                     }
                 });
             }
@@ -774,10 +798,34 @@ class AssignmentsManager {
             const options = customSelect.querySelector('.custom-select-options');
             const targetSelectId = customSelect.dataset.target;
             const targetSelect = document.getElementById(targetSelectId);
+            const valueElement = trigger?.querySelector('.custom-select-value');
 
             if (!trigger || !options || !targetSelect) return;
             if (customSelect.dataset.initialized === 'true') return;
             customSelect.dataset.initialized = 'true';
+
+            const syncFromTargetSelect = () => {
+                const currentValue = targetSelect.value;
+                let matchedOption = null;
+
+                options.querySelectorAll('.custom-select-option').forEach(option => {
+                    const isSelected = option.dataset.value === currentValue;
+                    option.classList.toggle('selected', isSelected);
+                    if (isSelected) matchedOption = option;
+                });
+
+                if (!matchedOption) {
+                    matchedOption = options.querySelector('.custom-select-option');
+                    if (matchedOption) {
+                        matchedOption.classList.add('selected');
+                        targetSelect.value = matchedOption.dataset.value || '';
+                    }
+                }
+
+                if (valueElement && matchedOption) {
+                    valueElement.textContent = matchedOption.textContent;
+                }
+            };
 
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -797,7 +845,6 @@ class AssignmentsManager {
                 options.querySelectorAll('.custom-select-option').forEach(opt => opt.classList.remove('selected'));
                 option.classList.add('selected');
 
-                const valueElement = trigger.querySelector('.custom-select-value');
                 if (valueElement) valueElement.textContent = text;
 
                 targetSelect.value = value;
@@ -805,6 +852,9 @@ class AssignmentsManager {
 
                 customSelect.classList.remove('open');
             });
+
+            targetSelect.addEventListener('change', syncFromTargetSelect);
+            syncFromTargetSelect();
         });
 
         if (!this.customSelectsInitialized) {
@@ -940,19 +990,20 @@ class AssignmentsManager {
     }
 
     switchView(view) {
-        this.currentView = view;
+        const normalizedView = view === 'by-due-date' ? 'by-due-date' : 'all-assignments';
+        this.currentView = normalizedView;
 
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.view === view);
+            btn.classList.toggle('active', btn.dataset.view === normalizedView);
         });
 
         const allView = document.getElementById('all-assignments-view');
         const calendarView = document.getElementById('by-due-date-view');
 
-        if (allView) allView.style.display = view === 'all-assignments' ? 'block' : 'none';
-        if (calendarView) calendarView.style.display = view === 'by-due-date' ? 'block' : 'none';
+        if (allView) allView.style.display = normalizedView === 'all-assignments' ? 'block' : 'none';
+        if (calendarView) calendarView.style.display = normalizedView === 'by-due-date' ? 'block' : 'none';
 
-        if (view === 'by-due-date') {
+        if (normalizedView === 'by-due-date') {
             this.renderCalendarView();
         } else {
             this.renderTableView();
@@ -1194,6 +1245,7 @@ class AssignmentsManager {
         const instructionsTextarea = document.getElementById('assignment-modal-instructions');
         const subjectTag = document.getElementById('subject-tag');
         const subjectDropdown = document.getElementById('subject-dropdown');
+        const subjectCurrent = document.getElementById('subject-current');
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
 
@@ -1207,7 +1259,10 @@ class AssignmentsManager {
         } else if (dueDateInput) {
             dueDateInput.value = '';
         }
-        if (statusSelect) statusSelect.value = assignment.status || 'not_started';
+        if (statusSelect) {
+            statusSelect.value = assignment.status || 'not_started';
+            statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         if (instructionsTextarea) instructionsTextarea.value = assignment.instructions || '';
         if (!emojiTrigger) {
             console.warn('Assignments: emoji trigger not found in modal');
@@ -1222,7 +1277,7 @@ class AssignmentsManager {
         if (subjectTag) {
             if (assignment.course_tag_name) {
                 subjectTag.textContent = assignment.course_tag_name;
-                subjectTag.style.backgroundColor = assignment.course_tag_color || '#666666';
+                subjectTag.style.backgroundColor = assignment.course_tag_color || '#e0e0e0';
                 subjectTag.classList.add('has-tag');
                 subjectTag.dataset.code = assignment.course_code || '';
                 subjectTag.dataset.color = assignment.course_tag_color || '';
@@ -1238,6 +1293,16 @@ class AssignmentsManager {
                 subjectTag.dataset.term = '';
             }
         }
+
+        if (subjectCurrent) {
+            const openBackgroundColor = assignment.course_tag_name
+                ? (assignment.course_tag_color || '#e0e0e0')
+                : '#e0e0e0';
+            subjectCurrent.style.setProperty('--subject-open-bg', openBackgroundColor);
+        }
+
+        if (subjectDropdown) subjectDropdown.style.display = 'none';
+        if (subjectCurrent) subjectCurrent.classList.remove('open');
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
@@ -1279,7 +1344,7 @@ class AssignmentsManager {
 
             const courseCode = subjectTag?.dataset.code || null;
             const courseName = subjectTag?.classList.contains('has-tag') ? subjectTag.textContent : null;
-            const courseColor = subjectTag?.dataset.color || '#666666';
+            const courseColor = subjectTag?.dataset.color || '#e0e0e0';
             const courseYear = subjectTag?.dataset.year || null;
             const courseTerm = subjectTag?.dataset.term || null;
 

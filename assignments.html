@@ -286,8 +286,19 @@
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">📊 Status</span>
-                            <select class="meta-value status-select" id="assignment-modal-status">
-                                <option value="not_started">Not Started</option>
+                            <div class="status-selector custom-select" data-target="assignment-modal-status">
+                                <div class="custom-select-trigger" tabindex="0">
+                                    <span class="custom-select-value">Not Started</span>
+                                    <div class="custom-select-arrow"></div>
+                                </div>
+                                <div class="custom-select-options">
+                                    <div class="custom-select-option selected" data-value="not_started">Not Started</div>
+                                    <div class="custom-select-option" data-value="ongoing">Ongoing</div>
+                                    <div class="custom-select-option" data-value="completed">Completed</div>
+                                </div>
+                            </div>
+                            <select class="status-select" id="assignment-modal-status">
+                                <option value="not_started" selected>Not Started</option>
                                 <option value="ongoing">Ongoing</option>
                                 <option value="completed">Completed</option>
                             </select>

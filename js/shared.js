@@ -818,7 +818,7 @@ export async function fetchProfessorChanges(courseCodes) {
     }
 }
 
-export async function openCourseInfoMenu(course, updateURL = true) {
+export async function openCourseInfoMenu(course, updateURL = true, options = {}) {
     console.log('Opening course info menu for:', course);
 
     // Function to properly format time slots from Japanese to English
@@ -899,7 +899,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
             const retryClassClose = document.getElementById("class-close");
 
             if (retryClassInfo && retryClassContent && retryClassClose) {
-                openCourseInfoMenu(course, updateURL);
+                openCourseInfoMenu(course, updateURL, options);
             } else {
                 console.error("Still cannot find course modal elements after retry");
             }
@@ -907,39 +907,47 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         return;
     }
 
+    const isDedicatedCoursePage = options.presentation === 'page' ||
+        (document.body.classList.contains('course-page-mode') && /^\/course\//.test(window.location.pathname));
+
     // Update URL if requested (default behavior)
     if (updateURL && course.course_code && course.academic_year && course.term) {
         const newURL = generateCourseURL(course.course_code, course.academic_year, course.term);
         window.history.pushState({ course: course }, '', newURL);
     }
 
-    // Create or get the background overlay
+    // Create or get the background overlay (modal mode only)
     let classInfoBackground = document.getElementById("class-info-background");
-    if (!classInfoBackground) {
-        classInfoBackground = document.createElement("div");
-        classInfoBackground.id = "class-info-background";
-        document.body.appendChild(classInfoBackground);
+    if (!isDedicatedCoursePage) {
+        if (!classInfoBackground) {
+            classInfoBackground = document.createElement("div");
+            classInfoBackground.id = "class-info-background";
+            document.body.appendChild(classInfoBackground);
 
-        // Close menu when clicking background
-        classInfoBackground.addEventListener("click", function () {
-            // Use smooth closing animation by removing show class
-            classInfo.classList.remove("show");
+            // Close menu when clicking background
+            classInfoBackground.addEventListener("click", function () {
+                // Use smooth closing animation by removing show class
+                classInfo.classList.remove("show");
 
-            setTimeout(() => {
-                document.body.style.overflow = "auto";
-                // Clear URL when closing - go back to home
-                window.history.pushState({}, '', '/');
+                setTimeout(() => {
+                    document.body.style.overflow = "auto";
+                    // Clear URL when closing - go back to home
+                    window.history.pushState({}, '', '/');
 
-                // Reset any inline styles before removing
-                classInfo.style.transform = '';
-                classInfo.style.transition = '';
-                classInfo.style.opacity = '';
+                    // Reset any inline styles before removing
+                    classInfo.style.transform = '';
+                    classInfo.style.transition = '';
+                    classInfo.style.opacity = '';
 
-                if (classInfoBackground.parentNode) {
-                    classInfoBackground.parentNode.removeChild(classInfoBackground);
-                }
-            }, 400); // Match the CSS transition duration
-        });
+                    if (classInfoBackground.parentNode) {
+                        classInfoBackground.parentNode.removeChild(classInfoBackground);
+                    }
+                }, 400); // Match the CSS transition duration
+            });
+        }
+    } else if (classInfoBackground && classInfoBackground.parentNode) {
+        classInfoBackground.parentNode.removeChild(classInfoBackground);
+        classInfoBackground = null;
     }
 
     // Get course color from the course data based on type
@@ -1649,21 +1657,20 @@ export async function openCourseInfoMenu(course, updateURL = true) {
 
     classInfo.classList.add("show");
 
-    // On mobile, start in semi-open state; on desktop, no change needed
-    if (window.innerWidth <= 780) {
-        // Remove fully-open class in case it was set previously
-    }
-
-    document.body.style.overflow = "hidden";
-
     // Reset any leftover inline styles from previous interactions
     classInfo.style.transform = '';
     classInfo.style.transition = '';
     classInfo.style.opacity = '';
 
-    // Add mobile swipe-to-close functionality
-    if (window.innerWidth <= 780) {
-        addSwipeToClose(classInfo, classInfoBackground);
+    if (isDedicatedCoursePage) {
+        document.body.style.overflow = "auto";
+    } else {
+        document.body.style.overflow = "hidden";
+
+        // Add mobile swipe-to-close functionality
+        if (window.innerWidth <= 780 && classInfoBackground) {
+            addSwipeToClose(classInfo, classInfoBackground);
+        }
     }
 
     // Restructure review dates for mobile after modal content is loaded
@@ -1672,9 +1679,11 @@ export async function openCourseInfoMenu(course, updateURL = true) {
     }
 
     // Show background with fade-in animation
-    setTimeout(() => {
-        classInfoBackground.style.opacity = "1";
-    }, 10);
+    if (!isDedicatedCoursePage && classInfoBackground) {
+        setTimeout(() => {
+            classInfoBackground.style.opacity = "1";
+        }, 10);
+    }
 
     // Set up add/remove course button functionality
     const addRemoveButton = document.getElementById("class-add-remove");
@@ -1886,7 +1895,7 @@ export async function openCourseInfoMenu(course, updateURL = true) {
         });
     }
 
-    if (!classClose.dataset.listenerAttached) {
+    if (!isDedicatedCoursePage && !classClose.dataset.listenerAttached) {
         classClose.addEventListener("click", function () {
             const currentBackground = document.getElementById("class-info-background");
 
@@ -3058,7 +3067,19 @@ function getCurrentYear() {
     if (yearSelect && yearSelect.value) {
         return parseInt(yearSelect.value);
     }
-    // Fallback to current year
+
+    // On full course page URLs, use the URL semester context
+    const courseParams = parseCourseURL();
+    if (courseParams && courseParams.year) {
+        return courseParams.year;
+    }
+
+    // Fallback to router-global state if available
+    if (typeof window.globalCurrentYear === 'number' && !Number.isNaN(window.globalCurrentYear)) {
+        return window.globalCurrentYear;
+    }
+
+    // Final fallback to current year
     return new Date().getFullYear();
 }
 
@@ -3067,8 +3088,21 @@ function getCurrentTerm() {
     if (termSelect && termSelect.value) {
         return termSelect.value;
     }
-    // Fallback to current term logic
-    return 'Fall'; // Adjust as needed
+
+    // On full course page URLs, use the URL semester context
+    const courseParams = parseCourseURL();
+    if (courseParams && courseParams.term) {
+        return courseParams.term;
+    }
+
+    // Fallback to router-global state if available
+    if (typeof window.globalCurrentTerm === 'string' && window.globalCurrentTerm) {
+        return window.globalCurrentTerm;
+    }
+
+    // Final fallback to current term logic
+    const currentMonth = new Date().getMonth() + 1;
+    return currentMonth >= 8 || currentMonth <= 2 ? 'Fall' : 'Spring';
 }
 
 // Check if the currently selected year/term is the current semester
