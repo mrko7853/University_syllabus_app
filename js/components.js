@@ -1,5 +1,5 @@
-import { supabase } from "/supabase.js";
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "/js/shared.js";
+import { supabase } from "../supabase.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "./shared.js";
 
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {

@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Assignments - BlazeArchive</title>
+    <title>Assignments - ILA Companion</title>
     <link rel="stylesheet" href="css/blaze.css">
-    <script type="module" src="/js/components.js"></script>
-    <script type="module" src="/js/shared.js"></script>
-    <script type="module" src="/js/assignments.js"></script>
-    <script type="module" src="/js/router.js"></script>
+    <script type="module" src="js/components.js"></script>
+    <script type="module" src="js/shared.js"></script>
+    <script type="module" src="js/assignments.js"></script>
+    <script type="module" src="js/router.js"></script>
 </head>
 
 <body>
@@ -259,7 +259,7 @@
                                 </div>
                             </div>
                         </div>
-                        <input type="text" class="assignment-modal-title" id="assignment-modal-title"
+                        <input type="text" spellcheck="false" class="assignment-modal-title" id="assignment-modal-title"
                             placeholder="Assignment Title">
                         <button class="assignment-modal-close" id="assignment-modal-close">
                             <div class="button-icon">
@@ -269,32 +269,41 @@
                     </div>
                     <div class="assignment-modal-meta">
                         <div class="meta-item">
-                            <span class="meta-label">📅 Due Date</span>
+                            <span class="meta-label">
+                                <span class="col-icon assignment-due-icon"></span>
+                                Due Date
+                            </span>
                             <input type="text" class="meta-value date-picker-trigger" id="assignment-modal-due-date" readonly>
                         </div>
                         <div class="meta-item">
-                            <span class="meta-label">📚 Subject</span>
+                            <span class="meta-label">
+                                <span class="col-icon assignment-type-icon"></span>
+                                Subject
+                            </span>
                             <div class="subject-selector" id="assignment-modal-subject">
                                 <div class="subject-current" id="subject-current">
                                     <span class="subject-tag" id="subject-tag">Select course</span>
                                     <span class="subject-arrow">▼</span>
                                 </div>
-                                <div class="subject-dropdown" id="subject-dropdown" style="display: none;">
+                                <div class="subject-dropdown" id="subject-dropdown">
                                     <!-- Course options will be rendered here -->
                                 </div>
                             </div>
                         </div>
                         <div class="meta-item">
-                            <span class="meta-label">📊 Status</span>
+                            <span class="meta-label">
+                                <span class="col-icon assignment-status-icon"></span>
+                                Status
+                            </span>
                             <div class="status-selector custom-select" data-target="assignment-modal-status">
                                 <div class="custom-select-trigger" tabindex="0">
                                     <span class="custom-select-value">Not Started</span>
                                     <div class="custom-select-arrow"></div>
                                 </div>
                                 <div class="custom-select-options">
-                                    <div class="custom-select-option selected" data-value="not_started">Not Started</div>
-                                    <div class="custom-select-option" data-value="ongoing">Ongoing</div>
-                                    <div class="custom-select-option" data-value="completed">Completed</div>
+                                    <div class="custom-select-option selected" data-value="not_started"><span class="option-tag">Not Started</span></div>
+                                    <div class="custom-select-option" data-value="ongoing"><span class="option-tag">Ongoing</span></div>
+                                    <div class="custom-select-option" data-value="completed"><span class="option-tag">Completed</span></div>
                                 </div>
                             </div>
                             <select class="status-select" id="assignment-modal-status">
@@ -306,7 +315,7 @@
                     </div>
                     <div class="assignment-modal-body">
                         <div class="instructions-section">
-                            <h3 class="section-title">Instructions</h3>
+                            <h3 class="section-title"><span class="col-icon assignment-instructions-icon"></span>Instructions</h3>
                             <textarea class="instructions-editor" id="assignment-modal-instructions"
                                 placeholder="Add instructions, notes, or any details here..."></textarea>
                         </div>

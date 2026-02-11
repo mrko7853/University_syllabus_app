@@ -1,5 +1,6 @@
-import { supabase } from "/supabase.js";
+import { supabase } from "../supabase.js";
 import * as wanakana from 'wanakana';
+import { getCurrentAppPath, stripBase, toAppUrl, withBase } from './path-utils.js';
 
 // Course type to color mapping
 const courseTypeColors = {
@@ -210,7 +211,6 @@ function rgbToHex(rgb) {
 
 // Helper function to generate course URL
 function generateCourseURL(courseCode, academicYear, term) {
-    const baseURL = window.location.origin;
     // Clean the course code for URL: remove special characters, convert spaces to underscores, lowercase
     const cleanCode = courseCode
         .replace(/[^\w\s]/g, '') // Remove special characters except word chars and spaces
@@ -219,21 +219,21 @@ function generateCourseURL(courseCode, academicYear, term) {
     const encodedCourseCode = encodeURIComponent(cleanCode);
     const encodedYear = encodeURIComponent(academicYear);
     const encodedTerm = encodeURIComponent(term.toLowerCase().replace(/.*\//, '')); // Extract just Fall/Spring
-    return `${baseURL}/course/${encodedCourseCode}/${encodedYear}/${encodedTerm}`;
+    return toAppUrl(`/course/${encodedCourseCode}/${encodedYear}/${encodedTerm}`);
 }
 
 // Export function to generate course URLs for external use
 export function getCourseURL(course) {
     if (!course.course_code || !course.academic_year || !course.term) {
         console.warn('Course missing required fields for URL generation:', course);
-        return window.location.pathname;
+        return getCurrentAppPath();
     }
     return generateCourseURL(course.course_code, course.academic_year, course.term);
 }
 
 // Helper function to parse course URL parameters
 function parseCourseURL() {
-    const path = window.location.pathname;
+    const path = getCurrentAppPath();
     // Look for clean URL pattern: /course/courseCode/year/term
     const match = path.match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)\/?$/);
 
@@ -908,7 +908,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     }
 
     const isDedicatedCoursePage = options.presentation === 'page' ||
-        (document.body.classList.contains('course-page-mode') && /^\/course\//.test(window.location.pathname));
+        (document.body.classList.contains('course-page-mode') && /^\/course\//.test(getCurrentAppPath()));
 
     // Update URL if requested (default behavior)
     if (updateURL && course.course_code && course.academic_year && course.term) {
@@ -932,7 +932,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 setTimeout(() => {
                     document.body.style.overflow = "auto";
                     // Clear URL when closing - go back to home
-                    window.history.pushState({}, '', '/');
+                    window.history.pushState({}, '', withBase('/'));
 
                     // Reset any inline styles before removing
                     classInfo.style.transform = '';
@@ -1560,7 +1560,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         classAssignments.innerHTML = `
                             <div class="class-subtitle-assignments">
                                 <p class="subtitle-opacity">Your Assignments</p>
-                                <a href="/assignments" class="view-all-assignments-btn" id="view-all-assignments-link">
+                                <a href="${withBase('/assignments')}" class="view-all-assignments-btn" id="view-all-assignments-link">
                                     <div class="button-icon">
                                         <p>View All</p>
                                         <div class="external-link-icon"></div>
@@ -1598,7 +1598,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 if (classInfoBackground) classInfoBackground.remove();
                                 document.body.style.overflow = 'auto';
                                 // Navigate to assignments page with assignment ID in hash
-                                window.location.href = `/assignments#assignment-${assignmentId}`;
+                                window.location.href = `${withBase('/assignments')}#assignment-${assignmentId}`;
                             });
                         });
 
@@ -1614,7 +1614,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 if (classInfoBackground) classInfoBackground.remove();
                                 document.body.style.overflow = 'auto';
                                 // Navigate to assignments page
-                                window.location.href = '/assignments';
+                                window.location.href = withBase('/assignments');
                             });
                         }
                     } else {
@@ -1626,7 +1626,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                             </div>
                             <div class="no-course-assignments">
                                 <p>No assignments for this course yet.</p>
-                                <a href="/assignments" class="add-assignment-link" id="add-assignment-link">Add an assignment →</a>
+                                <a href="${withBase('/assignments')}" class="add-assignment-link" id="add-assignment-link">Add an assignment →</a>
                             </div>
                         `;
 
@@ -1640,7 +1640,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 if (classInfo) classInfo.classList.remove('show');
                                 if (classInfoBackground) classInfoBackground.remove();
                                 document.body.style.overflow = 'auto';
-                                window.location.href = '/assignments';
+                                window.location.href = withBase('/assignments');
                             });
                         }
                     }
@@ -1905,7 +1905,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             setTimeout(() => {
                 document.body.style.overflow = "auto";
                 // Clear URL when closing - go back to home
-                window.history.pushState({}, '', '/');
+                window.history.pushState({}, '', withBase('/'));
 
                 // Reset any inline styles before removing
                 classInfo.style.transform = '';
@@ -2523,7 +2523,7 @@ export async function initializeCourseRouting() {
     try {
         // Handle route changes (both initial load and popstate events)
         const handleRouteChange = async () => {
-            console.log('Handling route change for path:', window.location.pathname);
+            console.log('Handling route change for path:', getCurrentAppPath());
 
             const params = parseCourseURL();
             if (params) {
@@ -2564,7 +2564,8 @@ export async function initializeCourseRouting() {
             if (target) {
                 event.preventDefault();
                 const url = target.getAttribute('href');
-                window.history.pushState({}, '', url);
+                const appPath = stripBase(url);
+                window.history.pushState({}, '', withBase(appPath));
                 handleRouteChange();
             }
         });
@@ -2579,7 +2580,7 @@ export async function initializeCourseRouting() {
 // Debug function to test course routing manually
 window.testCourseRouting = function () {
     console.log('Testing course routing...');
-    console.log('Current path:', window.location.pathname);
+    console.log('Current path:', getCurrentAppPath());
 
     const params = parseCourseURL();
     if (params) {
@@ -3414,7 +3415,7 @@ function addSwipeToClose(modal, background) {
 
                     setTimeout(() => {
                         document.body.style.overflow = "auto";
-                        window.history.pushState({}, '', '/');
+                        window.history.pushState({}, '', withBase('/'));
 
                         if (background.parentNode) {
                             background.parentNode.removeChild(background);
@@ -3468,7 +3469,7 @@ function addSwipeToClose(modal, background) {
 
             setTimeout(() => {
                 document.body.style.overflow = "auto";
-                window.history.pushState({}, '', '/');
+                window.history.pushState({}, '', withBase('/'));
 
                 if (background.parentNode) {
                     background.parentNode.removeChild(background);
@@ -3488,7 +3489,7 @@ function addSwipeToClose(modal, background) {
 
             setTimeout(() => {
                 document.body.style.overflow = "auto";
-                window.history.pushState({}, '', '/');
+                window.history.pushState({}, '', withBase('/'));
 
                 if (background.parentNode) {
                     background.parentNode.removeChild(background);

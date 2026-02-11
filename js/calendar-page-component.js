@@ -1,6 +1,6 @@
 // Calendar Page Component - Dedicated component for calendar page with mobile support
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "/js/shared.js";
-import { supabase } from "/supabase.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "./shared.js";
+import { supabase } from "../supabase.js";
 
 class CalendarPageComponent extends HTMLElement {
   constructor() {

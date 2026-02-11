@@ -1,4 +1,5 @@
-import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
+import { fetchCourseData, openCourseInfoMenu } from "./shared.js";
+import { getCurrentAppPath, withBase } from "./path-utils.js";
 
 function normalizeTerm(term) {
   if (!term) return null;
@@ -9,7 +10,7 @@ function normalizeTerm(term) {
 }
 
 function getCourseParams() {
-  const match = window.location.pathname.match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/);
+  const match = getCurrentAppPath().match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/);
   if (!match) return null;
   const [, courseCode, year, term] = match;
   return {
@@ -26,7 +27,11 @@ async function initCoursePage() {
 
   if (backBtn) {
     backBtn.addEventListener("click", () => {
-      window.location.href = "/courses";
+      if (window.router) {
+        window.router.navigate('/courses');
+      } else {
+        window.location.href = withBase('/courses');
+      }
     });
   }
 

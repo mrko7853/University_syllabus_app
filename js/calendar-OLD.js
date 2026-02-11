@@ -1,8 +1,8 @@
-import { supabase } from "/supabase.js";
-import { fetchCourseData, openCourseInfoMenu } from "/js/shared.js";
+import { supabase } from "../supabase.js";
+import { fetchCourseData, openCourseInfoMenu } from "./shared.js";
 
 // Import components to ensure web components are defined
-import '/js/components.js';
+import './components.js';
 
 function checkMobile() {
     window.isMobile = window.innerWidth <= 780;

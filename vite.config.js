@@ -3,6 +3,8 @@ import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: process.env.NODE_ENV === 'production' ? '/dev/' : '/',
+
   optimizeDeps: {
     include: ['@supabase/supabase-js', 'wanakana'],
   },

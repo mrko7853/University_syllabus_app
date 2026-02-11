@@ -1,10 +1,11 @@
-import { supabase } from "/supabase.js";
-import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters } from '/js/shared.js';
-import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from '/js/shared.js';
+import { supabase } from "../supabase.js";
+import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters } from './shared.js';
+import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from './shared.js';
 import * as wanakana from 'wanakana';
+import { getCurrentAppPath } from './path-utils.js';
 
 // Import components to ensure web components are defined
-import '/js/components.js';
+import './components.js';
 
 // Handle dynamic viewport height for mobile browsers
 function setViewportHeight() {
@@ -1024,9 +1025,9 @@ function setupDashboardEventListeners() {
                 console.log('  → Dropdowns synced');
 
                 // Check if we're on the calendar page
-                const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+                const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
                 console.log('  → Is calendar page?', isCalendarPage);
-                console.log('  → Current pathname:', window.location.pathname);
+                console.log('  → Current pathname:', getCurrentAppPath());
                 console.log('  → Calendar component exists?', !!document.querySelector('calendar-page'));
 
                 if (isCalendarPage) {
@@ -1726,7 +1727,7 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
             desktopHighlightIndex = -1;
 
             // Check if we're on the calendar page
-            const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+            const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
 
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
@@ -2413,7 +2414,7 @@ function showAutocomplete(query, searchAutocomplete) {
             currentHighlightIndex = -1;
 
             // Check if we're on the calendar page
-            const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+            const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
 
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
@@ -2784,7 +2785,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 // Function to perform search
 function performSearch(searchQuery) {
     // Check if we're on the calendar page
-    const isCalendarPage = window.location.pathname === '/calendar' || document.querySelector('calendar-page') !== null;
+    const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
 
     if (!isCalendarPage) {
         // Update the global search state (only on courses page)

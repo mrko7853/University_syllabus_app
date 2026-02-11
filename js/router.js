@@ -2,6 +2,7 @@
  * Complete SPA Router - Handles full component lifecycle
  * Ensures all components work properly on every navigation
  */
+import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
 
 class SimpleRouter {
   constructor() {
@@ -21,7 +22,7 @@ class SimpleRouter {
     // Course URL pattern: /course/courseCode/year/term
     this.coursePattern = /^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/
 
-    this.currentPath = window.location.pathname
+    this.currentPath = getCurrentAppPath()
     this.isInitialized = false
     this.componentCleanupFunctions = []
 
@@ -59,7 +60,7 @@ class SimpleRouter {
   init() {
     // Handle browser back/forward
     window.addEventListener('popstate', (e) => {
-      this.loadPage(window.location.pathname)
+      this.loadPage(getCurrentAppPath())
     })
 
     // Handle navigation clicks
@@ -88,7 +89,7 @@ class SimpleRouter {
     })
 
     // Load initial page
-    const currentPath = window.location.pathname
+    const currentPath = getCurrentAppPath()
     const basePath = this.extractBasePath(currentPath)
 
     if (basePath === '/' || basePath === '' || basePath === '/courses' || basePath === '/dashboard') {
@@ -137,8 +138,10 @@ class SimpleRouter {
       path = path.replace(window.location.origin, '')
     }
 
+    const appPath = stripBase(path)
+
     // Handle route parameters (e.g., /profile/uuid)
-    const cleanPath = this.extractBasePath(path)
+    const cleanPath = this.extractBasePath(appPath)
 
     // Normalize path
     if (cleanPath === '' || cleanPath === '/') {
@@ -150,7 +153,7 @@ class SimpleRouter {
     }
 
     if (path !== this.currentPath || !this.isInitialized) {
-      window.history.pushState({}, '', path)
+      window.history.pushState({}, '', withBase(path))
       this.loadPage(path)
     }
   }
@@ -238,7 +241,7 @@ class SimpleRouter {
       try {
         this.cleanupCurrentPage()
 
-        const response = await fetch('/course.html?t=' + Date.now())
+        const response = await fetch(withBase('/course.html') + '?t=' + Date.now())
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         const html = await response.text()
@@ -313,7 +316,7 @@ class SimpleRouter {
       this.updateLoadingProgress(30)
 
       // Fetch the HTML content
-      const response = await fetch(htmlFile + '?t=' + Date.now())
+      const response = await fetch(withBase(htmlFile) + '?t=' + Date.now())
       if (!response.ok) {
         throw new Error(`Failed to load ${htmlFile}`)
       }
@@ -1127,25 +1130,31 @@ class SimpleRouter {
 
   // Extract base path from parameterized routes
   extractBasePath(path) {
+    const rawPath = String(path || '/').split('?')[0].split('#')[0] || '/'
+    const normalizedPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath
+
     // Handle routes with parameters like /profile/uuid
-    if (path.startsWith('/profile/')) {
+    if (normalizedPath.startsWith('/profile/')) {
       return '/profile'
     }
-    if (path.startsWith('/courses/')) {
+    if (normalizedPath.startsWith('/courses/')) {
       return '/courses'
     }
-    if (path.startsWith('/dashboard/')) {
+    if (normalizedPath.startsWith('/dashboard/')) {
       return '/courses' // Redirect legacy dashboard paths
     }
-    if (path.startsWith('/calendar/')) {
+    if (normalizedPath.startsWith('/calendar/')) {
       return '/calendar'
     }
-    if (path.startsWith('/settings/')) {
+    if (normalizedPath.startsWith('/settings/')) {
       return '/settings'
+    }
+    if (normalizedPath === '/index' || normalizedPath === '/index/' || normalizedPath.startsWith('/index/')) {
+      return '/courses'
     }
 
     // Return the path as-is for routes without parameters
-    return path
+    return normalizedPath
   }
 
   // Check if a route requires authentication
@@ -1194,7 +1203,7 @@ class SimpleRouter {
     const pageName = pageNames[path] || 'Page'
 
     // Update title
-    document.title = `${pageName} - BlazeArchive`
+    document.title = `${pageName} - ILA Companion`
 
     // Show locked message
     // <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
@@ -2300,7 +2309,7 @@ class SimpleRouter {
       // Check if we're running from bundled assets
       window.location.pathname.includes('/assets/') ||
       // Check for common production indicators
-      process?.env?.NODE_ENV === 'production' ||
+      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') ||
       // Check if development server port is NOT in URL
       !window.location.href.includes(':5173') &&
       !window.location.href.includes('localhost') &&

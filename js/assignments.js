@@ -1,5 +1,5 @@
-import { supabase } from "/supabase.js";
-import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType } from "/js/shared.js";
+import { supabase } from "../supabase.js";
+import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType } from "./shared.js";
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -21,6 +21,7 @@ class AssignmentsManager {
         this.isNewAssignment = false;
         this.eventListenersSetup = false;
         this.isSaving = false;
+        this.courseNameDisplayMaxLength = 22;
     }
 
     async init() {
@@ -205,18 +206,22 @@ class AssignmentsManager {
         const statusSelect = document.getElementById('assignment-modal-status');
         const instructionsTextarea = document.getElementById('assignment-modal-instructions');
         const subjectTag = document.getElementById('subject-tag');
+        const subjectSelector = document.getElementById('assignment-modal-subject');
         const subjectDropdown = document.getElementById('subject-dropdown');
         const subjectCurrent = document.getElementById('subject-current');
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
+        const saveBtn = document.getElementById('assignment-save-btn');
 
         if (!overlay) return;
+        if (saveBtn) saveBtn.disabled = false;
 
         if (titleInput) titleInput.value = '';
         if (dueDateInput) dueDateInput.value = this.formatDateInputValue(new Date());
         if (statusSelect) {
             statusSelect.value = 'not_started';
             statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            this.updateStatusSelectorAppearance(statusSelect.value);
         }
         if (instructionsTextarea) instructionsTextarea.value = '';
         if (emojiTrigger) {
@@ -228,19 +233,18 @@ class AssignmentsManager {
 
         if (subjectTag) {
             subjectTag.textContent = 'Select course';
-            subjectTag.style.backgroundColor = '#e0e0e0';
+            subjectTag.style.backgroundColor = '';
             subjectTag.classList.remove('has-tag');
             subjectTag.dataset.code = '';
             subjectTag.dataset.color = '';
             subjectTag.dataset.year = '';
             subjectTag.dataset.term = '';
+            subjectTag.dataset.fullName = '';
         }
 
-        if (subjectCurrent) {
-            subjectCurrent.style.setProperty('--subject-open-bg', '#e0e0e0');
-        }
+        this.updateSubjectSelectorAppearance(subjectTag, subjectSelector);
 
-        if (subjectDropdown) subjectDropdown.style.display = 'none';
+        if (subjectSelector) subjectSelector.classList.remove('open');
         if (subjectCurrent) subjectCurrent.classList.remove('open');
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
@@ -279,35 +283,35 @@ class AssignmentsManager {
                 const name = option.dataset.name;
                 const color = option.dataset.color;
                 const current = document.getElementById('subject-current');
+                const selector = document.getElementById('assignment-modal-subject');
 
                 if (subjectTag) {
                     if (name) {
-                        subjectTag.textContent = name;
-                        subjectTag.style.backgroundColor = color;
+                        subjectTag.textContent = this.truncateText(name, this.courseNameDisplayMaxLength);
+                        subjectTag.style.backgroundColor = '';
                         subjectTag.classList.add('has-tag');
                         subjectTag.dataset.code = option.dataset.code;
                         subjectTag.dataset.color = color;
                         subjectTag.dataset.year = option.dataset.year || '';
                         subjectTag.dataset.term = option.dataset.term || '';
+                        subjectTag.dataset.fullName = name;
                     } else {
                         subjectTag.textContent = 'Select course';
-                        subjectTag.style.backgroundColor = '#e0e0e0';
+                        subjectTag.style.backgroundColor = '';
                         subjectTag.classList.remove('has-tag');
                         subjectTag.dataset.code = '';
                         subjectTag.dataset.color = '';
                         subjectTag.dataset.year = '';
                         subjectTag.dataset.term = '';
+                        subjectTag.dataset.fullName = '';
                     }
                 }
 
-                const openBackground = name ? (color || '#e0e0e0') : '#e0e0e0';
-                if (current) {
-                    current.style.setProperty('--subject-open-bg', openBackground);
-                }
+                this.updateSubjectSelectorAppearance(subjectTag, selector);
 
                 subjectDropdown.querySelectorAll('.subject-option').forEach(opt => opt.classList.remove('selected'));
                 option.classList.add('selected');
-                subjectDropdown.style.display = 'none';
+                if (selector) selector.classList.remove('open');
                 if (current) current.classList.remove('open');
             });
         });
@@ -504,7 +508,8 @@ class AssignmentsManager {
 
         const subjectCurrent = document.getElementById('subject-current');
         const subjectDropdown = document.getElementById('subject-dropdown');
-        if (subjectCurrent && subjectDropdown) {
+        const subjectSelector = document.getElementById('assignment-modal-subject');
+        if (subjectCurrent && subjectDropdown && subjectSelector) {
             // Clone the element to remove any existing event listeners
             const newSubjectCurrent = subjectCurrent.cloneNode(true);
             subjectCurrent.parentNode.replaceChild(newSubjectCurrent, subjectCurrent);
@@ -512,12 +517,16 @@ class AssignmentsManager {
             newSubjectCurrent.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                document.querySelectorAll('.custom-select').forEach(customSelect => {
+                    customSelect.classList.remove('open');
+                });
                 const dropdown = document.getElementById('subject-dropdown');
+                const selector = document.getElementById('assignment-modal-subject');
                 if (!dropdown) return;
-                const isHidden = dropdown.style.display === 'none' || dropdown.style.display === '';
-                dropdown.style.display = isHidden ? 'block' : 'none';
-                newSubjectCurrent.classList.toggle('open', isHidden);
-                console.log('Dropdown toggled:', isHidden ? 'shown' : 'hidden');
+                if (!selector) return;
+                const shouldOpen = !selector.classList.contains('open');
+                selector.classList.toggle('open', shouldOpen);
+                newSubjectCurrent.classList.toggle('open', shouldOpen);
             });
 
             // Only add document click listener once globally to prevent duplicates
@@ -526,8 +535,9 @@ class AssignmentsManager {
                 document.addEventListener('click', (e) => {
                     const dropdown = document.getElementById('subject-dropdown');
                     const current = document.getElementById('subject-current');
-                    if (dropdown && current && !current.contains(e.target) && !dropdown.contains(e.target)) {
-                        dropdown.style.display = 'none';
+                    const selector = document.getElementById('assignment-modal-subject');
+                    if (dropdown && current && selector && !selector.contains(e.target) && !dropdown.contains(e.target)) {
+                        selector.classList.remove('open');
                         current.classList.remove('open');
                     }
                 });
@@ -825,6 +835,10 @@ class AssignmentsManager {
                 if (valueElement && matchedOption) {
                     valueElement.textContent = matchedOption.textContent;
                 }
+
+                if (targetSelectId === 'assignment-modal-status') {
+                    this.updateStatusSelectorAppearance(targetSelect.value, customSelect);
+                }
             };
 
             trigger.addEventListener('click', (event) => {
@@ -984,7 +998,7 @@ class AssignmentsManager {
             if (popup && !popup.contains(e.target) &&
                 !e.target.classList.contains('due-date-cell') &&
                 !e.target.classList.contains('date-picker-trigger')) {
-                popup.style.display = 'none';
+                this.hideDatePickerPopup(popup);
             }
         });
     }
@@ -1083,8 +1097,9 @@ class AssignmentsManager {
             const statusClass = `status-${assignment.status.replace('_', '-')}`;
             const statusText = this.getStatusText(assignment.status);
 
+            const displayCourseTagName = this.truncateText(assignment.course_tag_name, this.courseNameDisplayMaxLength);
             const tagHtml = assignment.course_tag_name
-                ? `<span class="course-tag" style="background-color: ${assignment.course_tag_color}">${assignment.course_tag_name}</span>`
+                ? `<span class="course-tag" style="background-color: ${assignment.course_tag_color}">${this.escapeHtml(displayCourseTagName)}</span>`
                 : '<span class="no-tag">-</span>';
 
             return `
@@ -1244,12 +1259,15 @@ class AssignmentsManager {
         const statusSelect = document.getElementById('assignment-modal-status');
         const instructionsTextarea = document.getElementById('assignment-modal-instructions');
         const subjectTag = document.getElementById('subject-tag');
+        const subjectSelector = document.getElementById('assignment-modal-subject');
         const subjectDropdown = document.getElementById('subject-dropdown');
         const subjectCurrent = document.getElementById('subject-current');
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
+        const saveBtn = document.getElementById('assignment-save-btn');
 
         if (!overlay) return;
+        if (saveBtn) saveBtn.disabled = false;
 
         if (deleteBtn) deleteBtn.style.display = 'block';
 
@@ -1262,6 +1280,7 @@ class AssignmentsManager {
         if (statusSelect) {
             statusSelect.value = assignment.status || 'not_started';
             statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            this.updateStatusSelectorAppearance(statusSelect.value);
         }
         if (instructionsTextarea) instructionsTextarea.value = assignment.instructions || '';
         if (!emojiTrigger) {
@@ -1276,32 +1295,29 @@ class AssignmentsManager {
 
         if (subjectTag) {
             if (assignment.course_tag_name) {
-                subjectTag.textContent = assignment.course_tag_name;
-                subjectTag.style.backgroundColor = assignment.course_tag_color || '#e0e0e0';
+                subjectTag.textContent = this.truncateText(assignment.course_tag_name, this.courseNameDisplayMaxLength);
+                subjectTag.style.backgroundColor = '';
                 subjectTag.classList.add('has-tag');
                 subjectTag.dataset.code = assignment.course_code || '';
                 subjectTag.dataset.color = assignment.course_tag_color || '';
                 subjectTag.dataset.year = assignment.course_year || '';
                 subjectTag.dataset.term = assignment.course_term || '';
+                subjectTag.dataset.fullName = assignment.course_tag_name;
             } else {
                 subjectTag.textContent = 'Select course';
-                subjectTag.style.backgroundColor = '#e0e0e0';
+                subjectTag.style.backgroundColor = '';
                 subjectTag.classList.remove('has-tag');
                 subjectTag.dataset.code = '';
                 subjectTag.dataset.color = '';
                 subjectTag.dataset.year = '';
                 subjectTag.dataset.term = '';
+                subjectTag.dataset.fullName = '';
             }
         }
 
-        if (subjectCurrent) {
-            const openBackgroundColor = assignment.course_tag_name
-                ? (assignment.course_tag_color || '#e0e0e0')
-                : '#e0e0e0';
-            subjectCurrent.style.setProperty('--subject-open-bg', openBackgroundColor);
-        }
+        this.updateSubjectSelectorAppearance(subjectTag, subjectSelector);
 
-        if (subjectDropdown) subjectDropdown.style.display = 'none';
+        if (subjectSelector) subjectSelector.classList.remove('open');
         if (subjectCurrent) subjectCurrent.classList.remove('open');
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
@@ -1311,9 +1327,15 @@ class AssignmentsManager {
 
     closeAssignmentModal() {
         const overlay = document.getElementById('assignment-modal-overlay');
+        const saveBtn = document.getElementById('assignment-save-btn');
+        const datePickerPopup = document.getElementById('date-picker-popup');
         if (overlay) {
             overlay.style.display = 'none';
         }
+        if (datePickerPopup) {
+            this.hideDatePickerPopup(datePickerPopup, { immediate: true });
+        }
+        if (saveBtn) saveBtn.disabled = false;
         this.currentAssignment = null;
         this.isNewAssignment = false;
         this.isSaving = false;
@@ -1343,7 +1365,9 @@ class AssignmentsManager {
             if (saveBtn) saveBtn.disabled = true;
 
             const courseCode = subjectTag?.dataset.code || null;
-            const courseName = subjectTag?.classList.contains('has-tag') ? subjectTag.textContent : null;
+            const courseName = subjectTag?.classList.contains('has-tag')
+                ? (subjectTag.dataset.fullName || subjectTag.textContent)
+                : null;
             const courseColor = subjectTag?.dataset.color || '#e0e0e0';
             const courseYear = subjectTag?.dataset.year || null;
             const courseTerm = subjectTag?.dataset.term || null;
@@ -1395,6 +1419,9 @@ class AssignmentsManager {
             const saveBtn = document.getElementById('assignment-save-btn');
             if (saveBtn) saveBtn.disabled = false;
         } finally {
+            this.isSaving = false;
+            const saveBtn = document.getElementById('assignment-save-btn');
+            if (saveBtn) saveBtn.disabled = false;
             window._assignmentSaveInFlight = false;
         }
     }
@@ -1426,6 +1453,42 @@ class AssignmentsManager {
         return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
     }
 
+    showDatePickerPopup(popup) {
+        if (!popup) return;
+        popup.style.display = 'block';
+        popup.dataset.hideToken = '';
+
+        requestAnimationFrame(() => {
+            popup.classList.add('open');
+        });
+    }
+
+    hideDatePickerPopup(popup, { immediate = false } = {}) {
+        if (!popup) return;
+        if (!immediate && (popup.style.display === 'none' || popup.style.display === '')) return;
+
+        if (immediate) {
+            popup.classList.remove('open');
+            popup.style.display = 'none';
+            popup.dataset.hideToken = '';
+            return;
+        }
+
+        const hideToken = `${Date.now()}`;
+        popup.dataset.hideToken = hideToken;
+        popup.classList.remove('open');
+
+        const finishHide = () => {
+            if (popup.dataset.hideToken !== hideToken) return;
+            if (!popup.classList.contains('open')) {
+                popup.style.display = 'none';
+            }
+        };
+
+        popup.addEventListener('transitionend', finishHide, { once: true });
+        window.setTimeout(finishHide, 240);
+    }
+
     openDatePicker(targetElement, assignment, options = {}) {
         const popup = document.getElementById('date-picker-popup');
         if (!popup) return;
@@ -1449,11 +1512,13 @@ class AssignmentsManager {
         }
 
         const rect = targetElement.getBoundingClientRect();
-        popup.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        // Match subject/status dropdown spacing (top: 133% => ~33% extra below trigger)
+        const dropdownOffset = Math.round(rect.height * 0.33);
+        popup.style.top = `${rect.bottom + window.scrollY + dropdownOffset}px`;
         popup.style.left = `${rect.left + window.scrollX}px`;
-        popup.style.display = 'block';
 
         this.renderDatePicker();
+        this.showDatePickerPopup(popup);
     }
 
     renderDatePicker() {
@@ -1529,7 +1594,7 @@ class AssignmentsManager {
 
     async selectDatePickerDate(date) {
         const popup = document.getElementById('date-picker-popup');
-        if (popup) popup.style.display = 'none';
+        if (popup) this.hideDatePickerPopup(popup);
 
         if (this.datePickerTarget?.mode === 'modal') {
             const targetInput = this.datePickerTarget.element;
@@ -1553,6 +1618,37 @@ class AssignmentsManager {
             'completed': 'Completed'
         };
         return statusMap[status] || status;
+    }
+
+    getStatusColors(status) {
+        const statusColors = {
+            'not_started': { background: '#e9ecef', text: '#6c757d' },
+            'ongoing': { background: '#fff3cd', text: '#856404' },
+            'completed': { background: '#d4edda', text: '#155724' }
+        };
+        return statusColors[status] || { background: 'white', text: 'black' };
+    }
+
+    updateStatusSelectorAppearance(status, statusSelector = null) {
+        const selector = statusSelector || document.querySelector('.assignment-modal-meta .status-selector[data-target="assignment-modal-status"]');
+        if (!selector) return;
+
+        const colors = this.getStatusColors(status);
+        selector.style.setProperty('--status-tag-bg', colors.background);
+        selector.style.setProperty('--status-tag-color', colors.text);
+    }
+
+    updateSubjectSelectorAppearance(subjectTag = null, subjectSelector = null) {
+        const tag = subjectTag || document.getElementById('subject-tag');
+        const selector = subjectSelector || document.getElementById('assignment-modal-subject');
+        if (!tag || !selector) return;
+
+        const hasTag = tag.classList.contains('has-tag');
+        const tagBg = hasTag ? (tag.dataset.color || '#e0e0e0') : 'transparent';
+
+        selector.style.setProperty('--subject-selector-bg', 'white');
+        selector.style.setProperty('--subject-tag-bg', tagBg);
+        selector.style.setProperty('--subject-tag-color', hasTag ? '#333' : '#666');
     }
 
     escapeHtml(text) {

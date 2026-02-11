@@ -1,4 +1,5 @@
-import { supabase } from "/supabase.js";
+import { supabase } from "../supabase.js";
+import { withBase } from "./path-utils.js";
 
 // Setup auth form handlers that work with the router
 function setupAuthHandlers() {
@@ -25,7 +26,7 @@ function setupAuthHandlers() {
                 if (window.router) {
                     window.router.navigate('/dashboard');
                 } else {
-                    window.location.href = "/";
+                    window.location.href = withBase('/');
                 }
             }
         });

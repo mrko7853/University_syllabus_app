@@ -1,4 +1,5 @@
-import { supabase } from "/supabase.js";
+import { supabase } from "../supabase.js";
+import { getCurrentAppPath } from "./path-utils.js";
 
 async function initializeProfile() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -50,7 +51,7 @@ document.addEventListener("DOMContentLoaded", initializeProfile);
 
 // Listen for router navigation
 document.addEventListener('pageLoaded', (e) => {
-    if (e.detail.path === '/profile' || window.location.pathname === '/profile') {
+    if (e.detail.path === '/profile' || getCurrentAppPath() === '/profile') {
         setTimeout(initializeProfile, 100);
     }
 });
