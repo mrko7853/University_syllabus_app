@@ -153,9 +153,33 @@ class SimpleRouter {
     }
 
     if (path !== this.currentPath || !this.isInitialized) {
-      window.history.pushState({}, '', withBase(path))
+      const canonicalHistoryPath = this.getCanonicalHistoryPath(path)
+      window.history.pushState({}, '', withBase(canonicalHistoryPath))
       this.loadPage(path)
     }
+  }
+
+  getCanonicalHistoryPath(path) {
+    const normalized = String(path || '/')
+
+    // Keep a single canonical URL shape for top-level pages.
+    // This avoids duplicate route forms like /dev/assignments and /dev/assignments/.
+    const trailingSlashRoutes = new Set([
+      '/courses',
+      '/calendar',
+      '/assignments',
+      '/profile',
+      '/login',
+      '/register',
+      '/settings',
+      '/help'
+    ])
+
+    if (trailingSlashRoutes.has(normalized)) {
+      return `${normalized}/`
+    }
+
+    return normalized
   }
 
   // Clean up existing components before loading new page
@@ -477,22 +501,26 @@ class SimpleRouter {
       // Check if we have saved state to restore
       const hasSavedState = this.coursesPageState.year || this.coursesPageState.term
 
-      // In production, modules are already bundled and available
-      if (this.isProduction()) {
-        // Call initialization functions directly if they exist
-        if (window.initializeDashboard) {
-          await window.initializeDashboard()
+      // On multi-page entrypoints, main.js may not be loaded yet.
+      // Always ensure we can initialize dashboard regardless of start page.
+      let mainModule = null
+      if (typeof window.initializeDashboard !== 'function') {
+        try {
+          mainModule = this.isProduction()
+            ? await import('./main.js')
+            : await import('./main.js?' + Date.now())
+        } catch (error) {
+          console.error('Router: Failed to load main.js for dashboard init', error)
         }
+      }
 
-        // Note: updateCoursesAndFilters is now called inside initializeDashboard
+      if (typeof window.initializeDashboard === 'function') {
+        await window.initializeDashboard()
+      } else if (mainModule && typeof mainModule.initializeDashboard === 'function') {
+        await mainModule.initializeDashboard()
       } else {
-        // Re-import main.js to get fresh instances (dev mode only)
-        const mainModule = await import('./main.js?' + Date.now())
-
-        // Call the initialization function
-        if (mainModule.initializeDashboard) {
-          await mainModule.initializeDashboard()
-        }
+        console.error('Router: initializeDashboard is unavailable')
+        return
       }
 
       // Initialize year/term selectors
@@ -791,6 +819,14 @@ class SimpleRouter {
 
       const basePath = this.currentPath
 
+      // calendar-page is defined in calendar-page-component.js and may be absent
+      // when app starts from another entrypoint (e.g. assignments).
+      await this.ensureCalendarComponentRegistered()
+
+      // Calendar route relies on helper functions exposed by main.js.
+      // If user lands from a non-dashboard entrypoint, those helpers may not be loaded yet.
+      await this.ensureCalendarHelpersAvailable()
+
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -809,7 +845,7 @@ class SimpleRouter {
         await window.populateSemesterDropdown();
         console.log('Router: Semester dropdown populated');
       } else {
-        console.error('Router: populateSemesterDropdown not available');
+        console.warn('Router: populateSemesterDropdown not available');
       }
 
       // Initialize custom selects - MUST happen after dropdown population
@@ -818,7 +854,7 @@ class SimpleRouter {
         window.initializeCustomSelects();
         console.log('Router: Custom selects initialized');
       } else {
-        console.error('Router: initializeCustomSelects not available');
+        console.warn('Router: initializeCustomSelects not available');
       }
 
       // Attach semester change listener for calendar page
@@ -831,7 +867,7 @@ class SimpleRouter {
             console.log('  → Select value:', e.target.value);
 
             // Parse the semester value
-            const parsedValue = window.parseSemesterValue ? window.parseSemesterValue(e.target.value) : null;
+            const parsedValue = this.parseSemesterValueSafe(e.target.value);
             console.log('  → Parsed value:', parsedValue);
 
             if (!parsedValue || !parsedValue.term || !parsedValue.year) {
@@ -902,7 +938,7 @@ class SimpleRouter {
         window.initializeSearch();
         console.log('Router: Search initialized');
       } else {
-        console.error('Router: initializeSearch not available');
+        console.warn('Router: initializeSearch not available');
       }
 
       // Initialize calendar-specific functionality using web component
@@ -951,22 +987,84 @@ class SimpleRouter {
     }
   }
 
+  async ensureCalendarComponentRegistered() {
+    if (customElements.get('calendar-page')) {
+      return
+    }
+
+    try {
+      await import('./calendar-page-component.js')
+    } catch (error) {
+      console.error('Router: Failed to load calendar-page component module', error)
+    }
+  }
+
+  async ensureCalendarHelpersAvailable() {
+    const requiredHelpers = [
+      'populateSemesterDropdown',
+      'initializeCustomSelects',
+      'initializeSearch',
+      'parseSemesterValue',
+      'getAllCourses'
+    ]
+
+    const missingBeforeImport = requiredHelpers.filter(
+      (name) => typeof window[name] !== 'function'
+    )
+
+    if (missingBeforeImport.length === 0) {
+      return
+    }
+
+    try {
+      await import('./main.js')
+    } catch (error) {
+      console.error('Router: Failed to load calendar helper module from main.js', error)
+    }
+
+    const missingAfterImport = requiredHelpers.filter(
+      (name) => typeof window[name] !== 'function'
+    )
+
+    if (missingAfterImport.length > 0) {
+      console.warn('Router: Calendar helpers still unavailable:', missingAfterImport.join(', '))
+    }
+  }
+
+  parseSemesterValueSafe(value) {
+    if (typeof window.parseSemesterValue === 'function') {
+      return window.parseSemesterValue(value)
+    }
+
+    if (!value || value === '' || value === 'Loading...') {
+      return { term: null, year: null }
+    }
+
+    const parts = String(value).split('-')
+    if (parts.length === 2) {
+      return { term: parts[0], year: parts[1] }
+    }
+
+    return { term: null, year: null }
+  }
+
   async initializeProfile() {
     try {
-      // In production, modules are already bundled and available
-      if (this.isProduction()) {
-        // Call initialization functions directly if they exist
-        if (window.initializeProfile) {
-          await window.initializeProfile()
-        }
-      } else {
-        // Re-import profile.js to get fresh instances (dev mode only)
-        const profileModule = await import('./profile.js?' + Date.now())
+      let profileModule = null
 
-        // Call the initialization function
-        if (profileModule.initializeProfile) {
-          await profileModule.initializeProfile()
-        }
+      if (typeof window.initializeProfile !== 'function') {
+        profileModule = this.isProduction()
+          ? await import('./profile.js')
+          : await import('./profile.js?' + Date.now())
+      }
+
+      if (typeof window.initializeProfile === 'function') {
+        await window.initializeProfile()
+      } else if (profileModule && typeof profileModule.initializeProfile === 'function') {
+        await profileModule.initializeProfile()
+      } else {
+        console.error('Router: initializeProfile is unavailable')
+        return
       }
 
       // Initialize profile-specific functionality
