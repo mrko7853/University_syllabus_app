@@ -49,7 +49,7 @@ if (window.innerWidth <= 780) {
                 const nav = document.querySelector('app-navigation');
                 if (nav) {
                     nav.style.position = 'fixed';
-                    nav.style.bottom = '0';
+                    nav.style.bottom = 'env(safe-area-inset-bottom, 0px)';
                     nav.style.transform = 'translateZ(0)';
                 }
             }, 100);

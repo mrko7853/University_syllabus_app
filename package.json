@@ -12,7 +12,9 @@
     "cap:sync": "npm run build:mobile && npx cap sync",
     "ios:add": "npx cap add ios",
     "ios:open": "npx cap open ios",
-    "ios:dev": "npm run cap:sync && npx cap open ios"
+    "ios:dev": "npm run cap:sync && npx cap open ios",
+    "ios:pods:install": "cd ios/App && pod install",
+    "ios:pods:reset": "cd ios/App && pod deintegrate && rm -rf Pods Podfile.lock && pod install"
   },
   "keywords": [],
   "author": "",

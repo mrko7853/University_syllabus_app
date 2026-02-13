@@ -3234,8 +3234,9 @@ function addSwipeToClose(modal, background) {
     let modalState = 'semi-open'; // 'semi-open', 'fully-open', 'closed'
     let dragStarted = false;
 
-    const threshold = 200; // Much higher threshold - user must swipe almost all the way down
-    const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
+    const threshold = Math.min(140, Math.max(90, window.innerHeight * 0.16));
+    const velocityThreshold = 0.45;
+    const closeDragDistance = 260;
 
     // Get the content wrapper for scroll detection
     const contentWrapper = modal.querySelector('.class-content-wrapper');
@@ -3316,15 +3317,14 @@ function addSwipeToClose(modal, background) {
             // Apply transform based on gesture using CSS custom properties
             if (deltaY < 0 && modalState === 'semi-open') {
                 // Expanding from semi-open to fully-open
-                const progress = Math.min(Math.abs(deltaY) / 200, 1);
+                const progress = Math.min(Math.abs(deltaY) / threshold, 1);
                 const translateY = 20 - (20 * progress);
                 modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
                 modal.style.transition = 'none';
 
             } else if (deltaY > 0) {
                 // Collapsing or closing - use consistent maxDrag like search-modal
-                const maxDrag = 300; // Same as search-modal for consistent velocity
-                const progress = Math.min(deltaY / maxDrag, 1);
+                const progress = Math.min(deltaY / closeDragDistance, 1);
 
                 if (modalState === 'fully-open') {
                     // From fully-open to semi-open - NO fading, just transform
@@ -3367,11 +3367,11 @@ function addSwipeToClose(modal, background) {
         if (!isMobile() || !dragStarted) return;
 
         const deltaY = currentY - startY;
-        const duration = Date.now() - startTime;
+        const duration = Math.max(Date.now() - startTime, 1);
         const velocity = Math.abs(deltaY) / duration; // pixels per ms
 
         modal.classList.remove('swiping');
-        modal.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)'; // Instagram-like easing
+        modal.style.transition = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
 
         console.log('Touch end - deltaY:', deltaY, 'velocity:', velocity, 'modalState:', modalState);
 
@@ -3533,8 +3533,8 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     let isDragging = false;
     let dragStarted = false;
 
-    const threshold = 200; // Much higher threshold - user must swipe almost all the way down
-    const velocityThreshold = 1.5; // Much higher velocity threshold - prevents quick small swipes
+    const threshold = Math.min(120, Math.max(70, window.innerHeight * 0.14));
+    const velocityThreshold = 0.4;
 
     // Check if we're on mobile
     const isMobile = () => window.innerWidth <= 780;
@@ -3588,12 +3588,12 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
             e.preventDefault();
 
             // Apply transform using CSS custom property to bypass !important
-            const translateY = `${deltaY}px`;
-            modal.style.setProperty('--modal-translate-y', translateY);
+            const resistedDelta = Math.max(0, deltaY * 0.92);
+            modal.style.setProperty('--modal-translate-y', `${resistedDelta}px`);
 
             // Fade background
             const maxDrag = 300;
-            const progress = Math.min(deltaY / maxDrag, 1);
+            const progress = Math.min(resistedDelta / maxDrag, 1);
             const opacity = Math.max(0.2, 1 - progress * 0.8);
             background.style.opacity = opacity;
 
@@ -3617,7 +3617,7 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         if (!isMobile() || !dragStarted) return;
 
         const deltaY = currentY - startY;
-        const duration = Date.now() - startTime;
+        const duration = Math.max(Date.now() - startTime, 1);
         const velocity = Math.abs(deltaY) / duration; // pixels per ms
 
         modal.classList.remove('swiping');
