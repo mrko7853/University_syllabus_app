@@ -5,15 +5,26 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
-    "build": "vite build",
-    "postbuild": "node scripts/create-route-aliases.mjs"
+    "build:aliases": "node scripts/create-route-aliases.mjs",
+    "build:web": "VITE_DEPLOY_TARGET=web vite build && npm run build:aliases",
+    "build:mobile": "VITE_DEPLOY_TARGET=mobile vite build && npm run build:aliases",
+    "build": "npm run build:web",
+    "cap:sync": "npm run build:mobile && npx cap sync",
+    "ios:add": "npx cap add ios",
+    "ios:open": "npx cap open ios",
+    "ios:dev": "npm run cap:sync && npx cap open ios"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@capacitor/core": "^8.1.0",
+    "@capacitor/ios": "^8.1.0",
+    "@capacitor/local-notifications": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.1",
     "@supabase/supabase-js": "^2.53.1",
+    "@ebarooni/capacitor-calendar": "^8.0.0",
     "bcryptjs": "^3.0.2",
     "build": "^0.1.4",
     "cors": "^2.8.5",
@@ -25,5 +36,8 @@
     "run": "^1.5.0",
     "vite": "^7.1.0",
     "wanakana": "^5.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.5.0"
   }
 }

@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { getCurrentAppPath } from "./path-utils.js";
+import { getCurrentAppPath, withBase } from "./path-utils.js";
 
 async function initializeProfile() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -37,7 +37,7 @@ async function initializeProfile() {
                 if (window.router) {
                     window.router.navigate('/login');
                 } else {
-                    window.location.href = "login.html";
+                    window.location.href = withBase('/login');
                 }
             } catch (error) {
                 console.error('Unexpected error during logout:', error);

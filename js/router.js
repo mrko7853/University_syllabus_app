@@ -4,6 +4,8 @@
  */
 import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
 
+const IS_PRODUCTION = import.meta.env.PROD
+
 class SimpleRouter {
   constructor() {
     this.routes = {
@@ -15,6 +17,7 @@ class SimpleRouter {
       '/profile': '/profile.html',
       '/login': '/login.html',
       '/register': '/register.html',
+      '/native-tests': '/native-tests.html',
       '/settings': '/profile.html', // For now, settings goes to profile
       '/help': '/profile.html' // For now, help goes to profile
     }
@@ -171,6 +174,7 @@ class SimpleRouter {
       '/profile',
       '/login',
       '/register',
+      '/native-tests',
       '/settings',
       '/help'
     ])
@@ -469,6 +473,10 @@ class SimpleRouter {
       // Re-import and reinitialize assignments.js functionality if on assignments
       if (path === '/assignments' || this.routes[path] === '/assignments.html') {
         await this.initializeAssignments()
+      }
+
+      if (path === '/native-tests' || this.routes[path] === '/native-tests.html') {
+        await this.initializeNativeTests()
       }
 
       // Initialize shared functionality for all pages
@@ -1096,6 +1104,26 @@ class SimpleRouter {
       console.log('Router: Assignments page initialized');
     } catch (error) {
       console.error('Error initializing assignments:', error);
+    }
+  }
+
+  async initializeNativeTests() {
+    try {
+      let nativeTestsModule = null
+
+      if (typeof window.initializeNativeTests !== 'function') {
+        nativeTestsModule = await import('./native-tests-entry.js')
+      }
+
+      if (typeof window.initializeNativeTests === 'function') {
+        await window.initializeNativeTests()
+      } else if (nativeTestsModule && typeof nativeTestsModule.initializeNativeTests === 'function') {
+        await nativeTestsModule.initializeNativeTests()
+      } else {
+        console.error('Router: initializeNativeTests is unavailable')
+      }
+    } catch (error) {
+      console.error('Error initializing native tests:', error)
     }
   }
 
@@ -2402,17 +2430,7 @@ class SimpleRouter {
 
   // Check if running in production mode
   isProduction() {
-    // Check for various indicators that we're in production
-    return (
-      // Check if we're running from bundled assets
-      window.location.pathname.includes('/assets/') ||
-      // Check for common production indicators
-      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') ||
-      // Check if development server port is NOT in URL
-      !window.location.href.includes(':5173') &&
-      !window.location.href.includes('localhost') &&
-      !window.location.href.includes('127.0.0.1')
-    )
+    return IS_PRODUCTION
   }
 }
 

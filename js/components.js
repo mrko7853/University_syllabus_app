@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js";
 import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "./shared.js";
+import { withBase } from "./path-utils.js";
 
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
@@ -155,7 +156,7 @@ class AppNavigation extends HTMLElement {
       window.globalUser = null;
 
       // Redirect to login page
-      window.location.href = 'login.html';
+      window.location.href = withBase('/login');
 
     } catch (error) {
       console.error('Unexpected error during logout:', error);

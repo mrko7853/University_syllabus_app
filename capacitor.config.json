@@ -1,0 +1,6 @@
+{
+  "appId": "com.ilacompanion.app",
+  "appName": "ILA Companion",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

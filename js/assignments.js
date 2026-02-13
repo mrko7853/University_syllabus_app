@@ -1117,6 +1117,7 @@ class AssignmentsManager {
                 !e.target.classList.contains('due-date-cell') &&
                 !e.target.classList.contains('date-picker-trigger')) {
                 this.hideDatePickerPopup(popup);
+                this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
                 this.datePickerTarget = null;
             }
         });
@@ -1455,6 +1456,8 @@ class AssignmentsManager {
         if (datePickerPopup) {
             this.hideDatePickerPopup(datePickerPopup, { immediate: true });
         }
+        this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
+        this.datePickerTarget = null;
         if (emojiPicker) {
             emojiPicker.classList.remove('open');
             emojiPicker.style.display = 'none';
@@ -1821,6 +1824,14 @@ class AssignmentsManager {
         return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0);
     }
 
+    setDatePickerTriggerState(targetElement, isOpen) {
+        if (!targetElement || !targetElement.classList?.contains('date-picker-trigger')) return;
+        targetElement.classList.toggle('date-picker-open', isOpen);
+        if (!isOpen && typeof targetElement.blur === 'function') {
+            targetElement.blur();
+        }
+    }
+
     showDatePickerPopup(popup) {
         if (!popup) return;
         popup.style.display = 'block';
@@ -1870,8 +1881,13 @@ class AssignmentsManager {
 
         if (popupIsVisible && sameTrigger) {
             this.hideDatePickerPopup(popup);
+            this.setDatePickerTriggerState(targetElement, false);
             this.datePickerTarget = null;
             return;
+        }
+
+        if (currentTarget?.element && currentTarget.element !== targetElement) {
+            this.setDatePickerTriggerState(currentTarget.element, false);
         }
 
         this.datePickerTarget = { element: targetElement, assignment, mode };
@@ -1900,6 +1916,7 @@ class AssignmentsManager {
 
         this.renderDatePicker();
         this.showDatePickerPopup(popup);
+        this.setDatePickerTriggerState(targetElement, true);
     }
 
     renderDatePicker() {
@@ -1976,6 +1993,7 @@ class AssignmentsManager {
     async selectDatePickerDate(date) {
         const popup = document.getElementById('date-picker-popup');
         if (popup) this.hideDatePickerPopup(popup);
+        this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
 
         if (this.datePickerTarget?.mode === 'modal') {
             const targetInput = this.datePickerTarget.element;

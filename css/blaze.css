@@ -1297,10 +1297,6 @@ calendar-page #calendar-main td.calendar-first {}
     font-weight: 400;
 }
 
-.search-autocomplete-item .item-professor {
-    font-style: italic;
-}
-
 .search-input-container {
     position: relative;
 }
@@ -1526,7 +1522,6 @@ calendar-page #calendar-main td.calendar-first {}
     height: 50px;
     min-width: 180px;
     border-radius: 50px;
-    font-weight: 100;
     color: black;
     background-color: white;
     cursor: pointer;
@@ -1536,7 +1531,7 @@ calendar-page #calendar-main td.calendar-first {}
     touch-action: manipulation;
     padding: 10px 20px;
     font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--secondary-font), sans-serif;
     transition: box-shadow .2s, filter .2s;
     box-shadow: 0 -2px 6px #0a254059 inset;
     filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
@@ -1629,8 +1624,7 @@ calendar-page #calendar-main td.calendar-first {}
     cursor: pointer;
     transition: background-color .2s;
     font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
-    font-weight: 100;
+    font-family: var(--secondary-font), sans-serif;
     color: black;
 }
 
@@ -1686,7 +1680,7 @@ calendar-page #calendar-main td.calendar-first {}
 #clear-all-btn,
 #see-results-btn {
     flex: 1;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--secondary-font), sans-serif;
     font-size: var(--p);
     font-weight: 400;
 }
@@ -1775,7 +1769,7 @@ calendar-page #calendar-main td.calendar-first {}
 .search-pill-input {
     border: none;
     outline: none;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--secondary-font), sans-serif;
     font-size: var(--p);
     width: 100%;
     background: transparent;
@@ -2131,6 +2125,7 @@ calendar-page #calendar-main td.calendar-first {}
 .search-pill-autocomplete .search-autocomplete-item .item-title {
     font-weight: 500;
     margin-bottom: 4px;
+    font-family: 'Libre Bodoni', sans-serif;
 }
 
 .search-pill-autocomplete .search-autocomplete-item .item-details {
@@ -2138,14 +2133,11 @@ calendar-page #calendar-main td.calendar-first {}
     opacity: 60%;
     display: flex;
     gap: 15px;
+    font-family: var(--secondary-font), sans-serif;
 }
 
 .search-pill-autocomplete .search-autocomplete-item .item-code {
     font-weight: 400;
-}
-
-.search-pill-autocomplete .search-autocomplete-item .item-professor {
-    font-style: italic;
 }
 
 /* Hide search button on desktop, show search pill */
@@ -2221,7 +2213,7 @@ calendar-page #calendar-main td.calendar-first {}
     padding: 10px 20px;
     cursor: pointer;
     font-size: var(--p);
-    font-weight: 100;
+    font-family: var(--secondary-font), sans-serif;
     transition: background-color 0.2s ease;
 }
 
@@ -6271,24 +6263,36 @@ calendar-page .mobile-day-buttons {
     justify-content: center;
     padding: 80px 20px;
     text-align: center;
+    gap: 20px;
 }
 
 .assignments-empty .empty-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
+    width: 64px;
+    height: 64px;
+    background-image: url('/assets/assignment-empty.svg');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
+    margin: 0;
     opacity: 0.4;
 }
 
 .assignments-empty h3 {
     font-size: var(--h3);
-    color: #666;
-    margin: 0 0 10px 0;
+    color: #000;
+    margin: 0;
+    opacity: 0.6;
 }
 
 .assignments-empty p {
     font-size: 14px;
-    color: #999;
+    color: #000;
     font-family: var(--secondary-font), sans-serif;
+    margin: 0;
+    opacity: 0.6;
 }
 
 /* ===== CALENDAR VIEW ===== */
@@ -6314,7 +6318,7 @@ calendar-page .mobile-day-buttons {
 .calendar-nav {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
     padding: 14px 16px;
     border-bottom: 1px solid #e0e0e0;
     background: #fff;
@@ -6327,24 +6331,35 @@ calendar-page .mobile-day-buttons {
     height: 40px;
     border: none;
     border-radius: 100px;
-    background: transparent;
+    background: #fff;
     font-size: 20px;
     line-height: 1;
     cursor: pointer;
-    opacity: 0.55;
     transition: box-shadow .2s, filter .2s, opacity .2s, background-color .2s;
-    box-shadow: none;
-    filter: none;
+    box-shadow: 0 -2px 6px #0a254059 inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1;
 }
 
-.calendar-nav-btn:hover {
-    opacity: 1;
-    box-shadow: 0 -2px 6px #0a254059 inset;
-    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
+.calendar-nav-btn#calendar-prev-month,
+.calendar-nav-btn#calendar-next-month {
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+}
+
+.calendar-nav-btn#calendar-prev-month {
+    background-image: url('/assets/chevron-left.svg');
+}
+
+.calendar-nav-btn#calendar-next-month {
+    background-image: url('/assets/chevron-right.svg');
 }
 
 .calendar-nav-btn:active {
@@ -6358,6 +6373,10 @@ calendar-page .mobile-day-buttons {
     color: #000;
     margin: 0;
     flex-grow: 1;
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    line-height: 1;
 }
 
 .calendar-today-btn {
@@ -6396,7 +6415,7 @@ calendar-page .mobile-day-buttons {
 .calendar-header {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid rgba(189,170,198,.3);
     background: #fff;
 }
 
@@ -6408,7 +6427,6 @@ calendar-page .mobile-day-buttons {
     font-weight: 600;
     color: #666;
     letter-spacing: 0.5px;
-    border-right: 1px solid #f0f0f0;
 }
 
 .calendar-day-header:last-child {
@@ -6425,7 +6443,7 @@ calendar-page .mobile-day-buttons {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     min-height: 116px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid rgba(189,170,198,.3);
 }
 
 .calendar-week:last-child {
@@ -6434,11 +6452,11 @@ calendar-page .mobile-day-buttons {
 
 .calendar-cell {
     padding: 8px;
-    border-right: 1px solid #f0f0f0;
     min-height: 110px;
     display: flex;
     flex-direction: column;
     transition: background 0.15s ease;
+    border-radius: 10px;
 }
 
 .calendar-cell:last-child {
@@ -6491,7 +6509,7 @@ calendar-page .mobile-day-buttons {
     z-index: 1;
     padding: 4px 8px;
     border-radius: 10px;
-    font-size: 11px;
+    font-size: 12px;
     font-family: var(--secondary-font), sans-serif;
     font-weight: 500;
     color: #111;
@@ -6654,6 +6672,10 @@ calendar-page .mobile-day-buttons {
 }
 
 .meta-value:focus-visible {
+    background-color: #f8f5ff;
+}
+
+.meta-value.date-picker-trigger.date-picker-open {
     background-color: #f8f5ff;
 }
 
@@ -7229,8 +7251,13 @@ calendar-page .mobile-day-buttons {
     width: 28px;
     height: 28px;
     border: none;
-    background: transparent;
-    font-size: 16px;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
     cursor: pointer;
     border-radius: 50px;
     box-shadow: none;
@@ -7238,9 +7265,17 @@ calendar-page .mobile-day-buttons {
     transition: all 0.15s ease;
 }
 
+.date-picker-prev {
+    background-image: url('/assets/chevron-left.svg');
+}
+
+.date-picker-next {
+    background-image: url('/assets/chevron-right.svg');
+}
+
 .date-picker-prev:hover,
 .date-picker-next:hover {
-    background: #f0f0f0;
+    background-color: #f0f0f0;
     border-radius: 50px;
     filter: none !important;
 }
@@ -7384,6 +7419,7 @@ calendar-page .mobile-day-buttons {
 
     .calendar-month-title {
         font-size: 18px;
+        min-height: 34px;
     }
 
     .calendar-today-btn {

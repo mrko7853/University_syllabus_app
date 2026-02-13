@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Native Tests - ILA Companion</title>
+  <link rel="stylesheet" href="css/blaze.css">
+  <script type="module" src="js/components.js"></script>
+  <script type="module" src="js/shared.js"></script>
+  <script type="module" src="js/router.js"></script>
+  <script type="module" src="js/native-tests-entry.js"></script>
+</head>
+
+<body>
+  <app-navigation></app-navigation>
+
+  <div id="app-content">
+    <section id="native-tests-main" style="padding: 24px; max-width: 860px; margin: 0 auto;">
+      <h1 style="margin-bottom: 8px;">Native Smoke Tests</h1>
+      <p style="margin-bottom: 16px; color: #666;">
+        Use this page on a physical iPhone to verify Capacitor plugins and iOS permissions.
+      </p>
+
+      <div style="display: grid; gap: 12px; margin-bottom: 16px;">
+        <button id="btn-native-calendar" class="tab-btn" style="padding: 12px 14px; text-align: left;">
+          Test Calendar: Create Event (2 min from now)
+        </button>
+        <button id="btn-native-local" class="tab-btn" style="padding: 12px 14px; text-align: left;">
+          Test Local Notification (5s)
+        </button>
+        <button id="btn-native-push" class="tab-btn" style="padding: 12px 14px; text-align: left;">
+          Test Push: Register + Log Token
+        </button>
+      </div>
+
+      <pre id="native-tests-log"
+        style="padding: 12px; background: #111; color: #9ef09e; border-radius: 8px; min-height: 180px; overflow: auto; white-space: pre-wrap;"></pre>
+    </section>
+  </div>
+</body>
+
+</html>

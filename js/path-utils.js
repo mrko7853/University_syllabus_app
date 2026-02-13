@@ -38,9 +38,11 @@ export function withBase(path = '/') {
 export function stripBase(pathname = '/') {
   let normalizedPath = String(pathname || '/');
 
-  if (/^https?:\/\//i.test(normalizedPath)) {
+  try {
     const url = new URL(normalizedPath);
     normalizedPath = `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    // Not an absolute URL; keep as-is.
   }
 
   const noHash = normalizedPath.split('#')[0];
