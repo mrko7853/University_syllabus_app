@@ -68,6 +68,87 @@ const termSelect = document.getElementById("term-select");
 // Keep for backward compatibility, but components should fetch fresh sessions
 const user = window.globalUser;
 
+const MOBILE_BREAKPOINT = 780;
+const KEYBOARD_HEIGHT_THRESHOLD = 120;
+
+function isEditableElement(element) {
+  if (!element) return false;
+  if (element.isContentEditable) return true;
+  if (!element.matches) return false;
+  return element.matches('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]');
+}
+
+function updateMobileNavSafeHeight() {
+  const root = document.documentElement;
+  const nav = document.querySelector('app-navigation');
+  if (!root || !nav || window.innerWidth > MOBILE_BREAKPOINT) {
+    root?.style.removeProperty('--mobile-nav-safe-height');
+    return;
+  }
+
+  const navHeight = Math.ceil(nav.getBoundingClientRect().height || 0);
+  if (navHeight > 0) {
+    root.style.setProperty('--mobile-nav-safe-height', `${navHeight + 8}px`);
+  }
+}
+
+function initializeMobileNavKeyboardState() {
+  if (window.__mobileNavKeyboardStateInitialized) return;
+  window.__mobileNavKeyboardStateInitialized = true;
+
+  let baselineViewportHeight = window.visualViewport?.height || window.innerHeight;
+
+  const updateKeyboardState = () => {
+    if (!document.body) return;
+
+    if (window.innerWidth > MOBILE_BREAKPOINT) {
+      document.body.classList.remove('keyboard-visible');
+      return;
+    }
+
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    if (viewportHeight > baselineViewportHeight - 32) {
+      baselineViewportHeight = viewportHeight;
+    }
+
+    const activeElement = document.activeElement;
+    const isEditing = isEditableElement(activeElement);
+    const keyboardHeight = baselineViewportHeight - viewportHeight;
+    const isKeyboardVisible = isEditing && keyboardHeight > KEYBOARD_HEIGHT_THRESHOLD;
+
+    document.body.classList.toggle('keyboard-visible', isKeyboardVisible);
+  };
+
+  const refreshMobileNavState = () => {
+    updateMobileNavSafeHeight();
+    updateKeyboardState();
+  };
+
+  window.addEventListener('resize', refreshMobileNavState, { passive: true });
+  window.addEventListener('orientationchange', () => {
+    baselineViewportHeight = window.visualViewport?.height || window.innerHeight;
+    setTimeout(refreshMobileNavState, 250);
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', refreshMobileNavState);
+    window.visualViewport.addEventListener('scroll', updateKeyboardState);
+  }
+
+  document.addEventListener('focusin', updateKeyboardState, true);
+  document.addEventListener('focusout', () => {
+    setTimeout(updateKeyboardState, 120);
+  }, true);
+
+  document.addEventListener('pageLoaded', () => {
+    setTimeout(refreshMobileNavState, 30);
+  });
+
+  setTimeout(refreshMobileNavState, 0);
+}
+
+initializeMobileNavKeyboardState();
+
 class AppNavigation extends HTMLElement {
   constructor() {
     super();
@@ -114,6 +195,8 @@ class AppNavigation extends HTMLElement {
   }
 
   connectedCallback() {
+    updateMobileNavSafeHeight();
+
     // Add event listener for logout link
     const logoutLink = this.querySelector('a[href="#logout"]');
     if (logoutLink) {

@@ -9,6 +9,7 @@ body {
     line-height: 1.5;
 }
 
+
 /* CSS Custom Properties for dynamic viewport height */
 :root {
     --vh: 1vh;
@@ -29,6 +30,7 @@ body {
         --h2: 20px !important;
         --h3: 18px !important;
         --p: 16px !important;
+        --mobile-nav-height: 65px;
     }
 
     /* Use dynamic viewport height on mobile */
@@ -40,25 +42,11 @@ body {
         overflow-x: hidden;
     }
 
-    /* Handle virtual keyboard appearance */
-    body.keyboard-visible {
-        height: var(--app-height);
-        position: fixed;
-        width: 100%;
-    }
-
+    /* Keep layout stable when mobile keyboard is visible */
     body.keyboard-visible app-navigation {
-        position: fixed !important;
-        bottom: 0 !important;
-        transform: translateZ(0) !important;
-        -webkit-transform: translateZ(0) !important;
-    }
-
-    body.keyboard-visible .container-above {
-        position: sticky !important;
-        top: 0 !important;
-        transform: translateZ(0) !important;
-        -webkit-transform: translateZ(0) !important;
+        transform: translateY(120%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 }
 
@@ -1049,6 +1037,8 @@ calendar-page #calendar-main td.calendar-first {}
     left: 0;
     z-index: 1001;
     background: rgba(0, 0, 0, 0.5);
+    transition: opacity 0.22s ease;
+    will-change: opacity;
 }
 
 .search-background {
@@ -1060,6 +1050,8 @@ calendar-page #calendar-main td.calendar-first {}
     left: 0;
     z-index: 1001;
     background: rgba(0, 0, 0, 0.5);
+    transition: opacity 0.22s ease;
+    will-change: opacity;
 }
 
 .filter-popup {
@@ -2930,6 +2922,7 @@ td p {
         margin-bottom: 80px !important;
         padding: 15px;
         min-width: 330px;
+        box-sizing: border-box;
     }
 
     .course-main-title {
@@ -3386,20 +3379,25 @@ td p {
 
     app-navigation {
         position: fixed;
-        height: 65px;
+        height: calc(var(--mobile-nav-height) + var(--safe-area-bottom));
         width: 100% !important;
         bottom: 0;
-        bottom: env(safe-area-inset-bottom, 0);
-        /* Account for home indicator */
         left: 0;
         background: rgb(255 255 255 / 30%);
         z-index: 10000;
         -webkit-backdrop-filter: blur(20px);
         backdrop-filter: blur(20px);
         border-top: 1px solid #E3E2E2;
-        /* Ensure it stays at the bottom */
+        padding-bottom: var(--safe-area-bottom);
+        box-sizing: border-box;
+        transition: transform 0.22s ease, opacity 0.22s ease;
         transform: translateZ(0);
         -webkit-transform: translateZ(0);
+    }
+
+    #app-content {
+        box-sizing: border-box;
+        padding-bottom: var(--mobile-nav-safe-height, calc(var(--mobile-nav-height) + var(--safe-area-bottom) + 8px));
     }
 
     .accessibility-container {
@@ -3428,7 +3426,6 @@ td p {
     section {
         flex: 1;
         margin-left: 0 !important;
-        margin-bottom: 80px !important;
     }
 
     .filter-buttons {
@@ -3515,7 +3512,7 @@ td p {
 
     .course-cell {
         border-radius: 50px;
-        padding: 30px !important;
+        padding: 30px;
         font-size: var(--p);
         height: 200px !important;
         width: 100% !important;
@@ -3656,7 +3653,7 @@ td p {
         padding: var(--safe-area-top) 0 0 0 !important;
         border-radius: 0 !important;
         transform: translateY(var(--modal-translate-y, 100vh)) !important;
-        transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1) !important;
         will-change: transform !important;
         overflow: hidden !important;
         overscroll-behavior: contain !important;
@@ -3737,6 +3734,12 @@ td p {
         overflow: hidden !important;
         overscroll-behavior: none !important;
         -webkit-overflow-scrolling: auto !important;
+    }
+
+    body.modal-open app-navigation {
+        transform: translateY(120%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 
     .search-modal {
@@ -4092,7 +4095,8 @@ td p {
     background: rgba(0, 0, 0, 0.5);
     z-index: 1001;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.28s ease;
+    will-change: opacity;
 }
 
 /* Course header styles */
@@ -7753,4 +7757,535 @@ body.course-page-mode {
 .course-page-error {
     font-size: 16px;
     color: #666;
+}
+
+/* ============================================
+   CALENDAR PAGE MOBILE REFRESH
+   Scoped to calendar.html only
+   ============================================ */
+@media (max-width: 780px) {
+    #course-summary.calendar-page-modern {
+        position: relative;
+        background: #fff;
+        overflow-x: clip;
+    }
+
+    #course-summary.calendar-page-modern .main-content {
+        width: 100% !important;
+        height: auto !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        overflow-x: clip;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .mobile-day-buttons {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container {
+        margin: 0 0 10px !important;
+        padding: 15px !important;
+        border-radius: 20px !important;
+        background: #fff;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper {
+        gap: 0;
+        box-sizing: border-box;
+        padding: 15px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-container-main {
+        border-radius: 14px;
+        border: 1px solid rgba(229, 229, 234, 1);
+        background: #fff;
+        overflow: hidden;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-wrapper {
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main {
+        width: 100%;
+        min-width: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main thead {
+        display: table-header-group !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main tr {
+        display: table-row !important;
+        margin: 0 !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main th,
+    #course-summary.calendar-page-modern calendar-page #calendar-main td {
+        display: table-cell !important;
+        width: auto !important;
+        padding: 4px 4px !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main thead th {
+        position: sticky;
+        top: 0;
+        z-index: 8;
+        height: 36px;
+        background: #f8f8fa;
+        border-bottom: 1px solid rgba(223, 223, 228, 1);
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main thead th p {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: #6b6b73;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        font-family: var(--secondary-font), sans-serif;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main thead th.highlight-day {
+        background: #ece2f0;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main th:first-child {
+        position: static;
+        left: auto;
+        z-index: auto;
+        width: 40px !important;
+        min-width: 40px !important;
+        max-width: 40px !important;
+        background: #f8f8fa;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main tbody td {
+        height: 96px !important;
+        border-bottom: 1px solid rgba(232, 232, 236, 1);
+        border-right: 1px solid rgba(240, 240, 244, 1);
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main td:first-child {
+        position: static;
+        left: auto;
+        z-index: auto;
+        width: 40px !important;
+        min-width: 40px !important;
+        max-width: 40px !important;
+        background: #f8f8fa;
+        border-right: 1px solid rgba(223, 223, 228, 1);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .time-full {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .time-short {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 16px;
+        margin: 0 auto;
+        border-radius: 999px;
+        background: #ece2f0;
+        color: #5b4e64;
+        font-size: 10px !important;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        font-family: var(--secondary-font), sans-serif;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-day {
+        background-color: rgba(236, 226, 240, 0.5);
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time {
+        background-color: rgba(236, 226, 240, 0.75);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .course-cell {
+        top: 4px;
+        right: 4px;
+        bottom: 4px;
+        left: 4px;
+        width: auto !important;
+        height: auto !important;
+        margin: 0;
+        padding: 7px 7px 6px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        gap: 2px !important;
+        box-shadow: 0 8px 18px rgba(16, 24, 40, 0.12), inset 0 -2px 4px rgba(10, 37, 64, 0.18);
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .course-cell:active {
+        transform: scale(0.985);
+        box-shadow: 0 6px 12px rgba(16, 24, 40, 0.14);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .course-cell .course-title {
+        width: 100% !important;
+        display: -webkit-box !important;
+        height: auto !important;
+        align-items: flex-start !important;
+        margin: 0;
+        font-size: 9px;
+        font-weight: 650;
+        line-height: 1.22;
+        -webkit-line-clamp: 3;
+        color: #201826;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .course-cell .course-classroom {
+        width: 100% !important;
+        display: block !important;
+        height: auto !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        text-align: left;
+        margin-top: 2px;
+        font-size: 7px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: rgba(32, 24, 38, 0.72);
+    }
+
+    calendar-page #calendar-main th.highlight-day {
+        border-top-left-radius: 0px;
+        border-top-right-radius: 0px;
+    }
+
+    calendar-page #calendar-main tr:last-child td {
+        border-bottom-left-radius: 0px;
+        border-bottom-right-radius: 0px;
+    }
+}
+/* ============================================
+   CALENDAR PAGE MOBILE NATIVE SWIPE LAYOUT
+   Scoped to calendar.html only
+   ============================================ */
+calendar-page .calendar-mobile-view {
+    display: none;
+}
+
+@media (max-width: 780px) {
+    #course-summary.calendar-page-modern,
+    #course-summary.calendar-page-modern .main-content,
+    #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container,
+    #course-summary.calendar-page-modern calendar-page,
+    #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper,
+    #course-summary.calendar-page-modern calendar-page .calendar-container-main,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-view,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-viewport,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-track,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-page {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-wrapper {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-container-main {
+        border-radius: 34px;
+        background: #eee6f2;
+        border: none;
+        padding: 14px;
+        box-sizing: border-box;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-view {
+        display: flex !important;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tabs {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        border-radius: 30px;
+        padding: 10px;
+        z-index: 10;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab {
+        width: 50px !important;
+        height: 50px !important;
+        min-width: 50px !important;
+        min-height: 50px !important;
+        margin: 0 auto;
+        border-radius: 50% !important;
+        border: none;
+        background: #ffffff !important;
+        color: #1f1a23 !important;
+        font-family: var(--secondary-font), sans-serif;
+        font-size: var(--p);
+        font-weight: 500;
+        box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+        filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+        transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, filter 0.18s ease;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab:hover {
+        box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+        filter: drop-shadow(0 0 0 rgba(50, 50, 93, 0.25));
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab.is-active {
+        background: #E3D5E9 !important;
+        box-shadow: 0 2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+        filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab:active {
+        transform: scale(0.97);
+        box-shadow: 0 2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-viewport {
+        width: 100%;
+        overflow: hidden;
+        border-radius: 32px;
+        touch-action: pan-y;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-track {
+        display: flex;
+        width: 100%;
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-track.without-animation {
+        transition: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-page {
+        flex: 0 0 100%;
+        min-width: 100%;
+        max-width: 100%;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-shell {
+        width: 100%;
+        border-radius: 32px;
+        overflow: hidden;
+        background: #d6cadc;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period {
+        border-top: none;
+        border-bottom: 1px solid rgba(154, 141, 166, 0.5);
+        padding: 14px 14px 12px;
+        transition: background-color 0.24s ease, margin 0.24s ease, border-radius 0.24s ease, box-shadow 0.24s ease;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period:last-child {
+        border-bottom: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-toggle {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        border: none;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        filter: none !important;
+        display: grid;
+        grid-template-columns: minmax(60px, 60px) 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 0;
+        text-align: left;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-label {
+        margin: 0;
+        font-family: var(--secondary-font), sans-serif;
+        font-size: 14px;
+        color: rgba(56, 49, 63, 0.7);
+        line-height: 1.2;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-time {
+        margin: 0;
+        font-family: 'Libre Bodoni', serif;
+        font-size: var(--p);
+        font-weight: 700;
+        color: #1f1826;
+        line-height: 1.1;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-compact {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-pill {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 999px;
+        padding: 11px 16px 10px;
+        box-sizing: border-box;
+        font-family: 'Libre Bodoni', serif;
+        font-size: var(--p);
+        font-weight: 700;
+        color: #16101c;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-count {
+        flex-shrink: 0;
+        min-width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.9);
+        color: #3f344a;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: var(--secondary-font), sans-serif;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-panel {
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        margin-top: 0;
+        transition: max-height 0.26s ease, opacity 0.2s ease, margin-top 0.2s ease;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded {
+        background: #ffffff;
+        border-radius: 30px;
+        margin: 6px 4px;
+        position: relative;
+        box-shadow: 0 -2px 6px 0 rgba(10, 37, 64, 0.35) inset;
+        filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded+.calendar-mobile-period {
+        border-top: 1px solid rgba(154, 141, 166, 0.5);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: inset 0 0 0 1px rgba(223, 223, 228, 0.95);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded .calendar-mobile-period-toggle {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded .calendar-mobile-period-compact {
+        display: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded .calendar-mobile-period-time {
+        line-height: 1;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period.is-expanded .calendar-mobile-period-panel {
+        max-height: 700px;
+        opacity: 1;
+        margin-top: 12px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-card {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 180px;
+        border: none;
+        border-radius: 30px !important;
+        background: #9ab7de;
+        box-shadow: none !important;
+        filter: none !important;
+        text-align: left;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        color: #1a1320 !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-card:active {
+        transform: scale(0.992);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-title {
+        font-family: 'Libre Bodoni', serif;
+        font-size: 25px;
+        font-weight: 700;
+        line-height: 1.08;
+        margin: 0;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-professor {
+        font-family: var(--secondary-font), sans-serif;
+        font-size: 18px;
+        line-height: 1.2;
+        margin: 0;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-empty {
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px dashed rgba(120, 106, 135, 0.35);
+        color: rgba(49, 42, 57, 0.72);
+        font-family: var(--secondary-font), sans-serif;
+        font-size: 15px;
+        text-align: center;
+        padding: 18px 12px;
+    }
 }

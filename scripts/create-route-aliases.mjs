@@ -12,7 +12,6 @@ const routeAliases = {
   profile: 'profile.html',
   login: 'login.html',
   register: 'register.html',
-  'native-tests': 'native-tests.html',
   courses: 'index.html',
   dashboard: 'index.html',
   settings: 'index.html',

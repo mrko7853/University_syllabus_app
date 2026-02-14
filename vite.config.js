@@ -3,9 +3,8 @@ import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ command }) => {
-  const deployTarget = process.env.VITE_DEPLOY_TARGET || 'web';
   const isBuild = command === 'build';
-  const base = isBuild && deployTarget === 'mobile' ? '/' : (isBuild ? '/dev/' : '/');
+  const base = isBuild ? '/dev/' : '/';
 
   return {
     base,
@@ -32,7 +31,6 @@ export default defineConfig(({ command }) => {
           calendar: resolve(__dirname, 'calendar.html'),
           assignments: resolve(__dirname, 'assignments.html'),
           course: resolve(__dirname, 'course.html'),
-          nativeTests: resolve(__dirname, 'native-tests.html'),
         },
         output: {
           // Ensure proper chunking for components

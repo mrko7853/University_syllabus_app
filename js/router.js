@@ -17,7 +17,6 @@ class SimpleRouter {
       '/profile': '/profile.html',
       '/login': '/login.html',
       '/register': '/register.html',
-      '/native-tests': '/native-tests.html',
       '/settings': '/profile.html', // For now, settings goes to profile
       '/help': '/profile.html' // For now, help goes to profile
     }
@@ -40,6 +39,7 @@ class SimpleRouter {
     // Page caching - keeps pages in DOM but hidden
     this.pageCache = new Map()
     this.pageCacheInitialized = new Map()
+    this.sharedModulePromise = null
 
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
@@ -174,7 +174,6 @@ class SimpleRouter {
       '/profile',
       '/login',
       '/register',
-      '/native-tests',
       '/settings',
       '/help'
     ])
@@ -248,6 +247,34 @@ class SimpleRouter {
     document.body.style.overflow = ''
   }
 
+  getRouteCacheKey(path) {
+    return `route:${path}`
+  }
+
+  getCourseTemplateCacheKey() {
+    return 'route:__course_template__'
+  }
+
+  getCachedRouteMarkup(path) {
+    return this.pageCache.get(this.getRouteCacheKey(path)) || null
+  }
+
+  setCachedRouteMarkup(path, markup) {
+    const key = this.getRouteCacheKey(path)
+    this.pageCache.set(key, markup)
+    this.pageCacheInitialized.set(key, true)
+  }
+
+  getCachedCourseTemplate() {
+    return this.pageCache.get(this.getCourseTemplateCacheKey()) || null
+  }
+
+  setCachedCourseTemplate(markup) {
+    const key = this.getCourseTemplateCacheKey()
+    this.pageCache.set(key, markup)
+    this.pageCacheInitialized.set(key, true)
+  }
+
   async loadPage(path) {
     // Show loading bar
     this.showLoadingBar()
@@ -269,14 +296,24 @@ class SimpleRouter {
       try {
         this.cleanupCurrentPage()
 
-        const response = await fetch(withBase('/course.html') + '?t=' + Date.now())
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        let courseTemplateMarkup = this.getCachedCourseTemplate()
 
-        const html = await response.text()
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(html, 'text/html')
+        if (!courseTemplateMarkup) {
+          const response = await fetch(withBase('/course.html'))
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
-        const coursePage = doc.querySelector('#course-page')
+          const html = await response.text()
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(html, 'text/html')
+          const coursePage = doc.querySelector('#course-page')
+
+          if (coursePage) {
+            courseTemplateMarkup = coursePage.outerHTML
+            this.setCachedCourseTemplate(courseTemplateMarkup)
+          } else {
+            courseTemplateMarkup = ''
+          }
+        }
 
         let appContent = document.querySelector('#app-content')
         if (!appContent) {
@@ -288,8 +325,7 @@ class SimpleRouter {
         appContent.innerHTML = ''
         const courseAppContent = document.createElement('div')
         courseAppContent.id = 'course-app-content'
-
-        if (coursePage) courseAppContent.appendChild(coursePage.cloneNode(true))
+        courseAppContent.innerHTML = courseTemplateMarkup || ''
 
         appContent.appendChild(courseAppContent)
 
@@ -298,10 +334,9 @@ class SimpleRouter {
 
         await this.initializeShared()
 
-        if (!this.isProduction()) {
-          await import('./course-page.js?' + Date.now())
-        } else {
-          await import('./course-page.js')
+        const coursePageModule = await import('./course-page.js')
+        if (coursePageModule && typeof coursePageModule.initializeCoursePage === 'function') {
+          await coursePageModule.initializeCoursePage()
         }
 
         this.hideLoadingBar()
@@ -343,35 +378,40 @@ class SimpleRouter {
       // Update loading progress
       this.updateLoadingProgress(30)
 
-      // Fetch the HTML content
-      const response = await fetch(withBase(htmlFile) + '?t=' + Date.now())
-      if (!response.ok) {
-        throw new Error(`Failed to load ${htmlFile}`)
+      let appContent = document.querySelector('#app-content')
+      if (!appContent) {
+        appContent = document.createElement('div')
+        appContent.id = 'app-content'
+        document.body.appendChild(appContent)
       }
 
-      const html = await response.text()
+      const cachedMarkup = this.getCachedRouteMarkup(basePath)
 
-      // Update loading progress
-      this.updateLoadingProgress(60)
+      if (cachedMarkup) {
+        appContent.innerHTML = cachedMarkup
+        this.updateLoadingProgress(70)
+        console.log(`Router: Using cached markup for ${basePath}`)
+      } else {
+        // Fetch the HTML content
+        const response = await fetch(withBase(htmlFile))
+        if (!response.ok) {
+          throw new Error(`Failed to load ${htmlFile}`)
+        }
 
-      // Parse the HTML
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(html, 'text/html')
+        const html = await response.text()
 
-      // Extract the content we want (everything except navigation)
-      const newContent = doc.querySelector('#app-content') || doc.querySelector('section') || doc.body
+        // Update loading progress
+        this.updateLoadingProgress(60)
 
-      // Update the page content
-      const appContent = document.querySelector('#app-content')
-      if (newContent && appContent) {
-        // Clear existing content first
-        appContent.innerHTML = ''
+        // Parse the HTML
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
 
-        // Clone and append nodes
-        Array.from(newContent.childNodes).forEach(node => {
-          const clonedNode = node.cloneNode(true)
-          appContent.appendChild(clonedNode)
-        })
+        // Extract the content we want (everything except navigation)
+        const newContent = doc.querySelector('#app-content') || doc.querySelector('section') || doc.body
+        const pageMarkup = newContent ? newContent.innerHTML : ''
+        appContent.innerHTML = pageMarkup
+        this.setCachedRouteMarkup(basePath, pageMarkup)
 
         console.log('Router: Page content updated')
       }
@@ -408,6 +448,11 @@ class SimpleRouter {
   async initializeCurrentPageOnly(path) {
     try {
       console.log('Router: Initializing current page only (no HTML fetch):', path)
+
+      const appContent = document.querySelector('#app-content')
+      if (appContent && !this.getCachedRouteMarkup(path)) {
+        this.setCachedRouteMarkup(path, appContent.innerHTML)
+      }
 
       // Check authentication status
       const isAuthenticated = await this.checkAuthentication()
@@ -475,10 +520,6 @@ class SimpleRouter {
         await this.initializeAssignments()
       }
 
-      if (path === '/native-tests' || this.routes[path] === '/native-tests.html') {
-        await this.initializeNativeTests()
-      }
-
       // Initialize shared functionality for all pages
       await this.initializeShared()
 
@@ -514,9 +555,7 @@ class SimpleRouter {
       let mainModule = null
       if (typeof window.initializeDashboard !== 'function') {
         try {
-          mainModule = this.isProduction()
-            ? await import('./main.js')
-            : await import('./main.js?' + Date.now())
+          mainModule = await import('./main.js')
         } catch (error) {
           console.error('Router: Failed to load main.js for dashboard init', error)
         }
@@ -1061,9 +1100,7 @@ class SimpleRouter {
       let profileModule = null
 
       if (typeof window.initializeProfile !== 'function') {
-        profileModule = this.isProduction()
-          ? await import('./profile.js')
-          : await import('./profile.js?' + Date.now())
+        profileModule = await import('./profile.js')
       }
 
       if (typeof window.initializeProfile === 'function') {
@@ -1107,39 +1144,13 @@ class SimpleRouter {
     }
   }
 
-  async initializeNativeTests() {
-    try {
-      let nativeTestsModule = null
-
-      if (typeof window.initializeNativeTests !== 'function') {
-        nativeTestsModule = await import('./native-tests-entry.js')
-      }
-
-      if (typeof window.initializeNativeTests === 'function') {
-        await window.initializeNativeTests()
-      } else if (nativeTestsModule && typeof nativeTestsModule.initializeNativeTests === 'function') {
-        await nativeTestsModule.initializeNativeTests()
-      } else {
-        console.error('Router: initializeNativeTests is unavailable')
-      }
-    } catch (error) {
-      console.error('Error initializing native tests:', error)
-    }
-  }
-
   async initializeShared() {
     try {
-      // In production, modules are already bundled and available
-      if (this.isProduction()) {
-        // Shared functionality is already loaded, just initialize components
-        this.initializeSharedComponents()
-      } else {
-        // Re-import shared.js to get fresh instances (dev mode only)
-        const sharedModule = await import('./shared.js?' + Date.now())
-
-        // Initialize shared functionality
-        this.initializeSharedComponents()
+      if (!this.sharedModulePromise) {
+        this.sharedModulePromise = import('./shared.js')
       }
+      await this.sharedModulePromise
+      this.initializeSharedComponents()
 
       // Set up global year/term tracking for all pages as fallback
       this.setupGlobalYearTermTracking()

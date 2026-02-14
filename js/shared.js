@@ -199,6 +199,306 @@ function normalizeCourseTitle(title) {
 }
 
 const courseCache = {};
+const courseCacheMeta = {};
+const courseCacheInFlight = {};
+const COURSE_CACHE_TTL_MS = 5 * 60 * 1000;
+const COURSE_CACHE_FULL_RESYNC_MS = 30 * 60 * 1000;
+
+let supportsCoursesUpdatedAt = true;
+
+let coursesRealtimeSubscriptionInitialized = false;
+let coursesRealtimeChannel = null;
+
+function normalizeCourseYear(year) {
+    const parsed = parseInt(year, 10);
+    return Number.isFinite(parsed) ? parsed : year;
+}
+
+function normalizeCourseTerm(term) {
+    if (term === null || term === undefined) return '';
+
+    const rawTerm = String(term).trim();
+    const lowerTerm = rawTerm.toLowerCase();
+
+    if (lowerTerm.includes('fall') || rawTerm.includes('秋')) return 'Fall';
+    if (lowerTerm.includes('spring') || rawTerm.includes('春')) return 'Spring';
+
+    return rawTerm;
+}
+
+function getCourseCacheKey(year, term) {
+    const normalizedYear = normalizeCourseYear(year);
+    const normalizedTerm = normalizeCourseTerm(term);
+    return `${normalizedYear}-${normalizedTerm}`;
+}
+
+function getCourseIdentity(course) {
+    return `${course.course_code}::${normalizeCourseYear(course.academic_year)}::${normalizeCourseTerm(course.term)}`;
+}
+
+function getLatestCourseUpdatedAt(courses) {
+    if (!Array.isArray(courses) || courses.length === 0) return null;
+
+    let maxMillis = 0;
+
+    courses.forEach((course) => {
+        const updatedAt = course?.updated_at;
+        if (!updatedAt) return;
+
+        const millis = Date.parse(updatedAt);
+        if (!Number.isNaN(millis)) {
+            maxMillis = Math.max(maxMillis, millis);
+        }
+    });
+
+    if (!maxMillis) return null;
+    return new Date(maxMillis).toISOString();
+}
+
+function mergeCourseUpdates(existingCourses, changedCourses) {
+    const mergedMap = new Map();
+
+    existingCourses.forEach((course) => {
+        mergedMap.set(getCourseIdentity(course), course);
+    });
+
+    changedCourses.forEach((course) => {
+        mergedMap.set(getCourseIdentity(course), course);
+    });
+
+    return Array.from(mergedMap.values());
+}
+
+function setCourseCacheEntry(year, term, courses, options = {}) {
+    const cacheKey = getCourseCacheKey(year, term);
+    const now = Date.now();
+
+    courseCache[cacheKey] = courses;
+    courseCacheMeta[cacheKey] = {
+        fetchedAt: now,
+        fullSyncAt: options.fullSyncAt ?? now,
+        updatedAtIso: options.updatedAtIso ?? getLatestCourseUpdatedAt(courses),
+        requiresFullSync: options.requiresFullSync === true
+    };
+
+    return cacheKey;
+}
+
+function getCourseCacheEntry(year, term) {
+    const cacheKey = getCourseCacheKey(year, term);
+    const cachedCourses = courseCache[cacheKey];
+    if (!cachedCourses) return null;
+
+    return {
+        cacheKey,
+        courses: cachedCourses,
+        fetchedAt: courseCacheMeta[cacheKey]?.fetchedAt || 0,
+        fullSyncAt: courseCacheMeta[cacheKey]?.fullSyncAt || 0,
+        updatedAtIso: courseCacheMeta[cacheKey]?.updatedAtIso || null,
+        requiresFullSync: courseCacheMeta[cacheKey]?.requiresFullSync === true
+    };
+}
+
+function isCourseCacheFresh(cacheEntry) {
+    if (!cacheEntry) return false;
+    return Date.now() - cacheEntry.fetchedAt < COURSE_CACHE_TTL_MS;
+}
+
+function clearAvailableCourseDimensionCaches() {
+    availableSemestersCache = null;
+    availableYearsCache = null;
+}
+
+function hasCoursesUpdatedAtError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('updated_at') && (message.includes('column') || message.includes('does not exist'));
+}
+
+function invalidateCourseCacheEntry(year, term) {
+    const cacheKey = getCourseCacheKey(year, term);
+    delete courseCache[cacheKey];
+    delete courseCacheMeta[cacheKey];
+    delete courseCacheInFlight[cacheKey];
+    return cacheKey;
+}
+
+function markCourseCacheEntryStale(year, term, { requiresFullSync = false } = {}) {
+    const cacheKey = getCourseCacheKey(year, term);
+    const meta = courseCacheMeta[cacheKey];
+    if (!meta) return false;
+
+    meta.fetchedAt = 0;
+
+    if (requiresFullSync) {
+        meta.requiresFullSync = true;
+        meta.fullSyncAt = 0;
+    }
+
+    return true;
+}
+
+async function fetchDeltaCoursesSince(year, term, sinceIso) {
+    if (!supportsCoursesUpdatedAt || !sinceIso) return null;
+
+    const { data, error } = await supabase
+        .from('courses')
+        .select(`
+            *,
+            gpa_a_percent,
+            gpa_b_percent,
+            gpa_c_percent,
+            gpa_d_percent,
+            gpa_f_percent
+        `)
+        .eq('academic_year', year)
+        .eq('term', term)
+        .gt('updated_at', sinceIso);
+
+    if (error) {
+        if (hasCoursesUpdatedAtError(error)) {
+            supportsCoursesUpdatedAt = false;
+            console.warn('courses.updated_at is unavailable; falling back to full fetch strategy');
+            return null;
+        }
+        throw new Error(`Delta courses query failed: ${error.message}`);
+    }
+
+    return data || [];
+}
+
+async function fetchCourseDataWithDelta(year, term, cacheEntry) {
+    const cacheKey = getCourseCacheKey(year, term);
+    const shouldDoFullResync = (
+        !cacheEntry ||
+        cacheEntry.requiresFullSync ||
+        !cacheEntry.fullSyncAt ||
+        (Date.now() - cacheEntry.fullSyncAt > COURSE_CACHE_FULL_RESYNC_MS)
+    );
+
+    if (!shouldDoFullResync && cacheEntry?.updatedAtIso && supportsCoursesUpdatedAt) {
+        const changedCourses = await fetchDeltaCoursesSince(year, term, cacheEntry.updatedAtIso);
+        if (changedCourses !== null) {
+            if (changedCourses.length > 0) {
+                await applyHistoricalGpaFallback(changedCourses);
+                const mergedCourses = mergeCourseUpdates(cacheEntry.courses, changedCourses);
+                setCourseCacheEntry(year, term, mergedCourses, {
+                    fullSyncAt: cacheEntry.fullSyncAt,
+                    requiresFullSync: false
+                });
+                console.log(`Delta sync applied for ${term} ${year}: ${changedCourses.length} updated rows`);
+                return mergedCourses;
+            }
+
+            setCourseCacheEntry(year, term, cacheEntry.courses, {
+                fullSyncAt: cacheEntry.fullSyncAt,
+                updatedAtIso: cacheEntry.updatedAtIso,
+                requiresFullSync: false
+            });
+            return cacheEntry.courses;
+        }
+    }
+
+    const fullCourses = await fetchCourseDataFallback(year, term);
+    const meta = courseCacheMeta[cacheKey] || {};
+    setCourseCacheEntry(year, term, fullCourses, {
+        fullSyncAt: Date.now(),
+        updatedAtIso: meta.updatedAtIso || getLatestCourseUpdatedAt(fullCourses),
+        requiresFullSync: false
+    });
+    return fullCourses;
+}
+
+function refreshCourseDataInBackground(year, term, cacheKey, cacheEntry = null) {
+    if (courseCacheInFlight[cacheKey]) {
+        return courseCacheInFlight[cacheKey];
+    }
+
+    const refreshPromise = fetchCourseDataWithDelta(year, term, cacheEntry)
+        .catch((error) => {
+            console.warn(`Background refresh failed for ${term} ${year}:`, error);
+            return null;
+        })
+        .finally(() => {
+            delete courseCacheInFlight[cacheKey];
+        });
+
+    courseCacheInFlight[cacheKey] = refreshPromise;
+    return refreshPromise;
+}
+
+function ensureCoursesRealtimeInvalidation() {
+    if (coursesRealtimeSubscriptionInitialized) return;
+    coursesRealtimeSubscriptionInitialized = true;
+
+    try {
+        coursesRealtimeChannel = supabase
+            .channel('courses-cache-invalidation')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'courses' },
+                (payload) => {
+                    const row = payload?.new || payload?.old || null;
+                    const changedYear = row?.academic_year;
+                    const changedTerm = row?.term;
+                    const normalizedTerm = normalizeCourseTerm(changedTerm);
+                    const isDeleteEvent = payload?.eventType === 'DELETE';
+
+                    clearAvailableCourseDimensionCaches();
+
+                    if (changedYear !== undefined && changedYear !== null && normalizedTerm) {
+                        const marked = markCourseCacheEntryStale(changedYear, normalizedTerm, {
+                            requiresFullSync: isDeleteEvent
+                        });
+                        if (marked) {
+                            console.log(`Realtime cache marked stale for ${normalizedTerm} ${changedYear}`);
+                        }
+                    } else {
+                        Object.keys(courseCacheMeta).forEach((key) => {
+                            courseCacheMeta[key].fetchedAt = 0;
+                            if (isDeleteEvent) {
+                                courseCacheMeta[key].requiresFullSync = true;
+                                courseCacheMeta[key].fullSyncAt = 0;
+                            }
+                        });
+                        console.log('Realtime cache marked stale for all course cache entries');
+                    }
+
+                    window.dispatchEvent(new CustomEvent('coursesCacheInvalidated', {
+                        detail: {
+                            eventType: payload?.eventType || 'unknown',
+                            year: changedYear ?? null,
+                            term: normalizedTerm || null
+                        }
+                    }));
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Subscribed to realtime course cache invalidation');
+                }
+            });
+    } catch (error) {
+        console.warn('Failed to initialize realtime course cache invalidation:', error);
+    }
+}
+
+export function invalidateCourseCache(year = null, term = null) {
+    clearAvailableCourseDimensionCaches();
+
+    if (year !== null && year !== undefined && term !== null && term !== undefined) {
+        const removedKey = invalidateCourseCacheEntry(year, term);
+        return { removedKeys: [removedKey] };
+    }
+
+    const removedKeys = Object.keys(courseCache);
+    removedKeys.forEach((key) => {
+        delete courseCache[key];
+        delete courseCacheMeta[key];
+        delete courseCacheInFlight[key];
+    });
+
+    return { removedKeys };
+}
 
 // Helper function to convert RGB to hex
 function rgbToHex(rgb) {
@@ -309,6 +609,8 @@ let availableSemestersCache = null;
 
 // Fetch available semesters (term + year combinations) from the database
 export async function fetchAvailableSemesters() {
+    ensureCoursesRealtimeInvalidation();
+
     // Return cached data if available
     if (availableSemestersCache) {
         console.log('Using cached available semesters:', availableSemestersCache);
@@ -383,6 +685,8 @@ export async function fetchAvailableSemesters() {
 
 // Fetch available years from the database
 export async function fetchAvailableYears() {
+    ensureCoursesRealtimeInvalidation();
+
     // Return cached data if available
     if (availableYearsCache) {
         console.log('Using cached available years:', availableYearsCache);
@@ -426,18 +730,55 @@ export async function fetchAvailableYears() {
     }
 }
 
-export async function fetchCourseData(year, term) {
-    const cacheKey = `${year}-${term}`;
-    if (courseCache[cacheKey]) {
-        console.log(`Using cached courses for ${term} ${year}`);
-        return courseCache[cacheKey];
+export async function fetchCourseData(year, term, options = {}) {
+    ensureCoursesRealtimeInvalidation();
+
+    const normalizedYear = normalizeCourseYear(year);
+    const normalizedTerm = normalizeCourseTerm(term);
+    const cacheKey = getCourseCacheKey(normalizedYear, normalizedTerm);
+    const forceRefresh = options?.forceRefresh === true;
+
+    const cachedEntry = getCourseCacheEntry(normalizedYear, normalizedTerm);
+    if (cachedEntry && !forceRefresh) {
+        if (isCourseCacheFresh(cachedEntry)) {
+            console.log(`Using cached courses for ${normalizedTerm} ${normalizedYear}`);
+            return cachedEntry.courses;
+        }
+
+        console.log(`Using stale cached courses for ${normalizedTerm} ${normalizedYear}, refreshing in background`);
+        refreshCourseDataInBackground(normalizedYear, normalizedTerm, cacheKey, cachedEntry);
+        return cachedEntry.courses;
     }
 
-    try {
-        console.log(`Fetching courses for ${term} ${year}...`);
+    if (courseCacheInFlight[cacheKey]) {
+        return courseCacheInFlight[cacheKey];
+    }
 
-        // Skip the problematic RPC and use direct table queries instead
-        return await fetchCourseDataFallback(year, term);
+    const fetchPromise = (async () => {
+        try {
+            console.log(`Fetching courses for ${normalizedTerm} ${normalizedYear}...`);
+
+            return await fetchCourseDataWithDelta(normalizedYear, normalizedTerm, cachedEntry);
+        } catch (error) {
+            console.error(`Error fetching course data for ${normalizedTerm} ${normalizedYear}:`, error);
+
+            // Check if we have stale cache data as fallback
+            if (courseCache[cacheKey]) {
+                console.log(`Using stale cached data as fallback for ${normalizedTerm} ${normalizedYear}`);
+                return courseCache[cacheKey];
+            }
+
+            // Re-throw the error for retry mechanisms to handle
+            throw error;
+        } finally {
+            delete courseCacheInFlight[cacheKey];
+        }
+    })();
+
+    courseCacheInFlight[cacheKey] = fetchPromise;
+
+    try {
+        return await fetchPromise;
 
         /* Original RPC call - disabled due to temp_courses permission issues
         const { data: courses, error } = await supabase.rpc('get_courses_with_fallback_gpa', {
@@ -472,17 +813,70 @@ export async function fetchCourseData(year, term) {
         return courses;
         */
     } catch (error) {
-        console.error(`Error fetching course data for ${term} ${year}:`, error);
-
-        // Check if we have stale cache data as fallback
-        if (courseCache[cacheKey]) {
-            console.log(`Using stale cached data as fallback for ${term} ${year}`);
-            return courseCache[cacheKey];
-        }
-
-        // Re-throw the error for retry mechanisms to handle
         throw error;
     }
+}
+
+async function applyHistoricalGpaFallback(courses) {
+    if (!courses || courses.length === 0) return courses;
+
+    // Check if GPA data is present (checking for non-null AND non-zero values)
+    const coursesWithGPA = courses.filter(course => {
+        const hasValidGPA = (
+            (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+            (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+            (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+            (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+            (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+        );
+        return hasValidGPA;
+    });
+
+    const coursesWithoutGPA = courses.filter(course => {
+        const hasValidGPA = (
+            (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+            (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+            (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+            (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+            (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+        );
+        return !hasValidGPA;
+    });
+
+    if (coursesWithGPA.length > 0) {
+        console.log(`Found GPA data for ${coursesWithGPA.length} out of ${courses.length} courses`);
+    }
+
+    if (coursesWithoutGPA.length > 0) {
+        console.log(`${coursesWithoutGPA.length} courses missing GPA data - attempting to find historical GPA data...`);
+
+        // Get historical GPA data for courses that don't have current GPA data
+        const historicalGpaData = await fetchHistoricalGpaData(coursesWithoutGPA.map(c => c.course_code));
+
+        // Apply historical GPA data to courses that need it
+        coursesWithoutGPA.forEach(course => {
+            const historicalGpa = historicalGpaData[course.course_code];
+            if (historicalGpa) {
+                course.gpa_a_percent = historicalGpa.gpa_a_percent;
+                course.gpa_b_percent = historicalGpa.gpa_b_percent;
+                course.gpa_c_percent = historicalGpa.gpa_c_percent;
+                course.gpa_d_percent = historicalGpa.gpa_d_percent;
+                course.gpa_f_percent = historicalGpa.gpa_f_percent;
+                course.gpa_year_source = historicalGpa.academic_year; // Track where GPA came from
+                course.gpa_term_source = historicalGpa.term;
+            }
+        });
+
+        const coursesWithHistoricalGpa = coursesWithoutGPA.filter(course => course.gpa_year_source);
+        if (coursesWithHistoricalGpa.length > 0) {
+            console.log(`Found historical GPA data for ${coursesWithHistoricalGpa.length} additional courses`);
+            console.log('Sample course with historical GPA:', coursesWithHistoricalGpa[0]);
+        } else {
+            console.log('No historical GPA data found for courses missing current GPA');
+        }
+    }
+
+    return courses;
 }
 
 // Fallback method for when RPC permissions fail
@@ -542,64 +936,9 @@ async function fetchCourseDataFallback(year, term) {
             });
         }
 
-        // Check if GPA data is present (checking for non-null AND non-zero values)
-        const coursesWithGPA = courses.filter(course => {
-            const hasValidGPA = (
-                (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
-                (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
-                (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
-                (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
-                (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
-            );
-            return hasValidGPA;
-        });
+        await applyHistoricalGpaFallback(courses);
 
-        const coursesWithoutGPA = courses.filter(course => {
-            const hasValidGPA = (
-                (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
-                (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
-                (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
-                (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
-                (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
-            );
-            return !hasValidGPA;
-        });
-
-        if (coursesWithGPA.length > 0) {
-            console.log(`Found GPA data for ${coursesWithGPA.length} out of ${courses.length} courses`);
-        }
-
-        if (coursesWithoutGPA.length > 0) {
-            console.log(`${coursesWithoutGPA.length} courses missing GPA data - attempting to find historical GPA data...`);
-
-            // Get historical GPA data for courses that don't have current GPA data
-            const historicalGpaData = await fetchHistoricalGpaData(coursesWithoutGPA.map(c => c.course_code));
-
-            // Apply historical GPA data to courses that need it
-            coursesWithoutGPA.forEach(course => {
-                const historicalGpa = historicalGpaData[course.course_code];
-                if (historicalGpa) {
-                    course.gpa_a_percent = historicalGpa.gpa_a_percent;
-                    course.gpa_b_percent = historicalGpa.gpa_b_percent;
-                    course.gpa_c_percent = historicalGpa.gpa_c_percent;
-                    course.gpa_d_percent = historicalGpa.gpa_d_percent;
-                    course.gpa_f_percent = historicalGpa.gpa_f_percent;
-                    course.gpa_year_source = historicalGpa.academic_year; // Track where GPA came from
-                    course.gpa_term_source = historicalGpa.term;
-                }
-            });
-
-            const coursesWithHistoricalGpa = coursesWithoutGPA.filter(course => course.gpa_year_source);
-            if (coursesWithHistoricalGpa.length > 0) {
-                console.log(`Found historical GPA data for ${coursesWithHistoricalGpa.length} additional courses`);
-                console.log('Sample course with historical GPA:', coursesWithHistoricalGpa[0]);
-            } else {
-                console.log('No historical GPA data found for courses missing current GPA');
-            }
-        }
-
-        const cacheKey = `${year}-${term}`;
-        courseCache[cacheKey] = courses;
+        setCourseCacheEntry(year, term, courses);
 
         return courses;
     } catch (error) {
@@ -635,8 +974,7 @@ async function fetchCourseDataFallback(year, term) {
                     gpa_f_percent: null
                 }));
 
-                const cacheKey = `${year}-${term}`;
-                courseCache[cacheKey] = minimalProcessed;
+                setCourseCacheEntry(year, term, minimalProcessed);
                 return minimalProcessed;
             }
         } catch (minimalFallbackError) {
@@ -926,8 +1264,9 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
             // Close menu when clicking background
             classInfoBackground.addEventListener("click", function () {
-                // Use smooth closing animation by removing show class
-                classInfo.classList.remove("show");
+                // Use smooth closing animation and always reset swipe state
+                classInfo.classList.remove("show", "fully-open", "swiping");
+                classInfo.style.removeProperty('--modal-translate-y');
 
                 setTimeout(() => {
                     document.body.style.overflow = "auto";
@@ -1655,9 +1994,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }
     }
 
+    classInfo.classList.remove('fully-open', 'swiping');
     classInfo.classList.add("show");
 
     // Reset any leftover inline styles from previous interactions
+    classInfo.style.removeProperty('--modal-translate-y');
     classInfo.style.transform = '';
     classInfo.style.transition = '';
     classInfo.style.opacity = '';
@@ -1899,8 +2240,9 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         classClose.addEventListener("click", function () {
             const currentBackground = document.getElementById("class-info-background");
 
-            // Use smooth closing animation by removing show class
-            classInfo.classList.remove("show");
+            // Use smooth closing animation and always reset swipe state
+            classInfo.classList.remove("show", "fully-open", "swiping");
+            classInfo.style.removeProperty('--modal-translate-y');
 
             setTimeout(() => {
                 document.body.style.overflow = "auto";
@@ -3225,459 +3567,496 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     });
 }
 
-// Instagram-style modal functionality for class-info modal
-function addSwipeToClose(modal, background) {
-    let startY = 0;
-    let currentY = 0;
-    let startTime = 0;
-    let isDragging = false;
-    let modalState = 'semi-open'; // 'semi-open', 'fully-open', 'closed'
-    let dragStarted = false;
+const MOBILE_SHEET_BREAKPOINT = 780;
+const SWIPE_START_THRESHOLD = 8;
+const SWIPE_AXIS_LOCK_RATIO = 1.2;
+const SWIPE_CLOSE_DURATION_MS = 320;
 
-    const threshold = Math.min(140, Math.max(90, window.innerHeight * 0.16));
-    const velocityThreshold = 0.45;
-    const closeDragDistance = 260;
+function isMobileSheet() {
+    return window.innerWidth <= MOBILE_SHEET_BREAKPOINT;
+}
 
-    // Get the content wrapper for scroll detection
-    const contentWrapper = modal.querySelector('.class-content-wrapper');
+function getTouchPoint(event) {
+    return event.touches?.[0] || event.changedTouches?.[0] || null;
+}
 
-    // Check if we're on mobile
-    const isMobile = () => window.innerWidth <= 780;
+function isAtTop(scrollElement) {
+    return !scrollElement || scrollElement.scrollTop <= 1;
+}
 
-    function handleTouchStart(e) {
-        if (!isMobile()) return;
+function applyDragResistance(deltaY) {
+    if (deltaY <= 0) return 0;
+    if (deltaY <= 140) return deltaY * 0.88;
+    return 123.2 + ((deltaY - 140) * 0.34);
+}
 
-        startY = e.touches[0].clientY;
-        currentY = startY;
-        startTime = Date.now();
-        isDragging = false;
-        dragStarted = false;
+function resetSwipeHandlers(modal, key) {
+    const previousHandlers = modal?.[key];
+    if (!previousHandlers) return;
 
-        // Determine current modal state
-        if (modal.classList.contains('fully-open')) {
-            modalState = 'fully-open';
-        } else if (modal.classList.contains('show')) {
-            modalState = 'semi-open';
+    modal.removeEventListener('touchstart', previousHandlers.touchstart);
+    modal.removeEventListener('touchmove', previousHandlers.touchmove);
+    modal.removeEventListener('touchend', previousHandlers.touchend);
+    modal.removeEventListener('touchcancel', previousHandlers.touchcancel);
+}
+
+function clearSheetInlineStyles(modal, background, options = {}) {
+    const preserveBackgroundOpacity = options.preserveBackgroundOpacity === true;
+
+    modal.classList.remove('swiping');
+    modal.style.removeProperty('--modal-translate-y');
+    modal.style.transition = '';
+    modal.style.opacity = '';
+
+    if (background) {
+        background.style.transition = '';
+        if (!preserveBackgroundOpacity) {
+            background.style.opacity = '';
         }
-
-        console.log('Touch start, modalState:', modalState);
-    }
-
-    function handleTouchMove(e) {
-        if (!isMobile()) return;
-
-        currentY = e.touches[0].clientY;
-        const deltaY = currentY - startY;
-        const absDeltaY = Math.abs(deltaY);
-
-        // Check if content can scroll
-        const isAtTop = contentWrapper ? contentWrapper.scrollTop <= 0 : true;
-        const isAtBottom = contentWrapper ?
-            contentWrapper.scrollTop + contentWrapper.clientHeight >= contentWrapper.scrollHeight - 1 : true;
-        const hasScrollableContent = contentWrapper ?
-            contentWrapper.scrollHeight > contentWrapper.clientHeight : false;
-
-        // Determine if we should handle this gesture
-        let shouldHandleGesture = false;
-
-        if (deltaY < 0) {
-            // Swiping up
-            if (modalState === 'semi-open' && isAtTop) {
-                // Can expand to fully open
-                shouldHandleGesture = true;
-            } else if (modalState === 'fully-open' && !hasScrollableContent) {
-                // No content to scroll, allow rubber band effect
-                shouldHandleGesture = true;
-            }
-        } else if (deltaY > 0) {
-            // Swiping down
-            if (modalState === 'fully-open' && isAtTop) {
-                // Can collapse to semi-open or close
-                shouldHandleGesture = true;
-            } else if (modalState === 'semi-open' && isAtTop) {
-                // Can close modal
-                shouldHandleGesture = true;
-            } else if (!hasScrollableContent) {
-                // No content to scroll
-                shouldHandleGesture = true;
-            }
-        }
-
-        if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
-            if (!dragStarted) {
-                dragStarted = true;
-                isDragging = true;
-                modal.classList.add('swiping');
-                console.log('Started gesture, direction:', deltaY < 0 ? 'up' : 'down');
-            }
-
-            // Prevent scrolling when we're handling the gesture
-            e.preventDefault();
-
-            // Apply transform based on gesture using CSS custom properties
-            if (deltaY < 0 && modalState === 'semi-open') {
-                // Expanding from semi-open to fully-open
-                const progress = Math.min(Math.abs(deltaY) / threshold, 1);
-                const translateY = 20 - (20 * progress);
-                modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
-                modal.style.transition = 'none';
-
-            } else if (deltaY > 0) {
-                // Collapsing or closing - use consistent maxDrag like search-modal
-                const progress = Math.min(deltaY / closeDragDistance, 1);
-
-                if (modalState === 'fully-open') {
-                    // From fully-open to semi-open - NO fading, just transform
-                    const translateY = 0 + (20 * progress);
-                    modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
-
-                } else if (modalState === 'semi-open') {
-                    // From semi-open to closing - fade the MODAL itself like search-modal
-                    const translateY = 20 + (80 * progress);
-                    modal.style.setProperty('--modal-translate-y', `${translateY}vh`);
-
-                    // Fade the modal itself (not background) - same calculation as search-modal
-                    const opacity = Math.max(0.2, 1 - progress * 0.8);
-                    modal.style.opacity = opacity;
-                }
-                modal.style.transition = 'none';
-            }
-        } else if (dragStarted && !shouldHandleGesture) {
-            // User started gesture but now content should scroll - release gesture
-            isDragging = false;
-            dragStarted = false;
-            modal.classList.remove('swiping');
-
-            // Snap back to current state using CSS custom properties
-            modal.style.transition = 'transform 0.3s ease-out';
-            if (modalState === 'fully-open') {
-                modal.style.setProperty('--modal-translate-y', '0');
-            } else if (modalState === 'semi-open') {
-                modal.style.setProperty('--modal-translate-y', '20vh');
-            }
-            modal.style.opacity = '1'; // Reset modal opacity
-
-            console.log('Released gesture, allowing content scroll');
-        }
-
-        // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
-    }
-
-    function handleTouchEnd(e) {
-        if (!isMobile() || !dragStarted) return;
-
-        const deltaY = currentY - startY;
-        const duration = Math.max(Date.now() - startTime, 1);
-        const velocity = Math.abs(deltaY) / duration; // pixels per ms
-
-        modal.classList.remove('swiping');
-        modal.style.transition = 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
-
-        console.log('Touch end - deltaY:', deltaY, 'velocity:', velocity, 'modalState:', modalState);
-
-        // Determine final state based on distance and velocity using CSS custom properties
-        if (deltaY < 0 && modalState === 'semi-open') {
-            // Swiping up from semi-open
-            if (Math.abs(deltaY) > threshold || velocity > velocityThreshold) {
-                // Expand to fully open
-                modal.classList.add('fully-open');
-                modal.style.setProperty('--modal-translate-y', '0');
-                modalState = 'fully-open';
-                console.log('Expanded to fully open');
-            } else {
-                // Snap back to semi-open
-                modal.style.setProperty('--modal-translate-y', '20vh');
-                modal.style.opacity = '1'; // Reset opacity when snapping back
-                console.log('Snapped back to semi-open');
-            }
-
-        } else if (deltaY > 0) {
-            // Swiping down
-            if (modalState === 'fully-open') {
-                if (deltaY > threshold || velocity > velocityThreshold) {
-                    // Collapse to semi-open
-                    modal.classList.remove('fully-open');
-                    modal.style.setProperty('--modal-translate-y', '20vh');
-                    modalState = 'semi-open';
-                    console.log('Collapsed to semi-open');
-                } else {
-                    // Snap back to fully open
-                    modal.style.setProperty('--modal-translate-y', '0');
-                    console.log('Snapped back to fully open');
-                }
-
-            } else if (modalState === 'semi-open') {
-                if (deltaY > threshold || velocity > velocityThreshold) {
-                    // Close modal with same animation as search-modal
-                    modal.style.setProperty('--modal-translate-y', '100vh');
-                    background.style.opacity = '0';
-                    background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-
-                    setTimeout(() => {
-                        document.body.style.overflow = "auto";
-                        window.history.pushState({}, '', withBase('/'));
-
-                        if (background.parentNode) {
-                            background.parentNode.removeChild(background);
-                        }
-
-                        // Reset all styles after closing
-                        modal.style.removeProperty('--modal-translate-y');
-                        modal.style.transition = '';
-                        modal.style.transform = '';
-                        background.style.opacity = '';
-                        background.style.transition = '';
-                        modal.classList.remove('show', 'fully-open');
-                    }, 400);
-
-                    console.log('Closed class-info modal with swipe');
-                    return;
-                } else {
-                    // Snap back to semi-open
-                    modal.style.setProperty('--modal-translate-y', '20vh');
-                    modal.style.opacity = '1'; // Reset opacity when snapping back
-                    console.log('Snapped back to semi-open');
-                }
-            }
-        }
-
-        // Reset modal opacity and clear inline styles after animation
-        modal.style.opacity = '1';
-        setTimeout(() => {
-            if (modal.style.transition) {
-                modal.style.transition = '';
-            }
-            // Clean up any inline custom property overrides
-            if (modal.style.getPropertyValue('--modal-translate-y')) {
-                modal.style.removeProperty('--modal-translate-y');
-            }
-        }, 400);
-
-        isDragging = false;
-        dragStarted = false;
-    }
-
-    function closeModal() {
-        console.log('Closing class-info modal');
-        const isMobile = window.innerWidth <= 780;
-
-        if (isMobile) {
-            // Use same closing animation as search-modal - apply CSS custom property for smooth exit
-            modal.style.setProperty('--modal-translate-y', '100vh');
-            background.style.opacity = '0';
-            background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-
-            setTimeout(() => {
-                document.body.style.overflow = "auto";
-                window.history.pushState({}, '', withBase('/'));
-
-                if (background.parentNode) {
-                    background.parentNode.removeChild(background);
-                }
-
-                // Reset all styles after closing
-                modal.style.removeProperty('--modal-translate-y');
-                modal.style.transition = '';
-                modal.style.transform = '';
-                background.style.opacity = '';
-                background.style.transition = '';
-                modal.classList.remove('show', 'fully-open');
-            }, 400);
-        } else {
-            // Desktop close
-            modal.classList.remove("show");
-
-            setTimeout(() => {
-                document.body.style.overflow = "auto";
-                window.history.pushState({}, '', withBase('/'));
-
-                if (background.parentNode) {
-                    background.parentNode.removeChild(background);
-                }
-
-                // Clean up all styles
-                modal.style.removeProperty('--modal-translate-y');
-                modal.style.transform = '';
-                modal.style.transition = '';
-                modal.style.opacity = '';
-                background.style.opacity = '';
-                background.style.transition = '';
-                modal.classList.remove('fully-open');
-            }, 400);
-        }
-    }
-
-    // Add touch event listeners
-    modal.addEventListener('touchstart', handleTouchStart, { passive: false });
-    modal.addEventListener('touchmove', handleTouchMove, { passive: false });
-    modal.addEventListener('touchend', handleTouchEnd, { passive: false });
-
-    // Clean up listeners when modal is removed
-    const originalRemove = background.remove || background.parentNode?.removeChild?.bind(background.parentNode);
-    if (originalRemove) {
-        background.remove = function () {
-            modal.removeEventListener('touchstart', handleTouchStart);
-            modal.removeEventListener('touchmove', handleTouchMove);
-            modal.removeEventListener('touchend', handleTouchEnd);
-            return originalRemove.call(this);
-        };
     }
 }
 
-// Instagram-style modal functionality for simple modals (filter, search)
-function addSwipeToCloseSimple(modal, background, closeCallback) {
-    console.log('addSwipeToCloseSimple called for modal:', modal.className);
+// Swipe behavior for class-info modal with collapsed/expanded states on mobile
+function addSwipeToClose(modal, background) {
+    if (!modal || !background) return;
+
+    if (typeof modal._classInfoSwipeCleanup === 'function') {
+        modal._classInfoSwipeCleanup();
+    }
+
+    resetSwipeHandlers(modal, '_classInfoSwipeHandlers');
+
+    const contentWrapper = modal.querySelector('.class-content-wrapper');
+    const velocityThreshold = 0.55;
+
+    let startX = 0;
     let startY = 0;
     let currentY = 0;
     let startTime = 0;
-    let isDragging = false;
-    let dragStarted = false;
+    let dragging = false;
+    let axisLocked = false;
+    let cancelled = false;
+    let closing = false;
+    let gestureState = 'collapsed'; // 'collapsed' | 'expanded'
+    let settleTimer = null;
+    let closeTimer = null;
 
-    const threshold = Math.min(120, Math.max(70, window.innerHeight * 0.14));
-    const velocityThreshold = 0.4;
+    const collapsedOffsetPx = () => Math.round(window.innerHeight * 0.2);
+    const expandDistance = () => Math.min(180, Math.max(90, window.innerHeight * 0.14));
+    const closeDistance = () => Math.min(280, Math.max(120, window.innerHeight * 0.22));
+    const collapseDistance = () => Math.min(180, Math.max(90, window.innerHeight * 0.14));
 
-    // Check if we're on mobile
-    const isMobile = () => window.innerWidth <= 780;
-
-    function handleTouchStart(e) {
-        if (!isMobile()) return;
-
-        startY = e.touches[0].clientY;
-        currentY = startY;
-        startTime = Date.now();
-        isDragging = false;
-        dragStarted = false;
-
-        console.log('Simple modal touch start on:', modal.className);
+    function isExpanded() {
+        return modal.classList.contains('fully-open');
     }
 
-    function handleTouchMove(e) {
-        if (!isMobile()) return;
-
-        currentY = e.touches[0].clientY;
-        const deltaY = currentY - startY;
-        const absDeltaY = Math.abs(deltaY);
-
-        // Find the scrollable content element - for filter modal it's .filter-content
-        let scrollableElement = modal.querySelector('.filter-content') || modal;
-
-        // Check if modal content can scroll
-        const hasScrollableContent = scrollableElement.scrollHeight > scrollableElement.clientHeight;
-        const isAtTop = scrollableElement.scrollTop <= 0;
-        const isAtBottom = scrollableElement.scrollTop + scrollableElement.clientHeight >= scrollableElement.scrollHeight - 1;
-
-        // Only handle gestures appropriately based on scroll position and direction
-        let shouldHandleGesture = false;
-        if (deltaY > 0) {
-            // Swiping down - can close modal only when at top or no scrollable content
-            shouldHandleGesture = isAtTop || !hasScrollableContent;
+    function clearTimers() {
+        if (settleTimer) {
+            clearTimeout(settleTimer);
+            settleTimer = null;
         }
-        // Note: Upward swipes (deltaY < 0) are never handled - let content scroll naturally
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+    }
 
-        console.log('Touch move - deltaY:', deltaY, 'shouldHandle:', shouldHandleGesture, 'isAtTop:', isAtTop, 'hasScrollable:', hasScrollableContent);
+    function animateToState(nextState) {
+        clearTimers();
 
-        if (shouldHandleGesture && absDeltaY > 5) { // 5px threshold to start gesture
-            if (!dragStarted) {
-                dragStarted = true;
-                isDragging = true;
-                modal.classList.add('swiping');
-                console.log('Started simple modal gesture');
+        modal.classList.remove('swiping');
+        modal.style.transition = 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease';
+        background.style.transition = 'opacity 220ms ease';
+        background.style.opacity = '1';
+        modal.style.opacity = '1';
+
+        if (nextState === 'expanded') {
+            modal.classList.add('fully-open');
+            modal.style.setProperty('--modal-translate-y', '0px');
+        } else {
+            modal.classList.remove('fully-open');
+            modal.style.setProperty('--modal-translate-y', `${collapsedOffsetPx()}px`);
+        }
+
+        settleTimer = setTimeout(() => {
+            if (closing) return;
+            clearSheetInlineStyles(modal, background, { preserveBackgroundOpacity: true });
+        }, 320);
+    }
+
+    function closeModalWithSwipe() {
+        if (closing) return;
+        closing = true;
+        clearTimers();
+
+        modal.classList.remove('swiping');
+        modal.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease';
+        background.style.transition = 'opacity 260ms ease';
+        modal.style.setProperty('--modal-translate-y', '100vh');
+        modal.style.opacity = '0.35';
+        background.style.opacity = '0';
+
+        closeTimer = setTimeout(() => {
+            document.body.style.overflow = 'auto';
+            window.history.pushState({}, '', withBase('/'));
+
+            if (background.parentNode) {
+                background.parentNode.removeChild(background);
             }
 
-            // Prevent scrolling when we're handling the gesture
-            e.preventDefault();
-
-            // Apply transform using CSS custom property to bypass !important
-            const resistedDelta = Math.max(0, deltaY * 0.92);
-            modal.style.setProperty('--modal-translate-y', `${resistedDelta}px`);
-
-            // Fade background
-            const maxDrag = 300;
-            const progress = Math.min(resistedDelta / maxDrag, 1);
-            const opacity = Math.max(0.2, 1 - progress * 0.8);
-            background.style.opacity = opacity;
-
-        } else if (dragStarted && !shouldHandleGesture) {
-            // User started gesture but now content should scroll - release gesture
-            isDragging = false;
-            dragStarted = false;
-            modal.classList.remove('swiping');
-
-            // Snap back to normal position using CSS custom property
-            modal.style.setProperty('--modal-translate-y', '0');
-            background.style.opacity = '1';
-
-            console.log('Released simple modal gesture, allowing content scroll');
-        }
-
-        // If we're not handling the gesture, allow natural scrolling (don't preventDefault)
+            modal.classList.remove('show', 'fully-open', 'swiping');
+            clearSheetInlineStyles(modal, background, { preserveBackgroundOpacity: true });
+            closing = false;
+            closeTimer = null;
+        }, SWIPE_CLOSE_DURATION_MS);
     }
 
-    function handleTouchEnd(e) {
-        if (!isMobile() || !dragStarted) return;
+    function handleTouchStart(event) {
+        if (!isMobileSheet() || closing) return;
+        const point = getTouchPoint(event);
+        if (!point) return;
+
+        startX = point.clientX;
+        startY = point.clientY;
+        currentY = startY;
+        startTime = Date.now();
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
+        gestureState = isExpanded() ? 'expanded' : 'collapsed';
+        clearTimers();
+
+        modal.style.transition = '';
+        background.style.transition = '';
+    }
+
+    function handleTouchMove(event) {
+        if (!isMobileSheet() || closing || cancelled) return;
+
+        const point = getTouchPoint(event);
+        if (!point) return;
+
+        currentY = point.clientY;
+        const deltaX = point.clientX - startX;
+        const deltaY = currentY - startY;
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        const atTop = isAtTop(contentWrapper);
+
+        if (!axisLocked) {
+            if (absDeltaX < SWIPE_START_THRESHOLD && absDeltaY < SWIPE_START_THRESHOLD) return;
+
+            axisLocked = true;
+            const mostlyVertical = absDeltaY >= absDeltaX * SWIPE_AXIS_LOCK_RATIO;
+            const validDirection = gestureState === 'collapsed'
+                ? (deltaY < 0 && atTop) || (deltaY > 0 && atTop)
+                : (deltaY > 0 && atTop);
+
+            if (!mostlyVertical || !validDirection) {
+                cancelled = true;
+                return;
+            }
+
+            dragging = true;
+            modal.classList.add('swiping');
+            modal.style.transition = 'none';
+            background.style.transition = 'none';
+        }
+
+        if (!dragging) return;
+        if (deltaY > 0 && !atTop) {
+            cancelled = true;
+            animateToState(gestureState);
+            return;
+        }
+
+        event.preventDefault();
+
+        const collapsedOffset = collapsedOffsetPx();
+
+        if (gestureState === 'collapsed') {
+            if (deltaY < 0) {
+                const nextY = Math.max(0, collapsedOffset + deltaY);
+                modal.style.setProperty('--modal-translate-y', `${nextY}px`);
+                modal.style.opacity = '1';
+                background.style.opacity = '1';
+                return;
+            }
+
+            const resisted = applyDragResistance(deltaY);
+            const nextY = collapsedOffset + resisted;
+            const progress = Math.min(resisted / Math.max(window.innerHeight * 0.55, 260), 1);
+            modal.style.setProperty('--modal-translate-y', `${nextY}px`);
+            modal.style.opacity = `${Math.max(0.3, 1 - progress * 0.75)}`;
+            background.style.opacity = `${Math.max(0.15, 1 - progress * 0.85)}`;
+            return;
+        }
+
+        if (deltaY <= 0) return;
+        const resisted = applyDragResistance(deltaY);
+        modal.style.setProperty('--modal-translate-y', `${Math.min(collapsedOffset + 90, resisted)}px`);
+        modal.style.opacity = '1';
+        background.style.opacity = '1';
+    }
+
+    function handleTouchEnd() {
+        if (!isMobileSheet() || closing) return;
+
+        if (!dragging) {
+            dragging = false;
+            axisLocked = false;
+            cancelled = false;
+            return;
+        }
 
         const deltaY = currentY - startY;
         const duration = Math.max(Date.now() - startTime, 1);
-        const velocity = Math.abs(deltaY) / duration; // pixels per ms
+        const velocity = deltaY / duration;
 
-        modal.classList.remove('swiping');
-
-        console.log('Simple modal touch end - deltaY:', deltaY, 'velocity:', velocity);
-
-        // Determine if should close based on distance and velocity
-        if (deltaY > threshold || velocity > velocityThreshold) {
-            // Close the modal with swipe animation - use CSS custom property
-            modal.style.setProperty('--modal-translate-y', '100vh');
-            background.style.opacity = '0';
-            background.style.transition = 'opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-
-            setTimeout(() => {
-                // Call the callback directly to avoid double animation
-                closeCallback();
-                // Reset styles after closing
-                modal.style.removeProperty('--modal-translate-y');
-                background.style.opacity = '';
-                background.style.transition = '';
-                modal.classList.remove('show');
-            }, 400);
-
-            console.log('Closed simple modal');
+        if (gestureState === 'collapsed') {
+            if (deltaY < 0) {
+                const shouldExpand = Math.abs(deltaY) > expandDistance() || velocity < -velocityThreshold;
+                animateToState(shouldExpand ? 'expanded' : 'collapsed');
+            } else {
+                const shouldClose = deltaY > closeDistance() || velocity > velocityThreshold;
+                if (shouldClose) {
+                    closeModalWithSwipe();
+                } else {
+                    animateToState('collapsed');
+                }
+            }
         } else {
-            // Snap back to normal position using CSS custom property
-            modal.style.setProperty('--modal-translate-y', '0');
-            background.style.opacity = '1';
-
-            console.log('Snapped simple modal back');
+            const shouldCollapse = deltaY > collapseDistance() || velocity > velocityThreshold;
+            animateToState(shouldCollapse ? 'collapsed' : 'expanded');
         }
 
-        // Clear transition after animation
-        setTimeout(() => {
-            if (modal.style.transition) {
-                modal.style.transition = '';
-            }
-        }, 400);
-
-        isDragging = false;
-        dragStarted = false;
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
     }
 
-    // Attach event listeners
-    console.log('Attaching touch event listeners to modal:', modal.className);
+    function handleTouchCancel() {
+        if (!isMobileSheet() || closing) return;
+
+        if (dragging) {
+            animateToState(gestureState);
+        }
+
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
+    }
+
     modal.addEventListener('touchstart', handleTouchStart, { passive: false });
     modal.addEventListener('touchmove', handleTouchMove, { passive: false });
     modal.addEventListener('touchend', handleTouchEnd, { passive: false });
+    modal.addEventListener('touchcancel', handleTouchCancel, { passive: false });
 
-    // Store references for cleanup if needed
+    modal._classInfoSwipeHandlers = {
+        touchstart: handleTouchStart,
+        touchmove: handleTouchMove,
+        touchend: handleTouchEnd,
+        touchcancel: handleTouchCancel
+    };
+
+    modal._classInfoSwipeCleanup = clearTimers;
+}
+
+// Swipe behavior for filter/search mobile sheets
+function addSwipeToCloseSimple(modal, background, closeCallback) {
+    if (!modal || !background) return;
+
+    if (typeof modal._swipeCleanup === 'function') {
+        modal._swipeCleanup();
+    }
+
+    resetSwipeHandlers(modal, '_swipeHandlers');
+
+    let startX = 0;
+    let startY = 0;
+    let currentY = 0;
+    let startTime = 0;
+    let dragging = false;
+    let axisLocked = false;
+    let cancelled = false;
+    let closing = false;
+    let settleTimer = null;
+    let closeTimer = null;
+
+    const velocityThreshold = 0.55;
+    const closeDistance = () => Math.min(230, Math.max(96, window.innerHeight * 0.16));
+
+    function getScrollableElement() {
+        return modal.querySelector('.filter-content') ||
+            modal.querySelector('.class-content-wrapper') ||
+            modal;
+    }
+
+    function clearTimers() {
+        if (settleTimer) {
+            clearTimeout(settleTimer);
+            settleTimer = null;
+        }
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+    }
+
+    function animateBackOpen() {
+        clearTimers();
+
+        modal.classList.remove('swiping');
+        modal.style.transition = 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)';
+        background.style.transition = 'opacity 220ms ease';
+        modal.style.setProperty('--modal-translate-y', '0px');
+        background.style.opacity = '1';
+        modal.style.opacity = '1';
+
+        settleTimer = setTimeout(() => {
+            if (closing) return;
+            clearSheetInlineStyles(modal, background);
+        }, 260);
+    }
+
+    function closeWithSwipe() {
+        if (closing) return;
+        closing = true;
+        clearTimers();
+
+        modal.classList.remove('swiping');
+        modal.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)';
+        background.style.transition = 'opacity 260ms ease';
+        modal.style.setProperty('--modal-translate-y', '100vh');
+        background.style.opacity = '0';
+
+        closeTimer = setTimeout(() => {
+            closeCallback?.();
+            clearSheetInlineStyles(modal, background);
+            modal.classList.remove('show');
+            closing = false;
+            closeTimer = null;
+        }, SWIPE_CLOSE_DURATION_MS);
+    }
+
+    function handleTouchStart(event) {
+        if (!isMobileSheet() || closing) return;
+        const point = getTouchPoint(event);
+        if (!point) return;
+
+        startX = point.clientX;
+        startY = point.clientY;
+        currentY = startY;
+        startTime = Date.now();
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
+        clearTimers();
+        modal.style.transition = '';
+        background.style.transition = '';
+    }
+
+    function handleTouchMove(event) {
+        if (!isMobileSheet() || closing || cancelled) return;
+
+        const point = getTouchPoint(event);
+        if (!point) return;
+
+        currentY = point.clientY;
+        const deltaX = point.clientX - startX;
+        const deltaY = currentY - startY;
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        const atTop = isAtTop(getScrollableElement());
+
+        if (!axisLocked) {
+            if (absDeltaX < SWIPE_START_THRESHOLD && absDeltaY < SWIPE_START_THRESHOLD) return;
+
+            axisLocked = true;
+            const mostlyVertical = absDeltaY >= absDeltaX * SWIPE_AXIS_LOCK_RATIO;
+            if (!mostlyVertical || deltaY <= 0 || !atTop) {
+                cancelled = true;
+                return;
+            }
+
+            dragging = true;
+            modal.classList.add('swiping');
+            modal.style.transition = 'none';
+            background.style.transition = 'none';
+        }
+
+        if (!dragging) return;
+        if (!atTop) {
+            cancelled = true;
+            animateBackOpen();
+            return;
+        }
+
+        event.preventDefault();
+
+        const resisted = applyDragResistance(deltaY);
+        const progress = Math.min(resisted / Math.max(window.innerHeight * 0.55, 260), 1);
+        modal.style.setProperty('--modal-translate-y', `${resisted}px`);
+        background.style.opacity = `${Math.max(0.18, 1 - progress * 0.82)}`;
+    }
+
+    function handleTouchEnd() {
+        if (!isMobileSheet() || closing) return;
+
+        if (!dragging) {
+            dragging = false;
+            axisLocked = false;
+            cancelled = false;
+            return;
+        }
+
+        const deltaY = currentY - startY;
+        const duration = Math.max(Date.now() - startTime, 1);
+        const velocity = deltaY / duration;
+        const shouldClose = deltaY > closeDistance() || velocity > velocityThreshold;
+
+        if (shouldClose) {
+            closeWithSwipe();
+        } else {
+            animateBackOpen();
+        }
+
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
+    }
+
+    function handleTouchCancel() {
+        if (!isMobileSheet() || closing) return;
+
+        if (dragging) {
+            animateBackOpen();
+        }
+
+        dragging = false;
+        axisLocked = false;
+        cancelled = false;
+    }
+
+    modal.addEventListener('touchstart', handleTouchStart, { passive: false });
+    modal.addEventListener('touchmove', handleTouchMove, { passive: false });
+    modal.addEventListener('touchend', handleTouchEnd, { passive: false });
+    modal.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+
     modal._swipeHandlers = {
         touchstart: handleTouchStart,
         touchmove: handleTouchMove,
-        touchend: handleTouchEnd
+        touchend: handleTouchEnd,
+        touchcancel: handleTouchCancel
     };
+
+    modal._swipeCleanup = clearTimers;
 }
 
 // Make it globally available
 window.addSwipeToCloseSimple = addSwipeToCloseSimple;
 window.fetchCourseData = fetchCourseData;
+window.invalidateCourseCache = invalidateCourseCache;
 window.fetchProfessorChanges = fetchProfessorChanges;
 window.clearProfessorChangeCache = clearProfessorChangeCache;
 window.openCourseInfoMenu = openCourseInfoMenu;

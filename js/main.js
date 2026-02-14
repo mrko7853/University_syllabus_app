@@ -21,55 +21,6 @@ window.addEventListener('orientationchange', () => {
     setTimeout(setViewportHeight, 500); // Delay to account for orientation change
 });
 
-// Additional mobile-specific viewport handling
-if (window.innerWidth <= 780) {
-    // Handle virtual keyboard appearance/disappearance
-    let initialViewportHeight = window.innerHeight;
-
-    window.addEventListener('resize', () => {
-        const currentHeight = window.innerHeight;
-        const heightDifference = initialViewportHeight - currentHeight;
-
-        // If height difference is significant (likely keyboard), maintain app positioning
-        if (heightDifference > 150) {
-            // Virtual keyboard is probably visible
-            document.body.classList.add('keyboard-visible');
-        } else {
-            // Virtual keyboard is probably hidden
-            document.body.classList.remove('keyboard-visible');
-            setTimeout(setViewportHeight, 100); // Recalculate after keyboard hides
-        }
-    });
-
-    // Force proper positioning on focus/blur of input elements
-    document.addEventListener('focusin', (e) => {
-        if (e.target.matches('input, textarea, select')) {
-            setTimeout(() => {
-                // Ensure navigation stays at bottom during keyboard interaction
-                const nav = document.querySelector('app-navigation');
-                if (nav) {
-                    nav.style.position = 'fixed';
-                    nav.style.bottom = 'env(safe-area-inset-bottom, 0px)';
-                    nav.style.transform = 'translateZ(0)';
-                }
-            }, 100);
-        }
-    });
-
-    document.addEventListener('focusout', (e) => {
-        if (e.target.matches('input, textarea, select')) {
-            setTimeout(() => {
-                setViewportHeight();
-                // Reset navigation positioning
-                const nav = document.querySelector('app-navigation');
-                if (nav) {
-                    nav.style.bottom = 'env(safe-area-inset-bottom, 0)';
-                }
-            }, 300);
-        }
-    });
-}
-
 // Japanese name romanization mapping
 const japaneseNameMapping = {
     // Common surnames
@@ -2221,34 +2172,35 @@ function showModalWithMobileAnimation(modal, container, callback = null) {
     const isMobile = window.innerWidth <= 780;
 
     if (isMobile) {
+        const background = container.querySelector('.filter-background, .search-background');
+
+        // Reset transient swipe styles before each open.
+        modal.classList.remove('swiping');
+        modal.style.removeProperty('--modal-translate-y');
+        modal.style.transition = '';
+        modal.style.opacity = '';
+
+        if (background) {
+            background.style.transition = 'opacity 220ms ease';
+            background.style.opacity = '0';
+        }
+
         modal.classList.add('show');
         lockBodyScroll();
 
-        // Add swipe functionality for filter and search modals
-        if (modal.classList.contains('filter-popup')) {
-            console.log('Adding swipe to filter modal');
-            const background = container.querySelector('.filter-background');
-            if (typeof addSwipeToCloseSimple === 'function') {
-                addSwipeToCloseSimple(modal, background, () => {
-                    // Direct close without animation to avoid conflict
-                    container.classList.add('hidden');
-                    unlockBodyScroll();
-                });
-            } else {
-                console.error('addSwipeToCloseSimple function not found');
+        requestAnimationFrame(() => {
+            if (background) {
+                background.style.opacity = '1';
             }
-        } else if (modal.classList.contains('search-modal')) {
-            console.log('Adding swipe to search modal');
-            const background = container.querySelector('.search-background');
-            if (typeof addSwipeToCloseSimple === 'function') {
-                addSwipeToCloseSimple(modal, background, () => {
-                    // Direct close without animation to avoid conflict
-                    container.classList.add('hidden');
-                    unlockBodyScroll();
-                });
-            } else {
-                console.error('addSwipeToCloseSimple function not found');
-            }
+        });
+
+        if (background && typeof window.addSwipeToCloseSimple === 'function') {
+            window.addSwipeToCloseSimple(modal, background, () => {
+                container.classList.add('hidden');
+                unlockBodyScroll();
+                background.style.opacity = '';
+                background.style.transition = '';
+            });
         }
 
         if (callback) callback();
@@ -2263,11 +2215,26 @@ function hideModalWithMobileAnimation(modal, container, callback = null) {
     const isMobile = window.innerWidth <= 780;
 
     if (isMobile) {
-        modal.classList.remove('show');
+        const background = container.querySelector('.filter-background, .search-background');
+
+        modal.classList.remove('show', 'swiping');
+        modal.style.removeProperty('--modal-translate-y');
+        modal.style.transition = '';
+        modal.style.opacity = '';
+
+        if (background) {
+            background.style.transition = 'opacity 220ms ease';
+            background.style.opacity = '0';
+        }
+
         setTimeout(() => {
             unlockBodyScroll();
+            if (background) {
+                background.style.opacity = '';
+                background.style.transition = '';
+            }
             if (callback) callback();
-        }, 400); // Match the CSS transition duration
+        }, 320);
     } else {
         // Desktop animation logic
         unlockBodyScroll();
@@ -2805,49 +2772,14 @@ function ensureMobileNavigationPositioning() {
     const appNavigation = document.querySelector('app-navigation');
     if (!appNavigation) return;
 
-    // Check if we're on mobile
-    const isMobile = window.innerWidth <= 780;
-
-    if (isMobile) {
-        // Force bottom positioning with JavaScript
-        appNavigation.style.position = 'fixed';
-        appNavigation.style.bottom = '0';
-        appNavigation.style.left = '0';
-        appNavigation.style.right = '0';
-        appNavigation.style.width = '100%';
-        appNavigation.style.zIndex = '10000';
-
-        // Force hardware acceleration
-        appNavigation.style.transform = 'translateZ(0)';
-        appNavigation.style.webkitTransform = 'translateZ(0)';
-
-        // Ensure it stays at the bottom during scroll
-        const forceBottomPosition = () => {
-            if (window.innerWidth <= 780) {
-                appNavigation.style.bottom = '0px';
-                appNavigation.style.position = 'fixed';
-            }
-        };
-
-        // Apply on scroll events
-        let scrollTimeout;
-        window.addEventListener('scroll', () => {
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(forceBottomPosition, 10);
-        }, { passive: true });
-
-        // Apply on orientation change
-        window.addEventListener('orientationchange', () => {
-            setTimeout(forceBottomPosition, 100);
-        });
-
-        // Apply on resize
-        window.addEventListener('resize', () => {
-            setTimeout(forceBottomPosition, 50);
-        });
-
-        // Initial positioning
-        forceBottomPosition();
+    if (window.innerWidth <= 780) {
+        const navHeight = Math.ceil(appNavigation.getBoundingClientRect().height || 0);
+        if (navHeight > 0) {
+            document.documentElement.style.setProperty('--mobile-nav-safe-height', `${navHeight + 8}px`);
+        }
+    } else {
+        document.documentElement.style.removeProperty('--mobile-nav-safe-height');
+        document.body.classList.remove('keyboard-visible');
     }
 }
 
@@ -2942,7 +2874,10 @@ document.addEventListener('DOMContentLoaded', ensureMobileNavigationPositioning)
 window.addEventListener('load', ensureMobileNavigationPositioning);
 
 // Handle window resize to restructure when switching between mobile/desktop
-window.addEventListener('resize', restructureReviewDatesForMobile);
+window.addEventListener('resize', () => {
+    restructureReviewDatesForMobile();
+    ensureMobileNavigationPositioning();
+});
 
 // Export initialization functions for the router
 export async function initializeDashboard() {

@@ -20,7 +20,7 @@ function getCourseParams() {
   };
 }
 
-async function initCoursePage() {
+export async function initializeCoursePage() {
   const card = document.getElementById("course-page-card");
   const title = document.getElementById("course-page-title");
   const backBtn = document.getElementById("course-page-back");
@@ -89,4 +89,8 @@ async function initCoursePage() {
   }
 }
 
-initCoursePage();
+// Standalone course.html entrypoint initializes itself.
+// In SPA navigation, router calls initializeCoursePage() explicitly.
+if (!window.router) {
+  initializeCoursePage();
+}
