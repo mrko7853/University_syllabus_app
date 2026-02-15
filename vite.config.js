@@ -25,6 +25,7 @@ export default defineConfig(({ command }) => {
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
+          courses: resolve(__dirname, 'courses.html'),
           login: resolve(__dirname, 'login.html'),
           register: resolve(__dirname, 'register.html'),
           profile: resolve(__dirname, 'profile.html'),

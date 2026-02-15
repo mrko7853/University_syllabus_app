@@ -86,12 +86,26 @@ class AssignmentsManager {
         }
     }
 
+    consumeOpenNewAssignmentIntent() {
+        try {
+            const shouldOpen = sessionStorage.getItem('open_new_assignment_modal') === '1';
+            if (shouldOpen) {
+                sessionStorage.removeItem('open_new_assignment_modal');
+            }
+            return shouldOpen;
+        } catch (error) {
+            console.warn('Unable to read assignment quick-action intent:', error);
+            return false;
+        }
+    }
+
     async init() {
         if (this.isInitialized || this.isInitializing) return;
         this.isInitializing = true;
 
         try {
             console.log('Assignments Manager: Starting initialization...');
+            const shouldOpenNewAssignment = this.consumeOpenNewAssignmentIntent();
 
             // Setup event listeners FIRST - these should always work
             this.setupEventListeners();
@@ -102,6 +116,9 @@ class AssignmentsManager {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
                 console.log('User not authenticated, assignments data not loaded (but UI is ready)');
+                if (shouldOpenNewAssignment) {
+                    await this.openNewAssignmentModal();
+                }
                 this.isInitialized = true;
                 return;
             }
@@ -121,7 +138,10 @@ class AssignmentsManager {
             console.log('Assignments Manager: Fully initialized with user data');
 
             // Check for hash URL to open specific assignment
-            this.handleHashURL();
+            const handledHashRoute = this.handleHashURL();
+            if (!handledHashRoute && shouldOpenNewAssignment) {
+                await this.openNewAssignmentModal();
+            }
         } finally {
             this.isInitializing = false;
         }
@@ -156,7 +176,10 @@ class AssignmentsManager {
 
             // Clear the hash to avoid reopening on refresh
             window.history.replaceState(null, '', window.location.pathname);
+            return true;
         }
+
+        return false;
     }
 
     async loadUserCourses() {

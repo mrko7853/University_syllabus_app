@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters } from "./shared.js";
 import { withBase } from "./path-utils.js";
 
 // Helper function to normalize course titles
@@ -157,7 +157,11 @@ class AppNavigation extends HTMLElement {
     this.innerHTML = `
             <nav class="test">
                 <ul>
-                    <li><div class="desktop-app-logo"></div></li>
+                    <li class="logo-nav-item"><div class="desktop-app-logo"></div></li>
+                    <li><button class="nav-btn" id="home-btn" data-route="/">
+                        <span class="nav-icon"></span>
+                        <span class="navigation-text">Home</span>
+                    </button></li>
                     <li><button class="nav-btn" id="dashboard" data-route="/courses">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Courses</span>
@@ -181,11 +185,11 @@ class AppNavigation extends HTMLElement {
                         <a href="#logout">Logout</a>
                       </div>
                     </div>
-                    <li><button class="nav-btn" id="settings" data-route="/settings">
+                    <li class="settings-nav-item"><button class="nav-btn" id="settings" data-route="/settings">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Settings</span>
                     </button></li>
-                    <li><button class="nav-btn" id="help" data-route="/help">
+                    <li class="help-nav-item"><button class="nav-btn" id="help" data-route="/help">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Help</span>
                     </button></li>
@@ -258,12 +262,46 @@ class AppNavigation extends HTMLElement {
 class TotalCourses extends HTMLElement {
   constructor() {
     super();
+    this.handlePageLoaded = () => {
+      setTimeout(() => this.updateTotalCourses(), 100);
+    };
+    this.handleSemesterSelectionChange = (event) => {
+      const targetId = event?.target?.id;
+      if (!targetId) return;
+
+      if (
+        targetId === 'semester-select'
+        || targetId === 'semester-select-mobile'
+        || targetId === 'term-select'
+        || targetId === 'year-select'
+      ) {
+        setTimeout(() => this.updateTotalCourses(), 60);
+      }
+    };
+    this.handleAssignmentsCardClick = () => {
+      if (window.router?.navigate) {
+        window.router.navigate('/assignments');
+        return;
+      }
+      window.location.href = withBase('/assignments');
+    };
+    this.handleAssignmentsCardKeyDown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        this.handleAssignmentsCardClick();
+      }
+    };
 
     this.innerHTML = `
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
+                <h2 class="total-text">Assignments Due</h2>
                 <h2 class="total-count">0</h2>
-                <h2 class="total-text">Registered<br>Courses</h2>
+                <p class="total-upcoming">
+                  <span class="upcoming-assignment-title" hidden></span>
+                  <span class="no-upcoming-assignment-text">No upcoming assignment</span>
+                  <span class="upcoming-assignment-deadline"></span>
+                </p>
                 </div>
             </div>
         `;
@@ -274,64 +312,163 @@ class TotalCourses extends HTMLElement {
     this.updateTotalCourses();
 
     // Set up refresh on router navigation
-    document.addEventListener('pageLoaded', () => {
-      setTimeout(() => this.updateTotalCourses(), 100);
-    });
-  } async updateTotalCourses() {
-    const totalCountEl = this.querySelector('.total-count');
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.addEventListener('pageLoaded', this.handlePageLoaded);
+    document.removeEventListener('change', this.handleSemesterSelectionChange);
+    document.addEventListener('change', this.handleSemesterSelectionChange);
 
-    const fetchTotalCourses = async () => {
+    const assignmentsContainer = this.querySelector('.total-courses-container');
+    if (assignmentsContainer) {
+      assignmentsContainer.setAttribute('role', 'button');
+      assignmentsContainer.setAttribute('tabindex', '0');
+      assignmentsContainer.addEventListener('click', this.handleAssignmentsCardClick);
+      assignmentsContainer.addEventListener('keydown', this.handleAssignmentsCardKeyDown);
+    }
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.removeEventListener('change', this.handleSemesterSelectionChange);
+
+    const assignmentsContainer = this.querySelector('.total-courses-container');
+    if (assignmentsContainer) {
+      assignmentsContainer.removeEventListener('click', this.handleAssignmentsCardClick);
+      assignmentsContainer.removeEventListener('keydown', this.handleAssignmentsCardKeyDown);
+    }
+  }
+
+  getDaysLeft(dueDateValue) {
+    const dueDate = new Date(dueDateValue);
+    if (Number.isNaN(dueDate.getTime())) return null;
+    dueDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  formatDaysLeft(daysLeft) {
+    if (daysLeft === null) return '';
+    if (daysLeft <= 0) return 'Due today';
+    if (daysLeft === 1) return '1 day left';
+    return `${daysLeft} days left`;
+  }
+
+  async updateTotalCourses() {
+    const totalCountEl = this.querySelector('.total-count');
+    const upcomingAssignmentTitleEl = this.querySelector('.upcoming-assignment-title');
+    const noUpcomingTextEl = this.querySelector('.no-upcoming-assignment-text');
+    const upcomingDeadlineEl = this.querySelector('.upcoming-assignment-deadline');
+
+    const updateDisplay = ({
+      count = '0',
+      assignmentTitle = '',
+      noUpcomingText = 'No upcoming assignment',
+      daysLeftText = '',
+      hasUpcomingAssignment = false
+    }) => {
+      if (totalCountEl) totalCountEl.textContent = String(count);
+      if (upcomingDeadlineEl) upcomingDeadlineEl.textContent = daysLeftText;
+
+      if (upcomingAssignmentTitleEl) {
+        upcomingAssignmentTitleEl.textContent = hasUpcomingAssignment ? assignmentTitle : '';
+        upcomingAssignmentTitleEl.hidden = !hasUpcomingAssignment;
+      }
+
+      if (noUpcomingTextEl) {
+        noUpcomingTextEl.textContent = hasUpcomingAssignment ? '' : noUpcomingText;
+        noUpcomingTextEl.hidden = hasUpcomingAssignment;
+      }
+    };
+
+    const fetchDueAssignments = async () => {
       try {
         // Get fresh session data
         const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user || null;
 
         if (!currentUser) {
-          // For guest users, show a placeholder instead of error
-          return (this.innerHTML = `
-                    <div class="total-courses" id="total-registered-courses">
-                      <div class="total-courses-container">
-                      <h2 class="total-count">--</h2>
-                      <h2 class="total-text">Registered<br>Courses</h2>
-                      </div>
-                    </div>
-                  `);
+          return { guestUser: true, dueAssignments: [] };
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('courses_selection')
-          .eq('id', currentUser.id)
-          .single();
+        const { data: assignments, error: assignmentsError } = await supabase
+          .from('assignments')
+          .select('title, due_date, status, course_year, course_term')
+          .eq('user_id', currentUser.id)
+          .neq('status', 'completed')
+          .not('due_date', 'is', null);
 
-        if (profileError) {
-          throw profileError;
+        if (assignmentsError) {
+          throw assignmentsError;
         }
 
-        const selectedCourses = profile?.courses_selection || [];
+        const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear(), 10);
+        const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
+        const normalizedCurrentTerm = String(currentTerm).trim().toLowerCase();
+        const normalizedCurrentYear = Number(currentYear);
 
-        // Filter to only count courses for the current year and term using utility functions
-        const currentDisplayCourses = selectedCourses.filter(course => {
-          const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear());
-          const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
-          return course.year === currentYear && (!course.term || course.term === currentTerm);
-        });
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        return currentDisplayCourses.length;
+        const dueAssignments = (assignments || [])
+          .filter((assignment) => {
+            const dueDate = assignment?.due_date ? new Date(assignment.due_date) : null;
+            if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
+            dueDate.setHours(0, 0, 0, 0);
+
+            if (dueDate < today) return false;
+
+            const assignmentYear = assignment?.course_year === null || assignment?.course_year === undefined
+              ? null
+              : Number(assignment.course_year);
+            const assignmentTerm = assignment?.course_term ? String(assignment.course_term).trim().toLowerCase() : null;
+            const hasSemesterMetadata = assignmentYear !== null && assignmentTerm;
+
+            if (!hasSemesterMetadata) return true;
+            return assignmentYear === normalizedCurrentYear && assignmentTerm === normalizedCurrentTerm;
+          })
+          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+
+        return { guestUser: false, dueAssignments };
       } catch (error) {
-        console.error('Error fetching total courses:', error);
-        return 0; // Return 0 if there's an error
+        console.error('Error fetching due assignments:', error);
+        return { guestUser: false, dueAssignments: [] };
       }
     };
 
     try {
-      const count = await fetchTotalCourses();
-      if (typeof count === 'number') {
-        totalCountEl.textContent = String(count);
+      const { guestUser, dueAssignments } = await fetchDueAssignments();
+
+      if (guestUser) {
+        updateDisplay({
+          count: '--',
+          noUpcomingText: 'Sign in to view due assignments',
+          daysLeftText: '',
+          hasUpcomingAssignment: false
+        });
+        return;
       }
+
+      const upcoming = dueAssignments[0] || null;
+      const daysLeft = upcoming?.due_date ? this.getDaysLeft(upcoming.due_date) : null;
+      const assignmentTitle = upcoming?.title?.trim() || 'Untitled Assignment';
+
+      updateDisplay({
+        count: dueAssignments.length,
+        assignmentTitle,
+        noUpcomingText: 'No upcoming assignment',
+        daysLeftText: upcoming ? this.formatDaysLeft(daysLeft) : '',
+        hasUpcomingAssignment: Boolean(upcoming)
+      });
     } catch (error) {
-      console.error('Error updating total courses display:', error);
-      totalCountEl.textContent = '--';
+      console.error('Error updating due assignments display:', error);
+      updateDisplay({
+        count: '--',
+        noUpcomingText: 'Unable to load assignments',
+        daysLeftText: '',
+        hasUpcomingAssignment: false
+      });
     }
   }
 }
@@ -361,7 +498,7 @@ class TermBox extends HTMLElement {
       this.innerHTML = `
         <div class="total-courses">
           <div class="total-courses-container">
-            <h2 class="total-text" id="next-class-label">Next class:</h2>
+            <h2 class="total-text" id="next-class-label">Next Class</h2>
             <h2 class="total-count" id="next-class-name">Loading...</h2>
             <h2 class="total-text" id="next-class-time">Calculating...</h2>
           </div>
@@ -371,6 +508,26 @@ class TermBox extends HTMLElement {
 
     this.updateInterval = null;
     this.courses = [];
+    this.currentNextClassCourse = null;
+    this.yearSelectEl = null;
+    this.termSelectEl = null;
+    this.handleNextClassPageLoaded = () => {
+      setTimeout(() => this.updateNextClass(), 100);
+    };
+    this.handleNextClassSelectionChange = () => {
+      this.updateNextClass();
+    };
+    this.handleNextClassCardClick = () => {
+      if (this.currentNextClassCourse) {
+        openCourseInfoMenu(this.currentNextClassCourse);
+      }
+    };
+    this.handleNextClassCardKeyDown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        this.handleNextClassCardClick();
+      }
+    };
   }
 
   connectedCallback() {
@@ -392,26 +549,41 @@ class TermBox extends HTMLElement {
     }, 60000); // 60 seconds
 
     // Listen for selector changes
-    const yearSelect = document.getElementById('year-select');
-    const termSelect = document.getElementById('term-select');
+    this.yearSelectEl = document.getElementById('year-select');
+    this.termSelectEl = document.getElementById('term-select');
 
-    if (yearSelect) {
-      yearSelect.addEventListener('change', () => this.updateNextClass());
-    }
-
-    if (termSelect) {
-      termSelect.addEventListener('change', () => this.updateNextClass());
-    }
+    this.yearSelectEl?.addEventListener('change', this.handleNextClassSelectionChange);
+    this.termSelectEl?.addEventListener('change', this.handleNextClassSelectionChange);
 
     // Refresh on page navigation
-    document.addEventListener('pageLoaded', () => {
-      setTimeout(() => this.updateNextClass(), 100);
-    });
+    document.removeEventListener('pageLoaded', this.handleNextClassPageLoaded);
+    document.addEventListener('pageLoaded', this.handleNextClassPageLoaded);
+
+    const nextClassContainer = this.querySelector('.total-courses-container');
+    if (nextClassContainer) {
+      nextClassContainer.setAttribute('role', 'button');
+      nextClassContainer.setAttribute('tabindex', '0');
+      nextClassContainer.addEventListener('click', this.handleNextClassCardClick);
+      nextClassContainer.addEventListener('keydown', this.handleNextClassCardKeyDown);
+    }
   }
 
   disconnectedCallback() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+
+    this.yearSelectEl?.removeEventListener('change', this.handleNextClassSelectionChange);
+    this.termSelectEl?.removeEventListener('change', this.handleNextClassSelectionChange);
+    this.yearSelectEl = null;
+    this.termSelectEl = null;
+    document.removeEventListener('pageLoaded', this.handleNextClassPageLoaded);
+
+    const nextClassContainer = this.querySelector('.total-courses-container');
+    if (nextClassContainer) {
+      nextClassContainer.removeEventListener('click', this.handleNextClassCardClick);
+      nextClassContainer.removeEventListener('keydown', this.handleNextClassCardKeyDown);
     }
   }
 
@@ -471,6 +643,7 @@ class TermBox extends HTMLElement {
     const timeEl = this.querySelector('#next-class-time');
 
     if (!labelEl || !nameEl || !timeEl) return;
+    this.currentNextClassCourse = null;
 
     try {
       // Get current user
@@ -503,7 +676,7 @@ class TermBox extends HTMLElement {
       });
 
       if (semesterCourses.length === 0) {
-        labelEl.textContent = 'Next class:';
+        labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
         timeEl.style.display = 'none';
@@ -520,7 +693,7 @@ class TermBox extends HTMLElement {
       const nextClass = this.findNextClass(userCourses, year, term);
 
       if (!nextClass) {
-        labelEl.textContent = 'Next class:';
+        labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
         timeEl.style.display = 'none';
@@ -536,15 +709,17 @@ class TermBox extends HTMLElement {
       }
 
       if (nextClass.isCurrent) {
-        labelEl.textContent = 'Current class:';
+        labelEl.textContent = 'Current Class';
         nameEl.textContent = displayName;
         timeEl.textContent = '';
         timeEl.style.display = 'none';
+        this.currentNextClassCourse = nextClass.course;
       } else {
-        labelEl.textContent = 'Next class:';
+        labelEl.textContent = 'Next Class';
         nameEl.textContent = displayName;
         timeEl.textContent = nextClass.timeRemaining;
         timeEl.style.display = nextClass.timeRemaining ? 'block' : 'none';
+        this.currentNextClassCourse = nextClass.course;
       }
     } catch (error) {
       console.error('Error updating next class:', error);
@@ -726,6 +901,7 @@ class CourseCalendar extends HTMLElement {
     this.currentUser = null;
     this.retryCount = 0;
     this.maxRetries = 5;
+    this.renderRequestId = 0;
 
     this.innerHTML = `
       <div class="calendar-container-main">
@@ -745,36 +921,31 @@ class CourseCalendar extends HTMLElement {
             <tbody>
               <tr>
                 <td id="calendar-period-1">
-                  <p class="time-full">09:00 - 10:30</p>
-                  <p class="time-short">1h</p>
+                  <span class="period-index">1</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
                 <td id="calendar-period-2">
-                  <p class="time-full">10:45 - 12:15</p>
-                  <p class="time-short">2h</p>
+                  <span class="period-index">2</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
                 <td id="calendar-period-3">
-                  <p class="time-full">13:10 - 14:40</p>
-                  <p class="time-short">3h</p>
+                  <span class="period-index">3</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
                 <td id="calendar-period-4">
-                  <p class="time-full">14:55 - 16:25</p>
-                  <p class="time-short">4h</p>
+                  <span class="period-index">4</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
               <tr>
                 <td id="calendar-period-5">
-                  <p class="time-full">16:40 - 18:10</p>
-                  <p class="time-short">5h</p>
+                  <span class="period-index">5</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
@@ -892,18 +1063,39 @@ class CourseCalendar extends HTMLElement {
     }
   }
 
-  async showCourseWithRetry(year, term, retryAttempt = 0) {
+  createRenderRequestId() {
+    this.renderRequestId += 1;
+    return this.renderRequestId;
+  }
+
+  isRenderRequestStale(requestId) {
+    return requestId !== this.renderRequestId;
+  }
+
+  async showCourseWithRetry(year, term, retryAttempt = 0, requestId = null) {
+    const activeRequestId = requestId ?? this.createRenderRequestId();
+
     try {
       if (retryAttempt === 0) this.showLoading();
-      await this.showCourse(year, term);
+      await this.showCourse(year, term, activeRequestId);
+
+      if (this.isRenderRequestStale(activeRequestId)) {
+        return;
+      }
+
       if (retryAttempt === 0) this.hideLoading(); // Only hide loading if this was the initial attempt
     } catch (error) {
+      if (this.isRenderRequestStale(activeRequestId)) {
+        return;
+      }
+
       if (retryAttempt < this.maxRetries) {
         // Don't hide loading for retries
         // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
         const delay = 500 * Math.pow(2, retryAttempt);
         setTimeout(() => {
-          this.showCourseWithRetry(year, term, retryAttempt + 1);
+          if (this.isRenderRequestStale(activeRequestId)) return;
+          this.showCourseWithRetry(year, term, retryAttempt + 1, activeRequestId);
         }, delay);
       } else {
         // Final fallback: show empty cells and hide loading
@@ -922,8 +1114,10 @@ class CourseCalendar extends HTMLElement {
   }
 
   clearCourseCells() {
-    // Remove previously rendered course blocks and empties
-    this.calendar.querySelectorAll('tbody td .course-cell-main').forEach(el => el.remove());
+    // Remove all course/placeholder blocks in day cells.
+    this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
+      cell.textContent = '';
+    });
   }
 
   showEmptyCalendar() {
@@ -998,7 +1192,7 @@ class CourseCalendar extends HTMLElement {
     }
   }
 
-  async showCourse(year, term) {
+  async showCourse(year, term, requestId = this.renderRequestId) {
     this.displayedYear = year;
     this.displayedTerm = term;
 
@@ -1006,10 +1200,13 @@ class CourseCalendar extends HTMLElement {
       // Ensure we have the latest user session
       if (!this.currentUser) {
         const { data: { session } } = await supabase.auth.getSession();
+        if (this.isRenderRequestStale(requestId)) return;
         this.currentUser = session?.user || null;
       }
 
       let selectedCourses = [];
+      let normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
+
       if (this.currentUser) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -1017,10 +1214,10 @@ class CourseCalendar extends HTMLElement {
           .eq('id', this.currentUser.id)
           .single();
         if (profileError) throw profileError;
-        selectedCourses = profile?.courses_selection || [];
+        if (this.isRenderRequestStale(requestId)) return;
 
-        // Normalize term for comparison (handle both "Fall" and "秋学期/Fall" formats)
-        const normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
+        selectedCourses = profile?.courses_selection || [];
+        normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
 
         // Filter to only show courses for the current year and term
         selectedCourses = selectedCourses.filter(course => {
@@ -1031,15 +1228,15 @@ class CourseCalendar extends HTMLElement {
         console.log('Mini calendar: Selected courses for', year, normalizedTerm, ':', selectedCourses.length);
       }
 
-      this.clearCourseCells();
-
       // If no user or no selected courses for current year/term, fill with EMPTY placeholders
       if (!this.currentUser || !selectedCourses.length) {
+        if (this.isRenderRequestStale(requestId)) return;
         this.showEmptyCalendar();
         return;
       }
 
       const allCoursesInSemester = await fetchCourseData(year, term);
+      if (this.isRenderRequestStale(requestId)) return;
 
       const coursesToShow = allCoursesInSemester.filter(course =>
         selectedCourses.some((profileCourse) =>
@@ -1050,7 +1247,11 @@ class CourseCalendar extends HTMLElement {
       console.log('Mini calendar: Courses to show:', coursesToShow.length);
       console.log('Mini calendar: Course details:', coursesToShow.map(c => ({ code: c.course_code, time: c.time_slot })));
 
-      coursesToShow.forEach(course => {
+      this.clearCourseCells();
+
+      for (const course of coursesToShow) {
+        if (this.isRenderRequestStale(requestId)) return;
+
         // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
         let match = course.time_slot?.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
         let dayEN, period;
@@ -1081,29 +1282,25 @@ class CourseCalendar extends HTMLElement {
         }
 
         if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
-          return;
-        }
-
-        if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
-          return;
+          continue;
         }
 
         const colIndex = this.getColIndexByDayEN(dayEN);
         if (colIndex === -1) {
           console.log('Invalid column index for day:', dayEN);
-          return;
+          continue;
         }
 
         const rowIndex = Number.isFinite(period) ? (period - 1) : -1;
         if (rowIndex < 0 || rowIndex >= 5) {
           console.log('Invalid row index for period:', period, 'rowIndex:', rowIndex);
-          return;
+          continue;
         }
 
         const cell = this.calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
         if (!cell) {
           console.log('Cell not found for position:', { rowIndex: rowIndex + 1, colIndex: colIndex + 1 });
-          return;
+          continue;
         }
 
         console.log('Rendering course in cell:', { course: course.course_code, dayEN, period, colIndex, rowIndex });
@@ -1131,9 +1328,10 @@ class CourseCalendar extends HTMLElement {
         div.appendChild(div_box);
         div.appendChild(div_title);
         div.appendChild(div_classroom);
-      });
+      }
 
       // Fill remaining empty cells with placeholders
+      if (this.isRenderRequestStale(requestId)) return;
       this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
         if (!cell.querySelector('.course-cell-main')) {
           const emptyDiv = document.createElement('div');
@@ -1188,6 +1386,346 @@ class CourseCalendar extends HTMLElement {
     // Clear current user to force fresh session fetch
     this.currentUser = null;
     await this.showCourseWithRetry(year, term);
+  }
+}
+
+class LatestCoursesPreview extends HTMLElement {
+  constructor() {
+    super();
+    this.handlePageLoaded = () => {
+      setTimeout(() => this.refreshPreview(), 100);
+    };
+    this.handleCardClick = () => {
+      try {
+        sessionStorage.setItem('open_new_assignment_modal', '1');
+      } catch (error) {
+        console.warn('Unable to store assignment quick-action intent:', error);
+      }
+
+      if (window.router?.navigate) {
+        window.router.navigate('/assignments');
+        return;
+      }
+      window.location.href = withBase('/assignments');
+    };
+    this.handleCardKeyDown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        this.handleCardClick();
+      }
+    };
+
+    this.innerHTML = `
+      <div class="home-courses-preview">
+        <div class="home-courses-preview-header">
+          <div>
+            <h2 class="home-courses-preview-title">Quick Action</h2>
+          </div>
+          <span class="home-courses-preview-link">Add Assignment</span>
+        </div>
+        <p class="home-courses-preview-note">Add a new assignment to your schedule.</p>
+      </div>
+    `;
+  }
+
+  connectedCallback() {
+    this.refreshPreview();
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.addEventListener('pageLoaded', this.handlePageLoaded);
+
+    const card = this.querySelector('.home-courses-preview');
+    if (card) {
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.removeEventListener('click', this.handleCardClick);
+      card.removeEventListener('keydown', this.handleCardKeyDown);
+      card.addEventListener('click', this.handleCardClick);
+      card.addEventListener('keydown', this.handleCardKeyDown);
+    }
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    const card = this.querySelector('.home-courses-preview');
+    if (card) {
+      card.removeEventListener('click', this.handleCardClick);
+      card.removeEventListener('keydown', this.handleCardKeyDown);
+    }
+  }
+
+  updateYearTermContext(semester) {
+    if (!semester) return;
+
+    const termSelectEl = document.getElementById('term-select');
+    const yearSelectEl = document.getElementById('year-select');
+    if (termSelectEl) {
+      termSelectEl.value = semester.term;
+    }
+    if (yearSelectEl) {
+      yearSelectEl.value = semester.year;
+    }
+
+    window.globalCurrentYear = parseInt(semester.year, 10);
+    window.globalCurrentTerm = semester.term;
+  }
+
+  refreshWidgets() {
+    const nextAssignment = document.querySelector('total-courses');
+    if (nextAssignment?.updateTotalCourses) {
+      nextAssignment.updateTotalCourses();
+    }
+
+    const nextClass = document.querySelector('term-box');
+    if (nextClass?.updateNextClass) {
+      nextClass.updateNextClass();
+    }
+
+    const miniCalendar = document.querySelector('course-calendar');
+    if (miniCalendar?.refreshCalendar) {
+      miniCalendar.refreshCalendar();
+    }
+  }
+
+  async refreshPreview() {
+    const noteEl = this.querySelector('.home-courses-preview-note');
+    const quickActionText = 'Add a new assignment to your schedule.';
+
+    if (noteEl) noteEl.textContent = quickActionText;
+
+    try {
+      const semesters = await fetchAvailableSemesters();
+      const latestSemester = Array.isArray(semesters) && semesters.length > 0 ? semesters[0] : null;
+
+      if (!latestSemester) {
+        if (noteEl) noteEl.textContent = quickActionText;
+        return;
+      }
+
+      this.updateYearTermContext(latestSemester);
+      if (noteEl) noteEl.textContent = quickActionText;
+      this.refreshWidgets();
+    } catch (error) {
+      console.error('Error loading latest courses preview:', error);
+      if (noteEl) noteEl.textContent = quickActionText;
+    }
+  }
+}
+
+class ReviewSuggestionWidget extends HTMLElement {
+  constructor() {
+    super();
+    this.suggestedCourse = null;
+    this.lastSuggestedCourseKey = null;
+    this.handlePageLoaded = () => {
+      setTimeout(() => this.refreshSuggestion(), 120);
+    };
+    this.handleCardClick = () => {
+      if (!this.suggestedCourse) return;
+      const route = `/course/${encodeURIComponent(this.suggestedCourse.code)}/${this.suggestedCourse.year}/${encodeURIComponent(this.suggestedCourse.term)}`;
+      if (window.router?.navigate) {
+        window.router.navigate(route);
+        return;
+      }
+      window.location.href = withBase(route);
+    };
+    this.handleCardKeyDown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        this.handleCardClick();
+      }
+    };
+
+    this.innerHTML = `
+      <div class="home-review-suggestion">
+        <div class="home-review-suggestion-header">
+          <h2 class="home-review-suggestion-title">Suggestion</h2>
+          <span class="home-review-suggestion-link">Write Review</span>
+        </div>
+        <p class="home-review-suggestion-text">Review a course you have registered for.</p>
+        <div class="home-review-suggestion-course-card">
+          <h3 class="home-review-suggestion-course">Loading...</h3>
+          <p class="home-review-suggestion-meta"></p>
+        </div>
+      </div>
+    `;
+  }
+
+  connectedCallback() {
+    this.refreshSuggestion();
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.addEventListener('pageLoaded', this.handlePageLoaded);
+
+    const card = this.querySelector('.home-review-suggestion');
+    if (card) {
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.removeEventListener('click', this.handleCardClick);
+      card.removeEventListener('keydown', this.handleCardKeyDown);
+      card.addEventListener('click', this.handleCardClick);
+      card.addEventListener('keydown', this.handleCardKeyDown);
+    }
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    const card = this.querySelector('.home-review-suggestion');
+    if (card) {
+      card.removeEventListener('click', this.handleCardClick);
+      card.removeEventListener('keydown', this.handleCardKeyDown);
+    }
+  }
+
+  setContainerVisibility(isVisible) {
+    this.style.display = isVisible ? 'block' : 'none';
+    const container = this.closest('#home-review-suggestion-container');
+    if (container) {
+      container.style.display = isVisible ? 'block' : 'none';
+    }
+  }
+
+  normalizeTerm(termValue) {
+    if (termValue === null || termValue === undefined || termValue === '') {
+      return window.getCurrentTerm ? String(window.getCurrentTerm()) : 'Fall';
+    }
+
+    const raw = String(termValue).trim();
+    if (raw.includes('/')) {
+      return raw.split('/').pop().trim();
+    }
+
+    const lower = raw.toLowerCase();
+    if (lower.includes('fall') || raw.includes('秋')) return 'Fall';
+    if (lower.includes('spring') || raw.includes('春')) return 'Spring';
+    return raw;
+  }
+
+  getCourseSuggestionKey(course) {
+    if (!course) return '';
+    const code = String(course.code || '').trim();
+    const year = Number(course.year) || '';
+    const term = this.normalizeTerm(course.term || '');
+    return `${code}|${year}|${term}`;
+  }
+
+  getReviewedCourseKey(code, termValue) {
+    const normalizedCode = String(code || '').trim();
+    const normalizedTerm = this.normalizeTerm(termValue || '');
+    return `${normalizedCode}|${normalizedTerm}`;
+  }
+
+  pickRandomCourse(courses) {
+    if (!Array.isArray(courses) || courses.length === 0) return null;
+    if (courses.length === 1) return courses[0];
+
+    const candidates = this.lastSuggestedCourseKey
+      ? courses.filter((course) => this.getCourseSuggestionKey(course) !== this.lastSuggestedCourseKey)
+      : courses;
+    const pool = candidates.length > 0 ? candidates : courses;
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    return pool[randomIndex];
+  }
+
+  async refreshSuggestion() {
+    const courseTitleEl = this.querySelector('.home-review-suggestion-course');
+    const courseMetaEl = this.querySelector('.home-review-suggestion-meta');
+    const courseCardEl = this.querySelector('.home-review-suggestion-course-card');
+    if (courseTitleEl) courseTitleEl.textContent = 'Loading...';
+    if (courseMetaEl) courseMetaEl.textContent = '';
+    if (courseCardEl) courseCardEl.style.backgroundColor = 'rgba(255, 255, 255, 0.72)';
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user || null;
+      if (!user) {
+        this.suggestedCourse = null;
+        this.setContainerVisibility(false);
+        return;
+      }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('courses_selection')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const selectedCourses = Array.isArray(profile?.courses_selection)
+        ? profile.courses_selection.filter((course) => course?.code && course?.year)
+        : [];
+
+      const uniqueSelectedCourses = [...new Map(
+        selectedCourses.map((course) => [this.getCourseSuggestionKey(course), course])
+      ).values()];
+
+      let reviewedCourseKeys = new Set();
+      try {
+        const { data: reviewedCourses, error: reviewedCoursesError } = await supabase
+          .from('course_reviews')
+          .select('course_code, term')
+          .eq('user_id', user.id);
+
+        if (reviewedCoursesError) {
+          throw reviewedCoursesError;
+        }
+
+        reviewedCourseKeys = new Set(
+          (reviewedCourses || []).map((review) =>
+            this.getReviewedCourseKey(review.course_code, review.term)
+          )
+        );
+      } catch (error) {
+        console.error('Error loading reviewed courses for suggestion widget:', error);
+      }
+
+      const availableCourses = uniqueSelectedCourses.filter((course) => {
+        const reviewedKey = this.getReviewedCourseKey(course.code, course.term);
+        return !reviewedCourseKeys.has(reviewedKey);
+      });
+
+      if (availableCourses.length === 0) {
+        this.suggestedCourse = null;
+        this.setContainerVisibility(false);
+        return;
+      }
+
+      const selectedCourse = this.pickRandomCourse(availableCourses) || availableCourses[0];
+      const year = Number(selectedCourse.year) || new Date().getFullYear();
+      const term = this.normalizeTerm(selectedCourse.term);
+      const code = String(selectedCourse.code);
+
+      let displayTitle = code;
+      let courseType = null;
+      try {
+        const semesterCourses = await fetchCourseData(year, term);
+        const matchedCourse = Array.isArray(semesterCourses)
+          ? semesterCourses.find((course) => course.course_code === code)
+          : null;
+        if (matchedCourse) {
+          displayTitle = normalizeCourseTitle(matchedCourse.title || code);
+          courseType = matchedCourse.type || null;
+        }
+      } catch (error) {
+        console.error('Error fetching course title for review suggestion:', error);
+      }
+
+      this.suggestedCourse = { code, year, term };
+      this.lastSuggestedCourseKey = `${code}|${year}|${term}`;
+      if (courseTitleEl) courseTitleEl.textContent = displayTitle;
+      if (courseMetaEl) courseMetaEl.textContent = `${term} ${year}`;
+      if (courseCardEl) {
+        courseCardEl.style.backgroundColor = courseType
+          ? getCourseColorByType(courseType)
+          : 'rgba(255, 255, 255, 0.72)';
+      }
+      this.setContainerVisibility(true);
+    } catch (error) {
+      console.error('Error loading review suggestion widget:', error);
+      this.suggestedCourse = null;
+      this.setContainerVisibility(false);
+    }
   }
 }
 
@@ -1558,6 +2096,8 @@ customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
 customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
+customElements.define('latest-courses-preview', LatestCoursesPreview);
+customElements.define('review-suggestion-widget', ReviewSuggestionWidget);
 customElements.define('weekly-calendar', WeeklyCalendar);
 
 window.refreshCalendar = () => {

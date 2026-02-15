@@ -395,7 +395,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
 
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
-            <div class="class-container" style="background-color: ${courseColor}" data-course='${escapedCourseJSON}'>
+            <div class="class-container" style="--course-card-accent: ${courseColor};" data-course='${escapedCourseJSON}'>
                 <p id="course-code">${course.course_code}</p>
                 <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
                 <p id="course-professor-small">Professor</p>
@@ -858,6 +858,24 @@ function setupCourseListClickListener() {
 // Initialize courses with robust loading
 (async function initializeCourses() {
     try {
+        const normalizePath = (path) => {
+            const raw = String(path || '/');
+            const noQuery = raw.split('?')[0].split('#')[0];
+            const trimmed = noQuery.length > 1 ? noQuery.replace(/\/+$/, '') : noQuery;
+            return trimmed || '/';
+        };
+
+        const isCoursesRoute = (path) => {
+            const normalized = normalizePath(path);
+            return normalized === '/courses' || normalized === '/dashboard';
+        };
+
+        // Skip entirely unless we are actually on the courses route.
+        // This avoids race conditions when /course/... is loaded via a courses entrypoint.
+        if (!isCoursesRoute(getCurrentAppPath())) {
+            return;
+        }
+
         // Only run on courses/index page - check for key element
         const courseMainDiv = document.getElementById("course-main-div");
         if (!courseMainDiv) {
@@ -876,6 +894,12 @@ function setupCourseListClickListener() {
 
         // Additional delay to ensure all components and custom elements are mounted
         await new Promise(resolve => setTimeout(resolve, 200));
+
+        // If route changed while waiting (e.g. navigating to /course/...),
+        // stop initialization without logging errors.
+        if (!isCoursesRoute(getCurrentAppPath()) || !document.getElementById("course-main-div")) {
+            return;
+        }
 
         // Find elements dynamically  
         let semesterSelect = document.getElementById("semester-select");
@@ -903,6 +927,10 @@ function setupCourseListClickListener() {
             });
 
             if (!semesterSelect || !courseList) {
+                // Route may have changed while retrying; exit quietly in that case.
+                if (!isCoursesRoute(getCurrentAppPath()) || !document.getElementById("course-main-div")) {
+                    return;
+                }
                 throw new Error('Critical DOM elements missing after retry');
             }
         }
@@ -2712,7 +2740,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 
         coursesHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
-            <div class="class-container" style="background-color: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
+            <div class="class-container" style="--course-card-accent: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
                 <div class="class-suggestion">
                     <div class="class-suggestion-label">
                         Suggested

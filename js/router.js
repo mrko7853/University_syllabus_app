@@ -10,8 +10,9 @@ class SimpleRouter {
   constructor() {
     this.routes = {
       '/': '/index.html',
-      '/courses': '/index.html',
-      '/dashboard': '/index.html', // Legacy redirect
+      '/home': '/index.html',
+      '/courses': '/courses.html',
+      '/dashboard': '/courses.html', // Legacy redirect
       '/calendar': '/calendar.html',
       '/assignments': '/assignments.html',
       '/profile': '/profile.html',
@@ -94,18 +95,29 @@ class SimpleRouter {
     // Load initial page
     const currentPath = getCurrentAppPath()
     const basePath = this.extractBasePath(currentPath)
+    const hasHomeMarkup = !!document.getElementById('home-main')
+    const hasCoursesMarkup = !!document.getElementById('course-main-div')
 
-    if (basePath === '/' || basePath === '' || basePath === '/courses' || basePath === '/dashboard') {
-      // For courses page on initial load, just initialize without modifying DOM
+    if (this.isHomeRoute(basePath) && hasHomeMarkup) {
+      this.currentPath = '/'
+      this.initializeCurrentPageOnly('/')
+    } else if ((basePath === '/courses' || basePath === '/dashboard') && hasCoursesMarkup) {
       this.currentPath = '/courses'
       this.initializeCurrentPageOnly('/courses')
     } else {
-      // For non-index pages loaded directly, clear the default content and load the correct page
+      // For non-entrypoint pages loaded directly, clear the default content and load the correct page
       const appContent = document.querySelector('#app-content')
       if (appContent) {
         appContent.innerHTML = ''
       }
-      this.loadPage(currentPath)
+
+      if (basePath === '/dashboard') {
+        this.loadPage('/courses')
+      } else if (this.isHomeRoute(basePath)) {
+        this.loadPage('/')
+      } else {
+        this.loadPage(basePath)
+      }
     }
 
     this.isInitialized = true
@@ -129,10 +141,15 @@ class SimpleRouter {
 
   // Check if currently on the courses page
   isOnCoursesPage() {
-    return this.currentPath === '/' ||
-      this.currentPath === '/courses' ||
-      this.currentPath === '/dashboard' ||
-      this.currentPath === ''
+    return this.isCoursesRoute(this.currentPath)
+  }
+
+  isCoursesRoute(path) {
+    return path === '/courses' || path === '/dashboard'
+  }
+
+  isHomeRoute(path) {
+    return path === '/' || path === '' || path === '/home'
   }
 
   navigate(path) {
@@ -147,8 +164,8 @@ class SimpleRouter {
     const cleanPath = this.extractBasePath(appPath)
 
     // Normalize path
-    if (cleanPath === '' || cleanPath === '/') {
-      path = '/courses'
+    if (cleanPath === '' || cleanPath === '/' || cleanPath === '/home') {
+      path = '/'
     } else if (cleanPath === '/dashboard') {
       path = '/courses' // Redirect legacy dashboard to courses
     } else {
@@ -200,7 +217,7 @@ class SimpleRouter {
     this.componentCleanupFunctions = []
 
     // Disconnect any existing components to force reinitialization
-    const components = document.querySelectorAll('total-courses, term-box, course-calendar')
+    const components = document.querySelectorAll('total-courses, term-box, course-calendar, latest-courses-preview')
     components.forEach(component => {
       if (component.disconnectedCallback) {
         component.disconnectedCallback()
@@ -292,6 +309,7 @@ class SimpleRouter {
     if (courseMatch) {
       const [, courseCode, year, term] = courseMatch
       console.log('Course URL detected:', { courseCode, year, term })
+      this.currentPath = path
 
       try {
         this.cleanupCurrentPage()
@@ -428,8 +446,8 @@ class SimpleRouter {
       // Update loading progress
       this.updateLoadingProgress(95)
 
-      // ALWAYS check for guest dashboard on ANY courses page load (including first load)
-      if (basePath === '/courses' || basePath === '/dashboard' || basePath === '/' || this.routes[basePath] === '/index.html') {
+      // Check for guest restrictions on the courses page
+      if (this.isCoursesRoute(basePath)) {
         const isAuthenticated = await this.checkAuthentication()
         this.handleGuestDashboard(isAuthenticated)
       }
@@ -464,7 +482,7 @@ class SimpleRouter {
       await this.reinitializeEverything(path)
 
       // Handle guest dashboard if on courses page
-      if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
+      if (this.isCoursesRoute(path)) {
         this.handleGuestDashboard(isAuthenticated)
       }
 
@@ -498,8 +516,8 @@ class SimpleRouter {
       // Check authentication status for UI modifications
       const isAuthenticated = await this.checkAuthentication()
 
-      // Re-import and reinitialize main.js functionality if on courses/index
-      if (path === '/courses' || path === '/dashboard' || path === '/' || this.routes[path] === '/index.html') {
+      // Re-import and reinitialize main.js functionality if on courses
+      if (this.isCoursesRoute(path)) {
         await this.initializeDashboard()
         // Hide top content for guest users on courses page
         this.handleGuestDashboard(isAuthenticated)
@@ -1239,7 +1257,7 @@ class SimpleRouter {
 
   forceComponentReinitialization() {
     // Force web components to reinitialize
-    const components = document.querySelectorAll('total-courses, term-box, course-calendar')
+    const components = document.querySelectorAll('total-courses, term-box, course-calendar, latest-courses-preview')
     components.forEach(component => {
       if (component.connectedCallback) {
         component.connectedCallback()
@@ -1277,7 +1295,7 @@ class SimpleRouter {
     if (normalizedPath.startsWith('/courses/')) {
       return '/courses'
     }
-    if (normalizedPath.startsWith('/dashboard/')) {
+    if (normalizedPath === '/dashboard' || normalizedPath.startsWith('/dashboard/')) {
       return '/courses' // Redirect legacy dashboard paths
     }
     if (normalizedPath.startsWith('/calendar/')) {
@@ -1286,8 +1304,11 @@ class SimpleRouter {
     if (normalizedPath.startsWith('/settings/')) {
       return '/settings'
     }
+    if (normalizedPath === '/home' || normalizedPath === '/home/' || normalizedPath.startsWith('/home/')) {
+      return '/'
+    }
     if (normalizedPath === '/index' || normalizedPath === '/index/' || normalizedPath.startsWith('/index/')) {
-      return '/courses'
+      return '/'
     }
 
     // Return the path as-is for routes without parameters
@@ -1330,6 +1351,8 @@ class SimpleRouter {
 
     // Get page name for display
     const pageNames = {
+      '/': 'Home',
+      '/home': 'Home',
       '/profile': 'Profile',
       '/calendar': 'Calendar',
       '/courses': 'Courses',
@@ -1558,6 +1581,15 @@ class SimpleRouter {
     const topContent = document.querySelector('.top-content')
     if (!mainContent) return
 
+    // Guest hiding is only relevant to the courses route.
+    if (!this.isCoursesRoute(this.currentPath)) {
+      mainContent.classList.remove('guest-dashboard')
+      if (topContent) {
+        topContent.style.display = 'grid'
+      }
+      return
+    }
+
     if (!isAuthenticated) {
       // Add guest class to hide top content
       mainContent.classList.add('guest-dashboard')
@@ -1762,7 +1794,7 @@ class SimpleRouter {
     this.closeSearchModal()
 
     // Navigate to courses page if not already there
-    if (this.currentPath !== '/courses' && this.currentPath !== '/dashboard' && this.currentPath !== '/') {
+    if (!this.isCoursesRoute(this.currentPath)) {
       await this.navigate('/courses')
 
       // Wait for courses page to load completely

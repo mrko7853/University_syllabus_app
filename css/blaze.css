@@ -180,6 +180,11 @@ nav ul {
     background-image: url(/assets/profile.svg);
 }
 
+.nav-btn#home-btn .nav-icon {
+    background-image: url(/assets/logo-symbol.svg);
+    background-size: 18px;
+}
+
 .nav-btn#dashboard .nav-icon {
     background-image: url(/assets/dashboard.svg);
 }
@@ -242,6 +247,15 @@ section {
 #course-main-div,
 #calendar-main-div {
     margin: 20px 0;
+}
+
+#home-courses-preview-container {
+    margin: 20px 0;
+}
+
+#home-review-suggestion-container {
+    margin: 20px 0;
+    display: none;
 }
 
 #auth-main {
@@ -336,10 +350,6 @@ nav ul>li:nth-child(2) {
     margin-top: auto;
 }
 
-nav ul>li:nth-child(5) {
-    margin-top: auto;
-}
-
 .profile-menu-container {
     position: relative;
     display: flex;
@@ -403,6 +413,7 @@ nav ul>li:nth-child(5) {
 }
 
 .accessibility-dropdown:hover button#dashboard,
+.accessibility-dropdown:hover button#home-btn,
 .accessibility-dropdown:hover button#calendar-btn,
 .accessibility-dropdown:hover button#search,
 .accessibility-dropdown:hover button#settings,
@@ -450,15 +461,15 @@ term-box {
 }
 
 course-calendar {
-    background-color: #eee6f2;
+    background-color: transparent;
     border-radius: 30px;
     position: relative;
-    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
+    filter: none;
 }
 
 /* Apply inset shadow as pseudo-element on top */
 course-calendar::after {
-    content: '';
+    content: none;
     position: absolute;
     top: 0;
     left: 0;
@@ -511,6 +522,213 @@ course-calendar::after {
     overflow: visible;
 }
 
+#home-main .home-top-content>#calendar-container {
+    grid-column: 1 / -1;
+}
+
+.home-calendar-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.home-calendar-summary-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.home-calendar-summary-title {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    font-weight: 500;
+}
+
+.home-calendar-widget {
+    flex: none;
+    height: auto;
+    min-height: 0;
+}
+
+latest-courses-preview {
+    display: block;
+}
+
+.home-courses-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+    cursor: pointer;
+}
+
+.home-courses-preview:focus-visible {
+    outline: 2px solid #4f4f4f;
+    outline-offset: 4px;
+    border-radius: 18px;
+}
+
+.home-courses-preview-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.home-courses-preview-title {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    font-weight: 500;
+}
+
+.home-courses-preview-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 14px;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.75;
+}
+
+.home-courses-preview-note {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 14px;
+    opacity: 0.75;
+}
+
+.home-courses-preview-link,
+.home-review-suggestion-link,
+.home-calendar-link {
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.home-courses-preview-link::after,
+.home-review-suggestion-link::after,
+.home-calendar-link::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background-image: url(/assets/chevron-right.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 14px 14px;
+    display: block;
+}
+
+.home-courses-preview-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.home-course-preview-item {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.72);
+    min-height: 90px;
+}
+
+.home-course-preview-code {
+    margin: 0 0 4px 0;
+    font-size: 12px;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.7;
+}
+
+.home-course-preview-name {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--small-h2-desktop);
+    line-height: 1.3;
+    font-weight: 500;
+}
+
+.home-course-preview-professor {
+    margin: 6px 0 0 0;
+    font-size: 12px;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.75;
+}
+
+.home-courses-preview-empty {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.75;
+}
+
+.home-review-suggestion {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    cursor: pointer;
+    padding: 15px;
+}
+
+.home-review-suggestion:focus-visible {
+    outline: 2px solid #4f4f4f;
+    outline-offset: 4px;
+    border-radius: 18px;
+}
+
+.home-review-suggestion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.home-review-suggestion-title {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    font-weight: 500;
+}
+
+.home-review-suggestion-text {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.75;
+    font-size: 14px;
+}
+
+.home-review-suggestion-course-card {
+    border-radius: 18px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.home-review-suggestion-course {
+    margin: 0;
+    font-size: var(--small-h2-desktop);
+    line-height: 1.3;
+    font-weight: 600;
+}
+
+.home-review-suggestion-meta {
+    margin: 0;
+    font-size: 13px;
+    font-family: var(--secondary-font), sans-serif;
+    opacity: 0.72;
+}
+
 .total-courses {
     border-radius: 30px;
     height: 100%;
@@ -530,7 +748,14 @@ course-calendar::after {
     gap: 15px;
     flex-direction: column;
     height: 100%;
-    justify-content: flex-end;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.total-courses-container[role="button"]:focus-visible {
+    outline: 2px solid #4f4f4f;
+    outline-offset: 4px;
+    border-radius: 18px;
 }
 
 .user-concentration {
@@ -546,7 +771,8 @@ course-calendar::after {
 
 .total-count {
     font-size: var(--h3);
-    font-weight: 100;
+    font-family: var(--secondary-font), sans-serif;
+    font-weight: 500;
     margin: 0;
 }
 
@@ -555,6 +781,43 @@ course-calendar::after {
     font-size: var(--p);
     font-weight: 400;
     font-family: var(--secondary-font), sans-serif;
+}
+
+.total-upcoming {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.35;
+    font-family: var(--secondary-font), sans-serif;
+    color: #000;
+    min-height: 36px;
+}
+
+.upcoming-assignment-title {
+    display: block;
+    width: 140px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.no-upcoming-assignment-text {
+    display: block;
+    width: 140px;
+    white-space: normal;
+}
+
+#next-class-time {
+    font-size: 14px;
+    line-height: 1.35;
+    font-family: var(--secondary-font), sans-serif;
+    color: #000;
+    opacity: .75;
+}
+
+.upcoming-assignment-deadline {
+    display: block;
+    opacity: 0.75;
 }
 
 /* ============================================
@@ -616,7 +879,7 @@ course-calendar #calendar-main th p {
     margin: 10px auto 4px auto;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    font-family: var(--secondary-font), sans-serif;
     color: #000;
     font-size: 11px;
 }
@@ -672,29 +935,29 @@ course-calendar #calendar-main td p {
     /* Hide time labels in mini calendar */
 }
 
-/* Mini calendar: hide time labels completely */
+/* Mini calendar: period index column */
 course-calendar #calendar-main td:first-child {
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    overflow: hidden !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+    padding: 0 4px 0 0 !important;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 course-calendar #calendar-main th:first-child {
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
     padding: 0 !important;
-    border: none !important;
-    overflow: hidden !important;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* Ensure day columns take exactly 20% each */
 course-calendar #calendar-main td:not(:first-child) {
-    width: 20% !important;
-    max-width: 20% !important;
+    width: calc((100% - 30px) / 5) !important;
+    max-width: calc((100% - 30px) / 5) !important;
     vertical-align: middle;
     height: 32px;
     min-height: 32px;
@@ -705,8 +968,8 @@ course-calendar #calendar-main td:not(:first-child) {
 }
 
 course-calendar #calendar-main th:not(:first-child) {
-    width: 20% !important;
-    max-width: 20% !important;
+    width: calc((100% - 30px) / 5) !important;
+    max-width: calc((100% - 30px) / 5) !important;
     padding: 2px !important;
     overflow: hidden;
     box-sizing: border-box;
@@ -746,7 +1009,23 @@ course-calendar #calendar-main td:last-child {
 
 course-calendar #calendar-main th:first-child,
 course-calendar #calendar-main td:first-child {
-    border-right: none;
+    border-right: 1px solid rgba(189, 170, 198, 0.35);
+}
+
+course-calendar .period-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.66);
+    color: #555;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
 }
 
 /* Mini calendar course cells - small colored dots */
@@ -2942,13 +3221,40 @@ td p {
         /* Add margin instead of padding for proper centering */
     }
 
+    .total-text {
+        font-size: 14px !important;
+        width: 125px;
+    }
+
+    .total-count {
+        font-size: 18px !important;
+        width: 100px;
+    }
+
+    .upcoming-assignment-title {
+        width: 100px;
+    }
+
+    .no-upcoming-assignment-text {
+        width: 100px;
+    }
+
     course-calendar {
         border-radius: 15px !important;
     }
 
+    .top-content>#calendar-container {
+        overflow: hidden;
+    }
+
+    .top-content>#calendar-container course-calendar {
+        box-shadow: none;
+        filter: none;
+    }
+
     /* Mini calendar mobile styles */
-    course-calendar #calendar-main td,
-    course-calendar #calendar-main th {
+    course-calendar #calendar-main td:not(:first-child),
+    course-calendar #calendar-main th:not(:first-child) {
         width: 12px !important;
         height: 2px !important;
         min-width: 2px !important;
@@ -2962,10 +3268,13 @@ td p {
         display: none !important;
     }
 
-    /* Hide first column (time labels) completely on mobile */
     course-calendar #calendar-main td:first-child,
     course-calendar #calendar-main th:first-child {
-        display: none !important;
+        display: table-cell !important;
+        width: 4px !important;
+        min-width: 4px !important;
+        max-width: 4px !important;
+        padding: 0 2px 0 0 !important;
     }
 
     .course-cell-main {
@@ -2973,11 +3282,17 @@ td p {
     }
 
     course-calendar #calendar-main th p {
-        width: 10px !important;
-        height: 10px !important;
-        font-size: 7px !important;
-        min-width: 10px !important;
-        max-width: 10px !important;
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 10px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
+    }
+
+    course-calendar .period-index {
+        width: 14px;
+        height: 14px;
+        font-size: 9px;
     }
 
     /* Mobile calendar page styles */
@@ -3051,12 +3366,13 @@ td p {
         padding: 15px 15px;
     }
 
-    total-courses {
-        border-radius: 15px;
+    .total-courses {
+        border-radius: 15px !important;
     }
 
-    term-box {
-        display: none;
+    total-courses {
+        border-radius: 15px;
+        height: 100%;
     }
 
     course-calendar::after {
@@ -3296,6 +3612,15 @@ td p {
         background-image: url(/assets/mobile/mobile-profile-fill.svg) !important;
     }
 
+    .nav-btn#home-btn .nav-icon {
+        background-image: url(/assets/mobile/mobile-dashboard.svg) !important;
+    }
+
+    .nav-btn#home-btn.active .nav-icon,
+    .nav-btn#home-btn:active .nav-icon {
+        background-image: url(/assets/mobile/mobile-dashboard-fill.svg) !important;
+    }
+
     .nav-btn#dashboard .nav-icon {
         background-image: url(/assets/mobile/mobile-dashboard.svg) !important;
     }
@@ -3329,6 +3654,12 @@ td p {
         display: none !important;
     }
 
+    .logo-nav-item,
+    .settings-nav-item,
+    .help-nav-item {
+        display: none !important;
+    }
+
     .false {
         box-shadow: none !important;
     }
@@ -3342,15 +3673,8 @@ td p {
     }
 
     /* Reset margin on mobile - items are horizontal */
-    nav ul>li:nth-child(2),
-    nav ul>li:nth-child(5) {
+    nav ul>li {
         margin-top: 0px !important;
-    }
-
-    /* Hide Settings and Help list items on mobile */
-    nav ul>li:nth-child(5),
-    nav ul>li:nth-child(6) {
-        display: none !important;
     }
 
     nav {
@@ -3441,7 +3765,7 @@ td p {
         overflow-y: auto;
         padding: 0 20px 0 20px;
         /* Use a more reliable bottom spacing calculation */
-        padding-bottom: calc(85px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: 18px;
         /* Alternative: use margin-bottom instead of padding for better scroll behavior */
         margin-bottom: 0;
         -webkit-overflow-scrolling: touch;
@@ -3458,6 +3782,45 @@ td p {
         min-height: 0;
         /* Important for flexbox scrolling */
     }
+}
+
+@media (max-width: 780px) {
+    .home-courses-preview-list {
+        grid-template-columns: 1fr;
+    }
+
+    #home-courses-preview-container {
+        border-radius: 15px !important;
+    }
+
+    .home-review-suggestion {
+        border-radius: 15px !important;
+    }
+
+    .home-review-suggestion-course-card {
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+#home-courses-preview-container {
+    background-color: #eee6f2;
+    box-shadow: 0 -2px 6px #0a254059 inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
+}
+
+#calendar-container {
+    background-color: #eee6f2;
+    box-shadow: 0 -2px 6px #0a254059 inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
+}
+
+.home-review-suggestion {
+    background-color: #eee6f2;
+    box-shadow: 0 -2px 6px #0a254059 inset;
+    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
 }
 
 /* Mobile calendar */
@@ -3598,14 +3961,14 @@ td p {
     /* Additional responsive layout improvements */
     .top-content {
         grid-template-columns: 1fr 1fr !important;
-        gap: 10px !important;
+        gap: 15px !important;
         margin: 0px 15px 15px 15px !important;
     }
 
     .top-content .main-container {
-        padding: 15px !important;
+        padding: 0px !important;
         margin: 0 !important;
-        border-radius: 30px !important;
+        border-radius: 15px !important;
     }
 
     .top-content-two {
@@ -3623,8 +3986,9 @@ td p {
     /* General main-container mobile adjustments */
     .main-container {
         margin: 15px !important;
-        padding: 15px !important;
+        padding: 0px !important;
         border-radius: 30px !important;
+        background-color: #fff;
     }
 
     /* Course list mobile layout */
@@ -4051,11 +4415,11 @@ td p {
     .search-btn,
     .sort-btn,
     .filter-btn {
-        font-size: var(--small-h3-desktop) !important;
+        font-size: var(--small-h3-desktop);
     }
 
     .total-count {
-        font-size: var(--small-h1-desktop) !important;
+        font-size: var(--small-h1-desktop);
     }
 
     .search-btn div {
@@ -5747,7 +6111,7 @@ calendar-page .mobile-day-buttons {
         display: flex !important;
         width: 100%;
         height: auto;
-        padding: calc(10px + var(--safe-area-top)) 15px 12px 15px;
+        padding: calc(10px + var(--safe-area-top)) 15px 10px 15px;
         background-color: #FFFFFF;
         border-bottom: 1px solid #E3E2E2;
         justify-content: space-between;
@@ -5768,8 +6132,8 @@ calendar-page .mobile-day-buttons {
         background-position: center;
         background-repeat: no-repeat;
         background-size: cover;
-        width: 130px;
-        height: 40px;
+        width: 100px;
+        height: 31px;
         touch-action: manipulation;
     }
 
@@ -8097,7 +8461,6 @@ calendar-page .calendar-mobile-view {
         width: 100%;
         border-radius: 32px;
         overflow: hidden;
-        background: #d6cadc;
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-mobile-period {
@@ -8287,5 +8650,42 @@ calendar-page .calendar-mobile-view {
         font-size: 15px;
         text-align: center;
         padding: 18px 12px;
+    }
+}
+
+@media (max-width: 780px) {
+    #home-main .home-top-content {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        margin: 15px !important;
+        gap: 15px !important;
+    }
+
+    #home-main .home-assignment-container {
+        order: 1;
+    }
+
+    #home-main .home-next-class-container {
+        order: 2;
+    }
+
+    #home-main .home-next-class-container term-box {
+        display: block !important;
+        height: 100%;
+        border-radius: 15px;
+    }
+
+    #home-main #calendar-container {
+        display: block !important;
+        grid-column: 1 / -1;
+        order: 3;
+    }
+}
+
+/* Global mobile overscroll lock: disable pull-to-refresh and page stretch/bounce */
+@media (max-width: 780px) {
+    html,
+    body {
+        overscroll-behavior: none !important;
+        overscroll-behavior-y: none !important;
     }
 }
