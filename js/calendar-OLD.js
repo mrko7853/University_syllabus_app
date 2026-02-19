@@ -5,7 +5,7 @@ import { fetchCourseData, openCourseInfoMenu } from "./shared.js";
 import './components.js';
 
 function checkMobile() {
-    window.isMobile = window.innerWidth <= 780;
+    window.isMobile = window.innerWidth <= 1023;
 }
 window.addEventListener("load", checkMobile);
 window.addEventListener("resize", checkMobile);

@@ -1,6 +1,38 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters, openCourseSearchForSlot } from "./shared.js";
 import { withBase } from "./path-utils.js";
+import {
+  applyPreferredTermToGlobals,
+  applyStoredPreferences,
+  getPreferredTermValue,
+  normalizeTermValue,
+  setPreferredTermValue
+} from "./preferences.js";
+
+function bootstrapStoredPreferences() {
+  const applyBootPreferences = () => {
+    applyStoredPreferences();
+    const preferredTerm = getPreferredTermValue();
+    if (preferredTerm) {
+      const parsed = applyPreferredTermToGlobals(preferredTerm);
+      if (parsed?.term && parsed?.year) {
+        const termInput = document.getElementById('term-select');
+        const yearInput = document.getElementById('year-select');
+        if (termInput) termInput.value = parsed.term;
+        if (yearInput) yearInput.value = String(parsed.year);
+      }
+    }
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyBootPreferences, { once: true });
+    return;
+  }
+
+  applyBootPreferences();
+}
+
+bootstrapStoredPreferences();
 
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
@@ -47,6 +79,836 @@ function normalizeShortTitle(shortTitle) {
   return normalized;
 }
 
+const HOME_DESKTOP_BREAKPOINT = 1024;
+const HOME_SAVED_COURSES_KEY = 'ila_saved_courses';
+const HOME_SEMESTER_MIN_CREDITS = 2;
+const HOME_SEMESTER_MAX_CREDITS = 24;
+const HOME_DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const HOME_DAY_SHORT_LABELS = {
+  Mon: 'Mon',
+  Tue: 'Tue',
+  Wed: 'Wed',
+  Thu: 'Thu',
+  Fri: 'Fri'
+};
+const HOME_PERIODS = [
+  { period: 1, start: '09:00', end: '10:30', filterValue: '09:00' },
+  { period: 2, start: '10:45', end: '12:15', filterValue: '10:45' },
+  { period: 3, start: '13:10', end: '14:40', filterValue: '13:10' },
+  { period: 4, start: '14:55', end: '16:25', filterValue: '14:55' },
+  { period: 5, start: '16:40', end: '18:10', filterValue: '16:40' }
+];
+const HOME_PERIOD_BY_NUMBER = HOME_PERIODS.reduce((acc, slot) => {
+  acc[slot.period] = slot;
+  return acc;
+}, {});
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizeTermName(termValue) {
+  if (!termValue) return 'Fall';
+  const raw = String(termValue).trim();
+  if (raw.includes('/')) {
+    return normalizeTermName(raw.split('/').pop());
+  }
+
+  const lowered = raw.toLowerCase();
+  if (lowered.includes('fall') || raw.includes('秋')) return 'Fall';
+  if (lowered.includes('spring') || raw.includes('春')) return 'Spring';
+  if (!raw) return 'Fall';
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function parseSemesterValue(value) {
+  const normalized = normalizeTermValue(String(value || '').replace('/', '-'));
+  if (!normalized) return { term: null, year: null, value: null };
+  const [term, yearText] = normalized.split('-');
+  const year = parseInt(yearText, 10);
+  return {
+    term,
+    year: Number.isFinite(year) ? year : null,
+    value: normalized
+  };
+}
+
+function formatSemesterValue(term, year) {
+  if (!term || !year) return null;
+  return normalizeTermValue(`${normalizeTermName(term)}-${year}`);
+}
+
+function getCurrentHomeSemesterContext() {
+  const yearValue = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById('year-select')?.value || new Date().getFullYear(), 10);
+  const termValue = window.getCurrentTerm ? window.getCurrentTerm() : document.getElementById('term-select')?.value || 'Fall';
+  return {
+    year: Number.isFinite(Number(yearValue)) ? Number(yearValue) : new Date().getFullYear(),
+    term: normalizeTermName(termValue)
+  };
+}
+
+function parseCreditsValue(rawCredits) {
+  if (rawCredits === null || rawCredits === undefined || rawCredits === '') return 0;
+  if (typeof rawCredits === 'number') return Number.isFinite(rawCredits) ? rawCredits : 0;
+  const matched = String(rawCredits).match(/(\d+(\.\d+)?)/);
+  if (!matched) return 0;
+  const parsed = parseFloat(matched[1]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getPeriodMeta(period) {
+  return HOME_PERIOD_BY_NUMBER[Number(period)] || null;
+}
+
+function formatSlotLabel(day, period) {
+  return `${HOME_DAY_SHORT_LABELS[day] || day} • P${period}`;
+}
+
+function formatPeriodWindow(period) {
+  const meta = getPeriodMeta(period);
+  return meta ? `${meta.start} - ${meta.end}` : '';
+}
+
+function parseCourseTimeSlot(timeSlot) {
+  if (!timeSlot) return null;
+
+  let match = String(timeSlot).match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
+  if (match) {
+    const dayJP = match[1];
+    const dayMap = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri' };
+    const period = parseInt(match[2], 10);
+    const day = dayMap[dayJP];
+    if (!day || !HOME_PERIOD_BY_NUMBER[period]) return null;
+    return { day, period, timeLabel: formatPeriodWindow(period) };
+  }
+
+  match = String(timeSlot).match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
+  if (match) {
+    const day = match[1];
+    const startHour = parseInt(match[2], 10);
+    const startMin = parseInt(match[3], 10);
+    const startLabel = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`;
+    const period = HOME_PERIODS.find((slot) => slot.filterValue === startLabel)?.period;
+    if (!period) return null;
+    return { day, period, timeLabel: `${match[2]}:${match[3]} - ${match[4]}:${match[5]}` };
+  }
+
+  return null;
+}
+
+function formatDueDateLabel(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function getDaysUntilDate(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function navigateToRoute(path) {
+  if (!path) return;
+  if (window.router?.navigate) {
+    window.router.navigate(path);
+    return;
+  }
+  window.location.href = withBase(path);
+}
+
+function navigateToSlotCourseSearch(day, period, term, year) {
+  openCourseSearchForSlot({
+    day,
+    period: Number(period),
+    term: normalizeTermName(term),
+    year: Number(year) || null,
+    source: 'home-planner'
+  });
+}
+
+function isSemesterSelectionTarget(target) {
+  const targetId = target?.id;
+  if (!targetId) return false;
+  return (
+    targetId === 'semester-select'
+    || targetId === 'semester-select-mobile'
+    || targetId === 'term-select'
+    || targetId === 'year-select'
+  );
+}
+
+function readSavedCourses(limit = 5) {
+  try {
+    const raw = window.localStorage.getItem(HOME_SAVED_COURSES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((item) => {
+        const title = String(item?.title || item?.course_title || item?.courseName || item?.code || '').trim();
+        const code = String(item?.course_code || item?.code || '').trim();
+        const year = Number(item?.year) || null;
+        const term = item?.term ? normalizeTermName(item.term) : null;
+        let day = item?.day || null;
+        let period = Number(item?.period) || null;
+
+        if ((!day || !period) && item?.time_slot) {
+          const slot = parseCourseTimeSlot(item.time_slot);
+          if (slot) {
+            day = slot.day;
+            period = slot.period;
+          }
+        }
+
+        return {
+          title: title || code || 'Saved Course',
+          code: code || null,
+          day: day && HOME_DAY_ORDER.includes(day) ? day : null,
+          period: Number.isFinite(period) && period > 0 ? period : null,
+          year,
+          term
+        };
+      })
+      .filter((entry) => entry.title)
+      .slice(0, limit);
+  } catch (error) {
+    console.warn('Unable to read saved courses from storage:', error);
+    return [];
+  }
+}
+
+let homePlannerDataCache = {
+  key: null,
+  updatedAt: 0,
+  data: null,
+  pending: null
+};
+
+function invalidateHomePlannerDataCache() {
+  homePlannerDataCache = {
+    key: null,
+    updatedAt: 0,
+    data: null,
+    pending: null
+  };
+}
+
+async function fetchHomePlannerData() {
+  const { year, term } = getCurrentHomeSemesterContext();
+  const selectedSemesterValue = formatSemesterValue(term, year);
+  const savedCourses = readSavedCourses(5);
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user || null;
+
+  const emptySlotsFallback = HOME_DAY_ORDER.flatMap((day) =>
+    HOME_PERIODS.map((slot) => ({
+      day,
+      period: slot.period,
+      label: formatSlotLabel(day, slot.period)
+    }))
+  );
+
+  if (!user) {
+    return {
+      isAuthenticated: false,
+      user: null,
+      year,
+      term,
+      selectedSemesterValue,
+      userCourses: [],
+      selectedCourseEntries: [],
+      emptySlots: emptySlotsFallback,
+      occupiedSlotsCount: 0,
+      conflicts: [],
+      creditsTotal: 0,
+      courseCount: 0,
+      typeBreakdown: [],
+      assignmentsDueSoon: [],
+      savedCourses
+    };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('courses_selection')
+    .eq('id', user.id)
+    .single();
+
+  if (profileError) throw profileError;
+
+  const selectedCourseEntries = Array.isArray(profile?.courses_selection) ? profile.courses_selection : [];
+  const normalizedTerm = normalizeTermName(term);
+  const selectedForSemester = selectedCourseEntries.filter((course) => {
+    const courseYear = Number(course?.year);
+    const courseTerm = course?.term ? normalizeTermName(course.term) : null;
+    return courseYear === Number(year) && (!courseTerm || courseTerm === normalizedTerm);
+  });
+
+  let userCourses = [];
+  let typeBreakdown = [];
+  let creditsTotal = 0;
+  if (selectedForSemester.length > 0) {
+    const semesterCourses = await fetchCourseData(year, normalizedTerm);
+    const selectionCodes = new Set(selectedForSemester.map((course) => String(course?.code || '').trim()).filter(Boolean));
+    userCourses = (semesterCourses || []).filter((course) => selectionCodes.has(String(course?.course_code || '').trim()));
+
+    const breakdownMap = new Map();
+    userCourses.forEach((course) => {
+      const type = String(course?.type || 'General').trim() || 'General';
+      const credits = parseCreditsValue(course?.credits);
+      creditsTotal += credits;
+      const existing = breakdownMap.get(type) || { type, count: 0, credits: 0 };
+      existing.count += 1;
+      existing.credits += credits;
+      breakdownMap.set(type, existing);
+    });
+
+    typeBreakdown = [...breakdownMap.values()].sort((a, b) => {
+      if (b.credits !== a.credits) return b.credits - a.credits;
+      return b.count - a.count;
+    });
+  }
+
+  const slotMap = new Map();
+  userCourses.forEach((course) => {
+    const slot = parseCourseTimeSlot(course?.time_slot);
+    if (!slot || !HOME_DAY_ORDER.includes(slot.day) || !HOME_PERIOD_BY_NUMBER[slot.period]) return;
+    const key = `${slot.day}-${slot.period}`;
+    const existing = slotMap.get(key) || [];
+    existing.push(course);
+    slotMap.set(key, existing);
+  });
+
+  const emptySlots = [];
+  HOME_DAY_ORDER.forEach((day) => {
+    HOME_PERIODS.forEach((slot) => {
+      const key = `${day}-${slot.period}`;
+      if (!slotMap.has(key)) {
+        emptySlots.push({
+          day,
+          period: slot.period,
+          label: formatSlotLabel(day, slot.period)
+        });
+      }
+    });
+  });
+
+  const conflicts = [];
+  slotMap.forEach((courses, key) => {
+    if (courses.length < 2) return;
+    const [day, periodText] = key.split('-');
+    conflicts.push({
+      day,
+      period: Number(periodText),
+      label: formatSlotLabel(day, periodText),
+      courses: courses.map((course) => normalizeCourseTitle(course?.title || course?.course_code || 'Course'))
+    });
+  });
+
+  let assignmentsDueSoon = [];
+  try {
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from('assignments')
+      .select('title, due_date, status, course_code, course_year, course_term')
+      .eq('user_id', user.id)
+      .neq('status', 'completed')
+      .not('due_date', 'is', null);
+
+    if (assignmentsError) throw assignmentsError;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const windowEnd = new Date(today);
+    windowEnd.setDate(windowEnd.getDate() + 7);
+
+    const dueSoonAssignments = (assignments || [])
+      .filter((assignment) => {
+        const dueDate = assignment?.due_date ? new Date(assignment.due_date) : null;
+        if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
+        dueDate.setHours(0, 0, 0, 0);
+        if (dueDate < today || dueDate > windowEnd) return false;
+
+        const assignmentYear = assignment?.course_year === null || assignment?.course_year === undefined
+          ? null
+          : Number(assignment.course_year);
+        const assignmentTerm = assignment?.course_term ? normalizeTermName(assignment.course_term) : null;
+        const hasSemesterMeta = assignmentYear !== null && assignmentTerm;
+
+        if (!hasSemesterMeta) return true;
+        return assignmentYear === Number(year) && assignmentTerm === normalizedTerm;
+      })
+      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+
+    const courseNameByCode = new Map();
+    userCourses.forEach((course) => {
+      const code = String(course?.course_code || '').trim();
+      if (!code || courseNameByCode.has(code)) return;
+      courseNameByCode.set(code, normalizeCourseTitle(course?.title || code));
+    });
+
+    const missingCourseCodes = [...new Set(
+      dueSoonAssignments
+        .map((assignment) => String(assignment?.course_code || '').trim())
+        .filter((code) => code && !courseNameByCode.has(code))
+    )];
+
+    if (missingCourseCodes.length > 0) {
+      try {
+        const { data: mappedCourses, error: mappedCoursesError } = await supabase
+          .from('courses')
+          .select('course_code, title, academic_year, term')
+          .in('course_code', missingCourseCodes)
+          .eq('academic_year', Number(year))
+          .eq('term', normalizedTerm);
+
+        if (!mappedCoursesError) {
+          (mappedCourses || []).forEach((course) => {
+            const code = String(course?.course_code || '').trim();
+            if (!code || courseNameByCode.has(code)) return;
+            courseNameByCode.set(code, normalizeCourseTitle(course?.title || code));
+          });
+        }
+      } catch (mappingError) {
+        console.warn('Unable to map assignment course names for due-soon widget:', mappingError);
+      }
+    }
+
+    assignmentsDueSoon = dueSoonAssignments.map((assignment) => {
+      const courseCode = assignment?.course_code ? String(assignment.course_code).trim() : '';
+      return {
+        title: String(assignment?.title || 'Untitled assignment').trim() || 'Untitled assignment',
+        courseCode,
+        courseName: courseNameByCode.get(courseCode) || courseCode || 'Course not set',
+        dueDate: assignment?.due_date,
+        daysLeft: getDaysUntilDate(assignment?.due_date)
+      };
+    });
+  } catch (error) {
+    console.error('Error loading home planner assignments:', error);
+    assignmentsDueSoon = [];
+  }
+
+  return {
+    isAuthenticated: true,
+    user,
+    year,
+    term: normalizedTerm,
+    selectedSemesterValue,
+    userCourses,
+    selectedCourseEntries: selectedForSemester,
+    emptySlots,
+    occupiedSlotsCount: slotMap.size,
+    conflicts,
+    creditsTotal,
+    courseCount: userCourses.length,
+    typeBreakdown,
+    assignmentsDueSoon,
+    savedCourses
+  };
+}
+
+async function getHomePlannerData({ force = false } = {}) {
+  const { year, term } = getCurrentHomeSemesterContext();
+  const key = `${year}-${term}`;
+  const isFresh = (Date.now() - homePlannerDataCache.updatedAt) < 9000;
+
+  if (!force && homePlannerDataCache.key === key && homePlannerDataCache.data && isFresh) {
+    return homePlannerDataCache.data;
+  }
+
+  if (!force && homePlannerDataCache.key === key && homePlannerDataCache.pending) {
+    return homePlannerDataCache.pending;
+  }
+
+  const pending = fetchHomePlannerData()
+    .then((data) => {
+      homePlannerDataCache = {
+        key,
+        updatedAt: Date.now(),
+        data,
+        pending: null
+      };
+      return data;
+    })
+    .catch((error) => {
+      homePlannerDataCache.pending = null;
+      throw error;
+    });
+
+  homePlannerDataCache.pending = pending;
+  homePlannerDataCache.key = key;
+  return pending;
+}
+
+const homeDesktopHeaderState = {
+  searchCourses: [],
+  initializedAtLeastOnce: false
+};
+
+async function populateHomeSemesterDropdown() {
+  const homeMain = document.getElementById('home-main');
+  if (!homeMain) return;
+
+  const semesterSelects = homeMain.querySelectorAll('.semester-select');
+  const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
+  if (!semesterSelects.length || !customSelects.length) return;
+
+  const semesters = await fetchAvailableSemesters();
+  if (!Array.isArray(semesters) || semesters.length === 0) return;
+
+  const semesterValues = semesters
+    .map((semester) => formatSemesterValue(semester.term, semester.year))
+    .filter(Boolean);
+
+  const preferredTerm = getPreferredTermValue();
+  const hiddenTerm = document.getElementById('term-select');
+  const hiddenYear = document.getElementById('year-select');
+  const hiddenSelection = formatSemesterValue(hiddenTerm?.value || '', hiddenYear?.value || '');
+  const selectedSemesterValue = (
+    (preferredTerm && semesterValues.includes(preferredTerm) && preferredTerm)
+    || (hiddenSelection && semesterValues.includes(hiddenSelection) && hiddenSelection)
+    || semesterValues[0]
+  );
+
+  const selectedSemester = semesters.find((semester) => (
+    formatSemesterValue(semester.term, semester.year) === selectedSemesterValue
+  )) || semesters[0];
+
+  semesterSelects.forEach((select) => {
+    select.innerHTML = '';
+    semesters.forEach((semester) => {
+      const value = formatSemesterValue(semester.term, semester.year);
+      if (!value) return;
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = semester.label || `${semester.term} ${semester.year}`;
+      if (value === selectedSemesterValue) option.selected = true;
+      select.appendChild(option);
+    });
+    select.value = selectedSemesterValue;
+  });
+
+  customSelects.forEach((customSelect) => {
+    const optionsContainer = customSelect.querySelector('.custom-select-options');
+    const valueElement = customSelect.querySelector('.custom-select-value');
+    if (!optionsContainer || !valueElement) return;
+
+    optionsContainer.innerHTML = '';
+    semesters.forEach((semester) => {
+      const value = formatSemesterValue(semester.term, semester.year);
+      if (!value) return;
+      const option = document.createElement('div');
+      option.className = `custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
+      option.dataset.value = value;
+      option.textContent = semester.label || `${semester.term} ${semester.year}`;
+      optionsContainer.appendChild(option);
+    });
+
+    valueElement.textContent = selectedSemester?.label || `${selectedSemester?.term || ''} ${selectedSemester?.year || ''}`.trim();
+  });
+
+  if (selectedSemesterValue) {
+    setPreferredTermValue(selectedSemesterValue);
+    applyPreferredTermToGlobals(selectedSemesterValue);
+  }
+
+  const hiddenTermInput = document.getElementById('term-select');
+  const hiddenYearInput = document.getElementById('year-select');
+  if (selectedSemester?.term && hiddenTermInput) hiddenTermInput.value = normalizeTermName(selectedSemester.term);
+  if (selectedSemester?.year && hiddenYearInput) hiddenYearInput.value = String(selectedSemester.year);
+}
+
+function applyHomeSemesterSelection(value, { dispatchChange = true } = {}) {
+  const parsed = parseSemesterValue(value);
+  if (!parsed.value || !parsed.term || !parsed.year) return;
+
+  const homeMain = document.getElementById('home-main');
+  if (!homeMain) return;
+
+  const semesterSelects = homeMain.querySelectorAll('.semester-select');
+  const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
+
+  semesterSelects.forEach((select) => {
+    select.value = parsed.value;
+  });
+
+  customSelects.forEach((customSelect) => {
+    const valueElement = customSelect.querySelector('.custom-select-value');
+    customSelect.querySelectorAll('.custom-select-option').forEach((option) => {
+      const selected = option.dataset.value === parsed.value;
+      option.classList.toggle('selected', selected);
+      if (selected && valueElement) {
+        valueElement.textContent = option.textContent;
+      }
+    });
+  });
+
+  const termInput = document.getElementById('term-select');
+  const yearInput = document.getElementById('year-select');
+  if (termInput) termInput.value = parsed.term;
+  if (yearInput) yearInput.value = String(parsed.year);
+
+  setPreferredTermValue(parsed.value);
+  applyPreferredTermToGlobals(parsed.value);
+  homeDesktopHeaderState.initializedAtLeastOnce = true;
+  invalidateHomePlannerDataCache();
+
+  if (dispatchChange) {
+    yearInput?.dispatchEvent(new Event('change', { bubbles: true }));
+    termInput?.dispatchEvent(new Event('change', { bubbles: true }));
+    document.dispatchEvent(new CustomEvent('homeSemesterChanged', {
+      detail: {
+        term: parsed.term,
+        year: parsed.year
+      }
+    }));
+  }
+}
+
+function initializeHomeCustomSelects() {
+  const homeMain = document.getElementById('home-main');
+  if (!homeMain) return;
+
+  const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
+  customSelects.forEach((customSelect) => {
+    const trigger = customSelect.querySelector('.custom-select-trigger');
+    const optionsContainer = customSelect.querySelector('.custom-select-options');
+    const targetId = customSelect.dataset.target;
+    const targetSelect = document.getElementById(targetId);
+    if (!trigger || !optionsContainer || !targetSelect) return;
+    if (customSelect.dataset.initialized === 'true') return;
+    customSelect.dataset.initialized = 'true';
+
+    trigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      homeMain.querySelectorAll('.custom-select').forEach((other) => {
+        if (other !== customSelect) other.classList.remove('open');
+      });
+      customSelect.classList.toggle('open');
+    });
+
+    optionsContainer.addEventListener('click', (event) => {
+      const option = event.target.closest('.custom-select-option');
+      if (!option) return;
+      const value = option.dataset.value;
+      if (!value) return;
+      targetSelect.value = value;
+      targetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      customSelect.classList.remove('open');
+    });
+  });
+
+  if (!document.body.dataset.homeCustomSelectOutsideBound) {
+    document.addEventListener('click', (event) => {
+      const activeHomeMain = document.getElementById('home-main');
+      if (!activeHomeMain) return;
+      if (!event.target.closest('#home-main .custom-select')) {
+        activeHomeMain.querySelectorAll('.custom-select').forEach((customSelect) => customSelect.classList.remove('open'));
+      }
+    });
+    document.body.dataset.homeCustomSelectOutsideBound = 'true';
+  }
+}
+
+function setupHomeSemesterSync() {
+  const homeMain = document.getElementById('home-main');
+  if (!homeMain) return;
+
+  const semesterSelects = homeMain.querySelectorAll('.semester-select');
+  semesterSelects.forEach((select) => {
+    if (select.dataset.listenerAttached === 'true') return;
+    select.dataset.listenerAttached = 'true';
+    select.addEventListener('change', async () => {
+      applyHomeSemesterSelection(select.value);
+      await loadHomeSearchCourses();
+      refreshHomeSearchAutocomplete();
+    });
+  });
+}
+
+function getSelectedHomeSemester() {
+  const semesterSelect = document.getElementById('semester-select');
+  if (!semesterSelect?.value) return null;
+  const parsed = parseSemesterValue(semesterSelect.value);
+  if (!parsed.term || !parsed.year) return null;
+  return parsed;
+}
+
+async function loadHomeSearchCourses() {
+  const selected = getSelectedHomeSemester();
+  if (!selected) {
+    homeDesktopHeaderState.searchCourses = [];
+    return [];
+  }
+
+  try {
+    const courses = await fetchCourseData(selected.year, selected.term);
+    homeDesktopHeaderState.searchCourses = Array.isArray(courses) ? courses : [];
+  } catch (error) {
+    console.error('Error loading home desktop search courses:', error);
+    homeDesktopHeaderState.searchCourses = [];
+  }
+
+  return homeDesktopHeaderState.searchCourses;
+}
+
+function renderHomeSearchAutocomplete(query, input, autocompleteContainer) {
+  const trimmed = String(query || '').trim();
+  if (trimmed.length < 2) {
+    autocompleteContainer.style.display = 'none';
+    autocompleteContainer.innerHTML = '';
+    return;
+  }
+
+  const normalizedQuery = trimmed.toLowerCase();
+  const suggestions = (homeDesktopHeaderState.searchCourses || [])
+    .filter((course) => {
+      const title = String(course?.title || '').toLowerCase();
+      const professor = String(course?.professor || '').toLowerCase();
+      const code = String(course?.course_code || '').toLowerCase();
+      return title.includes(normalizedQuery) || professor.includes(normalizedQuery) || code.includes(normalizedQuery);
+    })
+    .slice(0, 6);
+
+  if (!suggestions.length) {
+    autocompleteContainer.style.display = 'none';
+    autocompleteContainer.innerHTML = '';
+    return;
+  }
+
+  autocompleteContainer.innerHTML = suggestions.map((course) => {
+    const title = escapeHtml(course?.title || '');
+    const professor = escapeHtml(course?.professor || '');
+    const code = escapeHtml(course?.course_code || '');
+    return `
+      <div class="search-autocomplete-item" data-course-code="${code}">
+        <div class="item-title">${title}</div>
+        <div class="item-details">
+          <span class="item-code">${code}</span>
+          <span class="item-professor">${professor}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  autocompleteContainer.style.display = 'block';
+
+  autocompleteContainer.querySelectorAll('.search-autocomplete-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const courseCode = item.dataset.courseCode;
+      const selectedCourse = (homeDesktopHeaderState.searchCourses || []).find((course) => String(course?.course_code || '') === String(courseCode || ''));
+      input.value = selectedCourse?.title || '';
+      autocompleteContainer.style.display = 'none';
+      autocompleteContainer.innerHTML = '';
+      if (selectedCourse) {
+        openCourseInfoMenu(selectedCourse);
+      }
+    });
+  });
+}
+
+function refreshHomeSearchAutocomplete() {
+  const input = document.getElementById('search-pill-input');
+  const autocomplete = document.getElementById('search-pill-autocomplete');
+  if (!input || !autocomplete) return;
+  renderHomeSearchAutocomplete(input.value, input, autocomplete);
+}
+
+function setupHomeSearchAutocomplete() {
+  const input = document.getElementById('search-pill-input');
+  const autocomplete = document.getElementById('search-pill-autocomplete');
+  if (!input || !autocomplete) return;
+  if (input.dataset.listenerAttached === 'true') return;
+  input.dataset.listenerAttached = 'true';
+
+  const rerender = () => renderHomeSearchAutocomplete(input.value, input, autocomplete);
+
+  input.addEventListener('input', rerender);
+  input.addEventListener('focus', async () => {
+    await loadHomeSearchCourses();
+    rerender();
+  });
+  input.addEventListener('click', async () => {
+    await loadHomeSearchCourses();
+    rerender();
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    const firstItem = autocomplete.querySelector('.search-autocomplete-item');
+    if (!firstItem) return;
+    event.preventDefault();
+    firstItem.click();
+  });
+
+  if (!document.body.dataset.homeSearchOutsideBound) {
+    document.addEventListener('click', (event) => {
+      if (!document.getElementById('home-main')) return;
+      if (!event.target.closest('#home-main .search-pill-container')) {
+        const container = document.getElementById('search-pill-autocomplete');
+        if (container) {
+          container.style.display = 'none';
+          container.innerHTML = '';
+        }
+      }
+    });
+    document.body.dataset.homeSearchOutsideBound = 'true';
+  }
+}
+
+async function initializeHomeDesktopHeader() {
+  const homeMain = document.getElementById('home-main');
+  const desktopHeader = homeMain?.querySelector('.home-container-above.container-above-desktop');
+  if (!homeMain || !desktopHeader) return;
+
+  try {
+    await populateHomeSemesterDropdown();
+    initializeHomeCustomSelects();
+    setupHomeSemesterSync();
+
+    if (!homeDesktopHeaderState.initializedAtLeastOnce) {
+      const selectedValue = document.getElementById('semester-select')?.value;
+      if (selectedValue) {
+        applyHomeSemesterSelection(selectedValue, { dispatchChange: true });
+      }
+    }
+
+    await loadHomeSearchCourses();
+    setupHomeSearchAutocomplete();
+  } catch (error) {
+    console.error('Error initializing home desktop header:', error);
+  }
+}
+
+const handleHomeDesktopHeaderSetup = () => {
+  setTimeout(() => {
+    initializeHomeDesktopHeader();
+  }, 30);
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', handleHomeDesktopHeaderSetup, { once: true });
+} else {
+  handleHomeDesktopHeaderSetup();
+}
+
+document.addEventListener('pageLoaded', handleHomeDesktopHeaderSetup);
+
 // Initialize session state - will be updated by components as needed
 window.globalSession = null;
 window.globalUser = null;
@@ -68,7 +930,7 @@ const termSelect = document.getElementById("term-select");
 // Keep for backward compatibility, but components should fetch fresh sessions
 const user = window.globalUser;
 
-const MOBILE_BREAKPOINT = 780;
+const MOBILE_BREAKPOINT = 1023;
 const KEYBOARD_HEIGHT_THRESHOLD = 120;
 
 function isEditableElement(element) {
@@ -88,7 +950,7 @@ function updateMobileNavSafeHeight() {
 
   const navHeight = Math.ceil(nav.getBoundingClientRect().height || 0);
   if (navHeight > 0) {
-    root.style.setProperty('--mobile-nav-safe-height', `${navHeight + 8}px`);
+    root.style.setProperty('--mobile-nav-safe-height', `${navHeight + 0}px`);
   }
 }
 
@@ -174,24 +1036,9 @@ class AppNavigation extends HTMLElement {
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Assignments</span>
                     </button></li>
-                    <div class="profile-menu-container">
                     <li><button class="nav-btn" id="profile" data-route="/profile">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Profile</span>
-                    </button></li>
-                      <div class="profile-dropdown-menu">
-                        <a href="#view-profile">View Profile</a>
-                        <a href="#settings">Settings</a>
-                        <a href="#logout">Logout</a>
-                      </div>
-                    </div>
-                    <li class="settings-nav-item"><button class="nav-btn" id="settings" data-route="/settings">
-                        <span class="nav-icon"></span>
-                        <span class="navigation-text">Settings</span>
-                    </button></li>
-                    <li class="help-nav-item"><button class="nav-btn" id="help" data-route="/help">
-                        <span class="nav-icon"></span>
-                        <span class="navigation-text">Help</span>
                     </button></li>
                 </ul>
             </nav>
@@ -200,62 +1047,6 @@ class AppNavigation extends HTMLElement {
 
   connectedCallback() {
     updateMobileNavSafeHeight();
-
-    // Add event listener for logout link
-    const logoutLink = this.querySelector('a[href="#logout"]');
-    if (logoutLink) {
-      logoutLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.handleLogout();
-      });
-    }
-  }
-
-  async handleLogout() {
-    try {
-      // Show loading state on the logout link
-      const logoutLink = this.querySelector('a[href="#logout"]');
-      if (logoutLink) {
-        logoutLink.textContent = 'Logging out...';
-        logoutLink.style.pointerEvents = 'none';
-      }
-
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        console.error('Error during logout:', error);
-        alert('Error during logout. Please try again.');
-
-        // Reset logout link state
-        if (logoutLink) {
-          logoutLink.textContent = 'Logout';
-          logoutLink.style.pointerEvents = 'auto';
-        }
-        return;
-      }
-
-      // Clear any local storage if needed
-      localStorage.removeItem('token');
-
-      // Update global session variables
-      window.globalSession = null;
-      window.globalUser = null;
-
-      // Redirect to login page
-      window.location.href = withBase('/login');
-
-    } catch (error) {
-      console.error('Unexpected error during logout:', error);
-      alert('An unexpected error occurred during logout.');
-
-      // Reset logout link state
-      const logoutLink = this.querySelector('a[href="#logout"]');
-      if (logoutLink) {
-        logoutLink.textContent = 'Logout';
-        logoutLink.style.pointerEvents = 'auto';
-      }
-    }
   }
 }
 
@@ -902,6 +1693,25 @@ class CourseCalendar extends HTMLElement {
     this.retryCount = 0;
     this.maxRetries = 5;
     this.renderRequestId = 0;
+    this.tooltipElement = null;
+    this.activeTooltipCell = null;
+    this.handleCalendarClickBound = this.handleCalendarClick.bind(this);
+    this.handleCalendarPointerOverBound = this.handleCalendarPointerOver.bind(this);
+    this.handleCalendarPointerMoveBound = this.handleCalendarPointerMove.bind(this);
+    this.handleCalendarPointerLeaveBound = this.handleCalendarPointerLeave.bind(this);
+    this.handleCalendarPageLoaded = () => {
+      setTimeout(() => this.initializeCalendar(), 100);
+    };
+    this.handleCalendarSelectionChange = (event) => {
+      if (!event || isSemesterSelectionTarget(event.target)) {
+        this.refreshFromSelectors();
+      }
+    };
+    this.handleCalendarResize = () => {
+      if (window.innerWidth < HOME_DESKTOP_BREAKPOINT) {
+        this.hideTooltip();
+      }
+    };
 
     this.innerHTML = `
       <div class="calendar-container-main">
@@ -971,8 +1781,10 @@ class CourseCalendar extends HTMLElement {
       Fri: 'calendar-friday'
     };
 
-    // Setup click handler
-    this.calendar.addEventListener("click", this.handleCalendarClick.bind(this));
+    this.calendar.addEventListener("click", this.handleCalendarClickBound);
+    this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
   }
 
   connectedCallback() {
@@ -984,35 +1796,26 @@ class CourseCalendar extends HTMLElement {
     // Set up refresh on router navigation only once
     if (!this.pageLoadedListenerAdded) {
       this.pageLoadedListenerAdded = true;
-      document.addEventListener('pageLoaded', () => {
-        setTimeout(() => this.initializeCalendar(), 100);
-      });
-
-      // Listen for year/term selector changes
-      const yearSelect = document.getElementById('year-select');
-      const termSelect = document.getElementById('term-select');
-
-      if (yearSelect) {
-        yearSelect.addEventListener('change', () => {
-          this.refreshFromSelectors();
-        });
-      }
-
-      if (termSelect) {
-        termSelect.addEventListener('change', () => {
-          this.refreshFromSelectors();
-        });
-      }
+      document.addEventListener('pageLoaded', this.handleCalendarPageLoaded);
+      document.addEventListener('change', this.handleCalendarSelectionChange);
+      document.addEventListener('homeSemesterChanged', this.handleCalendarSelectionChange);
+      window.addEventListener('resize', this.handleCalendarResize);
     }
   }
 
   disconnectedCallback() {
-    // Clean up event listeners if needed
+    document.removeEventListener('pageLoaded', this.handleCalendarPageLoaded);
+    document.removeEventListener('change', this.handleCalendarSelectionChange);
+    document.removeEventListener('homeSemesterChanged', this.handleCalendarSelectionChange);
+    window.removeEventListener('resize', this.handleCalendarResize);
+    this.hideTooltip();
+    this.pageLoadedListenerAdded = false;
   }
 
   refreshFromSelectors() {
     const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+    invalidateHomePlannerDataCache();
     console.log('Mini calendar: Refreshing from selectors:', year, term);
     this.showCourseWithRetry(year, term);
   }
@@ -1120,14 +1923,64 @@ class CourseCalendar extends HTMLElement {
     });
   }
 
+  populateEmptyPlaceholders() {
+    const rows = this.calendar.querySelectorAll('tbody tr');
+    rows.forEach((row, rowIndex) => {
+      const period = rowIndex + 1;
+      const cells = row.querySelectorAll('td:not(:first-child)');
+      cells.forEach((cell, colIndex) => {
+        if (cell.querySelector('.course-cell-main')) return;
+        const day = HOME_DAY_ORDER[colIndex];
+        const emptyDiv = document.createElement('div');
+        emptyDiv.classList.add('course-cell-main', 'course-cell-empty');
+        emptyDiv.dataset.emptySlot = 'true';
+        emptyDiv.dataset.day = day;
+        emptyDiv.dataset.period = String(period);
+        emptyDiv.dataset.slotLabel = formatSlotLabel(day, period);
+        emptyDiv.dataset.timeLabel = formatPeriodWindow(period);
+        emptyDiv.setAttribute('aria-label', `${formatSlotLabel(day, period)} empty slot`);
+        cell.appendChild(emptyDiv);
+      });
+    });
+  }
+
   showEmptyCalendar() {
     this.clearCourseCells();
-    this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
-      const emptyDiv = document.createElement('div');
+    this.populateEmptyPlaceholders();
+    this.renderLegendFromCourses([]);
+    this.hideTooltip();
+  }
 
-      emptyDiv.classList.add('course-cell-main');
-      cell.appendChild(emptyDiv);
+  getLegendContainer() {
+    const calendarContainer = this.closest('#calendar-container');
+    return calendarContainer?.querySelector('.home-calendar-legend') || document.querySelector('#home-main .home-calendar-legend');
+  }
+
+  renderLegendFromCourses(courses) {
+    const legendContainer = this.getLegendContainer();
+    if (!legendContainer) return;
+
+    const typeColorMap = new Map();
+    (Array.isArray(courses) ? courses : []).forEach((course) => {
+      const typeLabel = String(course?.type || 'General').trim() || 'General';
+      if (typeColorMap.has(typeLabel)) return;
+      typeColorMap.set(typeLabel, getCourseColorByType(typeLabel));
     });
+
+    const legendEntries = Array.from(typeColorMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]));
+
+    if (!legendEntries.length) {
+      legendContainer.innerHTML = '<span class="home-calendar-legend-empty">No registered courses yet</span>';
+      return;
+    }
+
+    legendContainer.innerHTML = legendEntries.map(([typeLabel, color]) => `
+      <span class="home-calendar-legend-item">
+        <span class="home-calendar-legend-dot" style="background:${color};"></span>
+        <span>${escapeHtml(typeLabel)}</span>
+      </span>
+    `).join('');
   }
 
   highlightDay(dayShort) {
@@ -1244,6 +2097,8 @@ class CourseCalendar extends HTMLElement {
         )
       );
 
+      this.renderLegendFromCourses(coursesToShow);
+
       console.log('Mini calendar: Courses to show:', coursesToShow.length);
       console.log('Mini calendar: Course details:', coursesToShow.map(c => ({ code: c.course_code, time: c.time_slot })));
 
@@ -1322,8 +2177,27 @@ class CourseCalendar extends HTMLElement {
         //  div_classroom.classList.add("empty-classroom");
         //  div_title.classList.add("empty-classroom-title");
         //}
+        const title = normalizeCourseTitle(course.title || course.course_code || 'Course');
+        const creditsValue = parseCreditsValue(course.credits);
+        const creditsLabel = creditsValue > 0
+          ? `${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`
+          : '';
+        const typeLabel = String(course.type || 'General').trim() || 'General';
+
         div_box.style.backgroundColor = getCourseColorByType(course.type);
         div.dataset.courseIdentifier = course.course_code;
+        div.dataset.courseCode = String(course.course_code || '');
+        div.dataset.courseTitle = title;
+        div.dataset.courseType = typeLabel;
+        div.dataset.day = dayEN;
+        div.dataset.period = String(period);
+        div.dataset.slotLabel = formatSlotLabel(dayEN, period);
+        div.dataset.timeLabel = formatPeriodWindow(period) || String(course.time_slot || '');
+        div.dataset.creditsLabel = creditsLabel;
+        div.setAttribute(
+          'aria-label',
+          `${title} ${formatSlotLabel(dayEN, period)} ${div.dataset.timeLabel}`.trim()
+        );
         cell.appendChild(div);
         div.appendChild(div_box);
         div.appendChild(div_title);
@@ -1332,28 +2206,124 @@ class CourseCalendar extends HTMLElement {
 
       // Fill remaining empty cells with placeholders
       if (this.isRenderRequestStale(requestId)) return;
-      this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
-        if (!cell.querySelector('.course-cell-main')) {
-          const emptyDiv = document.createElement('div');
-          emptyDiv.classList.add('course-cell-main');
-          cell.appendChild(emptyDiv);
-        }
-      });
+      this.populateEmptyPlaceholders();
+      this.hideTooltip();
     } catch (error) {
       console.error('An unexpected error occurred while showing courses:', error);
       throw error; // Re-throw to trigger retry mechanism
     }
   }
 
+  isDesktopPlannerMode() {
+    return window.innerWidth >= HOME_DESKTOP_BREAKPOINT;
+  }
+
+  ensureTooltipElement() {
+    if (this.tooltipElement && document.body.contains(this.tooltipElement)) {
+      return this.tooltipElement;
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'home-calendar-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tooltip);
+    this.tooltipElement = tooltip;
+    return tooltip;
+  }
+
+  positionTooltip(clientX, clientY) {
+    const tooltip = this.tooltipElement;
+    if (!tooltip) return;
+
+    const offset = 14;
+    const maxX = window.innerWidth - tooltip.offsetWidth - 8;
+    const maxY = window.innerHeight - tooltip.offsetHeight - 8;
+    const left = Math.max(8, Math.min(clientX + offset, maxX));
+    const top = Math.max(8, Math.min(clientY + offset, maxY));
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  showTooltipForCell(cell, event) {
+    if (!this.isDesktopPlannerMode()) return;
+    const tooltip = this.ensureTooltipElement();
+    if (!tooltip) return;
+
+    const isEmpty = cell.dataset.emptySlot === 'true';
+    const slotLabel = cell.dataset.slotLabel || '';
+    const timeLabel = cell.dataset.timeLabel || '';
+    let title = '';
+    let subtitle = '';
+    let detail = '';
+
+    if (isEmpty) {
+      title = 'Empty slot';
+      subtitle = [slotLabel, timeLabel].filter(Boolean).join(' • ');
+      detail = 'Click to find matching courses';
+    } else if (cell.dataset.courseIdentifier) {
+      title = cell.dataset.courseTitle || cell.dataset.courseCode || 'Course';
+      subtitle = [slotLabel, timeLabel].filter(Boolean).join(' • ');
+      const detailParts = [];
+      if (cell.dataset.creditsLabel) detailParts.push(cell.dataset.creditsLabel);
+      if (cell.dataset.courseType) detailParts.push(cell.dataset.courseType);
+      detail = detailParts.join(' • ');
+    } else {
+      this.hideTooltip();
+      return;
+    }
+
+    tooltip.innerHTML = `
+      <div class="home-calendar-tooltip-title">${escapeHtml(title)}</div>
+      <div class="home-calendar-tooltip-subtitle">${escapeHtml(subtitle)}</div>
+      ${detail ? `<div class="home-calendar-tooltip-detail">${escapeHtml(detail)}</div>` : ''}
+    `;
+    tooltip.classList.add('is-visible');
+    this.positionTooltip(event.clientX, event.clientY);
+  }
+
+  hideTooltip() {
+    if (!this.tooltipElement) return;
+    this.tooltipElement.classList.remove('is-visible');
+  }
+
+  handleCalendarPointerOver(event) {
+    if (!this.isDesktopPlannerMode()) return;
+    const cell = event.target.closest('.course-cell-main');
+    if (!cell || !this.calendar.contains(cell)) return;
+    this.activeTooltipCell = cell;
+    this.showTooltipForCell(cell, event);
+  }
+
+  handleCalendarPointerMove(event) {
+    if (!this.isDesktopPlannerMode() || !this.activeTooltipCell) return;
+    this.positionTooltip(event.clientX, event.clientY);
+  }
+
+  handleCalendarPointerLeave() {
+    this.activeTooltipCell = null;
+    this.hideTooltip();
+  }
+
   async handleCalendarClick(event) {
     const clickedCell = event.target.closest("div.course-cell-main");
     if (!clickedCell) return;
+
+    if (clickedCell.dataset.emptySlot === 'true') {
+      if (!this.isDesktopPlannerMode()) return;
+      const day = clickedCell.dataset.day;
+      const period = Number(clickedCell.dataset.period);
+      if (day && period && this.displayedYear && this.displayedTerm) {
+        navigateToSlotCourseSearch(day, period, this.displayedTerm, this.displayedYear);
+      }
+      return;
+    }
+
     const courseCode = clickedCell.dataset.courseIdentifier;
     if (!this.displayedYear || !this.displayedTerm || !courseCode) return;
 
     try {
       const courses = await fetchCourseData(this.displayedYear, this.displayedTerm);
-      const clickedCourse = courses.find(c => c.course_code === courseCode);
+      const clickedCourse = courses.find((course) => course.course_code === courseCode);
       if (clickedCourse) openCourseInfoMenu(clickedCourse);
     } catch (error) {
       console.error('Error handling calendar click:', error);
@@ -1392,55 +2362,34 @@ class CourseCalendar extends HTMLElement {
 class LatestCoursesPreview extends HTMLElement {
   constructor() {
     super();
-    this.handlePageLoaded = () => {
-      setTimeout(() => this.refreshPreview(), 100);
-    };
-    this.handleCardClick = () => {
-      try {
-        sessionStorage.setItem('open_new_assignment_modal', '1');
-      } catch (error) {
-        console.warn('Unable to store assignment quick-action intent:', error);
-      }
+    this.handleActionClick = this.handleActionClick.bind(this);
+    this.handlePageLoaded = () => setTimeout(() => this.renderQuickActions(), 70);
+    this.renderQuickActions();
+  }
 
-      if (window.router?.navigate) {
-        window.router.navigate('/assignments');
-        return;
-      }
-      window.location.href = withBase('/assignments');
-    };
-    this.handleCardKeyDown = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        this.handleCardClick();
-      }
-    };
-
+  renderQuickActions() {
     this.innerHTML = `
-      <div class="home-courses-preview">
+      <div class="home-courses-preview home-quick-actions-panel">
         <div class="home-courses-preview-header">
-          <div>
-            <h2 class="home-courses-preview-title">Quick Action</h2>
-          </div>
-          <span class="home-courses-preview-link">Add Assignment</span>
+          <h2 class="home-courses-preview-title">Quick Actions</h2>
         </div>
-        <p class="home-courses-preview-note">Add a new assignment to your schedule.</p>
+        <div class="home-quick-actions-stack">
+          <button type="button" class="home-quick-action-btn" data-action="add-assignment">Add assignment</button>
+          <button type="button" class="home-quick-action-btn" data-action="browse-courses">Browse courses</button>
+          <button type="button" class="home-quick-action-btn" data-action="write-review">Write review</button>
+        </div>
       </div>
     `;
   }
 
   connectedCallback() {
-    this.refreshPreview();
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
 
     const card = this.querySelector('.home-courses-preview');
     if (card) {
-      card.setAttribute('role', 'button');
-      card.setAttribute('tabindex', '0');
-      card.removeEventListener('click', this.handleCardClick);
-      card.removeEventListener('keydown', this.handleCardKeyDown);
-      card.addEventListener('click', this.handleCardClick);
-      card.addEventListener('keydown', this.handleCardKeyDown);
+      card.removeEventListener('click', this.handleActionClick);
+      card.addEventListener('click', this.handleActionClick);
     }
   }
 
@@ -1448,65 +2397,39 @@ class LatestCoursesPreview extends HTMLElement {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     const card = this.querySelector('.home-courses-preview');
     if (card) {
-      card.removeEventListener('click', this.handleCardClick);
-      card.removeEventListener('keydown', this.handleCardKeyDown);
+      card.removeEventListener('click', this.handleActionClick);
     }
   }
 
-  updateYearTermContext(semester) {
-    if (!semester) return;
+  handleActionClick(event) {
+    const actionButton = event.target.closest('.home-quick-action-btn');
+    if (!actionButton) return;
+    const action = actionButton.dataset.action;
+    if (!action) return;
 
-    const termSelectEl = document.getElementById('term-select');
-    const yearSelectEl = document.getElementById('year-select');
-    if (termSelectEl) {
-      termSelectEl.value = semester.term;
-    }
-    if (yearSelectEl) {
-      yearSelectEl.value = semester.year;
-    }
-
-    window.globalCurrentYear = parseInt(semester.year, 10);
-    window.globalCurrentTerm = semester.term;
-  }
-
-  refreshWidgets() {
-    const nextAssignment = document.querySelector('total-courses');
-    if (nextAssignment?.updateTotalCourses) {
-      nextAssignment.updateTotalCourses();
+    if (action === 'add-assignment') {
+      try {
+        sessionStorage.setItem('open_new_assignment_modal', '1');
+      } catch (error) {
+        console.warn('Unable to store assignment quick-action intent:', error);
+      }
+      navigateToRoute('/assignments');
+      return;
     }
 
-    const nextClass = document.querySelector('term-box');
-    if (nextClass?.updateNextClass) {
-      nextClass.updateNextClass();
+    if (action === 'browse-courses') {
+      navigateToRoute('/courses');
+      return;
     }
 
-    const miniCalendar = document.querySelector('course-calendar');
-    if (miniCalendar?.refreshCalendar) {
-      miniCalendar.refreshCalendar();
-    }
-  }
-
-  async refreshPreview() {
-    const noteEl = this.querySelector('.home-courses-preview-note');
-    const quickActionText = 'Add a new assignment to your schedule.';
-
-    if (noteEl) noteEl.textContent = quickActionText;
-
-    try {
-      const semesters = await fetchAvailableSemesters();
-      const latestSemester = Array.isArray(semesters) && semesters.length > 0 ? semesters[0] : null;
-
-      if (!latestSemester) {
-        if (noteEl) noteEl.textContent = quickActionText;
+    if (action === 'write-review') {
+      const reviewCard = document.querySelector('#home-review-suggestion-container .home-review-suggestion');
+      const reviewContainer = document.getElementById('home-review-suggestion-container');
+      if (reviewCard && reviewContainer && reviewContainer.style.display !== 'none') {
+        reviewCard.click();
         return;
       }
-
-      this.updateYearTermContext(latestSemester);
-      if (noteEl) noteEl.textContent = quickActionText;
-      this.refreshWidgets();
-    } catch (error) {
-      console.error('Error loading latest courses preview:', error);
-      if (noteEl) noteEl.textContent = quickActionText;
+      navigateToRoute('/courses');
     }
   }
 }
@@ -1729,6 +2652,472 @@ class ReviewSuggestionWidget extends HTMLElement {
   }
 }
 
+class HomePlannerWidgetBase extends HTMLElement {
+  constructor() {
+    super();
+    this.latestData = null;
+    this.handlePlannerPageLoaded = () => {
+      setTimeout(() => this.refreshWidget(true), 100);
+    };
+    this.handlePlannerSelectionChange = (event) => {
+      if (!event || isSemesterSelectionTarget(event.target)) {
+        this.refreshWidget(true);
+      }
+    };
+  }
+
+  connectedCallback() {
+    this.refreshWidget();
+    document.removeEventListener('pageLoaded', this.handlePlannerPageLoaded);
+    document.addEventListener('pageLoaded', this.handlePlannerPageLoaded);
+    document.removeEventListener('change', this.handlePlannerSelectionChange);
+    document.addEventListener('change', this.handlePlannerSelectionChange);
+    document.removeEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
+    document.addEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePlannerPageLoaded);
+    document.removeEventListener('change', this.handlePlannerSelectionChange);
+    document.removeEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
+  }
+
+  async refreshWidget(force = false) {
+    if (!document.getElementById('home-main')) return;
+    try {
+      const data = await getHomePlannerData({ force });
+      this.latestData = data;
+      this.renderWidget(data);
+    } catch (error) {
+      console.error('Error refreshing home planner widget:', error);
+      this.renderWidgetError();
+    }
+  }
+
+  renderWidget(_data) { }
+
+  renderWidgetError() {
+    this.innerHTML = '<p class="home-planner-empty">Unable to load data.</p>';
+  }
+}
+
+class HomePlannerOverview extends HomePlannerWidgetBase {
+  constructor() {
+    super();
+    this.handleActionClick = this.handleActionClick.bind(this);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.removeEventListener('click', this.handleActionClick);
+    this.addEventListener('click', this.handleActionClick);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener('click', this.handleActionClick);
+  }
+
+  renderWidget(data) {
+    const credits = Number(data?.creditsTotal || 0);
+    const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
+    const slotCountLabel = `${data?.occupiedSlotsCount || 0}/25`;
+    const creditLimitLabel = `${HOME_SEMESTER_MIN_CREDITS}-${HOME_SEMESTER_MAX_CREDITS} / sem`;
+    const conflicts = Array.isArray(data?.conflicts) ? data.conflicts : [];
+    const conflictSectionMarkup = conflicts.length
+      ? `
+        <div class="home-planner-conflict-box">
+          <h4>Conflicts</h4>
+          <ul class="home-planner-conflict-list">
+            ${conflicts.slice(0, 2).map((conflict) => `
+              <li>${escapeHtml(conflict.label)} (${conflict.courses.length})</li>
+            `).join('')}
+          </ul>
+        </div>
+      `
+      : '';
+
+    this.innerHTML = `
+      <div class="home-planner-overview">
+        <h3 class="home-planner-section-title">Planner</h3>
+        <div class="home-planner-kpi-grid">
+          <div class="home-planner-kpi">
+            <span>Credits</span>
+            <strong>${creditsLabel}</strong>
+            <small class="home-planner-kpi-limit">${creditLimitLabel}</small>
+          </div>
+          <div class="home-planner-kpi">
+            <span>Courses</span>
+            <strong>${data?.courseCount || 0}</strong>
+          </div>
+          <div class="home-planner-kpi">
+            <span>Slots</span>
+            <strong>${slotCountLabel}</strong>
+          </div>
+        </div>
+        ${conflictSectionMarkup}
+        <div class="home-planner-actions">
+          <button type="button" class="home-planner-action-btn" data-action="add-course">Add course</button>
+          <button type="button" class="home-planner-action-btn" data-action="find-slots">Find courses for empty slots</button>
+        </div>
+      </div>
+    `;
+  }
+
+  handleActionClick(event) {
+    const actionElement = event.target.closest('[data-action]');
+    if (!actionElement) return;
+
+    const action = actionElement.dataset.action;
+    if (action === 'add-course') {
+      navigateToRoute('/courses');
+      return;
+    }
+
+    if (action === 'find-slots') {
+      const firstEmpty = this.latestData?.emptySlots?.[0];
+      if (firstEmpty && this.latestData?.year && this.latestData?.term) {
+        navigateToSlotCourseSearch(firstEmpty.day, firstEmpty.period, this.latestData.term, this.latestData.year);
+        return;
+      }
+      navigateToRoute('/courses');
+      return;
+    }
+
+  }
+}
+
+class HomeProgressRequirements extends HomePlannerWidgetBase {
+  renderWidget(data) {
+    if (!data?.isAuthenticated) {
+      this.innerHTML = `
+        <div class="home-progress-card-content">
+          <div class="home-progress-card-header">
+            <h2 class="home-progress-card-title">Progress</h2>
+          </div>
+          <p class="home-planner-empty">Sign in to track your planning progress.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const credits = Number(data?.creditsTotal || 0);
+    const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
+    const totalForBars = credits > 0 ? credits : Math.max(Number(data?.courseCount || 0), 1);
+    const breakdown = Array.isArray(data?.typeBreakdown) ? data.typeBreakdown.slice(0, 4) : [];
+
+    this.innerHTML = `
+      <div class="home-progress-card-content">
+        <div class="home-progress-card-header">
+          <h2 class="home-progress-card-title">Progress / Requirements</h2>
+          <span class="home-progress-meta">${data?.courseCount || 0} courses</span>
+        </div>
+        <div class="home-progress-stat-grid">
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Credits</span>
+            <strong class="home-progress-stat-value">${creditsLabel}</strong>
+          </div>
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Slots filled</span>
+            <strong class="home-progress-stat-value">${data?.occupiedSlotsCount || 0}/25</strong>
+          </div>
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Min / semester</span>
+            <strong class="home-progress-stat-value">${HOME_SEMESTER_MIN_CREDITS}</strong>
+          </div>
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Max / semester</span>
+            <strong class="home-progress-stat-value">${HOME_SEMESTER_MAX_CREDITS}</strong>
+          </div>
+        </div>
+        <div class="home-progress-breakdown">
+          ${breakdown.length ? breakdown.map((entry) => {
+      const amount = entry.credits > 0 ? entry.credits : entry.count;
+      const pct = Math.max(6, Math.min(100, Math.round((amount / totalForBars) * 100)));
+      const amountLabel = entry.credits > 0
+        ? `${entry.credits % 1 === 0 ? entry.credits.toFixed(0) : entry.credits.toFixed(1)} cr`
+        : `${entry.count} course${entry.count === 1 ? '' : 's'}`;
+      return `
+              <div class="home-progress-row">
+                <div class="home-progress-row-head">
+                  <span>${escapeHtml(entry.type)}</span>
+                  <span>${amountLabel}</span>
+                </div>
+                <div class="home-progress-bar"><span style="width:${pct}%"></span></div>
+              </div>
+            `;
+    }).join('') : '<p class="home-planner-empty">Requirements breakdown coming soon.</p>'}
+        </div>
+      </div>
+    `;
+  }
+}
+
+class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
+  constructor() {
+    super();
+    this.handleSlotClick = this.handleSlotClick.bind(this);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.removeEventListener('click', this.handleSlotClick);
+    this.addEventListener('click', this.handleSlotClick);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener('click', this.handleSlotClick);
+  }
+
+  renderWidget(data) {
+    const slots = Array.isArray(data?.emptySlots) ? data.emptySlots.slice(0, 6) : [];
+
+    if (!slots.length) {
+      this.innerHTML = `
+        <div class="home-planner-module">
+          <div class="home-planner-module-header">
+            <h2 class="home-planner-module-title">Empty slots</h2>
+          </div>
+          <p class="home-planner-empty success">Your week is fully planned.</p>
+          <button type="button" class="home-module-link-btn" data-action="browse-courses">Browse courses anyway</button>
+        </div>
+      `;
+      return;
+    }
+
+    this.innerHTML = `
+      <div class="home-planner-module">
+        <div class="home-planner-module-header">
+          <h2 class="home-planner-module-title">Empty slots</h2>
+        </div>
+        <ul class="home-planner-list">
+          ${slots.map((slot) => `
+            <li class="home-planner-list-item">
+              <span>${escapeHtml(slot.label)} - Empty</span>
+              <button type="button" class="home-module-link-btn" data-action="slot-search" data-day="${slot.day}" data-period="${slot.period}">
+                Find courses
+              </button>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  handleSlotClick(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const action = actionButton.dataset.action;
+    if (action === 'browse-courses') {
+      navigateToRoute('/courses');
+      return;
+    }
+
+    if (action !== 'slot-search') return;
+    const day = actionButton.dataset.day;
+    const period = Number(actionButton.dataset.period);
+    if (!day || !period || !this.latestData?.term || !this.latestData?.year) {
+      navigateToRoute('/courses');
+      return;
+    }
+
+    navigateToSlotCourseSearch(day, period, this.latestData.term, this.latestData.year);
+  }
+}
+
+class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
+  constructor() {
+    super();
+    this.handleSavedAction = this.handleSavedAction.bind(this);
+    this.savedEntries = [];
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.removeEventListener('click', this.handleSavedAction);
+    this.addEventListener('click', this.handleSavedAction);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener('click', this.handleSavedAction);
+  }
+
+  renderWidget(data) {
+    this.savedEntries = Array.isArray(data?.savedCourses) ? data.savedCourses.slice(0, 5) : [];
+
+    if (!this.savedEntries.length) {
+      this.innerHTML = `
+        <div class="home-planner-module">
+          <div class="home-planner-module-header">
+            <h2 class="home-planner-module-title">Saved for later</h2>
+          </div>
+          <p class="home-planner-empty">Save courses to add later.</p>
+          <button type="button" class="home-module-link-btn" data-action="browse-courses">Browse courses</button>
+        </div>
+      `;
+      return;
+    }
+
+    this.innerHTML = `
+      <div class="home-planner-module">
+        <div class="home-planner-module-header">
+          <h2 class="home-planner-module-title">Saved for later</h2>
+        </div>
+        <ul class="home-planner-list">
+          ${this.savedEntries.map((course, index) => `
+            <li class="home-planner-list-item">
+              <span>
+                <strong>${escapeHtml(course.title)}</strong>
+                ${course.day && course.period ? `<small>${escapeHtml(formatSlotLabel(course.day, course.period))}</small>` : ''}
+              </span>
+              <button type="button" class="home-module-link-btn" data-action="add-saved" data-index="${index}">Add</button>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  async handleSavedAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+    const action = actionButton.dataset.action;
+    if (action === 'browse-courses') {
+      navigateToRoute('/courses');
+      return;
+    }
+
+    if (action !== 'add-saved') return;
+    const index = Number(actionButton.dataset.index);
+    const savedCourse = this.savedEntries[index];
+    if (!savedCourse) return;
+
+    if (!this.latestData?.isAuthenticated) {
+      if (typeof window.requireAuth === 'function') {
+        window.requireAuth('save-plan', () => navigateToRoute('/courses'));
+      } else {
+        navigateToRoute('/register');
+      }
+      return;
+    }
+
+    if (savedCourse.code && savedCourse.year && savedCourse.term) {
+      try {
+        const semesterCourses = await fetchCourseData(savedCourse.year, savedCourse.term);
+        const selectedCourse = (semesterCourses || []).find((course) => String(course?.course_code || '') === savedCourse.code);
+        if (selectedCourse) {
+          openCourseInfoMenu(selectedCourse);
+          return;
+        }
+      } catch (error) {
+        console.error('Unable to open saved course detail:', error);
+      }
+    }
+
+    if (savedCourse.day && savedCourse.period && this.latestData?.term && this.latestData?.year) {
+      navigateToSlotCourseSearch(savedCourse.day, savedCourse.period, this.latestData.term, this.latestData.year);
+      return;
+    }
+
+    navigateToRoute('/courses');
+  }
+}
+
+class HomeDueSoonWidget extends HomePlannerWidgetBase {
+  constructor() {
+    super();
+    this.handleDueSoonClick = this.handleDueSoonClick.bind(this);
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.removeEventListener('click', this.handleDueSoonClick);
+    this.addEventListener('click', this.handleDueSoonClick);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener('click', this.handleDueSoonClick);
+  }
+
+  renderWidget(data) {
+    if (!data?.isAuthenticated) {
+      this.innerHTML = `
+        <div class="home-planner-module">
+          <div class="home-planner-module-header">
+            <h2 class="home-planner-module-title">Due soon</h2>
+          </div>
+          <p class="home-planner-empty">Sign in to see upcoming deadlines.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const dueSoonItems = Array.isArray(data?.assignmentsDueSoon) ? data.assignmentsDueSoon.slice(0, 3) : [];
+    if (!dueSoonItems.length) {
+      this.innerHTML = `
+        <div class="home-planner-module">
+          <div class="home-planner-module-header">
+            <h2 class="home-planner-module-title">Due soon</h2>
+          </div>
+          <p class="home-planner-empty">No deadlines in the next 7 days.</p>
+          <button type="button" class="home-module-link-btn" data-action="open-assignments">Open assignments</button>
+        </div>
+      `;
+      return;
+    }
+
+    this.innerHTML = `
+      <div class="home-planner-module">
+        <div class="home-planner-module-header">
+          <h2 class="home-planner-module-title">Due soon</h2>
+          <span class="home-module-badge">${data.assignmentsDueSoon.length}</span>
+        </div>
+        <ul class="home-planner-list">
+          ${dueSoonItems.map((assignment) => {
+      const daysLeft = assignment.daysLeft;
+      const deadlineText = daysLeft === 0
+        ? 'Due today'
+        : (daysLeft === 1 ? '1 day left' : `${daysLeft} days left`);
+      const dueDateLabel = formatDueDateLabel(assignment.dueDate) || 'Date not set';
+      const courseLabel = assignment.courseName || assignment.courseCode || 'Course not set';
+      return `
+              <li class="home-planner-list-item home-due-item">
+                <button type="button" class="home-due-item-btn" data-action="open-assignments">
+                  <strong>${escapeHtml(assignment.title)}</strong>
+                  <small class="home-due-item-meta">
+                    <span class="home-due-item-meta-value">${escapeHtml(dueDateLabel)}</span>
+                    <span class="home-due-item-meta-separator">•</span>
+                    <span class="home-due-item-meta-value home-due-item-meta-course">${escapeHtml(courseLabel)}</span>
+                    <span class="home-due-item-meta-separator">•</span>
+                    <span class="home-due-item-meta-value">${escapeHtml(deadlineText)}</span>
+                  </small>
+                </button>
+              </li>
+            `;
+    }).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  handleDueSoonClick(event) {
+    const actionElement = event.target.closest('[data-action]');
+    if (!actionElement) {
+      if (event.target.closest('.home-planner-module')) {
+        navigateToRoute('/assignments');
+      }
+      return;
+    }
+    if (actionElement.dataset.action === 'open-assignments') {
+      navigateToRoute('/assignments');
+    }
+  }
+}
+
 class WeeklyCalendar extends HTMLElement {
   constructor() {
     super();
@@ -1822,7 +3211,7 @@ class WeeklyCalendar extends HTMLElement {
   }
 
   checkMobile() {
-    window.isMobile = window.innerWidth <= 780;
+    window.isMobile = window.innerWidth <= 1023;
     if (window.isMobile) {
       this.generateMobileButtons();
     }
@@ -2098,6 +3487,11 @@ customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
 customElements.define('latest-courses-preview', LatestCoursesPreview);
 customElements.define('review-suggestion-widget', ReviewSuggestionWidget);
+customElements.define('home-planner-overview', HomePlannerOverview);
+customElements.define('home-progress-requirements', HomeProgressRequirements);
+customElements.define('home-empty-slots-widget', HomeEmptySlotsWidget);
+customElements.define('home-saved-courses-widget', HomeSavedCoursesWidget);
+customElements.define('home-due-soon-widget', HomeDueSoonWidget);
 customElements.define('weekly-calendar', WeeklyCalendar);
 
 window.refreshCalendar = () => {

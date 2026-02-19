@@ -1,5 +1,6 @@
 import { supabase } from "../supabase.js";
 import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType } from "./shared.js";
+import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from "./preferences.js";
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -735,15 +736,26 @@ class AssignmentsManager {
 
         if (semesterSelects.length === 0 || customSelects.length === 0) return;
 
+        const semesterValues = semesters.map((semester) => `${semester.term}-${semester.year}`);
+        const preferredTerm = getPreferredTermValue();
+        const selectedSemesterValue = preferredTerm && semesterValues.includes(preferredTerm)
+            ? preferredTerm
+            : (semesterValues[0] || null);
+        const selectedSemester = semesters.find((semester) => `${semester.term}-${semester.year}` === selectedSemesterValue) || semesters[0] || null;
+
         semesterSelects.forEach(select => {
             select.innerHTML = '';
-            semesters.forEach((semester, index) => {
+            semesters.forEach((semester) => {
                 const option = document.createElement('option');
                 option.value = `${semester.term}-${semester.year}`;
                 option.textContent = semester.label;
-                if (index === 0) option.selected = true;
+                if (option.value === selectedSemesterValue) option.selected = true;
                 select.appendChild(option);
             });
+
+            if (selectedSemesterValue) {
+                select.value = selectedSemesterValue;
+            }
         });
 
         customSelects.forEach(customSelect => {
@@ -753,18 +765,24 @@ class AssignmentsManager {
             if (!optionsContainer || !valueElement) return;
 
             optionsContainer.innerHTML = '';
-            semesters.forEach((semester, index) => {
+            semesters.forEach((semester) => {
+                const value = `${semester.term}-${semester.year}`;
                 const customOption = document.createElement('div');
-                customOption.className = `custom-select-option${index === 0 ? ' selected' : ''}`;
-                customOption.dataset.value = `${semester.term}-${semester.year}`;
+                customOption.className = `custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
+                customOption.dataset.value = value;
                 customOption.textContent = semester.label;
                 optionsContainer.appendChild(customOption);
             });
 
-            if (semesters.length > 0) {
-                valueElement.textContent = semesters[0].label;
+            if (selectedSemester) {
+                valueElement.textContent = selectedSemester.label;
             }
         });
+
+        if (selectedSemesterValue) {
+            setPreferredTermValue(selectedSemesterValue);
+            applyPreferredTermToGlobals(selectedSemesterValue);
+        }
 
         this.setupSemesterSync();
     }
@@ -776,6 +794,12 @@ class AssignmentsManager {
             select.dataset.listenerAttached = 'true';
             select.addEventListener('change', async () => {
                 const value = select.value;
+                const normalizedSelection = normalizeTermValue(value);
+                if (normalizedSelection) {
+                    setPreferredTermValue(normalizedSelection);
+                    applyPreferredTermToGlobals(normalizedSelection);
+                }
+
                 semesterSelects.forEach(other => {
                     if (other.value !== value) other.value = value;
                 });
@@ -1035,7 +1059,7 @@ class AssignmentsManager {
         if (!searchContainer || !searchModal || searchButtons.length === 0) return;
 
         const closeSearch = (immediate = false) => {
-            if (window.innerWidth <= 780) {
+            if (window.innerWidth <= 1023) {
                 searchModal.classList.remove('show');
                 if (immediate) {
                     searchContainer.classList.add('hidden');
@@ -1055,7 +1079,7 @@ class AssignmentsManager {
         const openSearch = () => {
             searchContainer.classList.remove('hidden');
 
-            if (window.innerWidth <= 780) {
+            if (window.innerWidth <= 1023) {
                 searchModal.classList.add('show');
                 document.body.classList.add('modal-open');
 

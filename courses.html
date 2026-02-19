@@ -25,12 +25,12 @@
     <div class="app-header">
         <div class="app-logo"></div>
         <div class="app-misc">
-            <button id="help-mobile"></button>
-            <button id="settings-mobile"></button>
+            <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
     <div id="app-content">
+        <div class="page-courses">
 
         <div class="filter-container hidden">
             <div class="filter-background">
@@ -174,7 +174,7 @@
                     <div id="filter-year-term">
                         <div class="filter-year-term-container">
                             <div class="custom-select" data-target="semester-select">
-                                <div class="custom-select-trigger" tabindex="0">
+                                <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
                                     <span class="custom-select-value">Loading...</span>
                                     <div class="custom-select-arrow"></div>
                                 </div>
@@ -200,7 +200,7 @@
                         <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
                     </div>
                     <!-- Mobile search button (hidden on desktop) -->
-                    <button class="search-btn">
+                    <button class="search-btn control-surface control-surface--secondary">
                         <div></div>
                     </button>
                     <div class="sort-wrapper">
@@ -214,7 +214,7 @@
                             <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                         </div>
                     </div>
-                    <button class="filter-btn">
+                    <button class="filter-btn control-surface control-surface--secondary">
                         <div></div>
                     </button>
                 </div>
@@ -227,7 +227,7 @@
                     <div id="filter-year-term-mobile">
                         <div class="filter-year-term-container">
                             <div class="custom-select" data-target="semester-select-mobile">
-                                <div class="custom-select-trigger" tabindex="0">
+                                <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
                                     <span class="custom-select-value">Loading...</span>
                                     <div class="custom-select-arrow"></div>
                                 </div>
@@ -244,7 +244,7 @@
                     <h3 class="course-main-paragraph course-filter-paragraph"></h3>
                 </div>
                 <div class="buttons-box">
-                    <button class="search-btn">
+                    <button class="search-btn control-surface control-surface--secondary">
                         <div></div>
                     </button>
                     <div class="sort-wrapper">
@@ -258,7 +258,7 @@
                             <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                         </div>
                     </div>
-                    <button class="filter-btn">
+                    <button class="filter-btn control-surface control-surface--secondary">
                         <div></div>
                     </button>
                 </div>
@@ -271,113 +271,119 @@
                     <input type="hidden" id="term-select" value="Fall">
                     <input type="hidden" id="year-select" value="">
                     <div id="course-list" class="loading">
-                        <!-- Initial skeleton placeholders - will be replaced when courses load -->
+                        <!-- Initial skeleton placeholders - replaced when courses load -->
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-layout-probe" aria-hidden="true">
+                                    <p class="skeleton-probe-code">12001103-003</p>
+                                    <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
+                                    <div class="skeleton-probe-meta-row">
+                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <span class="skeleton-probe-type">Foundation</span>
+                                    </div>
+                                    <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
+                                    <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
+                                    <div class="skeleton-probe-chip-row">
+                                        <span class="skeleton-probe-chip">2 Credits</span>
+                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                    </div>
+                                </div>
+                                <div class="skeleton-code-line"></div>
+                                <div class="skeleton-title-stack">
+                                    <div class="skeleton-title-line"></div>
+                                    <div class="skeleton-title-line short"></div>
+                                </div>
+                                <div class="skeleton-meta-row">
+                                    <div class="skeleton-section-line"></div>
+                                    <div class="skeleton-type-chip"></div>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line"></span>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line medium"></span>
+                                </div>
+                                <div class="skeleton-chip-row">
+                                    <div class="skeleton-chip"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                            </div>
-                        </div>
-                        <div class="skeleton-class-outside">
-                            <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                            </div>
-                        </div>
-                        <div class="skeleton-class-outside">
-                            <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-layout-probe" aria-hidden="true">
+                                    <p class="skeleton-probe-code">12001103-003</p>
+                                    <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
+                                    <div class="skeleton-probe-meta-row">
+                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <span class="skeleton-probe-type">Foundation</span>
+                                    </div>
+                                    <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
+                                    <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
+                                    <div class="skeleton-probe-chip-row">
+                                        <span class="skeleton-probe-chip">2 Credits</span>
+                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                    </div>
+                                </div>
+                                <div class="skeleton-code-line"></div>
+                                <div class="skeleton-title-stack">
+                                    <div class="skeleton-title-line"></div>
+                                    <div class="skeleton-title-line short"></div>
+                                </div>
+                                <div class="skeleton-meta-row">
+                                    <div class="skeleton-section-line"></div>
+                                    <div class="skeleton-type-chip"></div>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line"></span>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line medium"></span>
+                                </div>
+                                <div class="skeleton-chip-row">
+                                    <div class="skeleton-chip"></div>
+                                </div>
                             </div>
                         </div>
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                            </div>
-                        </div>
-                        <div class="skeleton-class-outside">
-                            <div class="skeleton-class-container">
-                                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                                <div style="margin: 40px 0;"></div>
-                                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-                            </div>
-                            <div class="skeleton-gpa-bar">
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
-                                <div class="skeleton-gpa-section"></div>
+                                <div class="skeleton-layout-probe" aria-hidden="true">
+                                    <p class="skeleton-probe-code">12001103-003</p>
+                                    <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
+                                    <div class="skeleton-probe-meta-row">
+                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <span class="skeleton-probe-type">Foundation</span>
+                                    </div>
+                                    <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
+                                    <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
+                                    <div class="skeleton-probe-chip-row">
+                                        <span class="skeleton-probe-chip">2 Credits</span>
+                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                    </div>
+                                </div>
+                                <div class="skeleton-code-line"></div>
+                                <div class="skeleton-title-stack">
+                                    <div class="skeleton-title-line"></div>
+                                    <div class="skeleton-title-line short"></div>
+                                </div>
+                                <div class="skeleton-meta-row">
+                                    <div class="skeleton-section-line"></div>
+                                    <div class="skeleton-type-chip"></div>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line"></span>
+                                </div>
+                                <div class="skeleton-info-row">
+                                    <span class="skeleton-icon-block"></span>
+                                    <span class="skeleton-info-line medium"></span>
+                                </div>
+                                <div class="skeleton-chip-row">
+                                    <div class="skeleton-chip"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -413,6 +419,7 @@
             </div>
         </section>
 
+        </div>
     </div>
 
 </body>

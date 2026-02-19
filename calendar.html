@@ -21,8 +21,7 @@
   <div class="app-header">
     <div class="app-logo"></div>
     <div class="app-misc">
-      <button id="help-mobile"></button>
-      <button id="settings-mobile"></button>
+      <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
     </div>
   </div>
 
@@ -51,9 +50,9 @@
 
     <section id="course-summary" class="calendar-page-modern">
 
-      <!-- Desktop semester selector -->
+      <!-- Calendar toolbar (desktop) -->
       <div class="container-above container-above-desktop">
-        <div class="title-box">
+        <div class="calendar-toolbar-shell">
           <div id="filter-year-term">
             <div class="filter-year-term-container">
               <div class="custom-select" data-target="semester-select">
@@ -70,29 +69,60 @@
               </select>
             </div>
           </div>
-        </div>
-        <div class="buttons-box">
-          <!-- Desktop inline search pill -->
-          <div class="search-pill-container">
-            <div class="search-pill">
-              <div class="search-pill-icon"></div>
-              <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..."
-                autocomplete="off">
-            </div>
-            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+
+          <div class="calendar-toolbar-center" role="tablist" aria-label="Calendar view">
+            <button type="button" id="calendar-view-week" class="calendar-view-btn is-active"
+              aria-selected="true">Week</button>
+            <button type="button" id="calendar-view-day" class="calendar-view-btn" disabled
+              aria-disabled="true">Day</button>
+            <button type="button" id="calendar-view-list" class="calendar-view-btn" disabled
+              aria-disabled="true">List</button>
           </div>
-          <!-- Mobile search button (hidden on desktop) -->
-          <button class="search-btn">
-            <div></div>
-          </button>
+
+          <div class="calendar-toolbar-right">
+            <div class="calendar-toolbar-legend" aria-label="Course type legend">
+              <span class="calendar-toolbar-legend-item">
+                <span class="calendar-toolbar-dot calendar-toolbar-dot-core"></span>Core
+              </span>
+              <span class="calendar-toolbar-legend-item">
+                <span class="calendar-toolbar-dot calendar-toolbar-dot-foundation"></span>Foundation
+              </span>
+              <span class="calendar-toolbar-legend-item">
+                <span class="calendar-toolbar-dot calendar-toolbar-dot-elective"></span>Elective
+              </span>
+            </div>
+            <button type="button" id="calendar-filter-trigger" class="calendar-filter-trigger control-surface"
+              aria-haspopup="dialog" aria-expanded="false">Filters</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="calendar-filter-popover" class="calendar-filter-popover hidden" role="dialog"
+        aria-labelledby="calendar-filter-heading" aria-modal="false">
+        <div class="calendar-filter-popover-header">
+          <h3 id="calendar-filter-heading">Calendar filters</h3>
+          <button type="button" class="calendar-filter-close" id="calendar-filter-close"
+            aria-label="Close filters">×</button>
+        </div>
+        <div class="calendar-filter-group">
+          <p class="calendar-filter-group-title">Type</p>
+          <label><input type="checkbox" id="calendar-type-core"> Core</label>
+          <label><input type="checkbox" id="calendar-type-foundation"> Foundation</label>
+          <label><input type="checkbox" id="calendar-type-elective"> Elective</label>
+        </div>
+        <div class="calendar-filter-group">
+          <p class="calendar-filter-group-title">Visibility</p>
+          <label><input type="checkbox" id="calendar-show-registered" checked> Show registered</label>
+          <label><input type="checkbox" id="calendar-show-saved" disabled> Show saved (soon)</label>
+          <label><input type="checkbox" id="calendar-show-empty" checked> Show empty slots</label>
         </div>
       </div>
 
       <div class="main-content">
 
-        <!-- Mobile semester selector -->
+        <!-- Mobile toolbar -->
         <div class="container-above container-above-mobile">
-          <div class="title-box">
+          <div class="calendar-toolbar-shell">
             <div id="filter-year-term-mobile">
               <div class="filter-year-term-container">
                 <div class="custom-select" data-target="semester-select-mobile">
@@ -109,11 +139,8 @@
                 </select>
               </div>
             </div>
-          </div>
-          <div class="buttons-box">
-            <button class="search-btn">
-              <div></div>
-            </button>
+            <button type="button" id="calendar-filter-trigger-mobile" class="calendar-filter-trigger control-surface"
+              aria-haspopup="dialog" aria-expanded="false">Filters</button>
           </div>
         </div>
 

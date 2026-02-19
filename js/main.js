@@ -3,6 +3,7 @@ import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters } from '
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from './shared.js';
 import * as wanakana from 'wanakana';
 import { getCurrentAppPath } from './path-utils.js';
+import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from './preferences.js';
 
 // Import components to ensure web components are defined
 import './components.js';
@@ -222,6 +223,24 @@ function normalizeCourseTitle(title) {
     return normalized;
 }
 
+function toHexColor(value, fallback = '#E0E0E0') {
+    const color = String(value || '').trim();
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color) ? color : fallback;
+}
+
+function hexToRgba(hex, alpha = 0.38) {
+    const normalized = toHexColor(hex).slice(1);
+    const expanded = normalized.length === 3
+        ? normalized.split('').map((char) => char + char).join('')
+        : normalized;
+
+    const red = parseInt(expanded.slice(0, 2), 16);
+    const green = parseInt(expanded.slice(2, 4), 16);
+    const blue = parseInt(expanded.slice(4, 6), 16);
+
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 // Global sorting state
 let currentSortMethod = null;
 
@@ -237,6 +256,213 @@ let lastLoadedYear = null;
 let lastLoadedTerm = null;
 let lastLoadedProfessorChanges = new Set(); // Cache professor changes
 const MAX_COURSE_LOAD_RETRIES = 3;
+const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
+const HOME_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000;
+const HOME_PREFILTER_PERIOD_TO_TIME = {
+    1: '09:00',
+    2: '10:45',
+    3: '13:10',
+    4: '14:55',
+    5: '16:40'
+};
+const HOME_PREFILTER_TYPE_TO_CONCENTRATION = {
+    Core: ['culture', 'economy', 'politics', 'seminar'],
+    Foundation: ['academic', 'understanding'],
+    Elective: ['special']
+};
+
+function consumeHomeSlotPrefilter() {
+    try {
+        const raw = window.sessionStorage.getItem(HOME_SLOT_PREFILTER_KEY);
+        if (!raw) return null;
+        window.sessionStorage.removeItem(HOME_SLOT_PREFILTER_KEY);
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const createdAt = Number(parsed.createdAt || 0);
+        if (createdAt && (Date.now() - createdAt) > HOME_PREFILTER_MAX_AGE_MS) {
+            return null;
+        }
+
+        const day = String(parsed.day || '').trim();
+        const period = Number(parsed.period);
+        const term = String(parsed.term || '').trim();
+        const year = Number(parsed.year);
+        const typeFilters = Array.isArray(parsed.typeFilters)
+            ? Array.from(new Set(parsed.typeFilters
+                .map((value) => String(value || '').trim())
+                .filter((value) => value === 'Core' || value === 'Foundation' || value === 'Elective')))
+            : null;
+
+        if (!day || !Number.isFinite(period) || !term || !Number.isFinite(year)) {
+            return null;
+        }
+
+        return {
+            day,
+            period,
+            term,
+            year,
+            time: parsed.time || HOME_PREFILTER_PERIOD_TO_TIME[period] || null,
+            typeFilters: typeFilters && typeFilters.length > 0 ? typeFilters : null
+        };
+    } catch (error) {
+        console.warn('Unable to consume home slot prefilter payload:', error);
+        return null;
+    }
+}
+
+function applyHomePrefilterSemester(prefilter) {
+    if (!prefilter) return;
+    const normalizedTermValue = normalizeTermValue(`${prefilter.term}-${prefilter.year}`);
+    if (!normalizedTermValue) return;
+
+    const [term, yearText] = normalizedTermValue.split('-');
+    const year = parseInt(yearText, 10);
+    if (!term || !Number.isFinite(year)) return;
+
+    const termSelect = document.getElementById('term-select');
+    const yearSelect = document.getElementById('year-select');
+    if (termSelect) termSelect.value = term;
+    if (yearSelect) yearSelect.value = String(year);
+
+    const semesterSelect = document.getElementById('semester-select');
+    if (semesterSelect) {
+        semesterSelect.value = normalizedTermValue;
+        syncSemesterDropdowns(normalizedTermValue);
+    }
+
+    setPreferredTermValue(normalizedTermValue);
+    applyPreferredTermToGlobals(normalizedTermValue);
+}
+
+async function applyHomePrefilterFilters(prefilter) {
+    if (!prefilter) return;
+
+    const dayValue = prefilter.day;
+    const timeValue = HOME_PREFILTER_PERIOD_TO_TIME[prefilter.period] || prefilter.time;
+
+    const dayCheckboxes = document.querySelectorAll('#filter-by-days .filter-checkbox');
+    dayCheckboxes.forEach((checkbox) => {
+        checkbox.checked = checkbox.value === dayValue;
+    });
+
+    const timeCheckboxes = document.querySelectorAll('#filter-by-time .filter-checkbox');
+    timeCheckboxes.forEach((checkbox) => {
+        checkbox.checked = checkbox.value === timeValue;
+    });
+
+    const concentrationCheckboxes = document.querySelectorAll('#filter-by-concentration .filter-checkbox');
+    concentrationCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+    });
+
+    if (Array.isArray(prefilter.typeFilters) && prefilter.typeFilters.length > 0) {
+        const mappedValues = new Set(
+            prefilter.typeFilters.flatMap((typeLabel) => HOME_PREFILTER_TYPE_TO_CONCENTRATION[typeLabel] || [])
+        );
+
+        concentrationCheckboxes.forEach((checkbox) => {
+            checkbox.checked = mappedValues.has(checkbox.value);
+        });
+    }
+
+    currentSearchQuery = null;
+    await applySearchAndFilters(null);
+}
+
+function buildCourseSectionLine(courseCode, compactSchedule) {
+    const safeCode = courseCode || "Code";
+    const sectionMatch = String(courseCode || "").match(/-(\d+)$/);
+
+    if (!sectionMatch) {
+        return safeCode;
+    }
+
+    const sectionNumber = parseInt(sectionMatch[1], 10);
+    const sectionLabel = Number.isFinite(sectionNumber) ? `Section ${sectionNumber}` : `Section ${sectionMatch[1]}`;
+    return sectionLabel;
+}
+
+function getTopGpaChipLabel(course, hasProfessorChanged = false) {
+    if (hasProfessorChanged) {
+        return "";
+    }
+
+    const gpaGrades = [
+        { grade: "A", percent: course.gpa_a_percent },
+        { grade: "B", percent: course.gpa_b_percent },
+        { grade: "C", percent: course.gpa_c_percent },
+        { grade: "D", percent: course.gpa_d_percent },
+        { grade: "F", percent: course.gpa_f_percent }
+    ];
+
+    const validGrades = gpaGrades.filter((grade) => typeof grade.percent === "number" && grade.percent > 0);
+    if (validGrades.length === 0) {
+        return "";
+    }
+
+    const topGrade = validGrades.reduce((best, current) => current.percent > best.percent ? current : best);
+    return `Top: ${topGrade.grade} ${Math.round(topGrade.percent)}%`;
+}
+
+function getGpaChipMarkup(course, hasProfessorChanged = false) {
+    const gpaSummaryLabel = getTopGpaChipLabel(course, hasProfessorChanged);
+    if (!gpaSummaryLabel) {
+        return "";
+    }
+
+    return `<span class="course-chip">${gpaSummaryLabel}</span>`;
+}
+
+function getNewProfessorChipMarkup(hasProfessorChanged = false) {
+    if (!hasProfessorChanged) {
+        return "";
+    }
+
+    return `<span class="course-chip course-chip-new-professor">New Professor</span>`;
+}
+
+function getCreditsChipMarkup(course) {
+    const rawCredits = course && course.credits;
+    if (rawCredits === null || rawCredits === undefined || rawCredits === "") {
+        return "";
+    }
+
+    const normalizedCredits = String(rawCredits).trim();
+    if (!normalizedCredits) {
+        return "";
+    }
+
+    const parsedCredits = parseFloat(normalizedCredits.replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(parsedCredits) && parsedCredits > 0) {
+        const formattedCredits = Number.isInteger(parsedCredits)
+            ? String(parsedCredits)
+            : String(parsedCredits).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+        const creditUnit = parsedCredits === 1 ? "Credit" : "Credits";
+        return `<span class="course-chip course-chip-credits">${formattedCredits} ${creditUnit}</span>`;
+    }
+
+    const fallbackText = /credit/i.test(normalizedCredits) ? normalizedCredits : `${normalizedCredits} Credits`;
+    return `<span class="course-chip course-chip-credits">${fallbackText}</span>`;
+}
+
+function getCourseTypeLabel(courseType) {
+    const typeMap = {
+        "Introductory Seminars": "Seminar",
+        "Intermediate Seminars": "Seminar",
+        "Advanced Seminars and Honors Thesis": "Seminar",
+        "Academic and Research Skills": "Foundation",
+        "Understanding Japan and Kyoto": "Foundation",
+        "Japanese Society and Global Culture Concentration": "Culture",
+        "Japanese Business and the Global Economy Concentration": "Business",
+        "Japanese Politics and Global Studies Concentration": "Politics",
+        "Other Elective Courses": "Elective"
+    };
+
+    if (!courseType) return "General";
+    return typeMap[courseType] || "Elective";
+}
 
 async function showCourse(year, term) {
     // Validate year and term before proceeding
@@ -337,19 +563,27 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
 
     let courseHTML = "";
     courses.forEach(function (course) {
+        const rawTimeSlot = course.time_slot || "";
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
-        const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
+        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+        const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
-        let displayTimeSlot = course.time_slot;
+        let displayTimeSlot = rawTimeSlot;
+        let compactSchedule = course.course_code || "Code";
         if (specialMatch) {
             displayTimeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
+            compactSchedule = "Mon/Thu P3";
         } else if (match) {
+            const period = (match[2].match(/[1-5]/) || [null])[0];
             displayTimeSlot = `${days[match[1]]} ${times[match[2]]}`;
+            compactSchedule = period ? `${days[match[1]]} P${period}` : (days[match[1]] || (course.course_code || "Code"));
         }
+
+        const sectionLine = buildCourseSectionLine(course.course_code, compactSchedule);
 
         // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
+        const courseBorderColor = hexToRgba(courseColor, 0.38);
 
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
@@ -358,67 +592,27 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const hasProfessorChanged = professorChanges.has(course.course_code);
         const professorName = getRomanizedProfessorName(course.professor);
         const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
-
-        // Determine top 3 GPA grades for mobile display
-        const gpaGrades = [
-            { grade: 'A', percent: course.gpa_a_percent },
-            { grade: 'B', percent: course.gpa_b_percent },
-            { grade: 'C', percent: course.gpa_c_percent },
-            { grade: 'D', percent: course.gpa_d_percent },
-            { grade: 'F', percent: course.gpa_f_percent }
-        ];
-
-        // Sort by percentage descending and get top 3 grades (excluding 0%)
-        const top3Grades = new Set(
-            gpaGrades
-                .filter(g => g.percent !== null && g.percent > 0)
-                .sort((a, b) => b.percent - a.percent)
-                .slice(0, 3)
-                .map(g => g.grade)
-        );
-
-        // Helper function to get mobile GPA display text
-        const getMobileGpaText = (grade, percent) => {
-            if (percent === null || percent === 0) return grade;
-            const roundedPercent = Math.round(percent);
-            return top3Grades.has(grade) ? `${grade} ${roundedPercent}%` : grade;
-        };
-
-        // Helper function to format GPA percentage (remove decimals)
-        const formatGpaPercent = (percent) => {
-            if (percent === null) return 'N/A';
-            return Math.round(percent);
-        };
-
-        // Determine GPA class - hide GPA for new professors (professor changed)
-        const gpaClass = course.gpa_a_percent === null ? "gpa-null" : (hasProfessorChanged ? "gpa-new-professor" : "");
+        const creditsChip = getCreditsChipMarkup(course);
+        const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
+        const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
+        const courseTypeLabel = getCourseTypeLabel(course.type);
 
         courseHTML += `
-        <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}'>
-            <div class="class-container" style="--course-card-accent: ${courseColor};" data-course='${escapedCourseJSON}'>
+        <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}' style="--course-card-border: ${courseBorderColor};">
+            <div class="class-container" style="--course-card-accent: ${courseColor}; --course-card-border: ${courseBorderColor};" data-course='${escapedCourseJSON}'>
                 <p id="course-code">${course.course_code}</p>
                 <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
-                <p id="course-professor-small">Professor</p>
+                <div class="course-meta-row">
+                    <p class="course-section-line">${sectionLine}</p>
+                    <span class="course-type-label">${courseTypeLabel}</span>
+                </div>
                 <h3 id="course-professor"><div class="course-professor-icon"></div>${professorDisplay}</h3>
-                <div class="class-space"></div>
-                <p id="course-time-small">Time</p>
                 <h3 id="course-time"><div class="course-time-icon"></div>${displayTimeSlot}</h3>
-            </div>
-            <!-- Mobile GPA bar outside class-container -->
-            <div class="gpa-bar-mobile ${gpaClass}">
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>${getMobileGpaText('A', course.gpa_a_percent)}</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>${getMobileGpaText('B', course.gpa_b_percent)}</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>${getMobileGpaText('C', course.gpa_c_percent)}</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>${getMobileGpaText('D', course.gpa_d_percent)}</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>${getMobileGpaText('F', course.gpa_f_percent)}</p></div>
-            </div>
-            <!-- Desktop GPA bar outside class-container -->
-            <div class="gpa-bar gpa-bar-desktop ${gpaClass}">
-                <div class="gpa-fill"><p>A ${formatGpaPercent(course.gpa_a_percent)}%</p></div>
-                <div class="gpa-fill"><p>B ${formatGpaPercent(course.gpa_b_percent)}%</p></div>
-                <div class="gpa-fill"><p>C ${formatGpaPercent(course.gpa_c_percent)}%</p></div>
-                <div class="gpa-fill"><p>D ${formatGpaPercent(course.gpa_d_percent)}%</p></div>
-                <div class="gpa-fill"><p>F ${formatGpaPercent(course.gpa_f_percent)}%</p></div>
+                <div class="course-chip-row">
+                    ${creditsChip}
+                    ${gpaSummaryChip}
+                    ${newProfessorChip}
+                </div>
             </div>
         </div>
         `;
@@ -468,20 +662,40 @@ function createSkeletonCourse() {
     return `
         <div class="skeleton-class-outside">
             <div class="skeleton-class-container">
-                <p style="visibility: hidden; margin: 5px 0;">12001104-003</p>
-                <h2 style="visibility: hidden; margin: 5px 0 40px 0;">Academic Writing</h2>
-                <p style="visibility: hidden; margin: 5px 0;">Professor</p>
-                <h3 style="visibility: hidden; margin: 5px 0;">MICHAEL GRECO</h3>
-                <div style="margin: 40px 0;"></div>
-                <p style="visibility: hidden; margin: 5px 0;">Time</p>
-                <h3 style="visibility: hidden; margin: 5px 0;">Thu 14:55 - 16:25</h3>
-            </div>
-            <div class="skeleton-gpa-bar">
-                <div class="skeleton-gpa-section"></div>
-                <div class="skeleton-gpa-section"></div>
-                <div class="skeleton-gpa-section"></div>
-                <div class="skeleton-gpa-section"></div>
-                <div class="skeleton-gpa-section"></div>
+                <div class="skeleton-layout-probe" aria-hidden="true">
+                    <p class="skeleton-probe-code">12001103-003</p>
+                    <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
+                    <div class="skeleton-probe-meta-row">
+                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                        <span class="skeleton-probe-type">Foundation</span>
+                    </div>
+                    <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
+                    <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
+                    <div class="skeleton-probe-chip-row">
+                        <span class="skeleton-probe-chip">2 Credits</span>
+                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                    </div>
+                </div>
+                <div class="skeleton-code-line"></div>
+                <div class="skeleton-title-stack">
+                    <div class="skeleton-title-line"></div>
+                    <div class="skeleton-title-line short"></div>
+                </div>
+                <div class="skeleton-meta-row">
+                    <div class="skeleton-section-line"></div>
+                    <div class="skeleton-type-chip"></div>
+                </div>
+                <div class="skeleton-info-row">
+                    <span class="skeleton-icon-block"></span>
+                    <span class="skeleton-info-line"></span>
+                </div>
+                <div class="skeleton-info-row">
+                    <span class="skeleton-icon-block"></span>
+                    <span class="skeleton-info-line medium"></span>
+                </div>
+                <div class="skeleton-chip-row">
+                    <div class="skeleton-chip"></div>
+                </div>
             </div>
         </div>
     `;
@@ -985,6 +1199,12 @@ function setupDashboardEventListeners() {
                 console.log('  → Parsed term:', term);
                 console.log('  → Parsed year:', year);
 
+                const normalizedSelection = normalizeTermValue(e.target.value);
+                if (normalizedSelection) {
+                    setPreferredTermValue(normalizedSelection);
+                    applyPreferredTermToGlobals(normalizedSelection);
+                }
+
                 const termSelect = document.getElementById("term-select");
                 const yearSelect = document.getElementById("year-select");
 
@@ -1135,7 +1355,7 @@ function setupDashboardEventListeners() {
                 if (filterContainer.classList.contains("hidden")) {
                     filterContainer.classList.remove("hidden");
 
-                    if (window.innerWidth <= 780) {
+                    if (window.innerWidth <= 1023) {
                         // Mobile full-screen animation
                         showModalWithMobileAnimation(filterPopup, filterContainer);
                     } else {
@@ -1161,7 +1381,7 @@ function setupDashboardEventListeners() {
     if (filterBackground) {
         filterBackground.addEventListener("click", (event) => {
             if (event.target === filterBackground) {
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     // Mobile handling
                     const filterPopup = filterContainer.querySelector('.filter-popup');
                     hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
@@ -1190,7 +1410,7 @@ function setupDashboardEventListeners() {
 
     if (seeResultsBtn && filterContainer) {
         seeResultsBtn.addEventListener("click", () => {
-            if (window.innerWidth <= 780) {
+            if (window.innerWidth <= 1023) {
                 // Mobile handling
                 const filterPopup = filterContainer.querySelector('.filter-popup');
                 hideModalWithMobileAnimation(filterPopup, filterContainer, () => {
@@ -1320,7 +1540,7 @@ function setupDashboardEventListeners() {
                 if (searchContainer.classList.contains("hidden")) {
                     searchContainer.classList.remove("hidden");
 
-                    if (window.innerWidth <= 780) {
+                    if (window.innerWidth <= 1023) {
                         // Mobile full-screen animation
                         showModalWithMobileAnimation(searchModal, searchContainer);
                     } else {
@@ -1362,7 +1582,7 @@ function setupDashboardEventListeners() {
                 const searchQuery = searchInput ? searchInput.value : '';
                 await performSearch(searchQuery);
 
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     // Mobile full-screen animation
                     hideModalWithMobileAnimation(searchModal, searchContainer, () => {
                         searchContainer.classList.add("hidden");
@@ -1384,7 +1604,7 @@ function setupDashboardEventListeners() {
 
         if (searchCancel) {
             searchCancel.addEventListener("click", () => {
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     // Mobile full-screen animation
                     hideModalWithMobileAnimation(searchModal, searchContainer, () => {
                         searchContainer.classList.add("hidden");
@@ -1408,7 +1628,7 @@ function setupDashboardEventListeners() {
         if (searchBackground) {
             searchBackground.addEventListener("click", (event) => {
                 if (event.target === searchBackground) {
-                    if (window.innerWidth <= 780) {
+                    if (window.innerWidth <= 1023) {
                         // Mobile handling
                         hideModalWithMobileAnimation(searchModal, searchContainer, () => {
                             searchContainer.classList.add("hidden");
@@ -1491,7 +1711,7 @@ function setupSearchAutocomplete(searchInput, searchAutocomplete) {
                 // Close the search modal
                 const searchContainer = document.querySelector(".search-container");
                 const searchModal = document.querySelector(".search-modal");
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     hideModalWithMobileAnimation(searchModal, searchContainer, () => {
                         searchContainer.classList.add("hidden");
                     });
@@ -1802,18 +2022,29 @@ async function populateSemesterDropdown() {
         return;
     }
 
+    const semesterValues = semesters.map((semester) => `${semester.term}-${semester.year}`);
+    const preferredTerm = getPreferredTermValue();
+    const selectedSemesterValue = preferredTerm && semesterValues.includes(preferredTerm)
+        ? preferredTerm
+        : (semesterValues[0] || null);
+    const selectedSemester = semesters.find((semester) => `${semester.term}-${semester.year}` === selectedSemesterValue) || semesters[0] || null;
+
     // Populate each semester select (hidden <select> elements)
     semesterSelects.forEach(semesterSelect => {
         semesterSelect.innerHTML = '';
 
-        semesters.forEach((semester, index) => {
+        semesters.forEach((semester) => {
             const value = `${semester.term}-${semester.year}`;
             const option = document.createElement('option');
             option.value = value;
             option.textContent = semester.label;
-            if (index === 0) option.selected = true;
+            if (value === selectedSemesterValue) option.selected = true;
             semesterSelect.appendChild(option);
         });
+
+        if (selectedSemesterValue) {
+            semesterSelect.value = selectedSemesterValue;
+        }
     });
 
     // Populate each custom dropdown
@@ -1825,26 +2056,30 @@ async function populateSemesterDropdown() {
 
         optionsContainer.innerHTML = '';
 
-        semesters.forEach((semester, index) => {
+        semesters.forEach((semester) => {
             const value = `${semester.term}-${semester.year}`;
             const customOption = document.createElement('div');
-            customOption.className = 'custom-select-option' + (index === 0 ? ' selected' : '');
+            customOption.className = 'custom-select-option' + (value === selectedSemesterValue ? ' selected' : '');
             customOption.dataset.value = value;
             customOption.textContent = semester.label;
             optionsContainer.appendChild(customOption);
         });
 
-        // Set the displayed value for the first (most recent) semester
-        if (semesters.length > 0) {
-            valueElement.textContent = semesters[0].label;
+        // Set the displayed value for the selected semester
+        if (selectedSemester) {
+            valueElement.textContent = selectedSemester.label;
         }
     });
 
-    // Update hidden term and year inputs for the first (most recent) semester
-    if (semesters.length > 0) {
-        const firstSemester = semesters[0];
-        if (termSelect) termSelect.value = firstSemester.term;
-        if (yearSelect) yearSelect.value = firstSemester.year;
+    // Update hidden term/year and preferred term for the selected semester
+    if (selectedSemester) {
+        if (termSelect) termSelect.value = selectedSemester.term;
+        if (yearSelect) yearSelect.value = selectedSemester.year;
+
+        if (selectedSemesterValue) {
+            setPreferredTermValue(selectedSemesterValue);
+            applyPreferredTermToGlobals(selectedSemesterValue);
+        }
     }
 
     console.log('Semester dropdown populated successfully');
@@ -2135,7 +2370,7 @@ function lockBodyScroll() {
     modalCount++;
     console.log('Lock body scroll called, modal count:', modalCount);
 
-    if (window.innerWidth <= 780) {
+    if (window.innerWidth <= 1023) {
         if (modalCount === 1) { // Only lock on first modal
             scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
             document.body.classList.add('modal-open');
@@ -2157,7 +2392,7 @@ function unlockBodyScroll() {
 
     if (modalCount > 0) return; // Don't unlock if other modals are open
 
-    if (window.innerWidth <= 780) {
+    if (window.innerWidth <= 1023) {
         document.body.classList.remove('modal-open');
         document.body.style.top = '';
         document.body.style.position = '';
@@ -2197,7 +2432,7 @@ function preventBodyScroll(e) {
 }
 
 function showModalWithMobileAnimation(modal, container, callback = null) {
-    const isMobile = window.innerWidth <= 780;
+    const isMobile = window.innerWidth <= 1023;
 
     if (isMobile) {
         const background = container.querySelector('.filter-background, .search-background');
@@ -2240,7 +2475,7 @@ function showModalWithMobileAnimation(modal, container, callback = null) {
 }
 
 function hideModalWithMobileAnimation(modal, container, callback = null) {
-    const isMobile = window.innerWidth <= 780;
+    const isMobile = window.innerWidth <= 1023;
 
     if (isMobile) {
         const background = container.querySelector('.filter-background, .search-background');
@@ -2702,7 +2937,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 
     let coursesHTML = '';
 
-    coursesWithRelevance.forEach(function ({ course, relevanceScore }) {
+    coursesWithRelevance.forEach(function ({ course }) {
         const days = {
             "月曜日": "Mon", "月": "Mon",
             "火曜日": "Tue", "火": "Tue",
@@ -2718,57 +2953,56 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
             "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
         };
 
-        let timeSlot = course.time_slot;
+        const rawTimeSlot = course.time_slot || "";
+        let timeSlot = rawTimeSlot;
+        let compactSchedule = course.course_code || "Code";
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-        const match = course.time_slot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
-        const specialMatch = course.time_slot.match(/(月曜日3講時・木曜日3講時)/);
+        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+        const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         if (specialMatch) {
             timeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
+            compactSchedule = "Mon/Thu P3";
         } else if (match) {
+            const period = (match[2].match(/[1-5]/) || [null])[0];
             timeSlot = `${days[match[1]]} ${times[match[2]]}`;
+            compactSchedule = period ? `${days[match[1]]} P${period}` : (days[match[1]] || (course.course_code || "Code"));
         }
 
-        // Calculate relevance percentage for display
-        const relevancePercent = Math.round(relevanceScore * 100);
-        const matchQuality = relevanceScore > 0.7 ? "High" : relevanceScore > 0.4 ? "Medium" : "Low";
-        const matchColor = relevanceScore > 0.7 ? "#4CAF50" : relevanceScore > 0.4 ? "#FF9800" : "#757575";
-
         const suggestedCourseColor = getCourseColorByType(course.type);
+        const suggestedCourseBorderColor = hexToRgba(suggestedCourseColor, 0.38);
+        const sectionLine = buildCourseSectionLine(course.course_code, compactSchedule);
+        const hasProfessorChanged = lastLoadedProfessorChanges.has(course.course_code);
+        const creditsChip = getCreditsChipMarkup(course);
+        const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
+        const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
+        const professorName = romanizeProfessorName(course.professor);
+        const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
+        const courseTypeLabel = getCourseTypeLabel(course.type);
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
 
         coursesHTML += `
-        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
-            <div class="class-container" style="--course-card-accent: ${suggestedCourseColor}; position: relative;" data-course='${escapedCourseJSON}'>
+        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="--course-card-border: ${suggestedCourseBorderColor}; opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
+            <div class="class-container" style="--course-card-accent: ${suggestedCourseColor}; --course-card-border: ${suggestedCourseBorderColor}; position: relative;" data-course='${escapedCourseJSON}'>
                 <div class="class-suggestion">
                     <div class="class-suggestion-label">
                         Suggested
                     </div>
                 </div>
-                <p>${course.course_code}</p>
-                <h2>${normalizeCourseTitle(course.title)}</h2>
-                <p>Professor</p>
-                <h3>${romanizeProfessorName(course.professor)}</h3>
-                <div class="class-space"></div>
-                <p>Time</p>
-                <h3>${timeSlot}</h3>
-            </div>
-            <!-- Mobile GPA bar outside class-container -->
-            <div class="gpa-bar-mobile ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_a_percent !== null ? course.gpa_a_percent : 20}%"><p>A</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_b_percent !== null ? course.gpa_b_percent : 20}%"><p>B</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_c_percent !== null ? course.gpa_c_percent : 20}%"><p>C</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_d_percent !== null ? course.gpa_d_percent : 20}%"><p>D</p></div>
-                <div class="gpa-fill-mobile" style="width: ${course.gpa_f_percent !== null ? course.gpa_f_percent : 20}%"><p>F</p></div>
-            </div>
-            <!-- Desktop GPA bar outside class-container -->
-            <div class="gpa-bar gpa-bar-desktop ${course.gpa_a_percent === null ? "gpa-null" : ""}">
-                <div class="gpa-fill"><p>A ${course.gpa_a_percent !== null ? Math.round(course.gpa_a_percent) : 'N/A'}%</p></div>
-                <div class="gpa-fill"><p>B ${course.gpa_b_percent !== null ? Math.round(course.gpa_b_percent) : 'N/A'}%</p></div>
-                <div class="gpa-fill"><p>C ${course.gpa_c_percent !== null ? Math.round(course.gpa_c_percent) : 'N/A'}%</p></div>
-                <div class="gpa-fill"><p>D ${course.gpa_d_percent !== null ? Math.round(course.gpa_d_percent) : 'N/A'}%</p></div>
-                <div class="gpa-fill"><p>F ${course.gpa_f_percent !== null ? Math.round(course.gpa_f_percent) : 'N/A'}%</p></div>
+                <p id="course-code">${course.course_code}</p>
+                <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
+                <div class="course-meta-row">
+                    <p class="course-section-line">${sectionLine}</p>
+                    <span class="course-type-label">${courseTypeLabel}</span>
+                </div>
+                <h3 id="course-professor"><div class="course-professor-icon"></div>${professorDisplay}</h3>
+                <h3 id="course-time"><div class="course-time-icon"></div>${timeSlot}</h3>
+                <div class="course-chip-row">
+                    ${creditsChip}
+                    ${gpaSummaryChip}
+                    ${newProfessorChip}
+                </div>
             </div>
         </div>
         `;
@@ -2800,7 +3034,7 @@ function ensureMobileNavigationPositioning() {
     const appNavigation = document.querySelector('app-navigation');
     if (!appNavigation) return;
 
-    if (window.innerWidth <= 780) {
+    if (window.innerWidth <= 1023) {
         const navHeight = Math.ceil(appNavigation.getBoundingClientRect().height || 0);
         if (navHeight > 0) {
             document.documentElement.style.setProperty('--mobile-nav-safe-height', `${navHeight + 8}px`);
@@ -2813,7 +3047,7 @@ function ensureMobileNavigationPositioning() {
 
 // Function to restructure review dates ONLY on mobile
 function restructureReviewDatesForMobile() {
-    if (window.innerWidth <= 780) {
+    if (window.innerWidth <= 1023) {
         const reviewContainers = document.querySelectorAll('.review-dates');
 
         reviewContainers.forEach(container => {
@@ -2958,6 +3192,11 @@ export async function initializeDashboard() {
     // Initialize custom selects (dropdown behavior)
     initializeCustomSelects();
 
+    const pendingHomePrefilter = consumeHomeSlotPrefilter();
+    if (pendingHomePrefilter) {
+        applyHomePrefilterSemester(pendingHomePrefilter);
+    }
+
     // Set up course list click listener
     setupCourseListClickListener();
 
@@ -2971,6 +3210,10 @@ export async function initializeDashboard() {
 
     if (yearSelect && termSelect && yearSelect.value && termSelect.value) {
         await showCourse(yearSelect.value, termSelect.value);
+    }
+
+    if (pendingHomePrefilter) {
+        await applyHomePrefilterFilters(pendingHomePrefilter);
     }
 
     // Update the course filter paragraph to show current state

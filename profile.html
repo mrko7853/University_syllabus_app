@@ -12,58 +12,31 @@
     <div class="app-header">
         <div class="app-logo"></div>
         <div class="app-misc">
-            <button id="help-mobile"></button>
-            <button id="settings-mobile"></button>
+            <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
     <div id="app-content">
-        <section class="profile-page">
-            <div class="main-content">
-                <div class="main-container">
-                    <div class="container-above">
-                        <div class="title-box">
-                            <h2 class="course-main-title">Profile</h2>
-                            <h3 class="course-main-paragraph">Manage your account settings</h3>
-                        </div>
-                    </div>
-                    <div class="profile-content">
-                        <div class="profile-section">
-                            <h3>Personal Information</h3>
-                            <form id="profile-form">
-                                <div class="form-group">
-                                    <label for="full-name">Full Name</label>
-                                    <input type="text" id="full-name" name="full-name" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="email">Email</label>
-                                    <input type="email" id="email" name="email" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="student-id">Student ID</label>
-                                    <input type="text" id="student-id" name="student-id" required>
-                                </div>
-                                <button type="submit" class="btn-primary">Update Profile</button>
-                            </form>
-                        </div>
-                        
-                        <div class="profile-section">
-                            <h3>Account Actions</h3>
-                            <div class="action-buttons">
-                                <button id="change-password-btn" class="btn-secondary">Change Password</button>
-                                <button id="logout-button" class="btn-danger">Logout</button>
-                            </div>
-                        </div>
-                    </div>
+        <main id="profile-main" class="page profile-page">
+            <div class="page-inner">
+                <div class="profile-title-row">
+                    <h1>Profile</h1>
                 </div>
+
+                <section class="profile-section" id="profile-identity"></section>
+                <section class="profile-section" id="profile-academic"></section>
+                <section class="profile-section" id="profile-preferences"></section>
+                <section class="profile-section" id="profile-integrations"></section>
+                <section class="profile-section" id="profile-data-privacy"></section>
+                <section class="profile-section" id="profile-help"></section>
+                <section class="profile-section" id="profile-auth"></section>
             </div>
-        </section>
+        </main>
     </div>
 
     <script type="module" src="js/components.js"></script>
     <script type="module" src="js/shared.js"></script>
     <script type="module" src="js/profile.js"></script>
-    <!-- Simple Router -->
     <script type="module" src="js/router.js"></script>
 </body>
 </html>

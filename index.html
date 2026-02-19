@@ -21,37 +21,182 @@
     <div class="app-header">
         <div class="app-logo"></div>
         <div class="app-misc">
-            <button id="help-mobile"></button>
-            <button id="settings-mobile"></button>
+            <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
     <div id="app-content">
         <section id="home-main">
-            <div class="main-content home-main-content">
-                <div class="top-content home-top-content">
-                    <div class="main-container home-widget-card home-next-class-container">
-                        <term-box></term-box>
-                    </div>
-                    <div class="main-container home-widget-card home-assignment-container">
-                        <total-courses></total-courses>
-                    </div>
-                    <div class="main-container home-widget-card" id="calendar-container">
-                        <div class="home-calendar-summary">
-                            <div class="home-calendar-summary-header">
-                                <h2 class="home-calendar-summary-title">Schedule</h2>
-                                <a class="home-calendar-link" href="/calendar">Open Calendar</a>
+
+                            <div class="container-above container-above-desktop home-container-above">
+                    <div class="title-box">
+                        <div id="filter-year-term">
+                            <div class="filter-year-term-container">
+                                <div class="custom-select" data-target="semester-select">
+                                    <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                        <span class="custom-select-value">Loading...</span>
+                                        <div class="custom-select-arrow"></div>
+                                    </div>
+                                    <div class="custom-select-options"></div>
+                                </div>
+                                <select name="semester" id="semester-select" class="semester-select" style="display: none;"></select>
                             </div>
-                            <course-calendar class="home-calendar-widget"></course-calendar>
+                        </div>
+                    </div>
+                    <div class="buttons-box">
+                        <div class="search-pill-container">
+                            <div class="search-pill">
+                                <div class="search-pill-icon"></div>
+                                <input type="text" class="search-pill-input" id="search-pill-input"
+                                    placeholder="Search courses..." autocomplete="off">
+                            </div>
+                            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+                        </div>
+                        <button class="search-btn control-surface control-surface--secondary">
+                            <div></div>
+                        </button>
+                    </div>
+                </div>
+
+            <div class="main-content home-main-content">
+
+                <div class="top-content home-top-content">
+                    <div class="home-desktop-grid">
+                        <div class="home-col home-col-primary">
+                            <div class="main-container home-widget-card" id="calendar-container">
+                                <div class="home-calendar-summary">
+                                    <div class="home-calendar-summary-header">
+                                        <h2 class="home-calendar-summary-title">Schedule</h2>
+                                        <a class="home-calendar-link" href="/calendar">Open Calendar</a>
+                                    </div>
+                                    <div class="home-calendar-legend" aria-label="Schedule legend">
+                                        <span class="home-calendar-legend-empty">Loading legend...</span>
+                                    </div>
+                                    <div class="home-planner-hero">
+                                        <div class="home-planner-grid-pane">
+                                            <course-calendar class="home-calendar-widget"></course-calendar>
+                                        </div>
+                                        <div class="home-planner-panel">
+                                            <home-planner-overview></home-planner-overview>
+                                            <div class="home-next-class-container home-next-class-inline">
+                                                <term-box></term-box>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="main-container home-widget-card" id="home-progress-container">
+                                <home-progress-requirements></home-progress-requirements>
+                            </div>
+                        </div>
+
+                        <div class="home-col home-col-secondary">
+                            <div class="main-container home-widget-card home-next-class-container home-next-class-mobile">
+                                <term-box></term-box>
+                            </div>
+                            <div class="main-container home-widget-card" id="home-empty-slots-container">
+                                <home-empty-slots-widget></home-empty-slots-widget>
+                            </div>
+                            <div class="main-container home-widget-card" id="home-saved-courses-container">
+                                <home-saved-courses-widget></home-saved-courses-widget>
+                            </div>
+                            <div class="main-container home-widget-card home-assignment-container">
+                                <home-due-soon-widget></home-due-soon-widget>
+                            </div>
+                            <div class="main-container" id="home-courses-preview-container">
+                                <latest-courses-preview></latest-courses-preview>
+                            </div>
+                            <div class="main-container" id="home-review-suggestion-container">
+                                <review-suggestion-widget></review-suggestion-widget>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="main-container" id="home-courses-preview-container">
-                    <latest-courses-preview></latest-courses-preview>
-                </div>
-                <div class="main-container" id="home-review-suggestion-container">
-                    <review-suggestion-widget></review-suggestion-widget>
+                <div id="guest-home">
+                    <div class="home-desktop-grid guest-home-desktop-grid">
+                        <div class="home-col home-col-primary guest-home-top-content">
+                            <div class="main-container home-widget-card" id="guest-browse-container">
+                                <div class="total-courses">
+                                    <div class="total-courses-container guest-card-content">
+                                        <h2 class="home-calendar-summary-title">Browse Courses</h2>
+                                        <p class="total-upcoming guest-card-copy">Search by term, period, and review trends.</p>
+                                        <a class="home-calendar-link guest-card-link" href="/courses">Browse Courses</a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="main-container home-widget-card" id="guest-schedule-container">
+                                <div class="home-calendar-summary guest-calendar-summary">
+                                    <div class="home-calendar-summary-header">
+                                        <h2 class="home-calendar-summary-title">Schedule</h2>
+                                    </div>
+
+                                    <div class="guest-schedule-grid" aria-hidden="true">
+                                        <div class="guest-grid-corner"></div>
+                                        <div class="guest-day-head"><span class="guest-day-pill guest-day-pill-active">M</span></div>
+                                        <div class="guest-day-head"><span class="guest-day-pill">T</span></div>
+                                        <div class="guest-day-head"><span class="guest-day-pill">W</span></div>
+                                        <div class="guest-day-head"><span class="guest-day-pill">T</span></div>
+                                        <div class="guest-day-head"><span class="guest-day-pill">F</span></div>
+
+                                        <div class="guest-period-head"><span class="guest-period-pill">1</span></div>
+                                        <div class="guest-grid-cell guest-grid-cell-highlight"><span class="guest-dot guest-dot-blue"></span></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"><span class="guest-dot guest-dot-blue"></span></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+
+                                        <div class="guest-period-head"><span class="guest-period-pill">2</span></div>
+                                        <div class="guest-grid-cell guest-grid-cell-highlight"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"><span class="guest-dot guest-dot-blue"></span></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"><span class="guest-dot guest-dot-green"></span></div>
+
+                                        <div class="guest-period-head"><span class="guest-period-pill">3</span></div>
+                                        <div class="guest-grid-cell guest-grid-cell-highlight"></div>
+                                        <div class="guest-grid-cell"><span class="guest-dot guest-dot-purple"></span></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+
+                                        <div class="guest-period-head"><span class="guest-period-pill">4</span></div>
+                                        <div class="guest-grid-cell guest-grid-cell-highlight"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+
+                                        <div class="guest-period-head"><span class="guest-period-pill">5</span></div>
+                                        <div class="guest-grid-cell guest-grid-cell-highlight"></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"><span class="guest-dot guest-dot-yellow"></span></div>
+                                        <div class="guest-grid-cell"></div>
+                                        <div class="guest-grid-cell"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="home-col home-col-secondary guest-home-secondary-content">
+                            <div class="main-container" id="guest-personalize-container">
+                                <div class="guest-personalize-strip guest-cta">
+                                    <p class="guest-personalize-text">Want a more personalized experience?</p>
+                                    <a class="home-calendar-link guest-personalize-btn" href="/register">Sign Up</a>
+                                </div>
+                            </div>
+
+                            <div class="main-container home-widget-card" id="guest-unlocked-container">
+                                <div class="guest-unlocked-content">
+                                    <h2 class="home-calendar-summary-title">Unlocked with account</h2>
+                                    <p class="total-upcoming guest-card-copy">Save your courses, track assignments, and write reviews in one place.</p>
+                                    <a class="home-calendar-link guest-card-link" href="/register">Create Account</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <input type="hidden" id="term-select" value="Fall">

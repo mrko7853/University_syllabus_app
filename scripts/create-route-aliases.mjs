@@ -15,8 +15,8 @@ const routeAliases = {
   home: 'index.html',
   courses: 'courses.html',
   dashboard: 'courses.html',
-  settings: 'index.html',
-  help: 'index.html',
+  settings: 'profile.html',
+  help: 'profile.html',
   index: 'index.html',
 };
 

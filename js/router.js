@@ -55,6 +55,10 @@ class SimpleRouter {
   }
 
   initializeGlobalYearTerm() {
+    if (window.globalCurrentYear && window.globalCurrentTerm) {
+      return
+    }
+
     // Set default global year/term values
     const currentMonth = new Date().getMonth() + 1
     window.globalCurrentYear = new Date().getFullYear()
@@ -377,6 +381,19 @@ class SimpleRouter {
     const isProtectedRoute = this.isProtectedRoute(basePath)
     const isAuthenticated = await this.checkAuthentication()
 
+    // Assignments remain gated for guests, but route to Profile instead of a hard lock page.
+    if (basePath === '/assignments' && !isAuthenticated) {
+      try {
+        window.sessionStorage.setItem('ila_profile_auth_prompt', 'assignments')
+      } catch (error) {
+        console.warn('Router: unable to store assignments auth prompt context', error)
+      }
+
+      this.hideLoadingBar()
+      this.navigate('/profile')
+      return
+    }
+
     // Get the HTML file for this route
     const htmlFile = this.routes[basePath]
     if (!htmlFile) {
@@ -440,17 +457,14 @@ class SimpleRouter {
       // Update active navigation
       this.updateActiveNav(basePath)
 
+      // Toggle guest vs authenticated home layout early to avoid signed-in widget flashes
+      this.handleGuestDashboard(isAuthenticated, basePath)
+
       // Re-initialize everything for the new content
       await this.reinitializeEverything(basePath)
 
       // Update loading progress
       this.updateLoadingProgress(95)
-
-      // Check for guest restrictions on the courses page
-      if (this.isCoursesRoute(basePath)) {
-        const isAuthenticated = await this.checkAuthentication()
-        this.handleGuestDashboard(isAuthenticated)
-      }
 
       // Complete loading
       this.updateLoadingProgress(100)
@@ -478,13 +492,11 @@ class SimpleRouter {
       // Update active navigation
       this.updateActiveNav(path)
 
+      // Toggle guest vs authenticated home layout early to avoid signed-in widget flashes
+      this.handleGuestDashboard(isAuthenticated, path)
+
       // Re-initialize everything for the current content
       await this.reinitializeEverything(path)
-
-      // Handle guest dashboard if on courses page
-      if (this.isCoursesRoute(path)) {
-        this.handleGuestDashboard(isAuthenticated)
-      }
 
       console.log('Router: Current page initialized successfully')
 
@@ -494,6 +506,10 @@ class SimpleRouter {
   }
 
   updateActiveNav(currentPath) {
+    const navPath = currentPath === '/settings' || currentPath === '/help'
+      ? '/profile'
+      : currentPath
+
     // Remove active class and add false class to all nav buttons
     document.querySelectorAll('[data-route]').forEach(el => {
       el.classList.remove('active')
@@ -501,7 +517,7 @@ class SimpleRouter {
     })
 
     // Add active class and remove false class from current page button
-    const activeButton = document.querySelector(`[data-route="${currentPath}"]`)
+    const activeButton = document.querySelector(`[data-route="${navPath}"]`)
     if (activeButton) {
       activeButton.classList.add('active')
       activeButton.classList.remove('false')
@@ -513,14 +529,9 @@ class SimpleRouter {
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      // Check authentication status for UI modifications
-      const isAuthenticated = await this.checkAuthentication()
-
       // Re-import and reinitialize main.js functionality if on courses
       if (this.isCoursesRoute(path)) {
         await this.initializeDashboard()
-        // Hide top content for guest users on courses page
-        this.handleGuestDashboard(isAuthenticated)
       }
 
       // Re-import and reinitialize calendar.js functionality if on calendar
@@ -1317,7 +1328,7 @@ class SimpleRouter {
 
   // Check if a route requires authentication
   isProtectedRoute(path) {
-    const protectedRoutes = ['/profile', '/calendar', '/settings']
+    const protectedRoutes = ['/calendar', '/assignments']
     return protectedRoutes.includes(path)
   }
 
@@ -1346,6 +1357,8 @@ class SimpleRouter {
 
   // Show locked page for unauthenticated users
   showLockedPage(path) {
+    document.body.classList.remove('guest-dashboard')
+
     const mainContent = document.querySelector('#app-content') || document.querySelector('section') || document.body
     if (!mainContent) return
 
@@ -1355,6 +1368,7 @@ class SimpleRouter {
       '/home': 'Home',
       '/profile': 'Profile',
       '/calendar': 'Calendar',
+      '/assignments': 'Assignments',
       '/courses': 'Courses',
       '/dashboard': 'Courses',
       '/settings': 'Settings',
@@ -1366,8 +1380,6 @@ class SimpleRouter {
     document.title = `${pageName} - ILA Companion`
 
     // Show locked message
-    // <button class="login-btn" onclick="window.router.navigate('/login')">Log In</button>
-    // <button class="register-btn" onclick="window.router.navigate('/register')">Sign Up</button>
     mainContent.innerHTML = `
       <div class="locked-page-container">
         <div class="locked-page-content">
@@ -1375,7 +1387,8 @@ class SimpleRouter {
           <h2 class="locked-title">Page Locked</h2>
           <p class="locked-message">Please log in to access the ${pageName} page.</p>
           <div class="locked-actions">
-
+            <button class="login-btn" onclick="window.router.navigate('/login')">Sign in</button>
+            <button class="register-btn" onclick="window.router.navigate('/register')">Create account</button>
           </div>
         </div>
       </div>
@@ -1482,11 +1495,6 @@ class SimpleRouter {
         }
       }
 
-      /* Guest dashboard styles */
-      .guest-dashboard .top-content {
-        display: none !important;
-      }
-
       /* Loading bar styles */
       .router-loading-bar {
         position: fixed;
@@ -1575,36 +1583,31 @@ class SimpleRouter {
     }
   }
 
-  // Handle guest user dashboard modifications
-  handleGuestDashboard(isAuthenticated) {
-    const mainContent = document.querySelector('#app-content')
-    const topContent = document.querySelector('.top-content')
-    if (!mainContent) return
+  // Handle guest user home layout modifications
+  handleGuestDashboard(isAuthenticated, path = this.currentPath) {
+    const pageWrapper = document.body
+    if (!pageWrapper) return
 
-    // Guest hiding is only relevant to the courses route.
-    if (!this.isCoursesRoute(this.currentPath)) {
-      mainContent.classList.remove('guest-dashboard')
-      if (topContent) {
-        topContent.style.display = 'grid'
-      }
+    const topContent = document.querySelector('#home-main .top-content')
+    if (topContent) {
+      topContent.style.display = ''
+    }
+
+    // Remove any legacy class placement on #app-content.
+    const appContent = document.querySelector('#app-content')
+    if (appContent) {
+      appContent.classList.remove('guest-dashboard')
+    }
+
+    const normalizedPath = this.extractBasePath(path || this.currentPath)
+    const isHomeRoute = this.isHomeRoute(normalizedPath)
+
+    if (!isHomeRoute) {
+      pageWrapper.classList.remove('guest-dashboard')
       return
     }
 
-    if (!isAuthenticated) {
-      // Add guest class to hide top content
-      mainContent.classList.add('guest-dashboard')
-      // Ensure top-content stays hidden
-      if (topContent) {
-        topContent.style.display = 'none'
-      }
-    } else {
-      // Remove guest class if user is authenticated
-      mainContent.classList.remove('guest-dashboard')
-      // Show top-content for authenticated users
-      if (topContent) {
-        topContent.style.display = 'grid'
-      }
-    }
+    pageWrapper.classList.toggle('guest-dashboard', !isAuthenticated)
   }
 
   // Open search modal

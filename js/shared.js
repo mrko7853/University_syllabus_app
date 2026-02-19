@@ -18,6 +18,112 @@ const courseTypeColors = {
 // Default color for unknown types
 const defaultCourseColor = '#E0E0E0';
 
+const SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
+const SLOT_PERIOD_TO_TIME = {
+    1: '09:00',
+    2: '10:45',
+    3: '13:10',
+    4: '14:55',
+    5: '16:40'
+};
+const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective']);
+
+function normalizeSlotDay(day) {
+    const raw = String(day || '').trim();
+    if (!raw) return null;
+
+    const dayMap = {
+        Mon: 'Mon',
+        Monday: 'Mon',
+        Tue: 'Tue',
+        Tuesday: 'Tue',
+        Wed: 'Wed',
+        Wednesday: 'Wed',
+        Thu: 'Thu',
+        Thursday: 'Thu',
+        Fri: 'Fri',
+        Friday: 'Fri'
+    };
+
+    return dayMap[raw] || null;
+}
+
+function normalizeSlotPeriod(period) {
+    const parsed = parseInt(period, 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) return null;
+    return parsed;
+}
+
+function normalizeSlotTerm(term) {
+    const raw = String(term || '').trim();
+    if (!raw) return null;
+
+    const lower = raw.toLowerCase();
+    if (lower.includes('fall') || raw.includes('秋')) return 'Fall';
+    if (lower.includes('spring') || raw.includes('春')) return 'Spring';
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function normalizeSlotTypeFilters(typeFilters) {
+    if (!Array.isArray(typeFilters)) return null;
+
+    const normalized = typeFilters
+        .map((value) => String(value || '').trim())
+        .filter((value) => SLOT_ALLOWED_TYPE_FILTERS.has(value));
+
+    if (!normalized.length) return null;
+    return Array.from(new Set(normalized));
+}
+
+function storeSlotPrefilterPayload(payload) {
+    try {
+        window.sessionStorage.setItem(SLOT_PREFILTER_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Unable to store slot prefilter payload:', error);
+    }
+}
+
+function navigateToCoursesForSlot() {
+    if (window.router?.navigate) {
+        window.router.navigate('/courses');
+        return;
+    }
+    window.location.href = withBase('/courses');
+}
+
+export function openCourseSearchForSlot(payload = {}) {
+    const day = normalizeSlotDay(payload.day);
+    const period = normalizeSlotPeriod(payload.period);
+    const term = normalizeSlotTerm(payload.term);
+    const year = parseInt(payload.year, 10);
+
+    if (!day || !SLOT_ALLOWED_DAYS.has(day) || !period || !term || !Number.isFinite(year)) {
+        console.warn('openCourseSearchForSlot: invalid payload', payload);
+        navigateToCoursesForSlot();
+        return null;
+    }
+
+    const normalized = {
+        day,
+        period,
+        time: SLOT_PERIOD_TO_TIME[period] || null,
+        term,
+        year,
+        source: payload.source ? String(payload.source) : 'slot-intent',
+        createdAt: Date.now()
+    };
+
+    const normalizedTypeFilters = normalizeSlotTypeFilters(payload.typeFilters);
+    if (normalizedTypeFilters && normalizedTypeFilters.length > 0) {
+        normalized.typeFilters = normalizedTypeFilters;
+    }
+
+    storeSlotPrefilterPayload(normalized);
+    navigateToCoursesForSlot();
+    return normalized;
+}
+
 // Function to get color based on course type
 export function getCourseColorByType(courseType) {
     if (!courseType) return defaultCourseColor;
@@ -2009,7 +2115,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         document.body.style.overflow = "hidden";
 
         // Add mobile swipe-to-close functionality
-        if (window.innerWidth <= 780 && classInfoBackground) {
+        if (window.innerWidth <= 1023 && classInfoBackground) {
             addSwipeToClose(classInfo, classInfoBackground);
         }
     }
@@ -2033,6 +2139,140 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         // Always remove existing listener and set up fresh
         const newButton = addRemoveButton.cloneNode(true);
         addRemoveButton.parentNode.replaceChild(newButton, addRemoveButton);
+
+        const SEMESTER_MAX_CREDITS = 24;
+        const SEMESTER_MIN_CREDITS = 2;
+
+        function parseCreditsValue(rawCredits) {
+            if (rawCredits === null || rawCredits === undefined || rawCredits === '') return 0;
+            if (typeof rawCredits === 'number') return Number.isFinite(rawCredits) ? rawCredits : 0;
+
+            const matched = String(rawCredits).match(/(\d+(\.\d+)?)/);
+            if (!matched) return 0;
+
+            const parsed = parseFloat(matched[1]);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function formatCreditsValue(credits) {
+            const normalized = Number(credits);
+            if (!Number.isFinite(normalized)) return '0';
+            if (Number.isInteger(normalized)) return String(normalized);
+            return normalized.toFixed(1).replace(/\.0$/, '');
+        }
+
+        function isCourseSelectionInSemester(selectionEntry, year, term) {
+            if (!selectionEntry?.code) return false;
+
+            const selectionYear = parseInt(selectionEntry.year, 10);
+            const targetYear = parseInt(year, 10);
+            if (!Number.isFinite(selectionYear) || selectionYear !== targetYear) return false;
+
+            if (!selectionEntry.term) return true;
+
+            return normalizeCourseTerm(selectionEntry.term) === normalizeCourseTerm(term);
+        }
+
+        function getSemesterCreditStats(selectionEntries, creditsByCode, year, term) {
+            const selectedCodes = new Set();
+
+            (Array.isArray(selectionEntries) ? selectionEntries : []).forEach((selectionEntry) => {
+                if (!isCourseSelectionInSemester(selectionEntry, year, term)) return;
+
+                const normalizedCode = String(selectionEntry.code || '').trim();
+                if (!normalizedCode) return;
+
+                selectedCodes.add(normalizedCode);
+            });
+
+            let totalCredits = 0;
+            selectedCodes.forEach((code) => {
+                totalCredits += creditsByCode.get(code) || 0;
+            });
+
+            return {
+                totalCredits,
+                selectedCount: selectedCodes.size
+            };
+        }
+
+        function showCourseActionToast(message, durationMs = 2200) {
+            if (!message) return;
+            const existingToast = document.getElementById('link-copied-notification');
+            if (existingToast) existingToast.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'link-copied-notification';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, durationMs);
+        }
+
+        function formatConflictSlotForToast(timeSlot) {
+            const raw = String(timeSlot || '').trim();
+            if (!raw) return 'selected slot';
+
+            const dayMapJPToAbbr = {
+                '月': 'Mon',
+                '火': 'Tue',
+                '水': 'Wed',
+                '木': 'Thu',
+                '金': 'Fri',
+                '土': 'Sat',
+                '日': 'Sun'
+            };
+            const fullDayToAbbr = {
+                Monday: 'Mon',
+                Tuesday: 'Tue',
+                Wednesday: 'Wed',
+                Thursday: 'Thu',
+                Friday: 'Fri',
+                Saturday: 'Sat',
+                Sunday: 'Sun'
+            };
+            const periodMap = {
+                '1': '09:00-10:30',
+                '2': '10:45-12:15',
+                '3': '13:10-14:40',
+                '4': '14:55-16:25',
+                '5': '16:40-18:10'
+            };
+
+            const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
+            if (jpMatch) {
+                const day = dayMapJPToAbbr[jpMatch[1]] || jpMatch[1];
+                const timeWindow = periodMap[jpMatch[2]];
+                if (timeWindow) return `${day} ${timeWindow}`;
+                return day;
+            }
+
+            const englishFullMatch = raw.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/i);
+            if (englishFullMatch) {
+                const normalizedDay = englishFullMatch[1].charAt(0).toUpperCase() + englishFullMatch[1].slice(1).toLowerCase();
+                const day = fullDayToAbbr[normalizedDay] || normalizedDay;
+                return `${day} ${englishFullMatch[2]}\u2013${englishFullMatch[3]}`;
+            }
+
+            const englishAbbrMatch = raw.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/i);
+            if (englishAbbrMatch) {
+                const day = englishAbbrMatch[1].charAt(0).toUpperCase() + englishAbbrMatch[1].slice(1).toLowerCase();
+                return `${day} ${englishAbbrMatch[2]}\u2013${englishAbbrMatch[3]}`;
+            }
+
+            return raw.replace(/\s*-\s*/g, '\u2013');
+        }
 
         // Simple function to check if course is selected
         async function isCourseSelected(courseCode, year) {
@@ -2117,18 +2357,53 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     .single();
 
                 const currentSelection = profile?.courses_selection || [];
+                const currentYear = getCurrentYear();
+                const currentTerm = getCurrentTerm();
+                const normalizedCurrentTerm = normalizeCourseTerm(currentTerm);
 
-                // Filter to get only courses for current year and term
-                const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
-                const isCurrentlySelected = currentYearCourses.some(selected =>
-                    selected.code === course.course_code
+                const semesterCourses = await fetchCourseData(currentYear, normalizedCurrentTerm);
+                const semesterCreditsByCode = new Map();
+
+                (Array.isArray(semesterCourses) ? semesterCourses : []).forEach((semesterCourse) => {
+                    const courseCode = String(semesterCourse?.course_code || '').trim();
+                    if (!courseCode || semesterCreditsByCode.has(courseCode)) return;
+
+                    semesterCreditsByCode.set(courseCode, parseCreditsValue(semesterCourse?.credits));
+                });
+
+                const currentCourseCode = String(course.course_code || '').trim();
+                if (currentCourseCode && !semesterCreditsByCode.has(currentCourseCode)) {
+                    semesterCreditsByCode.set(currentCourseCode, parseCreditsValue(course.credits));
+                }
+
+                const isCurrentlySelected = currentSelection.some((selected) =>
+                    isCourseSelectionInSemester(selected, currentYear, currentTerm) &&
+                    String(selected.code || '').trim() === currentCourseCode
                 );
 
                 if (isCurrentlySelected) {
                     // Remove course - remove from the full selection, not just current year
                     const updatedSelection = currentSelection.filter(selected =>
-                        !(selected.code === course.course_code && selected.year === getCurrentYear() && (!selected.term || selected.term === getCurrentTerm()))
+                        !(
+                            String(selected.code || '').trim() === currentCourseCode &&
+                            isCourseSelectionInSemester(selected, currentYear, currentTerm)
+                        )
                     );
+
+                    const removalStats = getSemesterCreditStats(
+                        updatedSelection,
+                        semesterCreditsByCode,
+                        currentYear,
+                        currentTerm
+                    );
+
+                    if (removalStats.selectedCount > 0 && removalStats.totalCredits < SEMESTER_MIN_CREDITS) {
+                        alert(
+                            `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
+                            `This change would leave you with ${formatCreditsValue(removalStats.totalCredits)} credits.`
+                        );
+                        return;
+                    }
 
                     const { error } = await supabase
                         .from('profiles')
@@ -2152,15 +2427,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (conflictResult.hasConflict) {
                         console.log('Conflict detected, showing modal');
-                        showTimeConflictModal(conflictResult.conflictingCourses, course, async (shouldReplace, conflictingCourses) => {
+                        showTimeConflictModal(conflictResult.conflictingCourses, course, async (shouldReplace, conflictingCourses, actionType = 'dismiss') => {
                             if (shouldReplace) {
                                 // Remove conflicting courses and add new one
                                 let updatedSelection = currentSelection.filter(selected => {
                                     return !conflictingCourses.some(conflict => {
                                         // Remove conflicting courses from current year/term only
-                                        return conflict.course_code === selected.code &&
-                                            selected.year === getCurrentYear() &&
-                                            (!selected.term || selected.term === getCurrentTerm());
+                                        return String(conflict.course_code || '').trim() === String(selected.code || '').trim() &&
+                                            isCourseSelectionInSemester(selected, currentYear, currentTerm);
                                     });
                                 });
 
@@ -2168,11 +2442,34 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 updatedSelection = [
                                     ...updatedSelection,
                                     {
-                                        code: course.course_code,
-                                        year: getCurrentYear(),
-                                        term: getCurrentTerm()
+                                        code: currentCourseCode,
+                                        year: currentYear,
+                                        term: currentTerm
                                     }
                                 ];
+
+                                const replacementStats = getSemesterCreditStats(
+                                    updatedSelection,
+                                    semesterCreditsByCode,
+                                    currentYear,
+                                    currentTerm
+                                );
+
+                                if (replacementStats.totalCredits > SEMESTER_MAX_CREDITS) {
+                                    alert(
+                                        `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
+                                        `This change would bring you to ${formatCreditsValue(replacementStats.totalCredits)} credits.`
+                                    );
+                                    return;
+                                }
+
+                                if (replacementStats.selectedCount > 0 && replacementStats.totalCredits < SEMESTER_MIN_CREDITS) {
+                                    alert(
+                                        `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
+                                        `This change would leave you with ${formatCreditsValue(replacementStats.totalCredits)} credits.`
+                                    );
+                                    return;
+                                }
 
                                 const { error } = await supabase
                                     .from('profiles')
@@ -2185,13 +2482,18 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                     return;
                                 }
 
-                                alert('Course replaced successfully!');
+                                showCourseActionToast(`Replaced course in ${formatConflictSlotForToast(course.time_slot)}.`);
                                 await updateButton();
                                 // Also update the button state specifically
                                 await updateCourseButtonState(course, newButton);
                                 if (window.refreshCalendarComponent) {
                                     window.refreshCalendarComponent();
                                 }
+                                return;
+                            }
+
+                            if (actionType === 'keep') {
+                                showCourseActionToast('Kept current course.');
                             }
                         });
                         return;
@@ -2201,11 +2503,34 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     const updatedSelection = [
                         ...currentSelection,
                         {
-                            code: course.course_code,
-                            year: getCurrentYear(),
-                            term: getCurrentTerm()
+                            code: currentCourseCode,
+                            year: currentYear,
+                            term: currentTerm
                         }
                     ];
+
+                    const additionStats = getSemesterCreditStats(
+                        updatedSelection,
+                        semesterCreditsByCode,
+                        currentYear,
+                        currentTerm
+                    );
+
+                    if (additionStats.totalCredits > SEMESTER_MAX_CREDITS) {
+                        alert(
+                            `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
+                            `This change would bring you to ${formatCreditsValue(additionStats.totalCredits)} credits.`
+                        );
+                        return;
+                    }
+
+                    if (additionStats.selectedCount > 0 && additionStats.totalCredits < SEMESTER_MIN_CREDITS) {
+                        alert(
+                            `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
+                            `This change would leave you with ${formatCreditsValue(additionStats.totalCredits)} credits.`
+                        );
+                        return;
+                    }
 
                     const { error } = await supabase
                         .from('profiles')
@@ -3271,7 +3596,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
             console.log('Fetching course data for conflict check...');
             const { data: coursesData } = await supabase
                 .from('courses')
-                .select('course_code, title, time_slot, professor, academic_year, term')
+                .select('course_code, title, time_slot, professor, academic_year, term, type, credits')
                 .in('course_code', selectedCourseCodes)
                 .eq('academic_year', currentYear)
                 .eq('term', currentTerm);
@@ -3499,36 +3824,224 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     if (existingModal) {
         existingModal.remove();
     }
+    document.body.classList.remove('modal-open');
+    const previousFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    const safeConflictingCourses = Array.isArray(conflictingCourses) ? conflictingCourses : [];
+
+    const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const toDisplayText = (value, fallback = 'Not available') => {
+        const raw = String(value ?? '').trim();
+        return raw ? escapeHtml(raw) : `<span class="conflict-empty-value">${escapeHtml(fallback)}</span>`;
+    };
+
+    const toDisplayTitle = (courseEntry) => {
+        const normalized = normalizeCourseTitle(courseEntry?.title || '');
+        const rawTitle = String(courseEntry?.title || '').trim();
+        const title = String(normalized || rawTitle || 'Untitled course').trim();
+        return escapeHtml(title);
+    };
+
+    const toDisplayProfessor = (courseEntry) => {
+        const normalized = getRomanizedProfessorName(courseEntry?.professor || 'TBA');
+        return toDisplayText(normalized || 'TBA', 'TBA');
+    };
+
+    const toDisplayCredits = (courseEntry) => {
+        const raw = courseEntry?.credits;
+        if (raw === null || raw === undefined || raw === '') {
+            return `<span class="conflict-empty-value">Not listed</span>`;
+        }
+
+        if (typeof raw === 'number' && Number.isFinite(raw)) {
+            const value = Number.isInteger(raw) ? raw.toFixed(0) : raw.toFixed(1).replace(/\.0$/, '');
+            return `${escapeHtml(value)} credit${Number(raw) === 1 ? '' : 's'}`;
+        }
+
+        const matched = String(raw).match(/(\d+(\.\d+)?)/);
+        if (!matched) {
+            return toDisplayText(raw, 'Not listed');
+        }
+
+        const parsed = parseFloat(matched[1]);
+        if (!Number.isFinite(parsed)) {
+            return toDisplayText(raw, 'Not listed');
+        }
+
+        const value = Number.isInteger(parsed) ? parsed.toFixed(0) : parsed.toFixed(1).replace(/\.0$/, '');
+        return `${escapeHtml(value)} credit${parsed === 1 ? '' : 's'}`;
+    };
+
+    const toDisplayType = (courseEntry) => {
+        const rawType = String(courseEntry?.type || '').trim();
+        return rawType ? escapeHtml(rawType) : '<span class="conflict-empty-value">General</span>';
+    };
+
+    const toDisplayTimeSlot = (courseEntry) => {
+        const raw = String(courseEntry?.time_slot || '').trim();
+        if (!raw) return '<span class="conflict-empty-value">Not set</span>';
+
+        const dayMapJPToAbbr = {
+            月: 'Mon',
+            火: 'Tue',
+            水: 'Wed',
+            木: 'Thu',
+            金: 'Fri',
+            土: 'Sat',
+            日: 'Sun'
+        };
+        const fullDayToAbbr = {
+            Monday: 'Mon',
+            Tuesday: 'Tue',
+            Wednesday: 'Wed',
+            Thursday: 'Thu',
+            Friday: 'Fri',
+            Saturday: 'Sat',
+            Sunday: 'Sun'
+        };
+        const periodToRange = {
+            '1': '09:00 - 10:30',
+            '2': '10:45 - 12:15',
+            '3': '13:10 - 14:40',
+            '4': '14:55 - 16:25',
+            '5': '16:40 - 18:10'
+        };
+
+        const jpSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g)];
+        if (jpSlots.length > 0) {
+            return jpSlots.map((slot) => {
+                const day = dayMapJPToAbbr[slot[1]] || slot[1];
+                const periodRange = periodToRange[slot[2]] || '';
+                return escapeHtml(periodRange ? `${day} ${periodRange}` : day);
+            }).join('<br>');
+        }
+
+        const englishFullMatch = raw.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})$/i);
+        if (englishFullMatch) {
+            const dayRaw = englishFullMatch[1];
+            const day = fullDayToAbbr[dayRaw.charAt(0).toUpperCase() + dayRaw.slice(1).toLowerCase()] || dayRaw;
+            return `${escapeHtml(day)} ${escapeHtml(englishFullMatch[2].replace(/\s+/g, ' ').trim())}`;
+        }
+
+        const englishAbbrMatch = raw.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})$/i);
+        if (englishAbbrMatch) {
+            return `${escapeHtml(englishAbbrMatch[1])} ${escapeHtml(englishAbbrMatch[2].replace(/\s+/g, ' ').trim())}`;
+        }
+
+        return escapeHtml(raw);
+    };
+
+    const toDisplayTerm = (courseEntry) => {
+        const term = String(courseEntry?.term || '').trim();
+        const year = String(courseEntry?.academic_year || '').trim();
+        if (term && year) return `${escapeHtml(term)} ${escapeHtml(year)}`;
+        if (term) return escapeHtml(term);
+        if (year) return escapeHtml(year);
+        return '<span class="conflict-empty-value">Current semester</span>';
+    };
+
+    const toHexColor = (value, fallback = '#E0E0E0') => {
+        const color = String(value || '').trim();
+        return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color) ? color : fallback;
+    };
+
+    const hexToRgba = (hex, alpha = 0.34) => {
+        const normalized = toHexColor(hex).slice(1);
+        const expanded = normalized.length === 3
+            ? normalized.split('').map((char) => char + char).join('')
+            : normalized;
+        const red = parseInt(expanded.slice(0, 2), 16);
+        const green = parseInt(expanded.slice(2, 4), 16);
+        const blue = parseInt(expanded.slice(4, 6), 16);
+        return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+    };
+
+    const buildCourseCardMarkup = (courseEntry, badge, modifierClass) => {
+        const accentHex = toHexColor(getCourseColorByType(courseEntry?.type));
+        const accentBorder = hexToRgba(accentHex, 0.38);
+        return `
+        <article class="conflict-course-card ${modifierClass}" style="--conflict-card-accent: ${accentHex}; --conflict-card-border: ${accentBorder};">
+            <div class="conflict-course-card-header">
+                <h4>${toDisplayTitle(courseEntry)}</h4>
+                <span class="conflict-course-card-badge">${escapeHtml(badge)}</span>
+            </div>
+            <dl class="conflict-course-card-meta">
+                <div class="conflict-course-card-meta-row conflict-course-card-meta-row--time conflict-meta-primary">
+                    <dt>Time</dt>
+                    <dd>${toDisplayTimeSlot(courseEntry)}</dd>
+                </div>
+                <div class="conflict-course-card-meta-row conflict-meta-primary">
+                    <dt>Professor</dt>
+                    <dd>${toDisplayProfessor(courseEntry)}</dd>
+                </div>
+                <div class="conflict-course-card-meta-row conflict-meta-primary">
+                    <dt>Credits</dt>
+                    <dd>${toDisplayCredits(courseEntry)}</dd>
+                </div>
+            </dl>
+            <div class="conflict-card-details">
+                <div class="conflict-meta-secondary-wrap">
+                    <div class="conflict-course-card-meta-row conflict-meta-secondary">
+                        <dt>Code</dt>
+                        <dd>${toDisplayText(courseEntry?.course_code, 'N/A')}</dd>
+                    </div>
+                    <div class="conflict-course-card-meta-row conflict-meta-secondary">
+                        <dt>Type</dt>
+                        <dd>${toDisplayType(courseEntry)}</dd>
+                    </div>
+                </div>
+                <button type="button" class="conflict-more-details" aria-expanded="false">More details</button>
+            </div>
+        </article>
+    `;
+    };
 
     // Create modal container
     const modalContainer = document.createElement('div');
     modalContainer.className = 'conflict-container hidden';
 
     modalContainer.innerHTML = `
-        <div class="search-background">
-            <div class="search-modal">
-                <h2><div></div>Time Slot Conflict</h2>
+        <div class="conflict-backdrop">
+            <div class="conflict-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-modal-title">
+                <button class="assignment-modal-close conflict-modal-close" type="button" aria-label="Close conflict modal">&times;</button>
+                <h2 class="conflict-modal-title" id="conflict-modal-title">
+                    <span class="conflict-modal-heading-icon" aria-hidden="true"></span>
+                    Schedule Conflict
+                </h2>
                 <div class="conflict-content">
-                    <p>You are trying to add <strong>${normalizeCourseTitle(newCourse.title)}</strong> but there's already a course scheduled at the same time:</p>
-                    
-                    ${conflictingCourses.map(course => `
-                        <div class="conflicting-course">
-                            <div class="course-details">
-                                <h3>${normalizeCourseTitle(course.title)}</h3>
-                                <p><strong>Course Code:</strong> ${course.course_code}</p>
-                                <p><strong>Time:</strong> ${course.time_slot}</p>
-                                <p><strong>Professor:</strong> ${getRomanizedProfessorName(course.professor || 'TBA')}</p>
+                    <p class="conflict-intro">This course conflicts with a course you already registered for.
+                    </p>
+                    <div class="conflict-comparison-grid">
+                        <section class="conflict-comparison-column">
+                            <h3 class="conflict-column-title">Currently registered</h3>
+                            <div class="conflict-course-stack">
+                                ${safeConflictingCourses.length
+            ? safeConflictingCourses
+                .map((courseEntry) => buildCourseCardMarkup(courseEntry, 'Registered', 'conflict-course-card--existing'))
+                .join('')
+            : '<p class="conflict-empty">No registered course details found.</p>'}
                             </div>
-                        </div>
-                    `).join('')}
-                    
+                        </section>
+                        <section class="conflict-comparison-column">
+                            <h3 class="conflict-column-title">New selection</h3>
+                            <div class="conflict-course-stack">
+                                ${buildCourseCardMarkup(newCourse || {}, 'Selected', 'conflict-course-card--new')}
+                            </div>
+                        </section>
+                    </div>
                     <div class="conflict-question">
-                        <p>Would you like to remove the conflicting course and add the new one?</p>
+                        <p>Choose what to keep for this time slot.</p>
                     </div>
                 </div>
-                <div class="search-buttons">
-                    <button class="search-cancel conflict-cancel">Cancel</button>
-                    <button class="search-submit conflict-replace">Replace Course</button>
+                <div class="conflict-actions">
+                    <button class="conflict-cancel" type="button">Keep Registered Course</button>
+                    <button class="conflict-replace" type="button">Replace & Register</button>
                 </div>
             </div>
         </div>
@@ -3536,38 +4049,75 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
 
     // Add to body
     document.body.appendChild(modalContainer);
+    document.body.classList.add('modal-open');
 
     // Add event listeners
     const cancelBtn = modalContainer.querySelector('.conflict-cancel');
     const replaceBtn = modalContainer.querySelector('.conflict-replace');
-    const background = modalContainer.querySelector('.search-background');
+    const closeBtn = modalContainer.querySelector('.conflict-modal-close');
+    const background = modalContainer.querySelector('.conflict-backdrop');
+    const detailsToggleButtons = modalContainer.querySelectorAll('.conflict-more-details');
+    let resolved = false;
+
+    const handleEscape = (event) => {
+        if (event.key === 'Escape') {
+            resolveConflict(false, 'dismiss');
+        }
+    };
 
     function closeModal() {
+        modalContainer.classList.remove('show');
         modalContainer.classList.add('hidden');
+        document.body.classList.remove('modal-open');
         setTimeout(() => {
             modalContainer.remove();
+            if (previousFocusedElement && typeof previousFocusedElement.focus === 'function') {
+                previousFocusedElement.focus();
+            }
         }, 300);
-        if (onResolve) onResolve(false);
     }
 
-    function replaceAndAdd() {
-        modalContainer.classList.add('hidden');
-        setTimeout(() => {
-            modalContainer.remove();
-        }, 300);
-        if (onResolve) onResolve(true, conflictingCourses);
+    function resolveConflict(shouldReplace, actionType = 'dismiss') {
+        if (resolved) return;
+        resolved = true;
+        document.removeEventListener('keydown', handleEscape);
+        closeModal();
+        if (onResolve) {
+            onResolve(Boolean(shouldReplace), safeConflictingCourses, actionType);
+        }
     }
 
-    cancelBtn.addEventListener('click', closeModal);
-    replaceBtn.addEventListener('click', replaceAndAdd);
+    cancelBtn.addEventListener('click', () => resolveConflict(false, 'keep'));
+    replaceBtn.addEventListener('click', () => resolveConflict(true, 'replace'));
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => resolveConflict(false, 'dismiss'));
+    }
+    detailsToggleButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const parentCard = button.closest('.conflict-course-card');
+            if (!parentCard) return;
+
+            const isExpanded = parentCard.classList.toggle('is-expanded');
+            button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+            button.textContent = isExpanded ? 'Hide details' : 'More details';
+        });
+    });
     background.addEventListener('click', (e) => {
         if (e.target === background) {
-            closeModal();
+            resolveConflict(false, 'dismiss');
+        }
+    });
+    document.addEventListener('keydown', handleEscape);
+
+    requestAnimationFrame(() => {
+        modalContainer.classList.remove('hidden');
+        if (closeBtn) {
+            closeBtn.focus();
         }
     });
 }
 
-const MOBILE_SHEET_BREAKPOINT = 780;
+const MOBILE_SHEET_BREAKPOINT = 1023;
 const SWIPE_START_THRESHOLD = 8;
 const SWIPE_AXIS_LOCK_RATIO = 1.2;
 const SWIPE_CLOSE_DURATION_MS = 320;
