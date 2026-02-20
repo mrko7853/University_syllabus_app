@@ -5,6 +5,8 @@
 import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
 
 const IS_PRODUCTION = import.meta.env.PROD
+const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter'
+const HOME_SLOT_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000
 
 class SimpleRouter {
   constructor() {
@@ -576,8 +578,11 @@ class SimpleRouter {
         return;
       }
 
-      // Check if we have saved state to restore
-      const hasSavedState = this.coursesPageState.year || this.coursesPageState.term
+      // Check if we have saved state to restore.
+      // Slot-intent navigation from home writes a pending prefilter payload that should
+      // take precedence over old remembered courses-page state.
+      const hasPendingHomeSlotPrefilter = this.hasPendingHomeSlotPrefilter()
+      const hasSavedState = !hasPendingHomeSlotPrefilter && (this.coursesPageState.year || this.coursesPageState.term)
 
       // On multi-page entrypoints, main.js may not be loaded yet.
       // Always ensure we can initialize dashboard regardless of start page.
@@ -626,6 +631,29 @@ class SimpleRouter {
     }
   }
 
+  hasPendingHomeSlotPrefilter() {
+    try {
+      const raw = window.sessionStorage.getItem(HOME_SLOT_PREFILTER_KEY)
+      if (!raw) return false
+
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return false
+
+      const createdAt = Number(parsed.createdAt || 0)
+      if (createdAt && (Date.now() - createdAt) > HOME_SLOT_PREFILTER_MAX_AGE_MS) {
+        return false
+      }
+
+      const day = String(parsed.day || '').trim()
+      const term = String(parsed.term || '').trim()
+      const year = Number(parsed.year)
+      return Boolean(day && term && Number.isFinite(year))
+    } catch (error) {
+      console.warn('Router: unable to inspect home slot prefilter state', error)
+      return false
+    }
+  }
+
   // Restore state and reload courses with the saved year/term
   async restoreCoursesPageStateWithReload() {
     console.log('Restoring courses page state with reload:', this.coursesPageState)
@@ -665,41 +693,7 @@ class SimpleRouter {
       }
     }
 
-    // Restore search query after courses are loaded
-    if (this.coursesPageState.searchQuery) {
-      setTimeout(() => {
-        window.currentSearchQuery = this.coursesPageState.searchQuery
-
-        // Update desktop search pill input
-        const searchPillInput = document.getElementById('search-pill-input')
-        if (searchPillInput) {
-          searchPillInput.value = this.coursesPageState.searchQuery
-        }
-
-        // Update modal search input as well
-        const searchInput = document.getElementById('search-input')
-        if (searchInput) {
-          searchInput.value = this.coursesPageState.searchQuery
-        }
-
-        // Apply the search
-        if (window.performSearch) {
-          window.performSearch(this.coursesPageState.searchQuery)
-        } else if (window.applySearchAndFilters) {
-          window.applySearchAndFilters(this.coursesPageState.searchQuery)
-        }
-
-        // Update filter paragraph
-        if (window.updateCourseFilterParagraph) {
-          setTimeout(() => window.updateCourseFilterParagraph(), 100)
-        }
-      }, 300)
-    }
-
-    // Restore filters if any
-    if (this.coursesPageState.filters) {
-      setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
-    }
+    // Course filters/search are intentionally not restored across navigations.
   }
 
   // Save courses page state before navigating away
@@ -710,8 +704,8 @@ class SimpleRouter {
     this.coursesPageState = {
       year: yearSelect ? yearSelect.value : null,
       term: termSelect ? termSelect.value : null,
-      searchQuery: window.currentSearchQuery || null,
-      filters: this.getActiveFilters()
+      searchQuery: null,
+      filters: null
     }
 
     console.log('Saved courses page state:', this.coursesPageState)
@@ -720,7 +714,7 @@ class SimpleRouter {
   // Restore courses page state when returning
   restoreCoursesPageState() {
     // Only restore if we have saved state
-    if (!this.coursesPageState.year && !this.coursesPageState.term && !this.coursesPageState.searchQuery) {
+    if (!this.coursesPageState.year && !this.coursesPageState.term) {
       console.log('No saved courses page state to restore')
       return
     }
@@ -756,29 +750,7 @@ class SimpleRouter {
       if (termSelect) termSelect.dispatchEvent(new Event('change', { bubbles: true }))
     }
 
-    // Restore search query after a delay to ensure courses are loaded
-    if (this.coursesPageState.searchQuery) {
-      setTimeout(() => {
-        window.currentSearchQuery = this.coursesPageState.searchQuery
-
-        // Apply the search
-        if (window.performSearch) {
-          window.performSearch(this.coursesPageState.searchQuery)
-        } else if (window.applySearchAndFilters) {
-          window.applySearchAndFilters(this.coursesPageState.searchQuery)
-        }
-
-        // Update filter paragraph
-        if (window.updateCourseFilterParagraph) {
-          setTimeout(() => window.updateCourseFilterParagraph(), 100)
-        }
-      }, 300)
-    }
-
-    // Restore filters if any
-    if (this.coursesPageState.filters) {
-      setTimeout(() => this.restoreFilters(this.coursesPageState.filters), 400)
-    }
+    // Course filters/search are intentionally not restored across navigations.
   }
 
   // Get active filters from the filter menu
@@ -867,26 +839,7 @@ class SimpleRouter {
       })
     }
 
-    // Listen for search changes via global variable
-    const originalPerformSearch = window.performSearch
-    if (originalPerformSearch) {
-      window.performSearch = (query) => {
-        const result = originalPerformSearch(query)
-        this.coursesPageState.searchQuery = query || null
-        return result
-      }
-    }
-
-    // Also watch for filter changes
-    document.querySelectorAll('#filter-by-type input, #filter-by-days input, #filter-by-time input').forEach(input => {
-      const filterChangeHandler = () => {
-        this.coursesPageState.filters = this.getActiveFilters()
-      }
-      input.addEventListener('change', filterChangeHandler)
-      this.componentCleanupFunctions.push(() => {
-        input.removeEventListener('change', filterChangeHandler)
-      })
-    })
+    // Course filters/search are intentionally transient and not persisted.
   }
 
   async initializeCalendar() {

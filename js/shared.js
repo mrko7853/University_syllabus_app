@@ -28,6 +28,7 @@ const SLOT_PERIOD_TO_TIME = {
 };
 const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective']);
+const SLOT_ALLOWED_TIMES = new Set(Object.values(SLOT_PERIOD_TO_TIME));
 
 function normalizeSlotDay(day) {
     const raw = String(day || '').trim();
@@ -50,9 +51,16 @@ function normalizeSlotDay(day) {
 }
 
 function normalizeSlotPeriod(period) {
+    if (period === null || period === undefined || period === '') return null;
     const parsed = parseInt(period, 10);
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) return null;
     return parsed;
+}
+
+function normalizeSlotTime(timeValue) {
+    const raw = String(timeValue || '').trim();
+    if (!raw) return null;
+    return SLOT_ALLOWED_TIMES.has(raw) ? raw : null;
 }
 
 function normalizeSlotTerm(term) {
@@ -95,10 +103,18 @@ function navigateToCoursesForSlot() {
 export function openCourseSearchForSlot(payload = {}) {
     const day = normalizeSlotDay(payload.day);
     const period = normalizeSlotPeriod(payload.period);
+    const normalizedTimeFromPayload = normalizeSlotTime(payload.time);
     const term = normalizeSlotTerm(payload.term);
     const year = parseInt(payload.year, 10);
 
-    if (!day || !SLOT_ALLOWED_DAYS.has(day) || !period || !term || !Number.isFinite(year)) {
+    const hasProvidedPeriod = payload.period !== null && payload.period !== undefined && payload.period !== '';
+    if (!day || !SLOT_ALLOWED_DAYS.has(day) || !term || !Number.isFinite(year)) {
+        console.warn('openCourseSearchForSlot: invalid payload', payload);
+        navigateToCoursesForSlot();
+        return null;
+    }
+
+    if (hasProvidedPeriod && !period) {
         console.warn('openCourseSearchForSlot: invalid payload', payload);
         navigateToCoursesForSlot();
         return null;
@@ -106,13 +122,18 @@ export function openCourseSearchForSlot(payload = {}) {
 
     const normalized = {
         day,
-        period,
-        time: SLOT_PERIOD_TO_TIME[period] || null,
         term,
         year,
         source: payload.source ? String(payload.source) : 'slot-intent',
         createdAt: Date.now()
     };
+
+    if (period) {
+        normalized.period = period;
+        normalized.time = SLOT_PERIOD_TO_TIME[period] || null;
+    } else if (normalizedTimeFromPayload) {
+        normalized.time = normalizedTimeFromPayload;
+    }
 
     const normalizedTypeFilters = normalizeSlotTypeFilters(payload.typeFilters);
     if (normalizedTypeFilters && normalizedTypeFilters.length > 0) {

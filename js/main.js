@@ -285,16 +285,18 @@ function consumeHomeSlotPrefilter() {
         }
 
         const day = String(parsed.day || '').trim();
-        const period = Number(parsed.period);
+        const parsedPeriod = Number(parsed.period);
+        const period = Number.isFinite(parsedPeriod) ? parsedPeriod : null;
         const term = String(parsed.term || '').trim();
         const year = Number(parsed.year);
+        const time = String(parsed.time || '').trim() || null;
         const typeFilters = Array.isArray(parsed.typeFilters)
             ? Array.from(new Set(parsed.typeFilters
                 .map((value) => String(value || '').trim())
                 .filter((value) => value === 'Core' || value === 'Foundation' || value === 'Elective')))
             : null;
 
-        if (!day || !Number.isFinite(period) || !term || !Number.isFinite(year)) {
+        if (!day || !term || !Number.isFinite(year)) {
             return null;
         }
 
@@ -303,7 +305,7 @@ function consumeHomeSlotPrefilter() {
             period,
             term,
             year,
-            time: parsed.time || HOME_PREFILTER_PERIOD_TO_TIME[period] || null,
+            time: time || (Number.isFinite(period) ? HOME_PREFILTER_PERIOD_TO_TIME[period] : null) || null,
             typeFilters: typeFilters && typeFilters.length > 0 ? typeFilters : null
         };
     } catch (error) {
@@ -340,7 +342,9 @@ async function applyHomePrefilterFilters(prefilter) {
     if (!prefilter) return;
 
     const dayValue = prefilter.day;
-    const timeValue = HOME_PREFILTER_PERIOD_TO_TIME[prefilter.period] || prefilter.time;
+    const timeValue = Number.isFinite(prefilter.period)
+        ? (HOME_PREFILTER_PERIOD_TO_TIME[prefilter.period] || prefilter.time)
+        : (prefilter.time || null);
 
     const dayCheckboxes = document.querySelectorAll('#filter-by-days .filter-checkbox');
     dayCheckboxes.forEach((checkbox) => {
@@ -368,7 +372,93 @@ async function applyHomePrefilterFilters(prefilter) {
     }
 
     currentSearchQuery = null;
+    updateCourseFilterTriggerCount();
     await applySearchAndFilters(null);
+}
+
+function getCourseFilterCheckboxes() {
+    return document.querySelectorAll(
+        '#filter-by-days .filter-checkbox, #filter-by-time .filter-checkbox, #filter-by-concentration .filter-checkbox'
+    );
+}
+
+function getAppliedCourseFilterCount() {
+    return Array.from(getCourseFilterCheckboxes()).filter((checkbox) => checkbox.checked).length;
+}
+
+function ensureCourseFilterCountChip(filterBtn) {
+    if (!filterBtn) return null;
+
+    let chip = filterBtn.querySelector('.course-filter-count-chip');
+    if (!chip) {
+        chip = document.createElement('span');
+        chip.className = 'calendar-filter-count-chip course-filter-count-chip';
+        chip.setAttribute('aria-hidden', 'true');
+        chip.hidden = true;
+        filterBtn.appendChild(chip);
+    }
+
+    return chip;
+}
+
+function updateCourseFilterTriggerCount() {
+    const filterBtns = document.querySelectorAll('.page-courses .filter-btn');
+    if (!filterBtns.length) return;
+
+    const count = getAppliedCourseFilterCount();
+    const countLabel = count > 99 ? '99+' : String(count);
+    const ariaLabel = count > 0 ? `Filters, ${count} applied` : 'Filters';
+
+    filterBtns.forEach((filterBtn) => {
+        const chip = ensureCourseFilterCountChip(filterBtn);
+        if (!chip) return;
+
+        if (count > 0) {
+            chip.hidden = false;
+            chip.textContent = countLabel;
+            filterBtn.classList.add('has-active-filters');
+        } else {
+            chip.hidden = true;
+            chip.textContent = '';
+            filterBtn.classList.remove('has-active-filters');
+        }
+
+        filterBtn.setAttribute('aria-label', ariaLabel);
+    });
+}
+
+function resetCoursePageFiltersAndSearch() {
+    getCourseFilterCheckboxes().forEach((checkbox) => {
+        checkbox.checked = false;
+    });
+
+    currentSearchQuery = null;
+    suggestionsDisplayed = false;
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const searchPillInput = document.getElementById('search-pill-input');
+    if (searchPillInput) searchPillInput.value = '';
+
+    const searchAutocomplete = document.getElementById('search-autocomplete');
+    if (searchAutocomplete) {
+        searchAutocomplete.style.display = 'none';
+        searchAutocomplete.innerHTML = '';
+    }
+
+    const searchPillAutocomplete = document.getElementById('search-pill-autocomplete');
+    if (searchPillAutocomplete) {
+        searchPillAutocomplete.style.display = 'none';
+        searchPillAutocomplete.innerHTML = '';
+    }
+
+    const courseList = document.getElementById('course-list');
+    if (courseList) {
+        courseList.querySelector('.no-results')?.remove();
+    }
+
+    updateCourseFilterTriggerCount();
 }
 
 function buildCourseSectionLine(courseCode, compactSchedule) {
@@ -626,6 +716,13 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
     // Reset suggestions flag when courses are reloaded
     suggestionsDisplayed = false;
 
+    // Keep active day/time/type filters applied even if another async render completes later.
+    Promise.resolve()
+        .then(() => applySearchAndFilters(currentSearchQuery))
+        .catch((error) => {
+            console.warn('Failed to reapply filters after course render:', error);
+        });
+
     console.log(`Successfully rendered ${courses.length} courses for ${term} ${year}`);
 }
 // Robust course data fetching with retry mechanism
@@ -866,6 +963,8 @@ function applyFilters() {
 
 // Unified function that applies both search and filter criteria
 async function applySearchAndFilters(searchQuery) {
+    updateCourseFilterTriggerCount();
+
     // Don't apply filters while courses are still loading
     if (isLoadingCourses) {
         console.log('Skipping filter application - courses still loading');
@@ -1376,6 +1475,7 @@ function setupDashboardEventListeners() {
             });
         }
     });
+    updateCourseFilterTriggerCount();
 
     // Close filter modal when clicking outside
     if (filterBackground) {
@@ -1523,6 +1623,7 @@ function setupDashboardEventListeners() {
 
             // Clear global search state
             currentSearchQuery = null;
+            updateCourseFilterTriggerCount();
 
             // Update course filter paragraph to show default text
             updateCourseFilterParagraph();
@@ -2209,9 +2310,12 @@ function initializeFilterCheckboxes() {
     filterCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', async () => {
             // Apply filters when any checkbox changes
+            updateCourseFilterTriggerCount();
             await applySearchAndFilters();
         });
     });
+
+    updateCourseFilterTriggerCount();
 }
 
 // Responsive layout is now handled purely via CSS with .container-above-mobile and .container-above-desktop
@@ -3195,6 +3299,8 @@ export async function initializeDashboard() {
     const pendingHomePrefilter = consumeHomeSlotPrefilter();
     if (pendingHomePrefilter) {
         applyHomePrefilterSemester(pendingHomePrefilter);
+    } else {
+        resetCoursePageFiltersAndSearch();
     }
 
     // Set up course list click listener
@@ -3271,6 +3377,8 @@ Object.defineProperty(window, 'currentSearchQuery', {
 
 // Function to update the course filter paragraph with search/filter info
 function updateCourseFilterParagraph() {
+    updateCourseFilterTriggerCount();
+
     // Update all course filter paragraphs (mobile and desktop)
     const courseFilterParagraphs = document.querySelectorAll(".course-filter-paragraph");
     if (courseFilterParagraphs.length === 0) return;

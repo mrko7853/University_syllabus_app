@@ -1,6 +1,12 @@
 import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSearchForSlot } from "./shared.js";
 import { supabase } from "../supabase.js";
 
+const CALENDAR_VIEW_STORAGE_KEY = "ila_calendar_view_mode";
+const VIEW_WEEK = "week";
+const VIEW_DAY = "day";
+const VIEW_LIST = "list";
+const ALLOWED_CALENDAR_VIEWS = new Set([VIEW_WEEK, VIEW_DAY, VIEW_LIST]);
+
 class CalendarPageComponent extends HTMLElement {
   constructor() {
     super();
@@ -9,7 +15,10 @@ class CalendarPageComponent extends HTMLElement {
     this.currentUser = null;
     this.retryCount = 0;
     this.maxRetries = 5;
-    this.isMobile = false;
+    this.isMobile = window.innerWidth <= 1023;
+    this.savedViewPreference = this.readSavedViewPreference();
+    const initialPreferredView = this.savedViewPreference || this.resolveDefaultViewForViewport(this.isMobile);
+    this.currentView = this.resolveEffectiveViewForViewport(initialPreferredView, this.isMobile);
 
     this.dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     this.dayLongNames = {
@@ -44,7 +53,7 @@ class CalendarPageComponent extends HTMLElement {
     };
 
     this.filterState = {
-      typeGroups: new Set(),
+      typeFilters: new Set(),
       showRegistered: true,
       showSaved: false,
       showEmptySlots: true
@@ -54,6 +63,7 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileCoursesBySlot = new Map();
     this.mobileCourseLookup = new Map();
     this.desktopCourseLookup = new Map();
+    this.listCourseLookup = new Map();
     this.expandedMobilePeriodByDay = {};
     this.selectedMobileDayIndex = this.getDefaultMobileDayIndex();
 
@@ -66,6 +76,7 @@ class CalendarPageComponent extends HTMLElement {
     this.activeSlotTrigger = null;
     this.activeFilterTrigger = null;
     this.toolbarCleanupFns = [];
+    this.filterCloseTimer = null;
 
     this.innerHTML = `
       <div class="calendar-page-wrapper">
@@ -107,6 +118,12 @@ class CalendarPageComponent extends HTMLElement {
             </div>
           </div>
 
+          <div class="calendar-list-view" style="display: none;" aria-label="Registered courses list">
+            <div class="calendar-list-scroll">
+              <div class="calendar-list-content"></div>
+            </div>
+          </div>
+
           <div class="calendar-slot-popover hidden" id="calendar-slot-popover" role="dialog" aria-modal="false" aria-labelledby="calendar-slot-popover-title">
             <p class="calendar-slot-popover-title" id="calendar-slot-popover-title">Empty slot</p>
             <p class="calendar-slot-popover-subtitle" id="calendar-slot-popover-subtitle"></p>
@@ -144,6 +161,8 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileView = this.querySelector(".calendar-mobile-view");
     this.mobileDayTabs = this.querySelector(".calendar-mobile-day-tabs");
     this.mobileTrack = this.querySelector(".calendar-mobile-track");
+    this.listView = this.querySelector(".calendar-list-view");
+    this.listContent = this.querySelector(".calendar-list-content");
 
     this.slotPopover = this.querySelector("#calendar-slot-popover");
     this.slotPopoverSubtitle = this.querySelector("#calendar-slot-popover-subtitle");
@@ -160,6 +179,7 @@ class CalendarPageComponent extends HTMLElement {
     this.boundCalendarPointerMove = this.handleCalendarPointerMove.bind(this);
     this.boundCalendarPointerLeave = this.handleCalendarPointerLeave.bind(this);
     this.boundMobileClickHandler = this.handleMobileViewClick.bind(this);
+    this.boundListViewClickHandler = this.handleListViewClick.bind(this);
     this.boundTouchStartHandler = this.handleTouchStart.bind(this);
     this.boundTouchMoveHandler = this.handleTouchMove.bind(this);
     this.boundTouchEndHandler = this.handleTouchEnd.bind(this);
@@ -181,6 +201,7 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileView.addEventListener("touchstart", this.boundTouchStartHandler, { passive: true });
     this.mobileView.addEventListener("touchmove", this.boundTouchMoveHandler, { passive: true });
     this.mobileView.addEventListener("touchend", this.boundTouchEndHandler, { passive: true });
+    this.listView?.addEventListener("click", this.boundListViewClickHandler);
     this.addEventListener("click", this.boundRootActionClick);
 
     window.addEventListener("resize", this.boundResizeHandler);
@@ -202,6 +223,7 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileView.removeEventListener("touchstart", this.boundTouchStartHandler);
     this.mobileView.removeEventListener("touchmove", this.boundTouchMoveHandler);
     this.mobileView.removeEventListener("touchend", this.boundTouchEndHandler);
+    this.listView?.removeEventListener("click", this.boundListViewClickHandler);
     this.removeEventListener("click", this.boundRootActionClick);
 
     window.removeEventListener("resize", this.boundResizeHandler);
@@ -209,7 +231,7 @@ class CalendarPageComponent extends HTMLElement {
     document.removeEventListener("pointerdown", this.boundDocumentPointerDown);
 
     this.cleanupToolbarControls();
-    this.closeFilterPopover(false);
+    this.closeFilterPopover(false, true);
     this.closeSlotActionMenus(false);
     this.hideTooltip();
     this.clearFocusTrap();
@@ -218,6 +240,137 @@ class CalendarPageComponent extends HTMLElement {
   handlePageLoaded() {
     this.setupToolbarControls();
     this.checkMobile();
+  }
+
+  normalizeCalendarView(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ALLOWED_CALENDAR_VIEWS.has(normalized) ? normalized : null;
+  }
+
+  readSavedViewPreference() {
+    try {
+      const stored = window.localStorage.getItem(CALENDAR_VIEW_STORAGE_KEY);
+      return this.normalizeCalendarView(stored);
+    } catch (error) {
+      console.warn("Unable to read calendar view preference:", error);
+      return null;
+    }
+  }
+
+  writeSavedViewPreference(view) {
+    const normalized = this.normalizeCalendarView(view);
+    if (!normalized) return;
+
+    try {
+      window.localStorage.setItem(CALENDAR_VIEW_STORAGE_KEY, normalized);
+    } catch (error) {
+      console.warn("Unable to persist calendar view preference:", error);
+    }
+  }
+
+  resolveDefaultViewForViewport(isMobile) {
+    return isMobile ? VIEW_DAY : VIEW_WEEK;
+  }
+
+  resolveEffectiveViewForViewport(preferredView, isMobile) {
+    const normalized = this.normalizeCalendarView(preferredView);
+    const fallback = this.resolveDefaultViewForViewport(isMobile);
+    if (!normalized) return fallback;
+    if (isMobile && normalized === VIEW_WEEK) return VIEW_DAY;
+    return normalized;
+  }
+
+  getPreferredView() {
+    return this.savedViewPreference || this.resolveDefaultViewForViewport(this.isMobile);
+  }
+
+  applyViewportViewPreference() {
+    const preferredView = this.getPreferredView();
+    const effectiveView = this.resolveEffectiveViewForViewport(preferredView, this.isMobile);
+    this.currentView = effectiveView;
+    this.syncViewToggleButtons();
+  }
+
+  setCurrentView(view, { persist = false } = {}) {
+    const normalized = this.normalizeCalendarView(view);
+    if (!normalized) return;
+
+    if (persist) {
+      this.savedViewPreference = normalized;
+      this.writeSavedViewPreference(normalized);
+    }
+
+    const effectiveView = this.resolveEffectiveViewForViewport(normalized, this.isMobile);
+    this.currentView = effectiveView;
+    this.syncViewToggleButtons();
+    this.applyViewVisibility();
+  }
+
+  syncViewToggleButtons() {
+    const viewButtons = document.querySelectorAll("[data-calendar-view]");
+    const activeView = this.resolveEffectiveViewForViewport(this.currentView, this.isMobile);
+
+    viewButtons.forEach((button) => {
+      const buttonView = this.normalizeCalendarView(button.dataset.calendarView);
+      const isActive = buttonView === activeView;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.setAttribute("tabindex", isActive ? "0" : "-1");
+    });
+  }
+
+  setViewElementVisibility(element, isVisible, displayValue) {
+    if (!element) return;
+    element.classList.toggle("is-hidden", !isVisible);
+    element.style.display = isVisible ? displayValue : "none";
+  }
+
+  applyViewVisibility({ forceDayReset = false } = {}) {
+    const effectiveView = this.resolveEffectiveViewForViewport(this.currentView, this.isMobile);
+    this.currentView = effectiveView;
+
+    const showWeek = effectiveView === VIEW_WEEK;
+    const showDay = effectiveView === VIEW_DAY;
+    const showList = effectiveView === VIEW_LIST;
+
+    this.syncRootViewStateClasses(showWeek, showDay, showList);
+
+    this.setViewElementVisibility(this.calendarWrapper, showWeek, "block");
+    this.setViewElementVisibility(this.mobileView, showDay, "flex");
+    this.setViewElementVisibility(this.listView, showList, "block");
+
+    if (showDay) {
+      this.updateDayViewState(forceDayReset);
+    } else {
+      this.closeSlotSheet(false);
+    }
+
+    if (showWeek) {
+      this.showAllDays();
+    } else {
+      this.closeSlotPopover(false);
+      this.hideTooltip();
+    }
+  }
+
+  syncRootViewStateClasses(showWeek, showDay, showList) {
+    const root = this.closest("#course-summary") || document.getElementById("course-summary");
+    if (!root) return;
+
+    root.classList.toggle("calendar-view-week-active", Boolean(showWeek));
+    root.classList.toggle("calendar-view-day-active", Boolean(showDay));
+    root.classList.toggle("calendar-view-list-active", Boolean(showList));
+  }
+
+  updateDayViewState(forceReset = false) {
+    if (forceReset) {
+      this.selectedMobileDayIndex = this.getDefaultMobileDayIndex();
+    }
+
+    this.ensureExpandedPeriodForDay(this.dayOrder[this.selectedMobileDayIndex]);
+    this.updateMobileTrackPosition(false);
+    this.updateMobileDayButtons();
+    this.applyMobileExpandedState();
   }
 
   setupSearchButtons() {
@@ -301,51 +454,69 @@ class CalendarPageComponent extends HTMLElement {
 
   setupToolbarControls() {
     this.cleanupToolbarControls();
+    this.ensureCalendarFilterMarkup();
 
     const filterTriggerDesktop = document.getElementById("calendar-filter-trigger");
     const filterTriggerMobile = document.getElementById("calendar-filter-trigger-mobile");
     const filterPopover = document.getElementById("calendar-filter-popover");
-    const filterClose = document.getElementById("calendar-filter-close");
+    const filterBackground = document.getElementById("calendar-filter-background");
+    const filterSeeResults = document.getElementById("calendar-filter-see-results");
+    const filterClearAll = document.getElementById("calendar-filter-clear-all");
+    const filterPopupPanel = filterPopover?.querySelector(".filter-popup");
 
-    const weekButton = document.getElementById("calendar-view-week");
-    const dayButton = document.getElementById("calendar-view-day");
-    const listButton = document.getElementById("calendar-view-list");
+    const viewButtonDefs = [
+      { id: "calendar-view-week", view: VIEW_WEEK },
+      { id: "calendar-view-day", view: VIEW_DAY },
+      { id: "calendar-view-list", view: VIEW_LIST },
+      { id: "calendar-view-day-mobile", view: VIEW_DAY },
+      { id: "calendar-view-list-mobile", view: VIEW_LIST }
+    ];
+    const viewButtonSet = new Set();
 
-    const typeCore = document.getElementById("calendar-type-core");
-    const typeFoundation = document.getElementById("calendar-type-foundation");
-    const typeElective = document.getElementById("calendar-type-elective");
+    viewButtonDefs.forEach(({ id, view }) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      if (!button.dataset.calendarView) {
+        button.dataset.calendarView = view;
+      }
+      viewButtonSet.add(button);
+    });
+
+    document.querySelectorAll("[data-calendar-view]").forEach((button) => viewButtonSet.add(button));
+    const viewButtons = Array.from(viewButtonSet);
+
+    const typeCulture = document.getElementById("calendar-type-culture");
+    const typeEconomy = document.getElementById("calendar-type-economy");
+    const typePolitics = document.getElementById("calendar-type-politics");
+    const typeSpecial = document.getElementById("calendar-type-special");
+    const typeUnderstandingKyoto = document.getElementById("calendar-type-understanding-kyoto");
+    const typeAcademicSkills = document.getElementById("calendar-type-academic-skills");
+    const typeSeminarHonor = document.getElementById("calendar-type-seminar-honor");
     const showRegistered = document.getElementById("calendar-show-registered");
     const showSaved = document.getElementById("calendar-show-saved");
     const showEmpty = document.getElementById("calendar-show-empty");
 
     this.filterPopoverElement = filterPopover || null;
+    this.filterPopoverBackground = filterBackground || null;
+    this.filterPopoverPanel = filterPopupPanel || null;
     this.filterTriggerDesktop = filterTriggerDesktop || null;
     this.filterTriggerMobile = filterTriggerMobile || null;
 
-    if (weekButton) {
-      const onClick = () => {
-        weekButton.classList.add("is-active");
-        weekButton.setAttribute("aria-selected", "true");
-      };
-      weekButton.addEventListener("click", onClick);
-      this.toolbarCleanupFns.push(() => weekButton.removeEventListener("click", onClick));
-    }
+    viewButtons.forEach((button) => {
+      button.removeAttribute("disabled");
+      button.removeAttribute("aria-disabled");
 
-    if (dayButton) {
+      const requestedView = this.normalizeCalendarView(button.dataset.calendarView);
+      if (!requestedView) return;
+
       const onClick = (event) => {
         event.preventDefault();
+        this.setCurrentView(requestedView, { persist: true });
       };
-      dayButton.addEventListener("click", onClick);
-      this.toolbarCleanupFns.push(() => dayButton.removeEventListener("click", onClick));
-    }
 
-    if (listButton) {
-      const onClick = (event) => {
-        event.preventDefault();
-      };
-      listButton.addEventListener("click", onClick);
-      this.toolbarCleanupFns.push(() => listButton.removeEventListener("click", onClick));
-    }
+      button.addEventListener("click", onClick);
+      this.toolbarCleanupFns.push(() => button.removeEventListener("click", onClick));
+    });
 
     const openFromTrigger = (trigger) => {
       if (!trigger || !this.filterPopoverElement) return;
@@ -372,13 +543,32 @@ class CalendarPageComponent extends HTMLElement {
       this.toolbarCleanupFns.push(() => filterTriggerMobile.removeEventListener("click", onClick));
     }
 
-    if (filterClose) {
+    if (filterBackground) {
+      const onClick = (event) => {
+        if (event.target === filterBackground) {
+          this.closeFilterPopover(false);
+        }
+      };
+      filterBackground.addEventListener("click", onClick);
+      this.toolbarCleanupFns.push(() => filterBackground.removeEventListener("click", onClick));
+    }
+
+    if (filterSeeResults) {
       const onClick = (event) => {
         event.preventDefault();
         this.closeFilterPopover();
       };
-      filterClose.addEventListener("click", onClick);
-      this.toolbarCleanupFns.push(() => filterClose.removeEventListener("click", onClick));
+      filterSeeResults.addEventListener("click", onClick);
+      this.toolbarCleanupFns.push(() => filterSeeResults.removeEventListener("click", onClick));
+    }
+
+    if (filterClearAll) {
+      const onClick = (event) => {
+        event.preventDefault();
+        this.clearCalendarFilters();
+      };
+      filterClearAll.addEventListener("click", onClick);
+      this.toolbarCleanupFns.push(() => filterClearAll.removeEventListener("click", onClick));
     }
 
     const onFilterChange = () => {
@@ -386,13 +576,14 @@ class CalendarPageComponent extends HTMLElement {
       this.applyActiveFiltersAndRender();
     };
 
-    [typeCore, typeFoundation, typeElective, showRegistered, showSaved, showEmpty].forEach((checkbox) => {
+    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showSaved, showEmpty].forEach((checkbox) => {
       if (!checkbox) return;
       checkbox.addEventListener("change", onFilterChange);
       this.toolbarCleanupFns.push(() => checkbox.removeEventListener("change", onFilterChange));
     });
 
     this.syncFilterStateFromControls();
+    this.syncViewToggleButtons();
   }
 
   cleanupToolbarControls() {
@@ -406,20 +597,188 @@ class CalendarPageComponent extends HTMLElement {
     this.toolbarCleanupFns = [];
   }
 
+  getAppliedFilterCount() {
+    let count = this.filterState?.typeFilters?.size || 0;
+
+    if (this.filterState?.showRegistered === false) count += 1;
+    if (this.filterState?.showSaved === true) count += 1;
+    if (this.filterState?.showEmptySlots === false) count += 1;
+
+    return count;
+  }
+
+  ensureFilterCountChip(triggerButton) {
+    if (!triggerButton) return null;
+
+    let chip = triggerButton.querySelector(".calendar-filter-count-chip");
+    if (!chip) {
+      chip = document.createElement("span");
+      chip.className = "calendar-filter-count-chip";
+      chip.setAttribute("aria-hidden", "true");
+      chip.hidden = true;
+      triggerButton.appendChild(chip);
+    }
+
+    return chip;
+  }
+
+  updateFilterTriggerCount() {
+    const count = this.getAppliedFilterCount();
+    const countLabel = count > 99 ? "99+" : String(count);
+    const ariaLabel = count > 0 ? `Filters, ${count} applied` : "Filters";
+
+    [this.filterTriggerDesktop, this.filterTriggerMobile].forEach((trigger) => {
+      if (!trigger) return;
+
+      const chip = this.ensureFilterCountChip(trigger);
+      if (!chip) return;
+
+      if (count > 0) {
+        chip.hidden = false;
+        chip.textContent = countLabel;
+        trigger.classList.add("has-active-filters");
+      } else {
+        chip.hidden = true;
+        chip.textContent = "";
+        trigger.classList.remove("has-active-filters");
+      }
+
+      trigger.setAttribute("aria-label", ariaLabel);
+    });
+  }
+
   syncFilterStateFromControls() {
-    const core = document.getElementById("calendar-type-core")?.checked;
-    const foundation = document.getElementById("calendar-type-foundation")?.checked;
-    const elective = document.getElementById("calendar-type-elective")?.checked;
+    const culture = document.getElementById("calendar-type-culture")?.checked;
+    const economy = document.getElementById("calendar-type-economy")?.checked;
+    const politics = document.getElementById("calendar-type-politics")?.checked;
+    const special = document.getElementById("calendar-type-special")?.checked;
+    const understandingKyoto = document.getElementById("calendar-type-understanding-kyoto")?.checked;
+    const academicSkills = document.getElementById("calendar-type-academic-skills")?.checked;
+    const seminarHonor = document.getElementById("calendar-type-seminar-honor")?.checked;
+    const legacyFoundation = document.getElementById("calendar-type-foundation")?.checked;
 
     const selected = new Set();
-    if (core) selected.add("Core");
-    if (foundation) selected.add("Foundation");
-    if (elective) selected.add("Elective");
+    if (culture) selected.add("Culture");
+    if (economy) selected.add("Economy");
+    if (politics) selected.add("Politics");
+    if (special) selected.add("Special");
+    if (understandingKyoto) selected.add("UnderstandingJapanKyoto");
+    if (academicSkills) selected.add("AcademicSkills");
+    if (seminarHonor) selected.add("SeminarHonorThesis");
+    if (legacyFoundation) {
+      selected.add("UnderstandingJapanKyoto");
+      selected.add("AcademicSkills");
+    }
 
-    this.filterState.typeGroups = selected;
+    this.filterState.typeFilters = selected;
     this.filterState.showRegistered = document.getElementById("calendar-show-registered")?.checked !== false;
     this.filterState.showSaved = document.getElementById("calendar-show-saved")?.checked === true;
     this.filterState.showEmptySlots = document.getElementById("calendar-show-empty")?.checked !== false;
+    this.updateFilterTriggerCount();
+  }
+
+  clearCalendarFilters() {
+    [
+      "calendar-type-culture",
+      "calendar-type-economy",
+      "calendar-type-politics",
+      "calendar-type-special",
+      "calendar-type-understanding-kyoto",
+      "calendar-type-academic-skills",
+      "calendar-type-seminar-honor"
+    ].forEach((id) => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) checkbox.checked = false;
+    });
+
+    const showRegistered = document.getElementById("calendar-show-registered");
+    const showSaved = document.getElementById("calendar-show-saved");
+    const showEmpty = document.getElementById("calendar-show-empty");
+
+    if (showRegistered) showRegistered.checked = true;
+    if (showSaved) showSaved.checked = false;
+    if (showEmpty) showEmpty.checked = true;
+
+    this.syncFilterStateFromControls();
+    this.applyActiveFiltersAndRender();
+  }
+
+  ensureCalendarFilterMarkup() {
+    const typeGroupElement = document.getElementById("calendar-filter-type-group");
+    if (!typeGroupElement) return;
+
+    const previousSelections = this.getSelectedTypeFiltersFromDom();
+    typeGroupElement.innerHTML = `
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-culture" class="filter-checkbox">
+        <label for="calendar-type-culture">Global Culture<small>Japanese Society and Global Culture Concentration</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-economy" class="filter-checkbox">
+        <label for="calendar-type-economy">Business<small>Japanese Business and the Global Economy Concentration</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-politics" class="filter-checkbox">
+        <label for="calendar-type-politics">Politics<small>Japanese Politics and Global Studies Concentration</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-seminar-honor" class="filter-checkbox">
+        <label for="calendar-type-seminar-honor">Seminars<small>Seminars and Honors Thesis</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-academic-skills" class="filter-checkbox">
+        <label for="calendar-type-academic-skills">Academic Skills<small>Foundation Courses</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-understanding-kyoto" class="filter-checkbox">
+        <label for="calendar-type-understanding-kyoto">Understanding Japan and Kyoto<small>Foundation Courses</small></label>
+      </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-special" class="filter-checkbox">
+        <label for="calendar-type-special">Special Lecture Series</label>
+      </div>
+    `;
+
+    const syncChecked = (id, key) => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) checkbox.checked = previousSelections.has(key);
+    };
+
+    syncChecked("calendar-type-culture", "Culture");
+    syncChecked("calendar-type-economy", "Economy");
+    syncChecked("calendar-type-politics", "Politics");
+    syncChecked("calendar-type-special", "Special");
+    syncChecked("calendar-type-understanding-kyoto", "UnderstandingJapanKyoto");
+    syncChecked("calendar-type-academic-skills", "AcademicSkills");
+    syncChecked("calendar-type-seminar-honor", "SeminarHonorThesis");
+  }
+
+  getSelectedTypeFiltersFromDom() {
+    const selected = new Set();
+
+    if (document.getElementById("calendar-type-culture")?.checked) selected.add("Culture");
+    if (document.getElementById("calendar-type-economy")?.checked) selected.add("Economy");
+    if (document.getElementById("calendar-type-politics")?.checked) selected.add("Politics");
+    if (document.getElementById("calendar-type-special")?.checked) selected.add("Special");
+    if (document.getElementById("calendar-type-understanding-kyoto")?.checked) selected.add("UnderstandingJapanKyoto");
+    if (document.getElementById("calendar-type-academic-skills")?.checked) selected.add("AcademicSkills");
+    if (document.getElementById("calendar-type-seminar-honor")?.checked) selected.add("SeminarHonorThesis");
+    if (document.getElementById("calendar-type-foundation")?.checked) {
+      selected.add("UnderstandingJapanKyoto");
+      selected.add("AcademicSkills");
+    }
+
+    if (document.getElementById("calendar-type-core")?.checked) {
+      selected.add("Culture");
+      selected.add("Economy");
+      selected.add("Politics");
+    }
+    if (document.getElementById("calendar-type-elective")?.checked) {
+      selected.add("Special");
+      selected.add("SeminarHonorThesis");
+    }
+
+    return selected;
   }
 
   openFilterPopover(triggerElement) {
@@ -432,35 +791,146 @@ class CalendarPageComponent extends HTMLElement {
 
     this.closeSlotActionMenus();
 
-    this.filterPopoverElement.classList.remove("hidden");
-    this.filterPopoverElement.classList.toggle("is-mobile-open", this.isMobile);
+    if (this.filterCloseTimer) {
+      clearTimeout(this.filterCloseTimer);
+      this.filterCloseTimer = null;
+    }
 
-    if (!this.isMobile) {
-      const rect = triggerElement.getBoundingClientRect();
-      this.filterPopoverElement.style.top = `${Math.round(rect.bottom + 8)}px`;
-      this.filterPopoverElement.style.left = `${Math.round(rect.right - this.filterPopoverElement.offsetWidth)}px`;
+    const background = this.filterPopoverBackground;
+    const panel = this.filterPopoverPanel;
+
+    this.filterPopoverElement.classList.remove("hidden");
+    this.filterPopoverElement.style.transition = "";
+    this.filterPopoverElement.style.opacity = "";
+    this.filterPopoverElement.style.transform = "";
+
+    if (this.isMobile) {
+      if (background) {
+        background.style.transition = "opacity 220ms ease";
+        background.style.opacity = "0";
+      }
+
+      if (panel) {
+        panel.classList.remove("swiping");
+        panel.style.removeProperty("--modal-translate-y");
+        panel.style.transition = "";
+        panel.style.opacity = "";
+        panel.classList.add("show");
+      }
+
+      document.body.classList.add("modal-open");
+
+      requestAnimationFrame(() => {
+        if (background) background.style.opacity = "1";
+      });
     } else {
-      this.filterPopoverElement.style.top = "";
-      this.filterPopoverElement.style.left = "";
+      this.filterPopoverElement.style.opacity = "0";
+      this.filterPopoverElement.style.transform = "translateY(-10px)";
+      this.filterPopoverElement.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+
+      if (background) {
+        background.style.transition = "opacity 220ms ease";
+        background.style.opacity = "0";
+      }
+
+      document.body.classList.add("modal-open");
+
+      requestAnimationFrame(() => {
+        this.filterPopoverElement.style.opacity = "1";
+        this.filterPopoverElement.style.transform = "translateY(0)";
+        if (background) background.style.opacity = "1";
+      });
+    }
+
+    if (!this.calendarFilterSwipeBound && typeof window.addSwipeToCloseSimple === "function" && this.filterPopoverPanel && this.filterPopoverBackground) {
+      this.calendarFilterSwipeBound = true;
+      window.addSwipeToCloseSimple(this.filterPopoverPanel, this.filterPopoverBackground, () => this.closeFilterPopover(false));
     }
 
     this.activeFilterTrigger = triggerElement;
     if (this.filterTriggerDesktop) this.filterTriggerDesktop.setAttribute("aria-expanded", "true");
     if (this.filterTriggerMobile) this.filterTriggerMobile.setAttribute("aria-expanded", "true");
 
-    this.applyFocusTrap(this.filterPopoverElement, () => this.closeFilterPopover());
+    this.applyFocusTrap(this.filterPopoverPanel || this.filterPopoverElement, () => this.closeFilterPopover());
 
     const focusTarget = this.filterPopoverElement.querySelector("input, button");
     if (focusTarget) setTimeout(() => focusTarget.focus(), 0);
   }
 
-  closeFilterPopover(restoreFocus = true) {
+  closeFilterPopover(restoreFocus = true, immediate = false) {
     if (!this.filterPopoverElement) return;
 
-    this.filterPopoverElement.classList.add("hidden");
-    this.filterPopoverElement.classList.remove("is-mobile-open");
-    this.filterPopoverElement.style.top = "";
-    this.filterPopoverElement.style.left = "";
+    const background = this.filterPopoverBackground;
+    const panel = this.filterPopoverPanel;
+
+    if (this.filterCloseTimer) {
+      clearTimeout(this.filterCloseTimer);
+      this.filterCloseTimer = null;
+    }
+
+    if (immediate) {
+      if (panel) {
+        panel.classList.remove("show", "swiping");
+        panel.style.removeProperty("--modal-translate-y");
+        panel.style.transition = "";
+        panel.style.opacity = "";
+      }
+      this.filterPopoverElement.classList.add("hidden");
+      this.filterPopoverElement.style.transition = "";
+      this.filterPopoverElement.style.opacity = "";
+      this.filterPopoverElement.style.transform = "";
+      if (background) {
+        background.style.transition = "";
+        background.style.opacity = "";
+      }
+      document.body.classList.remove("modal-open");
+    } else if (this.isMobile) {
+      if (panel) {
+        panel.classList.remove("show", "swiping");
+        panel.style.removeProperty("--modal-translate-y");
+        panel.style.transition = "";
+        panel.style.opacity = "";
+      }
+      if (background) {
+        background.style.transition = "opacity 220ms ease";
+        background.style.opacity = "0";
+      }
+
+      this.filterCloseTimer = setTimeout(() => {
+        this.filterPopoverElement.classList.add("hidden");
+        this.filterPopoverElement.style.transition = "";
+        this.filterPopoverElement.style.opacity = "";
+        this.filterPopoverElement.style.transform = "";
+        if (background) {
+          background.style.transition = "";
+          background.style.opacity = "";
+        }
+        document.body.classList.remove("modal-open");
+        this.filterCloseTimer = null;
+      }, 320);
+    } else {
+      this.filterPopoverElement.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+      this.filterPopoverElement.style.opacity = "0";
+      this.filterPopoverElement.style.transform = "translateY(-10px)";
+
+      if (background) {
+        background.style.transition = "opacity 220ms ease";
+        background.style.opacity = "0";
+      }
+
+      this.filterCloseTimer = setTimeout(() => {
+        this.filterPopoverElement.classList.add("hidden");
+        this.filterPopoverElement.style.transition = "";
+        this.filterPopoverElement.style.opacity = "";
+        this.filterPopoverElement.style.transform = "";
+        if (background) {
+          background.style.transition = "";
+          background.style.opacity = "";
+        }
+        document.body.classList.remove("modal-open");
+        this.filterCloseTimer = null;
+      }, 300);
+    }
 
     if (this.filterTriggerDesktop) this.filterTriggerDesktop.setAttribute("aria-expanded", "false");
     if (this.filterTriggerMobile) this.filterTriggerMobile.setAttribute("aria-expanded", "false");
@@ -568,35 +1038,14 @@ class CalendarPageComponent extends HTMLElement {
     this.isMobile = window.innerWidth <= 1023;
     window.isMobile = this.isMobile;
 
-    if (this.isMobile !== wasMobile) {
-      this.updateMobileUI(true);
-      return;
-    }
-
-    if (this.isMobile) {
-      this.updateMobileUI(false);
-    }
+    const breakpointChanged = this.isMobile !== wasMobile;
+    this.applyViewportViewPreference();
+    this.applyViewVisibility({ forceDayReset: breakpointChanged && this.currentView === VIEW_DAY });
   }
 
   updateMobileUI(forceReset) {
-    if (this.isMobile) {
-      if (this.mobileView) this.mobileView.style.display = "flex";
-      if (this.calendarWrapper) this.calendarWrapper.style.display = "none";
-
-      if (forceReset) {
-        this.selectedMobileDayIndex = this.getDefaultMobileDayIndex();
-      }
-
-      this.ensureExpandedPeriodForDay(this.dayOrder[this.selectedMobileDayIndex]);
-      this.updateMobileTrackPosition(false);
-      this.updateMobileDayButtons();
-      this.applyMobileExpandedState();
-      return;
-    }
-
-    if (this.mobileView) this.mobileView.style.display = "none";
-    if (this.calendarWrapper) this.calendarWrapper.style.display = "block";
-    this.showAllDays();
+    this.updateDayViewState(forceReset);
+    this.applyViewVisibility();
   }
 
   buildMobileViewSkeleton() {
@@ -746,8 +1195,6 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   handleMobileViewClick(event) {
-    if (!this.isMobile) return;
-
     const courseCard = event.target.closest("[data-course-key]");
     if (courseCard) {
       const courseKey = courseCard.dataset.courseKey;
@@ -790,6 +1237,17 @@ class CalendarPageComponent extends HTMLElement {
 
       this.toggleMobilePeriod(dayCode, periodNumber);
     }
+  }
+
+  handleListViewClick(event) {
+    const row = event.target.closest(".calendar-list-item");
+    if (!row) return;
+
+    const courseKey = row.dataset.courseKey;
+    if (!courseKey) return;
+
+    const course = this.listCourseLookup.get(courseKey);
+    if (course) openCourseInfoMenu(course);
   }
 
   selectMobileDayByIndex(dayIndex, animate = true) {
@@ -919,7 +1377,20 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   getActiveTypeFilters() {
-    return Array.from(this.filterState.typeGroups);
+    if (!this.filterState.typeFilters || this.filterState.typeFilters.size === 0) return [];
+
+    const mappedGroups = new Set();
+    this.filterState.typeFilters.forEach((typeFilter) => {
+      if (typeFilter === "UnderstandingJapanKyoto" || typeFilter === "AcademicSkills") {
+        mappedGroups.add("Foundation");
+      } else if (typeFilter === "Special" || typeFilter === "SeminarHonorThesis") {
+        mappedGroups.add("Elective");
+      } else {
+        mappedGroups.add("Core");
+      }
+    });
+
+    return Array.from(mappedGroups);
   }
 
   openSlotActionMenu(slot, triggerElement) {
@@ -1096,7 +1567,7 @@ class CalendarPageComponent extends HTMLElement {
           const primaryCourse = courses[0];
           const compactPill = document.createElement("div");
           compactPill.className = "calendar-mobile-course-pill";
-          compactPill.style.backgroundColor = getCourseColorByType(primaryCourse.type);
+          compactPill.style.backgroundColor = this.getCalendarCourseColor(primaryCourse.type);
           compactPill.textContent = this.getCompactTitle(primaryCourse);
           compactContainer.appendChild(compactPill);
 
@@ -1115,7 +1586,7 @@ class CalendarPageComponent extends HTMLElement {
             card.type = "button";
             card.className = "calendar-mobile-course-card";
             card.dataset.courseKey = courseKey;
-            card.style.backgroundColor = getCourseColorByType(course.type);
+            card.style.backgroundColor = this.getCalendarCourseColor(course.type);
 
             const title = document.createElement("div");
             title.className = "calendar-mobile-course-title";
@@ -1158,6 +1629,98 @@ class CalendarPageComponent extends HTMLElement {
     this.updateMobileDayButtons();
     this.updateMobileTrackPosition(false);
     this.applyMobileExpandedState();
+  }
+
+  renderListSchedule() {
+    if (!this.listContent) return;
+
+    this.listCourseLookup.clear();
+    this.listContent.innerHTML = "";
+
+    const hasRegisteredCourses = Array.isArray(this.allRegisteredCourses) && this.allRegisteredCourses.length > 0;
+    let hasVisibleCourses = false;
+    const fragment = document.createDocumentFragment();
+
+    this.dayOrder.forEach((dayCode) => {
+      const daySection = document.createElement("section");
+      daySection.className = "calendar-list-day-group";
+
+      const heading = document.createElement("h3");
+      heading.className = "calendar-list-day-heading";
+      heading.textContent = this.dayLongNames[dayCode] || dayCode;
+      daySection.appendChild(heading);
+
+      const list = document.createElement("div");
+      list.className = "calendar-list-day-items";
+
+      this.periodDefinitions.forEach((periodDef) => {
+        const slotCourses = [...this.getCoursesForSlot(dayCode, periodDef.number)];
+        if (slotCourses.length === 0) return;
+
+        slotCourses.sort((a, b) => this.getDetailedTitle(a).localeCompare(this.getDetailedTitle(b)));
+
+        slotCourses.forEach((course, courseIndex) => {
+          hasVisibleCourses = true;
+          const courseKey = `${dayCode}-${periodDef.number}-${course.course_code || "course"}-${courseIndex}-list`;
+          this.listCourseLookup.set(courseKey, course);
+
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "calendar-list-item";
+          row.dataset.courseKey = courseKey;
+
+          const title = document.createElement("p");
+          title.className = "calendar-list-item-title";
+          title.textContent = this.getDetailedTitle(course);
+
+          const meta = document.createElement("p");
+          meta.className = "calendar-list-item-meta";
+          meta.textContent = `${this.dayLongNames[dayCode]} • Period ${periodDef.number} • ${periodDef.timeRange}`;
+
+          const badges = document.createElement("div");
+          badges.className = "calendar-list-item-badges";
+
+          const typeBadge = document.createElement("span");
+          typeBadge.className = "calendar-list-type-badge";
+          typeBadge.style.backgroundColor = this.getCalendarCourseColor(course.type);
+          typeBadge.textContent = this.getLegendLabelForCourse(course.type) || String(course.type || "Course");
+
+          const registeredBadge = document.createElement("span");
+          registeredBadge.className = "calendar-list-registered-badge";
+          registeredBadge.textContent = "Registered";
+
+          badges.appendChild(typeBadge);
+          badges.appendChild(registeredBadge);
+          row.appendChild(title);
+          row.appendChild(meta);
+          row.appendChild(badges);
+          list.appendChild(row);
+        });
+      });
+
+      if (list.children.length > 0) {
+        daySection.appendChild(list);
+        fragment.appendChild(daySection);
+      }
+    });
+
+    if (!hasRegisteredCourses) {
+      const emptyState = document.createElement("div");
+      emptyState.className = "calendar-list-empty-state";
+      emptyState.textContent = "No registered courses for this term yet.";
+      this.listContent.appendChild(emptyState);
+      return;
+    }
+
+    if (!hasVisibleCourses) {
+      const emptyState = document.createElement("div");
+      emptyState.className = "calendar-list-empty-state";
+      emptyState.textContent = "No courses match your current filters.";
+      this.listContent.appendChild(emptyState);
+      return;
+    }
+
+    this.listContent.appendChild(fragment);
   }
 
   getCompactTitle(course) {
@@ -1403,28 +1966,66 @@ class CalendarPageComponent extends HTMLElement {
     const raw = String(typeLabel || "").trim();
     if (!raw) return null;
 
-    if (raw === "Academic and Research Skills" || raw === "Understanding Japan and Kyoto") return "Foundation";
-    if (raw === "Other Elective Courses") return "Elective";
+    if (raw === "Japanese Society and Global Culture Concentration") return "Culture";
+    if (raw === "Japanese Business and the Global Economy Concentration") return "Economy";
+    if (raw === "Japanese Politics and Global Studies Concentration") return "Politics";
+    if (raw === "Understanding Japan and Kyoto") return "UnderstandingJapanKyoto";
+    if (raw === "Academic and Research Skills") return "AcademicSkills";
+    if (raw === "Other Elective Courses" || raw === "Special Lecture Series") return "Special";
 
     if (
       raw === "Introductory Seminars"
       || raw === "Intermediate Seminars"
       || raw === "Advanced Seminars and Honors Thesis"
-      || raw === "Japanese Society and Global Culture Concentration"
-      || raw === "Japanese Business and the Global Economy Concentration"
-      || raw === "Japanese Politics and Global Studies Concentration"
     ) {
-      return "Core";
+      return "SeminarHonorThesis";
+    }
+
+    return null;
+  }
+
+  getCalendarCourseColor(typeLabel) {
+    const raw = String(typeLabel || "").trim();
+
+    const calendarTypeColors = {
+      "Japanese Society and Global Culture Concentration": "#C1E0C8",
+      "Japanese Business and the Global Economy Concentration": "#EFDC8F",
+      "Japanese Politics and Global Studies Concentration": "#E77A84",
+      "Special Lecture Series": "#BDA7F2",
+      "Other Elective Courses": "#BDA7F2",
+      "Understanding Japan and Kyoto": "#AED3F2",
+      "Academic and Research Skills": "#A0BEE8"
+    };
+
+    return calendarTypeColors[raw] || getCourseColorByType(typeLabel);
+  }
+
+  getLegendLabelForCourse(typeLabel) {
+    const raw = String(typeLabel || "").trim();
+    if (!raw) return null;
+
+    if (raw === "Japanese Society and Global Culture Concentration") return "Global Culture";
+    if (raw === "Japanese Business and the Global Economy Concentration") return "Economy";
+    if (raw === "Japanese Politics and Global Studies Concentration") return "Politics";
+    if (raw === "Understanding Japan and Kyoto") return "Understanding Japan and Kyoto";
+    if (raw === "Academic and Research Skills") return "Academic Skills";
+    if (raw === "Other Elective Courses" || raw === "Special Lecture Series") return "Special Lecture Series";
+    if (
+      raw === "Introductory Seminars"
+      || raw === "Intermediate Seminars"
+      || raw === "Advanced Seminars and Honors Thesis"
+    ) {
+      return "Seminar and Honor Thesis";
     }
 
     return null;
   }
 
   passesTypeFilters(course) {
-    if (!this.filterState.typeGroups || this.filterState.typeGroups.size === 0) return true;
+    if (!this.filterState.typeFilters || this.filterState.typeFilters.size === 0) return true;
 
     const group = this.getTypeGroupForCourse(course?.type);
-    return group ? this.filterState.typeGroups.has(group) : false;
+    return group ? this.filterState.typeFilters.has(group) : false;
   }
 
   applyActiveFiltersAndRender() {
@@ -1438,6 +2039,7 @@ class CalendarPageComponent extends HTMLElement {
 
     this.mobileCoursesBySlot.clear();
     this.desktopCourseLookup.clear();
+    this.listCourseLookup.clear();
 
     visibleCourses.forEach((course) => {
       const parsed = this.parseCourseSchedule(course);
@@ -1450,6 +2052,8 @@ class CalendarPageComponent extends HTMLElement {
 
     this.renderDesktopSchedule();
     this.renderMobileSchedule();
+    this.renderListSchedule();
+    this.applyViewVisibility();
 
     this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
     this.highlightCurrentTimePeriod();
@@ -1524,8 +2128,11 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileCoursesBySlot.clear();
     this.mobileCourseLookup.clear();
     this.desktopCourseLookup.clear();
+    this.listCourseLookup.clear();
     this.renderDesktopSchedule();
     this.renderMobileSchedule();
+    this.renderListSchedule();
+    this.applyViewVisibility();
   }
 
   renderDesktopSchedule() {
@@ -1547,7 +2154,7 @@ class CalendarPageComponent extends HTMLElement {
           courseButton.className = "calendar-course-card";
           courseButton.dataset.courseKey = courseKey;
 
-          const color = getCourseColorByType(primaryCourse.type);
+          const color = this.getCalendarCourseColor(primaryCourse.type);
           courseButton.style.backgroundColor = color;
 
           const title = document.createElement("p");
@@ -1556,7 +2163,7 @@ class CalendarPageComponent extends HTMLElement {
 
           const subtitle = document.createElement("p");
           subtitle.className = "calendar-course-subtitle";
-          subtitle.textContent = primaryCourse.location || this.getTypeGroupForCourse(primaryCourse.type) || "Scheduled";
+          subtitle.textContent = primaryCourse.location || this.getLegendLabelForCourse(primaryCourse.type) || "Scheduled";
 
           const badge = document.createElement("span");
           badge.className = "calendar-course-badge";
@@ -1581,8 +2188,8 @@ class CalendarPageComponent extends HTMLElement {
           emptyButton.dataset.day = dayCode;
           emptyButton.dataset.period = String(periodDef.number);
           emptyButton.dataset.action = "slot-empty";
-          emptyButton.textContent = "Empty";
-          emptyButton.setAttribute("aria-label", `Empty slot ${dayCode} period ${periodDef.number} (${periodDef.timeRange})`);
+          emptyButton.textContent = "+ Add";
+          emptyButton.setAttribute("aria-label", `Add course in empty slot ${dayCode} period ${periodDef.number} (${periodDef.timeRange})`);
           slotCell.appendChild(emptyButton);
         }
       });
@@ -1617,6 +2224,7 @@ class CalendarPageComponent extends HTMLElement {
 
   highlightCurrentTimePeriod() {
     this.calendar.querySelectorAll("tbody td").forEach((cell) => cell.classList.remove("highlight-current-time"));
+    this.calendar.querySelectorAll("tbody td.calendar-time-cell").forEach((cell) => cell.classList.remove("highlight-current-period"));
 
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -1632,8 +2240,12 @@ class CalendarPageComponent extends HTMLElement {
     const rowIndex = currentPeriod.number - 1;
     if (!rows[rowIndex]) return;
 
-    const cell = rows[rowIndex].querySelector(`td:nth-child(${colIndex + 1})`);
+    const row = rows[rowIndex];
+    const cell = row.querySelector(`td:nth-child(${colIndex + 1})`);
     if (cell) cell.classList.add("highlight-current-time");
+
+    const timeCell = row.querySelector("td.calendar-time-cell");
+    if (timeCell) timeCell.classList.add("highlight-current-period");
   }
 
   getCourseByLookupKey(courseKey) {
@@ -1731,21 +2343,46 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   handleCalendarPointerOver(event) {
-    if (!this.canShowHover()) return;
+    if (!this.canShowHover()) {
+      this.activeTooltipCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
 
     const card = event.target.closest(".calendar-course-card");
-    if (!card || !this.calendar.contains(card)) return;
+    if (!card || !this.calendar.contains(card)) {
+      this.activeTooltipCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
 
     const courseKey = card.dataset.courseKey;
     const course = this.getCourseByLookupKey(courseKey);
-    if (!course) return;
+    if (!course) {
+      this.activeTooltipCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
 
     this.activeTooltipCourseKey = courseKey;
     this.showTooltipForCourse(course, event);
   }
 
   handleCalendarPointerMove(event) {
-    if (!this.canShowHover() || !this.activeTooltipCourseKey) return;
+    if (!this.canShowHover() || !this.activeTooltipCourseKey) {
+      this.activeTooltipCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
+
+    const card = event.target.closest(".calendar-course-card");
+    const hoveredCourseKey = card?.dataset?.courseKey;
+    if (!card || !this.calendar.contains(card) || hoveredCourseKey !== this.activeTooltipCourseKey) {
+      this.activeTooltipCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
+
     this.positionTooltip(event.clientX, event.clientY);
   }
 

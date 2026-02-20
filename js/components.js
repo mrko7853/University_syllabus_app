@@ -239,6 +239,15 @@ function navigateToSlotCourseSearch(day, period, term, year) {
   });
 }
 
+function navigateToDayCourseSearch(day, term, year) {
+  openCourseSearchForSlot({
+    day,
+    term: normalizeTermName(term),
+    year: Number(year) || null,
+    source: 'home-calendar-day'
+  });
+}
+
 function isSemesterSelectionTarget(target) {
   const targetId = target?.id;
   if (!targetId) return false;
@@ -1020,23 +1029,23 @@ class AppNavigation extends HTMLElement {
             <nav class="test">
                 <ul>
                     <li class="logo-nav-item"><div class="desktop-app-logo"></div></li>
-                    <li><button class="nav-btn" id="home-btn" data-route="/">
+                    <li class="nav-main-item nav-main-first"><button class="nav-btn" id="home-btn" data-route="/">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Home</span>
                     </button></li>
-                    <li><button class="nav-btn" id="dashboard" data-route="/courses">
+                    <li class="nav-main-item"><button class="nav-btn" id="dashboard" data-route="/courses">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Courses</span>
                     </button></li>
-                    <li><button class="nav-btn" id="calendar-btn" data-route="/calendar">
+                    <li class="nav-main-item"><button class="nav-btn" id="calendar-btn" data-route="/calendar">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Calendar</span>
                     </button></li>
-                    <li><button class="nav-btn" id="assignments-btn" data-route="/assignments">
+                    <li class="nav-main-item"><button class="nav-btn" id="assignments-btn" data-route="/assignments">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Assignments</span>
                     </button></li>
-                    <li><button class="nav-btn" id="profile" data-route="/profile">
+                    <li class="nav-main-item nav-main-last"><button class="nav-btn" id="profile" data-route="/profile">
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Profile</span>
                     </button></li>
@@ -1696,6 +1705,7 @@ class CourseCalendar extends HTMLElement {
     this.tooltipElement = null;
     this.activeTooltipCell = null;
     this.handleCalendarClickBound = this.handleCalendarClick.bind(this);
+    this.handleCalendarKeyDownBound = this.handleCalendarKeyDown.bind(this);
     this.handleCalendarPointerOverBound = this.handleCalendarPointerOver.bind(this);
     this.handleCalendarPointerMoveBound = this.handleCalendarPointerMove.bind(this);
     this.handleCalendarPointerLeaveBound = this.handleCalendarPointerLeave.bind(this);
@@ -1769,6 +1779,7 @@ class CourseCalendar extends HTMLElement {
     this.calendar = this.querySelector("#calendar-main");
     this.calendarHeader = this.calendar.querySelectorAll("thead th");
     this.loadingIndicator = this.querySelector("#loading-indicator");
+    this.initializeDayHeaderInteractions();
 
     this.displayedYear = null;
     this.displayedTerm = null;
@@ -1782,9 +1793,21 @@ class CourseCalendar extends HTMLElement {
     };
 
     this.calendar.addEventListener("click", this.handleCalendarClickBound);
+    this.calendar.addEventListener("keydown", this.handleCalendarKeyDownBound);
     this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+  }
+
+  initializeDayHeaderInteractions() {
+    const headerCells = Array.from(this.calendarHeader).slice(1);
+    headerCells.forEach((headerCell, index) => {
+      const dayCode = HOME_DAY_ORDER[index];
+      if (!dayCode) return;
+      headerCell.dataset.day = dayCode;
+      headerCell.tabIndex = 0;
+      headerCell.setAttribute('aria-label', `Filter courses by ${HOME_DAY_SHORT_LABELS[dayCode]}`);
+    });
   }
 
   connectedCallback() {
@@ -1960,11 +1983,32 @@ class CourseCalendar extends HTMLElement {
     const legendContainer = this.getLegendContainer();
     if (!legendContainer) return;
 
+    const normalizeLegendType = (rawTypeLabel) => {
+      const typeLabel = String(rawTypeLabel || 'General').trim() || 'General';
+      const seminarTypes = new Set([
+        'Introductory Seminars',
+        'Intermediate Seminars',
+        'Advanced Seminars and Honors Thesis'
+      ]);
+
+      if (seminarTypes.has(typeLabel)) {
+        return {
+          label: 'Seminar and Honor Thesis',
+          color: getCourseColorByType('Advanced Seminars and Honors Thesis')
+        };
+      }
+
+      return {
+        label: typeLabel,
+        color: getCourseColorByType(typeLabel)
+      };
+    };
+
     const typeColorMap = new Map();
     (Array.isArray(courses) ? courses : []).forEach((course) => {
-      const typeLabel = String(course?.type || 'General').trim() || 'General';
-      if (typeColorMap.has(typeLabel)) return;
-      typeColorMap.set(typeLabel, getCourseColorByType(typeLabel));
+      const normalized = normalizeLegendType(course?.type);
+      if (typeColorMap.has(normalized.label)) return;
+      typeColorMap.set(normalized.label, normalized.color);
     });
 
     const legendEntries = Array.from(typeColorMap.entries())
@@ -2304,7 +2348,41 @@ class CourseCalendar extends HTMLElement {
     this.hideTooltip();
   }
 
+  getHeaderDayFromEventTarget(target) {
+    const dayHeader = target?.closest('th[data-day]');
+    if (!dayHeader || !this.calendar.contains(dayHeader)) return null;
+    const day = dayHeader.dataset.day;
+    return day && HOME_DAY_ORDER.includes(day) ? day : null;
+  }
+
+  navigateToDayFromHeader(day) {
+    if (!day) return;
+    const fallbackSemester = getCurrentHomeSemesterContext();
+    const targetYear = this.displayedYear || fallbackSemester.year;
+    const targetTerm = this.displayedTerm || fallbackSemester.term;
+    if (!targetYear || !targetTerm) return;
+    navigateToDayCourseSearch(day, targetTerm, targetYear);
+  }
+
+  handleCalendarKeyDown(event) {
+    if (!event) return;
+    const isActivationKey = event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar';
+    if (!isActivationKey) return;
+
+    const day = this.getHeaderDayFromEventTarget(event.target);
+    if (!day) return;
+
+    event.preventDefault();
+    this.navigateToDayFromHeader(day);
+  }
+
   async handleCalendarClick(event) {
+    const selectedDay = this.getHeaderDayFromEventTarget(event.target);
+    if (selectedDay) {
+      this.navigateToDayFromHeader(selectedDay);
+      return;
+    }
+
     const clickedCell = event.target.closest("div.course-cell-main");
     if (!clickedCell) return;
 
@@ -2721,8 +2799,8 @@ class HomePlannerOverview extends HomePlannerWidgetBase {
   renderWidget(data) {
     const credits = Number(data?.creditsTotal || 0);
     const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
+    const creditsProgressLabel = `${creditsLabel}/${HOME_SEMESTER_MAX_CREDITS}`;
     const slotCountLabel = `${data?.occupiedSlotsCount || 0}/25`;
-    const creditLimitLabel = `${HOME_SEMESTER_MIN_CREDITS}-${HOME_SEMESTER_MAX_CREDITS} / sem`;
     const conflicts = Array.isArray(data?.conflicts) ? data.conflicts : [];
     const conflictSectionMarkup = conflicts.length
       ? `
@@ -2743,8 +2821,7 @@ class HomePlannerOverview extends HomePlannerWidgetBase {
         <div class="home-planner-kpi-grid">
           <div class="home-planner-kpi">
             <span>Credits</span>
-            <strong>${creditsLabel}</strong>
-            <small class="home-planner-kpi-limit">${creditLimitLabel}</small>
+            <strong>${creditsProgressLabel}</strong>
           </div>
           <div class="home-planner-kpi">
             <span>Courses</span>
@@ -2803,6 +2880,7 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
 
     const credits = Number(data?.creditsTotal || 0);
     const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
+    const creditsProgressLabel = `${creditsLabel}/${HOME_SEMESTER_MAX_CREDITS}`;
     const totalForBars = credits > 0 ? credits : Math.max(Number(data?.courseCount || 0), 1);
     const breakdown = Array.isArray(data?.typeBreakdown) ? data.typeBreakdown.slice(0, 4) : [];
 
@@ -2815,19 +2893,11 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
         <div class="home-progress-stat-grid">
           <div class="home-progress-stat">
             <span class="home-progress-stat-label">Credits</span>
-            <strong class="home-progress-stat-value">${creditsLabel}</strong>
+            <strong class="home-progress-stat-value">${creditsProgressLabel}</strong>
           </div>
           <div class="home-progress-stat">
             <span class="home-progress-stat-label">Slots filled</span>
             <strong class="home-progress-stat-value">${data?.occupiedSlotsCount || 0}/25</strong>
-          </div>
-          <div class="home-progress-stat">
-            <span class="home-progress-stat-label">Min / semester</span>
-            <strong class="home-progress-stat-value">${HOME_SEMESTER_MIN_CREDITS}</strong>
-          </div>
-          <div class="home-progress-stat">
-            <span class="home-progress-stat-label">Max / semester</span>
-            <strong class="home-progress-stat-value">${HOME_SEMESTER_MAX_CREDITS}</strong>
           </div>
         </div>
         <div class="home-progress-breakdown">
