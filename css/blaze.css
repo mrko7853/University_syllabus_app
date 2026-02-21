@@ -487,7 +487,7 @@ select:focus-visible {
 }
 
 .nav-main-last {
-    margin-bottom: auto;
+    margin-top: auto;
 }
 
 .profile-menu-container {
@@ -4195,7 +4195,7 @@ td p {
 
 @media (hover: hover) and (pointer: fine) {
     .day-button:hover {
-        background: var(--control-bg-hover);
+        background-color: var(--control-bg-hover);
         border-color: var(--control-border-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
@@ -7387,32 +7387,36 @@ td p {
 }
 
 .conflict-container .conflict-modal-close.assignment-modal-close {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    z-index: 2;
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
+    position: static;
+    z-index: auto;
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    min-height: 52px;
     border-radius: var(--control-radius-round);
     border: 1px solid var(--control-border);
     background: var(--control-bg);
-    color: rgba(15, 23, 38, 0.85) !important;
+    color: transparent !important;
     font-family: var(--font-ui);
-    font-size: 28px;
-    line-height: 1;
+    font-size: 0;
+    line-height: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
     filter: none;
     padding: 0;
+    flex-shrink: 0;
+    background-image: url(/assets/close.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 22px 22px;
 }
 
 @media (hover: hover) and (pointer: fine) {
     .conflict-container .conflict-modal-close.assignment-modal-close:hover {
         border-color: var(--control-border-hover);
-        background: var(--control-bg-hover);
+        background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 }
@@ -7422,8 +7426,18 @@ td p {
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
 }
 
+.conflict-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid rgba(10, 37, 64, 0.1);
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+}
+
 .conflict-modal-title {
-    margin: 0 56px 15px 0;
+    margin: 0;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -7432,6 +7446,8 @@ td p {
     line-height: 1.1;
     font-weight: 500;
     color: #000;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .conflict-container .conflict-modal-heading-icon {
@@ -7831,18 +7847,21 @@ body.modal-open {
     }
 
     .conflict-modal-title {
-        margin-bottom: 20px;
         font-size: 22px;
         gap: 10px;
     }
 
+    .conflict-modal-head {
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+    }
+
     .conflict-container .conflict-modal-close.assignment-modal-close {
-        top: 10px;
-        right: 10px;
-        width: 40px;
-        min-width: 40px;
-        height: 40px;
-        font-size: 26px;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+        background-size: 20px 20px;
     }
 
     .conflict-container .conflict-modal-heading-icon {
@@ -11572,8 +11591,7 @@ calendar-page .calendar-mobile-view {
     display: none;
 }
 
-.profile-page .card-surface,
-.profile-modal.card-surface {
+.profile-page .card-surface {
     background: #e3d5e9;
     border: 1px solid rgba(0, 0, 0, .06);
     box-shadow: 0 6px 18px #0a25401a;
@@ -11638,6 +11656,7 @@ calendar-page .calendar-mobile-view {
     gap: 16px;
     padding: 14px 16px;
     border-top: 1px solid var(--border);
+    align-items: center;
 }
 
 .profile-page .setting-row:first-child {
@@ -11758,8 +11777,8 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-page .profile-action-pill .pill-icon--edit {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     display: inline-block;
     background: center / contain no-repeat url(/assets/edit.svg);
 }
@@ -11882,6 +11901,22 @@ calendar-page .calendar-mobile-view {
     color: #000;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.profile-modal-layer .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 5px 11px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.72);
+    color: #000;
+    white-space: nowrap;
 }
 
 .profile-page .status-pill--signed-in {
@@ -12041,11 +12076,13 @@ calendar-page .calendar-mobile-view {
     white-space: nowrap;
 }
 
-#profile-main .profile-native-select {
+#profile-main .profile-native-select,
+.profile-modal-layer .profile-native-select {
     display: none;
 }
 
-#profile-main .profile-custom-select {
+#profile-main .profile-custom-select,
+.profile-modal-layer .profile-custom-select {
     position: relative;
     display: inline-block;
     width: fit-content;
@@ -12053,7 +12090,8 @@ calendar-page .calendar-mobile-view {
     touch-action: manipulation;
 }
 
-#profile-main .profile-custom-select .custom-select-trigger {
+#profile-main .profile-custom-select .custom-select-trigger,
+.profile-modal-layer .profile-custom-select .custom-select-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
@@ -12072,40 +12110,52 @@ calendar-page .calendar-mobile-view {
     transform: translateY(0);
 }
 
+#profile-main .profile-custom-select.is-disabled .custom-select-trigger,
+.profile-modal-layer .profile-custom-select.is-disabled .custom-select-trigger {
+    opacity: 0.62;
+    cursor: not-allowed;
+}
+
 @media (hover: hover) and (pointer: fine) {
-    #profile-main .profile-custom-select .custom-select-trigger.control-surface:hover {
+    #profile-main .profile-custom-select:not(.is-disabled) .custom-select-trigger.control-surface:hover,
+    .profile-modal-layer .profile-custom-select:not(.is-disabled) .custom-select-trigger.control-surface:hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
         box-shadow: var(--control-shadow-hover);
     }
 }
 
-#profile-main .profile-custom-select.open .custom-select-trigger.control-surface {
+#profile-main .profile-custom-select.open .custom-select-trigger.control-surface,
+.profile-modal-layer .profile-custom-select.open .custom-select-trigger.control-surface {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: var(--control-press-shadow);
     transform: translateY(var(--control-press-translate));
 }
 
-#profile-main .profile-custom-select .custom-select-trigger.control-surface:active {
+#profile-main .profile-custom-select .custom-select-trigger.control-surface:active,
+.profile-modal-layer .profile-custom-select .custom-select-trigger.control-surface:active {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: var(--control-press-shadow);
     transform: translateY(var(--control-press-translate));
 }
 
-#profile-main .profile-custom-select .custom-select-trigger.control-surface:focus-visible {
+#profile-main .profile-custom-select .custom-select-trigger.control-surface:focus-visible,
+.profile-modal-layer .profile-custom-select .custom-select-trigger.control-surface:focus-visible {
     outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
 }
 
-#profile-main .profile-custom-select .custom-select-value {
+#profile-main .profile-custom-select .custom-select-value,
+.profile-modal-layer .profile-custom-select .custom-select-value {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-#profile-main .profile-custom-select .custom-select-arrow {
+#profile-main .profile-custom-select .custom-select-arrow,
+.profile-modal-layer .profile-custom-select .custom-select-arrow {
     width: 16px;
     height: 16px;
     background-image: url(/assets/arrow.svg);
@@ -12118,11 +12168,13 @@ calendar-page .calendar-mobile-view {
     flex: 0 0 16px;
 }
 
-#profile-main .profile-custom-select.open .custom-select-arrow {
+#profile-main .profile-custom-select.open .custom-select-arrow,
+.profile-modal-layer .profile-custom-select.open .custom-select-arrow {
     transform: rotate(180deg);
 }
 
-#profile-main .profile-custom-select .custom-select-options {
+#profile-main .profile-custom-select .custom-select-options,
+.profile-modal-layer .profile-custom-select .custom-select-options {
     position: absolute;
     top: 133%;
     left: 0;
@@ -12141,7 +12193,16 @@ calendar-page .calendar-mobile-view {
     transform: translateY(-10px);
 }
 
-#profile-main .profile-custom-select .custom-select-options::after {
+.profile-modal-layer .profile-custom-select.open {
+    z-index: 1600;
+}
+
+.profile-modal-layer .profile-custom-select .custom-select-options {
+    z-index: 1610;
+}
+
+#profile-main .profile-custom-select .custom-select-options::after,
+.profile-modal-layer .profile-custom-select .custom-select-options::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -12151,18 +12212,21 @@ calendar-page .calendar-mobile-view {
     z-index: 10;
 }
 
-#profile-main .profile-custom-select .custom-select-options-inner {
+#profile-main .profile-custom-select .custom-select-options-inner,
+.profile-modal-layer .profile-custom-select .custom-select-options-inner {
     max-height: 200px;
     overflow-y: auto;
 }
 
-#profile-main .profile-custom-select.open .custom-select-options {
+#profile-main .profile-custom-select.open .custom-select-options,
+.profile-modal-layer .profile-custom-select.open .custom-select-options {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
 }
 
-#profile-main .profile-custom-select .custom-select-option {
+#profile-main .profile-custom-select .custom-select-option,
+.profile-modal-layer .profile-custom-select .custom-select-option {
     padding: 10px 20px;
     cursor: pointer;
     transition: background-color .2s;
@@ -12173,24 +12237,42 @@ calendar-page .calendar-mobile-view {
     white-space: nowrap;
 }
 
-#profile-main .profile-custom-select .custom-select-option:first-child {
+#profile-main .profile-custom-select .custom-select-option:first-child,
+.profile-modal-layer .profile-custom-select .custom-select-option:first-child {
     border-radius: 20px 20px 0 0;
 }
 
-#profile-main .profile-custom-select .custom-select-option:last-child {
+#profile-main .profile-custom-select .custom-select-option:last-child,
+.profile-modal-layer .profile-custom-select .custom-select-option:last-child {
     border-radius: 0 0 20px 20px;
 }
 
-#profile-main .profile-custom-select .custom-select-option:only-child {
+#profile-main .profile-custom-select .custom-select-option:only-child,
+.profile-modal-layer .profile-custom-select .custom-select-option:only-child {
     border-radius: 20px;
 }
 
-#profile-main .profile-custom-select .custom-select-option:hover {
+#profile-main .profile-custom-select .custom-select-option:hover,
+.profile-modal-layer .profile-custom-select .custom-select-option:hover {
     background-color: #f8f5ff;
 }
 
-#profile-main .profile-custom-select .custom-select-option.selected {
+#profile-main .profile-custom-select .custom-select-option.selected,
+.profile-modal-layer .profile-custom-select .custom-select-option.selected {
     background-color: var(--control-bg-active);
+}
+
+.profile-modal-layer .calendar-integration-mode-controls .profile-custom-select {
+    width: 100%;
+}
+
+.profile-modal-layer .calendar-integration-mode-controls .profile-custom-select .custom-select-trigger {
+    width: 100%;
+    min-width: 0;
+}
+
+.profile-modal-layer .calendar-integration-mode-controls .profile-custom-select .custom-select-options {
+    width: 100%;
 }
 
 .profile-page .picker-value {
@@ -12289,110 +12371,261 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-modal-backdrop {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    background: rgba(10, 20, 35, 0.36);
+    background-color: rgba(18, 16, 24, 0.64);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
 }
 
 .profile-modal {
-    position: absolute;
+    position: fixed;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    width: min(760px, calc(100vw - 32px));
+    max-width: 760px;
     max-height: calc(100dvh - 32px);
+    box-sizing: border-box;
+    background:
+        radial-gradient(130% 100% at 0% 0%, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0) 70%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.94) 0%, #f3ecf7 52%, #ece3f2 100%);
+    border: var(--card-border);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--shadow);
+    border-radius: 26px;
+    filter: none;
+    font-family: var(--font-ui);
+}
+
+.profile-modal.card-surface {
+    background:
+        radial-gradient(130% 100% at 0% 0%, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0) 70%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.94) 0%, #f3ecf7 52%, #ece3f2 100%);
+    border: var(--card-border);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--shadow);
+    border-radius: 26px;
+}
+
+.profile-modal.profile-modal-has-open-select {
+    overflow: visible;
 }
 
 .profile-modal--dialog {
     top: 50%;
     left: 50%;
-    width: min(560px, calc(100vw - 28px));
     transform: translate(-50%, -50%);
 }
 
 .profile-modal--sheet {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    transform: translateY(100%);
+    left: 50%;
+    bottom: 12px;
+    transform: translate(-50%, calc(100% + 12px));
     transition: transform 0.24s ease;
-    max-height: calc(100dvh - 10px);
+    max-height: calc(100dvh - 24px);
 }
 
 .profile-modal--sheet.show {
-    transform: translateY(0);
+    transform: translate(-50%, 0);
 }
 
 .profile-modal--fullscreen {
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0 !important;
+    top: 50%;
+    left: 50%;
+    width: min(760px, calc(100vw - 24px));
+    max-width: 760px;
+    max-height: calc(100dvh - (var(--safe-area-top) + var(--safe-area-bottom) + 16px));
+    transform: translate(-50%, -50%);
 }
 
 .profile-modal .swipe-indicator {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 10px 0 4px;
+    padding: 10px 0 0;
     background: transparent;
     flex-shrink: 0;
 }
 
 .profile-modal .swipe-indicator::before {
     content: "";
-    width: 36px;
+    width: 42px;
     height: 4px;
     border-radius: 2px;
-    background: rgba(15, 23, 38, 0.22);
+    background: rgba(15, 23, 38, 0.2);
 }
 
 .profile-modal-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 18px 18px 10px;
+    gap: 12px;
+    border-bottom: 1px solid rgba(10, 37, 64, 0.1);
+    margin-bottom: 15px;
+    padding: 0 0 15px;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top: 24px;
 }
 
 .profile-modal-head h3 {
     margin: 0;
-    font-size: var(--h3);
-    font-weight: 600;
+    font-size: var(--h2);
+    font-weight: 500;
     font-family: var(--font-ui);
+    line-height: 1.1;
     color: #000;
+}
+
+.profile-modal-layer .profile-modal-head .icon-btn {
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    min-height: 52px;
+    border-radius: var(--control-radius-round);
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    background-image: url(/assets/close.svg);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 22px 22px;
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-modal-layer .profile-modal-head .icon-btn:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+}
+
+.profile-modal-layer .profile-modal-head .icon-btn:active {
+    transform: translateY(var(--control-press-translate));
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+}
+
+.profile-modal-layer .profile-modal-head .icon-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
 }
 
 .profile-modal-body {
     overflow: auto;
-    padding: 0 18px 12px;
+    font-family: var(--font-ui);
+    padding: 0;
+    padding-left: 24px;
+    padding-right: 24px;
+}
+
+.profile-modal.profile-modal-has-open-select .profile-modal-body {
+    overflow: visible;
 }
 
 .profile-modal-footer {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 10px;
-    padding: 0 18px 18px;
+    gap: 12px;
+    margin-top: 15px;
+    padding: 12px 0 calc(var(--safe-area-bottom) + 4px) 0;
+    border-top: 1px solid rgba(10, 37, 64, 0.1);
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-bottom: 24px;
+}
+
+.profile-modal-footer .control-surface,
+.profile-modal-footer .danger-action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.profile-modal-footer .control-surface:only-child,
+.profile-modal-footer .danger-action-btn:only-child {
+    flex: 0 1 auto;
+    min-width: 180px;
+    margin-left: auto;
 }
 
 .profile-modal-footer .danger-action-btn {
     min-height: 52px;
 }
 
+.profile-modal-layer .control-surface:not(.icon-btn) {
+    min-height: 52px;
+    height: 52px;
+    border-radius: var(--control-radius-pill);
+    border: 1px solid rgba(122, 102, 143, 0.26);
+    background: #f4f1f8;
+    color: #1b2435;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--control-shadow);
+    font-size: var(--p);
+    font-weight: 500;
+    line-height: 1.2;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+    text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-modal-layer .control-surface:not(.icon-btn):hover {
+        background: #ece7f2;
+        border-color: rgba(122, 102, 143, 0.36);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--control-shadow-hover);
+    }
+}
+
+.profile-modal-layer .control-surface:not(.icon-btn):active {
+    transform: translateY(var(--control-press-translate));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), var(--control-press-shadow);
+}
+
+.profile-modal-layer .control-surface:not(.icon-btn):focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.profile-modal-layer .danger-action-btn {
+    min-height: 52px;
+    border: 1px solid rgba(196, 68, 89, 0.58);
+    background-color: rgba(241, 176, 188, 0.82);
+    color: #45131d;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--control-shadow);
+    font-size: var(--p);
+    font-weight: 500;
+    justify-content: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-modal-layer .danger-action-btn:hover {
+        border-color: rgba(196, 68, 89, 0.7);
+        background-color: rgba(237, 164, 178, 0.86);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--control-shadow-hover);
+    }
+}
+
+.profile-modal-layer .danger-action-btn:active {
+    background-color: rgba(232, 153, 168, 0.9);
+    transform: translateY(var(--control-press-translate));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), var(--control-press-shadow);
+}
+
+.profile-modal-layer .danger-action-btn:focus-visible {
+    outline: 2px solid rgba(196, 68, 89, 0.4);
+    outline-offset: 2px;
+}
+
 .profile-modal-label {
     display: block;
     margin-top: 10px;
-    margin-bottom: 6px;
-    font-size: 13px;
+    margin-bottom: 8px;
+    font-size: 14px;
     font-family: var(--font-ui);
     font-weight: 600;
-    color: #000;
+    color: rgba(23, 32, 51, 0.9);
 }
 
 .profile-modal-input {
@@ -12405,9 +12638,10 @@ calendar-page .calendar-mobile-view {
     padding: 0 18px;
     min-height: 52px;
     height: 52px;
-    font-size: 14px;
-    font-family: var(--font-ui);
+    font-size: var(--p);
+    font-family: var(--secondary-font), sans-serif;
     margin-bottom: 0;
+    color: #1b2435;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     transform: translateY(0);
 }
@@ -12415,12 +12649,12 @@ calendar-page .calendar-mobile-view {
 .profile-modal .search-input.profile-modal-input {
     margin-bottom: 0;
     width: 100%;
-    font-family: var(--font-ui);
+    font-family: var(--secondary-font), sans-serif;
 }
 
 .profile-modal-input::placeholder,
 .profile-modal .search-input.profile-modal-input::placeholder {
-    color: rgba(15, 23, 38, 0.48);
+    color: #999;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -12455,10 +12689,13 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-picker-help {
-    margin: 0 0 12px;
-    font-size: 13px;
-    font-family: var(--font-ui);
-    color: rgba(0, 0, 0, 0.7);
+    margin: 0 0 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(10, 37, 64, .1);
+    font-size: var(--p);
+    line-height: 1.45;
+    font-family: var(--secondary-font), serif;
+    color: #000;
 }
 
 .profile-choice-list {
@@ -12469,27 +12706,33 @@ calendar-page .calendar-mobile-view {
 .profile-choice-option {
     width: 100%;
     min-height: 52px;
-    border-radius: 14px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: rgba(255, 255, 255, 0.72);
+    border-radius: var(--card-radius);
+    border: 1px solid rgba(120, 120, 160, 0.24);
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.84) 100%),
+        rgba(238, 230, 246, 0.84);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     text-align: left;
-    padding: 10px 12px;
+    padding: 13px 14px;
     font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 500;
+    color: rgba(15, 23, 38, 0.9);
+    box-shadow: var(--card-shadow);
 }
 
 .profile-choice-option.is-selected {
-    border-color: rgba(0, 0, 0, 0.1);
-    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(58, 141, 84, 0.32);
+    background:
+        linear-gradient(180deg, rgba(154, 239, 184, 0.36) 0%, rgba(134, 228, 166, 0.34) 100%),
+        rgba(255, 255, 255, 0.86);
 }
 
 .profile-choice-option .choice-check {
-    color: rgba(30, 86, 145, 0.92);
+    color: #114126;
     font-size: 14px;
     font-weight: 800;
 }
@@ -12500,10 +12743,13 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-faq-item {
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.72);
-    padding: 10px 12px;
+    border: 1px solid rgba(120, 120, 160, 0.24);
+    border-radius: var(--card-radius);
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.84) 100%),
+        rgba(238, 230, 246, 0.84);
+    box-shadow: var(--card-shadow);
+    padding: 14px;
 }
 
 .profile-faq-item h4 {
@@ -12525,6 +12771,86 @@ calendar-page .calendar-mobile-view {
     gap: 8px 10px;
     font-size: 14px;
     font-family: var(--font-ui);
+}
+
+.profile-modal-layer .calendar-integration-mode-row {
+    margin-bottom: 15px;
+}
+
+.profile-modal-layer .calendar-integration-mode-controls {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+}
+
+.profile-modal-layer .calendar-integration-feed-list {
+    display: grid;
+    gap: 10px;
+}
+
+.profile-modal-layer .calendar-integration-feed-card {
+    border: 1px solid rgba(120, 120, 160, 0.24);
+    border-radius: var(--card-radius);
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.84) 100%),
+        rgba(238, 230, 246, 0.84);
+    padding: 15px;
+    box-shadow: var(--card-shadow);
+}
+
+.profile-modal-layer .calendar-integration-feed-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.profile-modal-layer .calendar-integration-feed-head h4 {
+    margin: 0;
+    font-size: 15px;
+    font-family: var(--font-ui);
+    font-weight: 560;
+    color: #000;
+}
+
+.profile-modal-layer .calendar-integration-feed-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.profile-modal-layer .calendar-integration-feed-actions .control-surface {
+    width: 100%;
+    min-height: 52px;
+    text-align: center;
+    justify-content: center;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.profile-modal-layer .calendar-integration-security-row {
+    margin-top: 15px;
+    padding-top: 15px;
+    padding-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.profile-modal-layer #profile-program-year-form .profile-custom-select,
+.profile-modal-layer #profile-program-year-form .profile-custom-select .custom-select-trigger,
+.profile-modal-layer #profile-program-year-form .profile-custom-select .custom-select-options {
+    width: 100%;
+}
+
+.profile-modal-layer .status-pill {
+    border: 1px solid rgba(120, 120, 160, 0.2);
+    background: rgba(255, 255, 255, 0.86);
+    color: rgba(23, 32, 51, 0.74);
+    font-size: 12px;
+    font-weight: 700;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .profile-toast {
@@ -12649,8 +12975,38 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         padding: 14px;
     }
 
+    .profile-modal {
+        width: calc(100vw - 24px);
+        max-width: 520px;
+        max-height: calc(100dvh - (var(--safe-area-top) + var(--safe-area-bottom) + 16px));
+        border-radius: 18px;
+        padding: 16px 14px 12px;
+    }
+
+    .profile-modal-head {
+        padding: 0 0 12px;
+    }
+
+    .profile-modal-head h3 {
+        font-size: 22px;
+        line-height: 1.15;
+    }
+
+    .profile-modal-layer .profile-modal-head .icon-btn {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        font-size: 32px;
+    }
+
+    .profile-modal-body {
+        padding: 0;
+    }
+
     .profile-modal-footer {
         justify-content: stretch;
+        gap: 10px;
+        padding: 10px 0 calc(var(--safe-area-bottom) + 2px);
     }
 
     .profile-modal-footer .control-surface,
@@ -12658,13 +13014,20 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         width: 100%;
     }
 
+    .profile-modal-layer .calendar-integration-mode-controls,
+    .profile-modal-layer .calendar-integration-feed-actions,
+    .profile-modal-layer .calendar-integration-security-row {
+        grid-template-columns: 1fr;
+    }
+
     .profile-modal--sheet {
-        max-height: calc(100dvh - var(--safe-area-top));
+        bottom: calc(var(--safe-area-bottom) + 8px);
+        max-height: calc(100dvh - (var(--safe-area-top) + var(--safe-area-bottom) + 16px));
         padding-bottom: max(0px, var(--safe-area-bottom));
     }
 
     .profile-modal--fullscreen {
-        max-height: 100dvh;
+        max-height: calc(100dvh - (var(--safe-area-top) + var(--safe-area-bottom) + 16px));
     }
 }
 

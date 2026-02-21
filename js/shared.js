@@ -4030,11 +4030,13 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     modalContainer.innerHTML = `
         <div class="conflict-backdrop">
             <div class="conflict-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-modal-title">
-                <button class="assignment-modal-close conflict-modal-close" type="button" aria-label="Close conflict modal">&times;</button>
-                <h2 class="conflict-modal-title" id="conflict-modal-title">
-                    <span class="conflict-modal-heading-icon" aria-hidden="true"></span>
-                    Schedule Conflict
-                </h2>
+                <div class="conflict-modal-head">
+                    <h2 class="conflict-modal-title" id="conflict-modal-title">
+                        <span class="conflict-modal-heading-icon" aria-hidden="true"></span>
+                        Schedule Conflict
+                    </h2>
+                    <button class="assignment-modal-close conflict-modal-close" type="button" aria-label="Close conflict modal"></button>
+                </div>
                 <div class="conflict-content">
                     <p class="conflict-intro">This course conflicts with a course you already registered for.
                     </p>

@@ -2,6 +2,13 @@ import { supabase } from "../supabase.js";
 import { fetchAvailableSemesters } from "./shared.js";
 import { getCurrentAppPath, withBase } from "./path-utils.js";
 import {
+  buildProviderLinks,
+  disconnectAllCalendarFeeds,
+  ensureCalendarFeeds,
+  fetchCalendarIntegrationState,
+  rotateCalendarFeeds
+} from "./calendar-integrations.js";
+import {
   PREFERENCE_KEYS,
   DEFAULT_PREFERENCES,
   applyPreferencesToDocument,
@@ -26,10 +33,62 @@ const state = {
   user: null,
   profile: null,
   settings: null,
+  calendarIntegrationState: null,
+  calendarIntegrationError: null,
   semesters: [],
   userSettingsTableAvailable: true,
   profileProgramYearColumnsAvailable: true
 };
+
+function getDefaultCalendarIntegrationState() {
+  return {
+    status: "not_connected",
+    settings: {
+      feedMode: "separate",
+      timezone: "Asia/Tokyo",
+      scope: "selected_term",
+      assignmentsRule: "incomplete_only"
+    },
+    feeds: []
+  };
+}
+
+function normalizeCalendarIntegrationState(payload) {
+  if (!payload || typeof payload !== "object") {
+    return getDefaultCalendarIntegrationState();
+  }
+
+  const rawSettings = payload.settings && typeof payload.settings === "object" ? payload.settings : {};
+  const feedMode = String(rawSettings.feedMode || "").toLowerCase() === "combined" ? "combined" : "separate";
+
+  const normalizedFeeds = Array.isArray(payload.feeds)
+    ? payload.feeds
+      .map((feed) => {
+        const kindRaw = String(feed?.kind || "").toLowerCase();
+        const kind = ["courses", "assignments", "combined"].includes(kindRaw) ? kindRaw : null;
+        const httpsUrl = String(feed?.httpsUrl || "").trim();
+        if (!kind || !httpsUrl) return null;
+        return {
+          kind,
+          httpsUrl,
+          webcalUrl: String(feed?.webcalUrl || "").trim(),
+          googleSubscribeUrl: String(feed?.googleSubscribeUrl || "").trim()
+        };
+      })
+      .filter(Boolean)
+    : [];
+
+  return {
+    status: normalizedFeeds.length > 0 ? "connected" : "not_connected",
+    settings: {
+      feedMode,
+      timezone: String(rawSettings.timezone || "Asia/Tokyo"),
+      scope: "selected_term",
+      assignmentsRule: "incomplete_only"
+    },
+    feeds: normalizedFeeds
+  };
+}
 
 function getRoot() {
   return document.getElementById("profile-main");
@@ -332,6 +391,16 @@ function getTimeFormatLabel(value) {
   return String(value || "12") === "24" ? "24-hour" : "12-hour";
 }
 
+function getCalendarFeedLabel(kind) {
+  if (kind === "courses") return "Courses";
+  if (kind === "assignments") return "Assignments";
+  return "Courses + Assignments";
+}
+
+function getKindsForFeedMode(feedMode) {
+  return feedMode === "combined" ? ["combined"] : ["courses", "assignments"];
+}
+
 function cardTemplate(title, bodyMarkup, actionMarkup = "") {
   return `
     <div class="profile-card card-surface">
@@ -527,9 +596,11 @@ function renderTermOptions(selectedValue) {
     .join("");
 }
 
-function renderCustomSelectMarkup(selectId, options, selectedValue) {
+function renderCustomSelectMarkup(selectId, options, selectedValue, config = {}) {
   const normalizedOptions = Array.isArray(options) ? options : [];
   const selected = normalizedOptions.find((option) => option.value === selectedValue) || normalizedOptions[0] || null;
+  const isDisabled = config.disabled === true;
+  const disabledAttr = isDisabled ? " disabled" : "";
 
   const optionRows = normalizedOptions
     .map((option) => {
@@ -546,8 +617,8 @@ function renderCustomSelectMarkup(selectId, options, selectedValue) {
     .join("");
 
   return `
-    <div class="custom-select profile-custom-select" data-target="${escapeHtml(selectId)}">
-      <div class="custom-select-trigger control-surface" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+    <div class="custom-select profile-custom-select${isDisabled ? " is-disabled" : ""}" data-target="${escapeHtml(selectId)}">
+      <div class="custom-select-trigger control-surface" tabindex="${isDisabled ? "-1" : "0"}" role="button" aria-haspopup="listbox" aria-expanded="false" aria-disabled="${isDisabled ? "true" : "false"}">
         <span class="custom-select-value">${escapeHtml(selected?.label || "Select")}</span>
         <div class="custom-select-arrow"></div>
       </div>
@@ -557,24 +628,33 @@ function renderCustomSelectMarkup(selectId, options, selectedValue) {
         </div>
       </div>
     </div>
-    <select id="${escapeHtml(selectId)}" class="profile-native-select" style="display:none;">
+    <select id="${escapeHtml(selectId)}" class="profile-native-select" style="display:none;"${disabledAttr}>
       ${selectOptions}
     </select>
   `;
 }
 
 function initializeProfileCustomSelects() {
-  const customSelects = document.querySelectorAll("#profile-main .profile-custom-select");
+  const customSelects = document.querySelectorAll("#profile-main .profile-custom-select, #profile-modal-layer .profile-custom-select");
   if (customSelects.length === 0) return;
+
+  const refreshModalOpenSelectState = () => {
+    document.querySelectorAll("#profile-modal-layer .profile-modal").forEach((modal) => {
+      const hasOpenSelect = Boolean(modal.querySelector(".profile-custom-select.open"));
+      modal.classList.toggle("profile-modal-has-open-select", hasOpenSelect);
+    });
+  };
 
   const closeAll = (except = null) => {
     customSelects.forEach((customSelect) => {
       if (customSelect !== except) {
         customSelect.classList.remove("open");
+        customSelect.classList.remove("open-upward");
         const trigger = customSelect.querySelector(".custom-select-trigger");
         if (trigger) trigger.setAttribute("aria-expanded", "false");
       }
     });
+    refreshModalOpenSelectState();
   };
 
   customSelects.forEach((customSelect) => {
@@ -592,6 +672,11 @@ function initializeProfileCustomSelects() {
     const syncFromTargetSelect = () => {
       const currentValue = targetSelect.value;
       let matchedOption = null;
+      const isDisabled = targetSelect.disabled;
+
+      customSelect.classList.toggle("is-disabled", isDisabled);
+      trigger.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+      trigger.tabIndex = isDisabled ? -1 : 0;
 
       options.querySelectorAll(".custom-select-option").forEach((option) => {
         const isSelected = option.dataset.value === currentValue;
@@ -614,19 +699,23 @@ function initializeProfileCustomSelects() {
 
     trigger.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (targetSelect.disabled) return;
       const isOpen = customSelect.classList.contains("open");
       closeAll(customSelect);
       customSelect.classList.toggle("open", !isOpen);
       trigger.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      refreshModalOpenSelectState();
     });
 
     trigger.addEventListener("keydown", (event) => {
+      if (targetSelect.disabled) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       trigger.click();
     });
 
     options.addEventListener("click", (event) => {
+      if (targetSelect.disabled) return;
       const option = event.target.closest(".custom-select-option");
       if (!option) return;
 
@@ -634,8 +723,10 @@ function initializeProfileCustomSelects() {
       targetSelect.value = value;
       targetSelect.dispatchEvent(new Event("change", { bubbles: true }));
       customSelect.classList.remove("open");
+      customSelect.classList.remove("open-upward");
       trigger.setAttribute("aria-expanded", "false");
       syncFromTargetSelect();
+      refreshModalOpenSelectState();
     });
 
     targetSelect.addEventListener("change", syncFromTargetSelect);
@@ -647,7 +738,7 @@ function initializeProfileCustomSelects() {
   }
 
   profileCustomSelectDocumentHandler = (event) => {
-    if (!event.target.closest("#profile-main .profile-custom-select")) {
+    if (!event.target.closest(".profile-custom-select")) {
       closeAll();
     }
   };
@@ -763,6 +854,17 @@ function renderSignedInView() {
   }
 
   if (integrations) {
+    const integrationState = normalizeCalendarIntegrationState(state.calendarIntegrationState);
+    const isConnected = integrationState.status === "connected";
+    const feedModeLabel = integrationState.settings.feedMode === "combined" ? "Combined feed" : "Separate feeds";
+    const feedCount = integrationState.feeds.length;
+    const statusLabel = isConnected ? "Connected" : "Not connected";
+    const helperText = state.calendarIntegrationError
+      ? "Calendar integration service is temporarily unavailable."
+      : (isConnected
+        ? `${feedModeLabel} active (${feedCount} ${feedCount === 1 ? "feed" : "feeds"}).`
+        : "Subscribe from Google Calendar.");
+
     integrations.innerHTML = cardTemplate(
       "Integrations",
       `
@@ -771,15 +873,15 @@ function renderSignedInView() {
           "Current integration status",
           `
             <div class="setting-control-stack">
-              <span class="status-pill status-pill--neutral">Not connected</span>
-              <button class="profile-action-pill control-surface is-disabled" id="profile-manage-integrations" type="button" disabled title="Coming soon">
-                <span class="pill-icon" aria-hidden="true">🔒</span>
+              <span class="status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
+              <button class="profile-action-pill control-surface" id="profile-manage-integrations" type="button">
+                <span class="pill-icon" aria-hidden="true">📅</span>
                 <span>Manage</span>
               </button>
             </div>
           `
         )}
-        <p class="coming-soon-note">Export to Google Calendar — coming soon</p>
+        <p class="coming-soon-note">${escapeHtml(helperText)}</p>
       `
     );
   }
@@ -886,6 +988,7 @@ function bindSignedInActions() {
     button.addEventListener("click", openProgramYearSetupModal);
   });
 
+  document.getElementById("profile-manage-integrations")?.addEventListener("click", openCalendarIntegrationsModal);
   document.getElementById("profile-clear-cache")?.addEventListener("click", openClearCacheModal);
   document.getElementById("profile-delete-account")?.addEventListener("click", openDeleteAccountModal);
   document.getElementById("profile-signout")?.addEventListener("click", openSignOutModal);
@@ -968,7 +1071,7 @@ function openModal({
       ${showSwipeIndicator ? '<div class="swipe-indicator" aria-hidden="true"></div>' : ""}
       <div class="profile-modal-head">
         <h3>${escapeHtml(title)}</h3>
-        <button type="button" class="control-surface icon-btn" data-modal-close="true" aria-label="Close">×</button>
+        <button type="button" class="control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
       </div>
       <div class="profile-modal-body">${bodyMarkup}</div>
       ${footerMarkup ? `<div class="profile-modal-footer">${footerMarkup}</div>` : ""}
@@ -1109,6 +1212,189 @@ function openPreferencePicker(key) {
       }
     });
   }
+}
+
+function getCalendarFeedRowsMarkup(integrationState) {
+  if (!integrationState.feeds.length) {
+    return '<p class="profile-picker-help">No feed links yet. Choose a mode and click Save mode to connect.</p>';
+  }
+
+  return integrationState.feeds
+    .map((feed) => {
+      const links = buildProviderLinks(feed);
+      return `
+        <div class="calendar-integration-feed-card">
+          <div class="calendar-integration-feed-head">
+            <h4>${escapeHtml(getCalendarFeedLabel(feed.kind))}</h4>
+            <span class="status-pill status-pill--neutral">Active</span>
+          </div>
+          <div class="calendar-integration-feed-actions">
+            <a class="control-surface" href="${escapeHtml(links.googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
+            <button class="control-surface" type="button" data-action="copy-feed-url" data-url="${escapeHtml(links.httpsUrl)}">Copy Subscription URL</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function openCalendarIntegrationsModal() {
+  const initialState = normalizeCalendarIntegrationState(state.calendarIntegrationState);
+  const local = {
+    data: initialState,
+    busy: false,
+    error: state.calendarIntegrationError ? "Could not refresh integration state right now." : ""
+  };
+
+  const layer = openModal({
+    title: "Calendar Integrations",
+    bodyMarkup: `
+      <div id="calendar-integrations-modal-content"></div>
+    `,
+    mode: "fullscreen-mobile"
+  });
+
+  const content = layer.querySelector("#calendar-integrations-modal-content");
+  if (!content) return;
+
+  const render = () => {
+    const modeValue = local.data.settings.feedMode === "combined" ? "combined" : "separate";
+    const saveLabel = local.data.status === "connected" ? "Save Mode" : "Connect";
+    const disableAttr = local.busy ? " disabled" : "";
+    const feedModeOptions = [
+      { value: "separate", label: "Separate Calendars" },
+      { value: "combined", label: "Single Combined Calendar" }
+    ];
+
+    content.innerHTML = `
+      <p class="profile-picker-help">Create private subscription links for Google Calendar.</p>
+      ${local.error ? `<p class="profile-inline-error">${escapeHtml(local.error)}</p>` : ""}
+      <div class="calendar-integration-mode-row">
+        <label class="profile-modal-label" for="calendar-feed-mode-select">Feed mode</label>
+        <div class="calendar-integration-mode-controls">
+          ${renderCustomSelectMarkup("calendar-feed-mode-select", feedModeOptions, modeValue, { disabled: local.busy })}
+          <button class="control-surface" type="button" id="calendar-feed-mode-save"${disableAttr}>${escapeHtml(saveLabel)}</button>
+        </div>
+      </div>
+      <div class="calendar-integration-feed-list">
+        ${getCalendarFeedRowsMarkup(local.data)}
+      </div>
+      <div class="calendar-integration-security-row">
+        <button class="control-surface" type="button" id="calendar-rotate-links"${disableAttr}>Regenerate Links</button>
+        <button class="danger-action-btn" type="button" id="calendar-disconnect-links"${disableAttr}>Disconnect</button>
+      </div>
+    `;
+    initializeProfileCustomSelects();
+
+    content.querySelector("#calendar-feed-mode-save")?.addEventListener("click", async () => {
+      const select = content.querySelector("#calendar-feed-mode-select");
+      const selectedMode = String(select?.value || local.data.settings.feedMode || "separate").toLowerCase() === "combined"
+        ? "combined"
+        : "separate";
+
+      local.busy = true;
+      local.error = "";
+      render();
+
+      try {
+        const next = await ensureCalendarFeeds(selectedMode);
+        local.data = normalizeCalendarIntegrationState(next);
+        state.calendarIntegrationState = local.data;
+        state.calendarIntegrationError = null;
+        renderSignedInView();
+        showProfileToast("Calendar updated");
+      } catch (error) {
+        console.error("Profile: ensure calendar feeds failed", error);
+        local.error = "Could not save calendar mode.";
+        state.calendarIntegrationError = error;
+      } finally {
+        local.busy = false;
+        render();
+      }
+    });
+
+    content.querySelector("#calendar-rotate-links")?.addEventListener("click", async () => {
+      const feedMode = local.data.settings.feedMode;
+      const fallbackKinds = getKindsForFeedMode(feedMode);
+      const activeKinds = local.data.feeds.map((feed) => feed.kind);
+      const kinds = activeKinds.length > 0 ? activeKinds : fallbackKinds;
+
+      local.busy = true;
+      local.error = "";
+      render();
+
+      try {
+        const next = await rotateCalendarFeeds(kinds);
+        local.data = normalizeCalendarIntegrationState(next);
+        state.calendarIntegrationState = local.data;
+        state.calendarIntegrationError = null;
+        renderSignedInView();
+        showProfileToast("Links regenerated");
+      } catch (error) {
+        console.error("Profile: rotate calendar feeds failed", error);
+        local.error = "Could not regenerate links.";
+        state.calendarIntegrationError = error;
+      } finally {
+        local.busy = false;
+        render();
+      }
+    });
+
+    content.querySelector("#calendar-disconnect-links")?.addEventListener("click", async () => {
+      local.busy = true;
+      local.error = "";
+      render();
+
+      try {
+        const next = await disconnectAllCalendarFeeds();
+        local.data = normalizeCalendarIntegrationState(next);
+        state.calendarIntegrationState = local.data;
+        state.calendarIntegrationError = null;
+        renderSignedInView();
+        showProfileToast("Disconnected");
+      } catch (error) {
+        console.error("Profile: disconnect calendar feeds failed", error);
+        local.error = "Could not disconnect calendar links.";
+        state.calendarIntegrationError = error;
+      } finally {
+        local.busy = false;
+        render();
+      }
+    });
+
+    content.querySelectorAll("[data-action='copy-feed-url']").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const url = button.getAttribute("data-url") || "";
+        if (!url) return;
+
+        try {
+          await navigator.clipboard.writeText(url);
+          showProfileToast("Link copied");
+        } catch (error) {
+          console.warn("Clipboard copy failed", error);
+          window.prompt("Copy subscription URL:", url);
+        }
+      });
+    });
+
+  };
+
+  render();
+
+  fetchCalendarIntegrationState()
+    .then((freshState) => {
+      local.data = normalizeCalendarIntegrationState(freshState);
+      state.calendarIntegrationState = local.data;
+      state.calendarIntegrationError = null;
+      renderSignedInView();
+      render();
+    })
+    .catch((error) => {
+      console.warn("Profile: calendar integration refresh failed", error);
+      local.error = "Using last known data. Some actions may fail.";
+      state.calendarIntegrationError = error;
+      render();
+    });
 }
 
 function openFaqModal() {
@@ -1335,9 +1621,16 @@ function openEditProfileModal() {
 function openProgramYearSetupModal() {
   const program = state.profile?.program ? String(state.profile.program) : "";
   const year = state.profile?.year ? String(state.profile.year) : "";
+  const yearOptions = [
+    { value: "", label: "Not Set" },
+    { value: "1", label: "Year 1" },
+    { value: "2", label: "Year 2" },
+    { value: "3", label: "Year 3" },
+    { value: "4", label: "Year 4" }
+  ];
 
   const layer = openModal({
-    title: "Set up academic details",
+    title: "Set Up Academic Details",
     bodyMarkup: `
       <form id="profile-program-year-form" novalidate>
         <label class="profile-modal-label" for="profile-edit-program">Program</label>
@@ -1345,13 +1638,7 @@ function openProgramYearSetupModal() {
         <p class="profile-inline-error" id="profile-edit-program-error"></p>
 
         <label class="profile-modal-label" for="profile-edit-year">Year</label>
-        <select class="profile-modal-input" id="profile-edit-year">
-          <option value=""${!year ? " selected" : ""}>Not set</option>
-          <option value="1"${year === "1" ? " selected" : ""}>Year 1</option>
-          <option value="2"${year === "2" ? " selected" : ""}>Year 2</option>
-          <option value="3"${year === "3" ? " selected" : ""}>Year 3</option>
-          <option value="4"${year === "4" ? " selected" : ""}>Year 4</option>
-        </select>
+        ${renderCustomSelectMarkup("profile-edit-year", yearOptions, year)}
         <p class="profile-inline-error" id="profile-edit-year-error"></p>
       </form>
     `,
@@ -1362,6 +1649,7 @@ function openProgramYearSetupModal() {
     mode: "dialog",
     mobileMode: "sheet"
   });
+  initializeProfileCustomSelects();
 
   const form = layer.querySelector("#profile-program-year-form");
   form?.addEventListener("submit", async (event) => {
@@ -1546,9 +1834,12 @@ async function loadSignedInState() {
   const baseSettings = buildInitialSettings();
   const semesters = await fetchSemestersSafe();
 
-  const [profileRow, settingsRow] = await Promise.all([
+  const [profileRow, settingsRow, integrationResult] = await Promise.all([
     fetchProfileSafe(state.user),
-    fetchUserSettingsSafe(state.user.id)
+    fetchUserSettingsSafe(state.user.id),
+    fetchCalendarIntegrationState()
+      .then((data) => ({ data, error: null }))
+      .catch((error) => ({ data: null, error }))
   ]);
 
   state.profile = {
@@ -1558,6 +1849,8 @@ async function loadSignedInState() {
 
   state.semesters = semesters;
   state.settings = mergeSettings(baseSettings, settingsRow, semesters);
+  state.calendarIntegrationState = normalizeCalendarIntegrationState(integrationResult.data);
+  state.calendarIntegrationError = integrationResult.error;
 
   syncSettingsToLocalStorage(state.settings);
   applyPreferencesToDocument(state.settings);
@@ -1585,6 +1878,8 @@ async function initializeProfile() {
 
     if (!state.isAuthenticated) {
       state.settings = buildInitialSettings();
+      state.calendarIntegrationState = null;
+      state.calendarIntegrationError = null;
       applyPreferencesToDocument(state.settings);
       renderGuestView(route);
       applyRouteFocus(route);

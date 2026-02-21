@@ -130,7 +130,13 @@ class SimpleRouter {
   }
 
   shouldIntercept(link) {
-    const href = link.getAttribute('href')
+    const href = String(link.getAttribute('href') || '').trim()
+    if (!href) return false
+
+    // Skip absolute/custom URL schemes (http, https, webcal, etc).
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href)) {
+      return false
+    }
 
     // Skip external links
     if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('tel:')) {
