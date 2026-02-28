@@ -1,6 +1,7 @@
 import { supabase } from "../supabase.js";
 import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType } from "./shared.js";
 import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from "./preferences.js";
+import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -23,6 +24,7 @@ class AssignmentsManager {
         this.eventListenersSetup = false;
         this.isSaving = false;
         this.courseNameDisplayMaxLength = 22;
+        this.coursePrefilter = this.readCoursePrefilterFromURL();
         this.emojiRecentStorageKey = 'assignments_recent_emojis_v1';
         this.emojiRecentLimit = 24;
         this.emojiActiveCategory = 'people';
@@ -100,6 +102,68 @@ class AssignmentsManager {
         }
     }
 
+    readCoursePrefilterFromURL() {
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const courseCode = (params.get('courseCode') || params.get('course_code') || '').trim();
+            const year = (params.get('year') || '').trim();
+            const term = (params.get('term') || '').trim();
+            const courseTitle = (params.get('courseTitle') || '').trim();
+
+            if (!courseCode) return null;
+
+            return {
+                courseCode,
+                normalizedCourseCode: courseCode.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                year: year || null,
+                term: term || null,
+                courseTitle: courseTitle || null
+            };
+        } catch (error) {
+            console.warn('Unable to read assignment course prefilter from URL:', error);
+            return null;
+        }
+    }
+
+    matchesCoursePrefilter(assignment) {
+        if (!this.coursePrefilter) return true;
+
+        const normalizeCode = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const normalizeTerm = (value) => String(value || '').trim().toLowerCase();
+        const normalizeYear = (value) => String(value || '').trim();
+
+        if (normalizeCode(assignment?.course_code) !== this.coursePrefilter.normalizedCourseCode) {
+            return false;
+        }
+
+        const prefilterYear = normalizeYear(this.coursePrefilter.year);
+        const prefilterTerm = normalizeTerm(this.coursePrefilter.term);
+
+        if (!prefilterYear && !prefilterTerm) {
+            return true;
+        }
+
+        if (assignment?.course_year || assignment?.course_term) {
+            const yearMatches = !prefilterYear || normalizeYear(assignment.course_year) === prefilterYear;
+            const termMatches = !prefilterTerm || normalizeTerm(assignment.course_term) === prefilterTerm;
+            return yearMatches && termMatches;
+        }
+
+        const matchingSelections = (this.userCourseSelections || []).filter((course) =>
+            normalizeCode(course?.code) === this.coursePrefilter.normalizedCourseCode
+        );
+
+        if (!matchingSelections.length) {
+            return true;
+        }
+
+        return matchingSelections.some((course) => {
+            const yearMatches = !prefilterYear || normalizeYear(course?.year) === prefilterYear;
+            const termMatches = !prefilterTerm || normalizeTerm(course?.term) === prefilterTerm;
+            return yearMatches && termMatches;
+        });
+    }
+
     async init() {
         if (this.isInitialized || this.isInitializing) return;
         this.isInitializing = true;
@@ -175,8 +239,8 @@ class AssignmentsManager {
                 console.warn('Assignment not found for hash:', assignmentId);
             }
 
-            // Clear the hash to avoid reopening on refresh
-            window.history.replaceState(null, '', window.location.pathname);
+            // Clear the hash to avoid reopening on refresh (preserve query params, including course prefilter)
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
             return true;
         }
 
@@ -300,6 +364,8 @@ class AssignmentsManager {
         const saveBtn = document.getElementById('assignment-save-btn');
 
         if (!overlay) return;
+        overlay.dataset.assignmentId = '';
+        overlay.dataset.assignmentMode = 'new';
         if (saveBtn) saveBtn.disabled = false;
 
         if (titleInput) titleInput.value = '';
@@ -738,9 +804,14 @@ class AssignmentsManager {
 
         const semesterValues = semesters.map((semester) => `${semester.term}-${semester.year}`);
         const preferredTerm = getPreferredTermValue();
-        const selectedSemesterValue = preferredTerm && semesterValues.includes(preferredTerm)
-            ? preferredTerm
-            : (semesterValues[0] || null);
+        const prefilterSemesterValue = this.coursePrefilter?.term && this.coursePrefilter?.year
+            ? `${this.coursePrefilter.term}-${this.coursePrefilter.year}`
+            : null;
+        const selectedSemesterValue = prefilterSemesterValue && semesterValues.includes(prefilterSemesterValue)
+            ? prefilterSemesterValue
+            : preferredTerm && semesterValues.includes(preferredTerm)
+                ? preferredTerm
+                : (semesterValues[0] || null);
         const selectedSemester = semesters.find((semester) => `${semester.term}-${semester.year}` === selectedSemesterValue) || semesters[0] || null;
 
         semesterSelects.forEach(select => {
@@ -1008,6 +1079,12 @@ class AssignmentsManager {
 
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
+
+                if (openSemesterMobileSheet({ targetSelect })) {
+                    customSelect.classList.remove('open');
+                    return;
+                }
+
                 document.querySelectorAll('.custom-select').forEach(other => {
                     if (other !== customSelect) other.classList.remove('open');
                 });
@@ -1211,12 +1288,16 @@ class AssignmentsManager {
 
     getAssignmentsForSelectedSemester() {
         const selected = this.getSelectedSemester();
-        if (!selected) return this.assignments;
+        if (!selected) {
+            return this.coursePrefilter
+                ? this.assignments.filter((assignment) => this.matchesCoursePrefilter(assignment))
+                : this.assignments;
+        }
 
         const selectedYear = String(selected.year);
         const selectedTerm = String(selected.term).toLowerCase();
 
-        return this.assignments.filter(assignment => {
+        const semesterAssignments = this.assignments.filter(assignment => {
             if (assignment.course_year && assignment.course_term) {
                 return String(assignment.course_year) === selectedYear &&
                     String(assignment.course_term).toLowerCase() === selectedTerm;
@@ -1232,6 +1313,12 @@ class AssignmentsManager {
 
             return !assignment.course_code;
         });
+
+        if (!this.coursePrefilter) {
+            return semesterAssignments;
+        }
+
+        return semesterAssignments.filter((assignment) => this.matchesCoursePrefilter(assignment));
     }
 
     renderTableView() {
@@ -1434,6 +1521,8 @@ class AssignmentsManager {
         const saveBtn = document.getElementById('assignment-save-btn');
 
         if (!overlay) return;
+        overlay.dataset.assignmentId = assignment?.id != null ? String(assignment.id) : '';
+        overlay.dataset.assignmentMode = 'edit';
         if (saveBtn) saveBtn.disabled = false;
 
         if (deleteBtn) deleteBtn.style.display = 'block';
@@ -1499,6 +1588,8 @@ class AssignmentsManager {
         const emojiPicker = document.getElementById('assignment-emoji-picker');
         if (overlay) {
             overlay.style.display = 'none';
+            overlay.dataset.assignmentId = '';
+            overlay.dataset.assignmentMode = '';
         }
         if (datePickerPopup) {
             this.hideDatePickerPopup(datePickerPopup, { immediate: true });
@@ -1773,6 +1864,14 @@ class AssignmentsManager {
         console.log('Saving assignment...');
 
         try {
+            if (!this.currentUser) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) {
+                    throw new Error('User session missing while saving assignment');
+                }
+                this.currentUser = session.user;
+            }
+
             const titleInput = document.getElementById('assignment-modal-title');
             const dueDateInput = document.getElementById('assignment-modal-due-date');
             const statusSelect = document.getElementById('assignment-modal-status');
@@ -1780,6 +1879,7 @@ class AssignmentsManager {
             const subjectTag = document.getElementById('subject-tag');
             const emojiTrigger = document.getElementById('assignment-emoji-trigger');
             const saveBtn = document.getElementById('assignment-save-btn');
+            const overlay = document.getElementById('assignment-modal-overlay');
             if (saveBtn) saveBtn.disabled = true;
 
             const courseCode = subjectTag?.dataset.code || null;
@@ -1808,7 +1908,13 @@ class AssignmentsManager {
                 assignment_icon: assignmentIcon ? assignmentIcon : null
             };
 
-            if (this.isNewAssignment || !this.currentAssignment) {
+            const modalAssignmentId = (overlay?.dataset.assignmentId || '').trim();
+            const activeAssignmentId = this.currentAssignment?.id != null
+                ? String(this.currentAssignment.id)
+                : (modalAssignmentId || null);
+            const shouldCreate = this.isNewAssignment && !activeAssignmentId;
+
+            if (shouldCreate) {
                 const newAssignment = {
                     user_id: this.currentUser.id,
                     ...assignmentData
@@ -1826,7 +1932,10 @@ class AssignmentsManager {
                 this.renderAssignments();
                 console.log('Created new assignment:', data);
             } else {
-                await this.updateAssignment(this.currentAssignment.id, assignmentData);
+                if (!this.currentAssignment && activeAssignmentId) {
+                    this.currentAssignment = this.assignments.find((assignment) => String(assignment?.id) === activeAssignmentId) || null;
+                }
+                await this.updateAssignment(activeAssignmentId, assignmentData);
             }
 
             this.closeAssignmentModal();
@@ -2060,7 +2169,7 @@ class AssignmentsManager {
     getStatusText(status) {
         const statusMap = {
             'not_started': 'Not Started',
-            'ongoing': 'Ongoing',
+            'ongoing': 'In Progress',
             'completed': 'Completed'
         };
         return statusMap[status] || status;

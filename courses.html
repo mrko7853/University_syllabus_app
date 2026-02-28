@@ -388,9 +388,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="class-info" id="class-info">
-                    <div class="class-info-header">
-                        <div class="swipe-indicator"></div>
+                <div class="class-info sheet courseinfo-sheet" id="class-info">
+                    <div class="class-info-header sheet-header courseinfo-header">
+                        <div class="swipe-indicator courseinfo-grabber"></div>
                         <div class="class-header">
                             <button id="class-close">
                                 <div class="button-icon">
@@ -398,21 +398,20 @@
                                 </div>
                             </button>
                             <h2>Class Info</h2>
-                            <button id="class-add-remove"></button>
                         </div>
                     </div>
 
-                    <div class="class-content-wrapper">
-                        <div class="class-content" id="class-content">
-                        </div>
+                    <div class="courseinfo-peek" id="course-info-peek" aria-hidden="true"></div>
 
-                        <div class="class-content" id="class-gpa-graph">
+                    <div class="class-content-wrapper sheet-body courseinfo-body">
+                        <div id="course-info-body">
+                            <div id="course-info-content-root"></div>
                         </div>
+                    </div>
 
-                        <div class="class-content" id="class-review">
-                        </div>
-
-                        <div class="class-content" id="class-assignments">
+                    <div class="sheet-footer" id="course-info-footer">
+                        <div id="course-info-actions">
+                            <button id="class-add-remove"></button>
                         </div>
                     </div>
                 </div>

@@ -22,21 +22,26 @@
       <div class="course-page-card" id="course-page-card">
         <div class="course-page-loading" id="course-page-loading">Loading course…</div>
 
-        <div class="class-info course-fullscreen" id="class-info">
-          <div class="class-info-header">
-            <div class="swipe-indicator"></div>
+        <div class="class-info course-fullscreen sheet courseinfo-sheet" id="class-info">
+          <div class="class-info-header sheet-header courseinfo-header">
+            <div class="swipe-indicator courseinfo-grabber"></div>
             <div class="class-header" id="class-header-full">
               <button id="class-close">x</button>
               <h2>Class Info</h2>
-              <button id="class-add-remove"></button>
             </div>
           </div>
 
-          <div class="class-content-wrapper">
-            <div class="class-content" id="class-content"></div>
-            <div class="class-content" id="class-gpa-graph"></div>
-            <div class="class-content" id="class-review"></div>
-            <div class="class-content" id="class-assignments"></div>
+          <div class="courseinfo-peek" id="course-info-peek" aria-hidden="true"></div>
+
+          <div class="class-content-wrapper sheet-body courseinfo-body">
+            <div id="course-info-body">
+              <div id="course-info-content-root"></div>
+            </div>
+          </div>
+          <div class="sheet-footer" id="course-info-footer">
+            <div id="course-info-actions">
+              <button id="class-add-remove"></button>
+            </div>
           </div>
         </div>
       </div>

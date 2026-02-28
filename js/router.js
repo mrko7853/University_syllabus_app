@@ -24,8 +24,8 @@ class SimpleRouter {
       '/help': '/profile.html' // For now, help goes to profile
     }
 
-    // Course URL pattern: /course/courseCode/year/term
-    this.coursePattern = /^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/
+    // Course URL pattern: /course/courseCode/year/term (also supports /courses alias)
+    this.coursePattern = /^\/courses?\/([^\/]+)\/(\d{4})\/([^\/]+)$/
 
     this.currentPath = getCurrentAppPath()
     this.isInitialized = false
@@ -43,6 +43,11 @@ class SimpleRouter {
     this.pageCache = new Map()
     this.pageCacheInitialized = new Map()
     this.sharedModulePromise = null
+    this.mobileHeaderProfileBadgeCache = {
+      userId: null,
+      initials: '',
+      fetchedAt: 0
+    }
 
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
@@ -164,6 +169,165 @@ class SimpleRouter {
     return path === '/' || path === '' || path === '/home'
   }
 
+  isMobileViewport() {
+    return window.innerWidth <= 1023
+  }
+
+  isProfileRoute(path) {
+    return path === '/profile' || path === '/settings' || path === '/help'
+  }
+
+  shouldRedirectGuestProfileRoute(path, isAuthenticated) {
+    return this.isProfileRoute(path) && !isAuthenticated
+  }
+
+  getInitials(name, email = '') {
+    const normalizedName = String(name || '').trim()
+    if (normalizedName) {
+      const parts = normalizedName.split(/\s+/).filter(Boolean)
+      if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      }
+      return parts[0].slice(0, 2).toUpperCase()
+    }
+
+    return String(email || '').split('@')[0].slice(0, 2).toUpperCase() || 'IL'
+  }
+
+  async getMobileHeaderProfileInitials() {
+    try {
+      let supabaseClient = null
+
+      if (this.isProduction()) {
+        supabaseClient = window.supabase || null
+      } else {
+        const { supabase } = await import('../supabase.js')
+        supabaseClient = supabase
+      }
+
+      if (!supabaseClient) return ''
+
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      const user = session?.user || null
+      if (!user) return ''
+
+      const cache = this.mobileHeaderProfileBadgeCache
+      if (cache.userId === user.id && cache.initials && (Date.now() - cache.fetchedAt) < 60000) {
+        return cache.initials
+      }
+
+      let displayName = ''
+      try {
+        const { data: profileRow } = await supabaseClient
+          .from('profiles')
+          .select('display_name')
+          .eq('id', user.id)
+          .single()
+
+        displayName = String(profileRow?.display_name || '').trim()
+      } catch (error) {
+        console.warn('Router: failed to load profile display name for mobile header', error)
+      }
+
+      if (!displayName) {
+        displayName = String(
+          user.user_metadata?.display_name
+          || user.user_metadata?.name
+          || user.user_metadata?.full_name
+          || user.email
+          || ''
+        ).trim()
+      }
+
+      const initials = this.getInitials(displayName, user.email || '')
+      this.mobileHeaderProfileBadgeCache = {
+        userId: user.id,
+        initials,
+        fetchedAt: Date.now()
+      }
+      return initials
+    } catch (error) {
+      console.error('Router: error resolving mobile header initials', error)
+      return ''
+    }
+  }
+
+  async hydrateMobileProfileButtonInitials() {
+    const button = document.getElementById('profile-mobile')
+    if (!button) return
+
+    const initials = await this.getMobileHeaderProfileInitials()
+    if (!button.isConnected) return
+
+    if (!initials) {
+      button.textContent = ''
+      button.classList.remove('profile-mobile-initials')
+      button.removeAttribute('data-initials')
+      button.setAttribute('aria-label', 'Profile')
+      return
+    }
+
+    button.textContent = initials
+    button.classList.add('profile-mobile-initials')
+    button.setAttribute('data-initials', initials)
+    button.setAttribute('aria-label', `Profile (${initials})`)
+  }
+
+  async hydrateDesktopProfileNavInitials(isAuthenticated) {
+    const profileNavButton = document.getElementById('profile')
+    const profileNavIcon = profileNavButton?.querySelector('.nav-icon')
+    if (!profileNavButton || !profileNavIcon) return
+
+    if (!isAuthenticated) {
+      profileNavButton.classList.remove('nav-btn--initials')
+      profileNavIcon.textContent = ''
+      profileNavIcon.removeAttribute('data-initials')
+      profileNavButton.setAttribute('aria-label', 'Profile')
+      return
+    }
+
+    const initials = await this.getMobileHeaderProfileInitials()
+    if (!profileNavButton.isConnected || !profileNavIcon.isConnected) return
+
+    if (!initials) {
+      profileNavButton.classList.remove('nav-btn--initials')
+      profileNavIcon.textContent = ''
+      profileNavIcon.removeAttribute('data-initials')
+      profileNavButton.setAttribute('aria-label', 'Profile')
+      return
+    }
+
+    profileNavButton.classList.add('nav-btn--initials')
+    profileNavIcon.textContent = initials
+    profileNavIcon.setAttribute('data-initials', initials)
+    profileNavButton.setAttribute('aria-label', `Profile (${initials})`)
+  }
+
+  async updateMobileGuestAuthHeader(isAuthenticated) {
+    const appHeader = document.querySelector('.app-header')
+    const appMisc = appHeader?.querySelector('.app-misc')
+    if (!appMisc) return
+
+    const profileButtonMarkup = `
+      <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
+    `
+
+    if (!this.isMobileViewport() || isAuthenticated) {
+      appMisc.innerHTML = profileButtonMarkup
+      if (isAuthenticated) {
+        await this.hydrateMobileProfileButtonInitials()
+      }
+      return
+    }
+
+    appMisc.innerHTML = `
+      <div class="mobile-guest-auth-actions">
+        <button type="button" class="control-surface mobile-guest-auth-btn" data-route="/login">Log In</button>
+        <button type="button" class="control-surface mobile-guest-auth-btn" data-route="/register">Sign Up</button>
+      </div>
+    `
+  }
+
   navigate(path) {
     // Remove domain if full URL
     if (path.includes(window.location.origin)) {
@@ -171,6 +335,15 @@ class SimpleRouter {
     }
 
     const appPath = stripBase(path)
+    const normalizedAppPath = (String(appPath || '/').split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/'
+
+    if (this.coursePattern.test(normalizedAppPath)) {
+      if (normalizedAppPath !== this.currentPath || !this.isInitialized) {
+        window.history.pushState({}, '', withBase(normalizedAppPath))
+        this.loadPage(normalizedAppPath)
+      }
+      return
+    }
 
     // Handle route parameters (e.g., /profile/uuid)
     const cleanPath = this.extractBasePath(appPath)
@@ -261,6 +434,23 @@ class SimpleRouter {
 
     const classInfo = document.getElementById('class-info')
     if (classInfo) {
+      if (typeof classInfo._focusTrapCleanup === 'function') {
+        classInfo._focusTrapCleanup()
+        classInfo._focusTrapCleanup = null
+      }
+      if (typeof classInfo._mobileTabsResizeCleanup === 'function') {
+        classInfo._mobileTabsResizeCleanup()
+        classInfo._mobileTabsResizeCleanup = null
+      }
+      if (typeof classInfo._courseInfoTabCleanup === 'function') {
+        classInfo._courseInfoTabCleanup()
+        classInfo._courseInfoTabCleanup = null
+      }
+      if (typeof classInfo._courseInfoSheetController?.destroy === 'function') {
+        classInfo._courseInfoSheetController.destroy()
+        classInfo._courseInfoSheetController = null
+      }
+
       // When leaving course fullscreen routes, hide immediately to avoid slide-out animation.
       if (document.body.classList.contains('course-page-mode')) {
         classInfo.style.transition = 'none'
@@ -271,9 +461,17 @@ class SimpleRouter {
 
       classInfo.classList.remove('show', 'fully-open', 'swiping')
       classInfo.style.removeProperty('--modal-translate-y')
+      classInfo.style.removeProperty('--sheet-y')
+      classInfo.style.removeProperty('--sheet-radius')
+      classInfo.classList.remove('is-snapping', 'is-dragging')
+      delete classInfo.dataset.sheetState
     }
 
     document.body.style.overflow = ''
+    document.body.style.position = ''
+    document.body.style.top = ''
+    document.body.style.width = ''
+    document.body.classList.remove('modal-open')
   }
 
   getRouteCacheKey(path) {
@@ -388,6 +586,14 @@ class SimpleRouter {
     // Check if user is authenticated for protected routes
     const isProtectedRoute = this.isProtectedRoute(basePath)
     const isAuthenticated = await this.checkAuthentication()
+    await this.updateMobileGuestAuthHeader(isAuthenticated)
+    await this.hydrateDesktopProfileNavInitials(isAuthenticated)
+
+    if (this.shouldRedirectGuestProfileRoute(basePath, isAuthenticated)) {
+      this.hideLoadingBar()
+      this.navigate('/login')
+      return
+    }
 
     // Assignments remain gated for guests, but route to Profile instead of a hard lock page.
     if (basePath === '/assignments' && !isAuthenticated) {
@@ -496,6 +702,13 @@ class SimpleRouter {
 
       // Check authentication status
       const isAuthenticated = await this.checkAuthentication()
+      await this.updateMobileGuestAuthHeader(isAuthenticated)
+      await this.hydrateDesktopProfileNavInitials(isAuthenticated)
+
+      if (this.shouldRedirectGuestProfileRoute(path, isAuthenticated)) {
+        this.navigate('/login')
+        return
+      }
 
       // Update active navigation
       this.updateActiveNav(path)
@@ -524,12 +737,11 @@ class SimpleRouter {
       el.classList.add('false')
     })
 
-    // Add active class and remove false class from current page button
-    const activeButton = document.querySelector(`[data-route="${navPath}"]`)
-    if (activeButton) {
+    // Mark all matching route buttons active (e.g., sidebar + mobile header profile button).
+    document.querySelectorAll(`[data-route="${navPath}"]`).forEach((activeButton) => {
       activeButton.classList.add('active')
       activeButton.classList.remove('false')
-    }
+    })
   }
 
   async reinitializeEverything(path) {
@@ -1257,6 +1469,11 @@ class SimpleRouter {
   extractBasePath(path) {
     const rawPath = String(path || '/').split('?')[0].split('#')[0] || '/'
     const normalizedPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath
+
+    // Preserve course detail deep-links so they can be handled by the dedicated course route loader.
+    if (this.coursePattern && this.coursePattern.test(normalizedPath)) {
+      return normalizedPath
+    }
 
     // Handle routes with parameters like /profile/uuid
     if (normalizedPath.startsWith('/profile/')) {

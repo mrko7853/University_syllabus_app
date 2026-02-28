@@ -22,10 +22,11 @@ import {
   normalizeTermValue
 } from "./preferences.js";
 
-const PROFILE_ROUTES = new Set(["/profile", "/settings", "/help"]);
+const PROFILE_ROUTES = new Set(["/profile", "/settings"]);
 const AUTH_PROMPT_KEY = "ila_profile_auth_prompt";
 const PROFILE_MODAL_LAYER_ID = "profile-modal-layer";
 let profileCustomSelectDocumentHandler = null;
+let profileHeaderScrollCleanup = null;
 
 const state = {
   isAuthenticated: false,
@@ -101,6 +102,107 @@ function getCurrentRouteForProfile() {
 
 function isMobileViewport() {
   return window.innerWidth <= 1023;
+}
+
+function teardownProfileMobileHeaderBehavior() {
+  if (typeof profileHeaderScrollCleanup === "function") {
+    profileHeaderScrollCleanup();
+    profileHeaderScrollCleanup = null;
+  }
+}
+
+function initializeProfileMobileHeaderBehavior() {
+  teardownProfileMobileHeaderBehavior();
+
+  const header = document.querySelector(".app-header");
+  const appContent = document.getElementById("app-content");
+  const profileMain = document.getElementById("profile-main");
+  if (!header) return;
+
+  if (!isMobileViewport()) {
+    header.classList.remove("app-header--hidden");
+    document.body.classList.remove("profile-page-header-sticky");
+    document.documentElement.style.removeProperty("--profile-mobile-header-height");
+    return;
+  }
+
+  document.body.classList.add("profile-page-header-sticky");
+
+  const setHeaderHeight = () => {
+    const height = Math.ceil(header.getBoundingClientRect().height);
+    document.documentElement.style.setProperty("--profile-mobile-header-height", `${height}px`);
+  };
+
+  const getCurrentScrollY = () => {
+    const windowScrollY = window.scrollY || window.pageYOffset || 0;
+    const rootScrollY = document.documentElement?.scrollTop || 0;
+    const bodyScrollY = document.body?.scrollTop || 0;
+    const docScrollY = document.scrollingElement?.scrollTop || 0;
+    const contentScrollY = appContent ? appContent.scrollTop : 0;
+    const mainScrollY = profileMain ? profileMain.scrollTop : 0;
+    return Math.max(windowScrollY, rootScrollY, bodyScrollY, docScrollY, contentScrollY, mainScrollY);
+  };
+
+  let lastScrollY = getCurrentScrollY();
+  let ticking = false;
+  const scrollThreshold = 6;
+  const topRevealThreshold = 8;
+
+  const applyScrollState = () => {
+    ticking = false;
+
+    const currentScrollY = getCurrentScrollY();
+    if (currentScrollY <= topRevealThreshold) {
+      header.classList.remove("app-header--hidden");
+      lastScrollY = currentScrollY;
+      return;
+    }
+
+    const deltaY = currentScrollY - lastScrollY;
+    if (Math.abs(deltaY) <= scrollThreshold) return;
+
+    if (deltaY > 0) {
+      header.classList.add("app-header--hidden");
+    } else {
+      header.classList.remove("app-header--hidden");
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(applyScrollState);
+  };
+
+  const onResize = () => {
+    if (!isMobileViewport()) {
+      teardownProfileMobileHeaderBehavior();
+      return;
+    }
+    setHeaderHeight();
+  };
+
+  setHeaderHeight();
+  header.classList.remove("app-header--hidden");
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  appContent?.addEventListener("scroll", onScroll, { passive: true });
+  profileMain?.addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+  window.addEventListener("resize", onResize);
+
+  profileHeaderScrollCleanup = () => {
+    window.removeEventListener("scroll", onScroll);
+    appContent?.removeEventListener("scroll", onScroll);
+    profileMain?.removeEventListener("scroll", onScroll);
+    document.removeEventListener("scroll", onScroll, true);
+    window.removeEventListener("resize", onResize);
+    header.classList.remove("app-header--hidden");
+    document.body.classList.remove("profile-page-header-sticky");
+    document.documentElement.style.removeProperty("--profile-mobile-header-height");
+  };
 }
 
 function escapeHtml(value) {
@@ -420,7 +522,6 @@ function renderSignedInSkeleton() {
     "profile-preferences",
     "profile-integrations",
     "profile-data-privacy",
-    "profile-help",
     "profile-auth"
   ];
 
@@ -457,7 +558,7 @@ function renderLoadError(error) {
     `
   );
 
-  ["profile-academic", "profile-preferences", "profile-integrations", "profile-data-privacy", "profile-help", "profile-auth"].forEach((id) => {
+  ["profile-academic", "profile-preferences", "profile-integrations", "profile-data-privacy", "profile-auth"].forEach((id) => {
     const section = document.getElementById(id);
     if (section) section.innerHTML = "";
   });
@@ -522,10 +623,7 @@ function navRow(id, action, label, icon, soon = false) {
 function renderHelpBody() {
   return `
     <div class="profile-nav-list">
-      ${navRow("profile-open-faq", "faq", "FAQ", "?")}
-      ${navRow("profile-open-feedback", "feedback", "Feedback", "✉", true)}
-      ${navRow("profile-open-bug", "bug", "Report a bug", "!", true)}
-      ${navRow("profile-open-about", "about", "About", "i")}
+      <button class="control-surface" id="profile-open-about" type="button">About</button>
     </div>
   `;
 }
@@ -538,7 +636,6 @@ function renderGuestView(route) {
   const preferences = document.getElementById("profile-preferences");
   const integrations = document.getElementById("profile-integrations");
   const dataPrivacy = document.getElementById("profile-data-privacy");
-  const help = document.getElementById("profile-help");
   const auth = document.getElementById("profile-auth");
 
   if (identity) {
@@ -548,9 +645,9 @@ function renderGuestView(route) {
         <p class="profile-body-copy">Browse courses without an account. Sign in to save your schedule.</p>
         ${promptText ? `<p class="profile-inline-notice">${escapeHtml(promptText)}</p>` : ""}
         <div class="profile-inline-actions">
-          <button class="control-surface" id="guest-browse-courses-btn" type="button">Browse courses</button>
-          <button class="control-surface" id="guest-signin-btn" type="button">Sign in</button>
-          <button class="control-surface" id="guest-register-btn" type="button">Create account</button>
+          <button class="control-surface" id="guest-browse-courses-btn" type="button">Browse Courses</button>
+          <button class="control-surface" id="guest-signin-btn" type="button">Sign In</button>
+          <button class="control-surface" id="guest-register-btn" type="button">Create Account</button>
         </div>
       `
     );
@@ -561,16 +658,12 @@ function renderGuestView(route) {
       "What's unlocked with an account",
       `
         <div class="profile-nav-list">
-          ${navRow("guest-save-timetable", "require-auth", "Save timetable", "✓")}
-          ${navRow("guest-track-deadlines", "require-auth", "Track deadlines", "⌛")}
-          ${navRow("guest-write-reviews", "require-auth", "Write reviews", "★")}
+          ${navRow("guest-save-timetable", "require-auth", "Save Timetable", "✓")}
+          ${navRow("guest-track-deadlines", "require-auth", "Track Deadlines", "⌛")}
+          ${navRow("guest-write-reviews", "require-auth", "Write Reviews", "★")}
         </div>
       `
     );
-  }
-
-  if (help) {
-    help.innerHTML = cardTemplate("Help & About", renderHelpBody());
   }
 
   if (preferences) preferences.innerHTML = "";
@@ -752,7 +845,6 @@ function renderSignedInView() {
   const preferences = document.getElementById("profile-preferences");
   const integrations = document.getElementById("profile-integrations");
   const dataPrivacy = document.getElementById("profile-data-privacy");
-  const help = document.getElementById("profile-help");
   const auth = document.getElementById("profile-auth");
 
   const displayName = getProfileDisplayName(state.profile, state.user);
@@ -762,7 +854,7 @@ function renderSignedInView() {
   const yearValue = state.profile?.year ? String(state.profile.year) : "";
   const hasProgram = Boolean(programValue);
   const hasYear = Boolean(yearValue);
-  const setupLabel = hasProgram || hasYear ? "Edit" : "Set up";
+  const setupLabel = hasProgram || hasYear ? "Edit" : "Set Up";
   const useMobilePicker = isMobileViewport();
 
   if (identity) {
@@ -804,20 +896,22 @@ function renderSignedInView() {
         ${settingRow(
           "Program",
           "Your current program",
-          `<div class="setting-control-stack">${
+          `${
             hasProgram
               ? `<span class="status-pill status-pill--value">${escapeHtml(programValue)}</span>`
-              : '<span class="status-pill status-pill--not-set">Not set</span>'
-          }<button class="profile-action-pill control-surface" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button></div>`
+              : '<span class="status-pill status-pill--not-set">Not Set</span>'
+          }<button class="profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+          "setting-row--program-year"
         )}
         ${settingRow(
           "Year",
           "Current year",
-          `<div class="setting-control-stack">${
+          `${
             hasYear
               ? `<span class="status-pill status-pill--value">Year ${escapeHtml(yearValue)}</span>`
-              : '<span class="status-pill status-pill--not-set">Not set</span>'
-          }<button class="profile-action-pill control-surface" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button></div>`
+              : '<span class="status-pill status-pill--not-set">Not Set</span>'
+          }<button class="profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+          "setting-row--program-year"
         )}
       `
     );
@@ -847,8 +941,8 @@ function renderSignedInView() {
       `
         ${settingRow("Language", "Choose app language", languageControl)}
         ${settingRow("Time format", "12-hour or 24-hour", timeFormatControl)}
-        ${settingRow("Use full card colors", "Show full card background colors", toggleMarkup("pref-fullcardcolors-toggle", state.settings.fullCardColors))}
-        ${settingRow("Reduce motion", "Limit transitions and motion", toggleMarkup("pref-reducemotion-toggle", state.settings.reduceMotion))}
+        ${settingRow("Use full card colors", "Show full card background colors", toggleMarkup("pref-fullcardcolors-toggle", state.settings.fullCardColors), "setting-row--toggle")}
+        ${settingRow("Reduce motion", "Limit transitions and motion", toggleMarkup("pref-reducemotion-toggle", state.settings.reduceMotion), "setting-row--toggle")}
       `
     );
   }
@@ -872,16 +966,14 @@ function renderSignedInView() {
           "Calendar access",
           "Current integration status",
           `
-            <div class="setting-control-stack">
-              <span class="status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
-              <button class="profile-action-pill control-surface" id="profile-manage-integrations" type="button">
-                <span class="pill-icon" aria-hidden="true">📅</span>
-                <span>Manage</span>
-              </button>
-            </div>
-          `
+            <span class="status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
+            <button class="profile-action-pill profile-action-pill--integration control-surface" id="profile-manage-integrations" type="button">
+              <span class="pill-icon pill-icon--calendar-plus" aria-hidden="true"></span>
+              <span>Manage</span>
+            </button>
+          `,
+          "setting-row--integration"
         )}
-        <p class="coming-soon-note">${escapeHtml(helperText)}</p>
       `
     );
   }
@@ -892,28 +984,35 @@ function renderSignedInView() {
       `
         <div class="profile-subblock">
           <h3 class="profile-subtitle">Utilities</h3>
-          ${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="control-surface" id="profile-clear-cache" type="button">Clear cache</button>')}
+          <div class="setting-row-id">${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="control-surface" id="profile-clear-cache" type="button">Clear Cache</button>')}</div>
+        </div>
+        <div class="profile-subblock" id="profile-help-subblock">
+          <h3 class="profile-subtitle">App Version</h3>
+          <div class="setting-row-id">${settingRow("Version", "Current application version", `${renderHelpBody()}`)}</div>
         </div>
         <div class="danger-zone">
-          <h3 class="profile-subtitle">Danger zone</h3>
-          <p class="danger-copy">Deleting your account permanently removes your profile and saved data.</p>
-          <button class="danger-action-btn" id="profile-delete-account" type="button">
-            <span class="pill-icon" aria-hidden="true">🗑</span>
-            <span>Delete account</span>
-          </button>
+          <h3 class="profile-subtitle">Danger Zone</h3>
+          <div class="danger-zone-row">
+            <button class="danger-action-btn" id="profile-delete-account" type="button">
+              <span class="pill-icon pill-icon--trash" aria-hidden="true"></span>
+              <span>Delete Account</span>
+            </button>
+            <div class="danger-zone-meta">
+              <h4 class="setting-title">Delete account</h4>
+              <p class="danger-copy">Deleting your account permanently removes your profile and saved data</p>
+            </div>
+          </div>
         </div>
       `
     );
   }
 
-  if (help) {
-    help.innerHTML = cardTemplate("Help & Feedback", renderHelpBody());
-  }
-
   if (auth) {
     auth.innerHTML = cardTemplate(
-      "Sign out",
-      `<button class="control-surface" id="profile-signout" type="button">Sign out</button>`
+      "Sign Out",
+      `<div class="profile-subblock">
+          <div class="setting-row-id">${settingRow("Sign out", "End your session and return to the login screen", '<button class="control-surface" id="profile-signout" type="button">Sign Out</button>')}</div>
+       </div>`
     );
   }
 
@@ -928,15 +1027,6 @@ function bindGuestActions() {
   document.querySelectorAll("[data-action='require-auth']").forEach((button) => {
     button.addEventListener("click", () => navigateTo("/login"));
   });
-
-  bindHelpActions();
-}
-
-function bindHelpActions() {
-  document.getElementById("profile-open-faq")?.addEventListener("click", openFaqModal);
-  document.getElementById("profile-open-about")?.addEventListener("click", openAboutModal);
-  document.getElementById("profile-open-feedback")?.addEventListener("click", () => showProfileToast("Coming soon"));
-  document.getElementById("profile-open-bug")?.addEventListener("click", () => showProfileToast("Coming soon"));
 }
 
 function setToggleUi(button, checked) {
@@ -991,9 +1081,8 @@ function bindSignedInActions() {
   document.getElementById("profile-manage-integrations")?.addEventListener("click", openCalendarIntegrationsModal);
   document.getElementById("profile-clear-cache")?.addEventListener("click", openClearCacheModal);
   document.getElementById("profile-delete-account")?.addEventListener("click", openDeleteAccountModal);
+  document.getElementById("profile-open-about")?.addEventListener("click", openAboutModal);
   document.getElementById("profile-signout")?.addEventListener("click", openSignOutModal);
-
-  bindHelpActions();
 }
 
 function showProfileToast(message = "Saved") {
@@ -1023,18 +1112,18 @@ function closeModal() {
   if (!layer) return;
 
   const modal = layer.querySelector(".profile-modal");
-  const isSheet = modal?.classList.contains("profile-modal--sheet");
+  const isSwipeModal = modal?.classList.contains("profile-modal--swipe");
 
-  if (isSheet && modal) {
+  if (isSwipeModal && modal) {
     modal.classList.remove("show");
     window.setTimeout(() => {
       layer.remove();
-    }, 220);
+      document.body.classList.remove("modal-open");
+    }, 340);
   } else {
     layer.remove();
+    document.body.classList.remove("modal-open");
   }
-
-  document.body.classList.remove("modal-open");
 }
 
 function resolveModalMode(mode, mobileMode) {
@@ -1061,7 +1150,8 @@ function openModal({
   closeModal();
 
   const resolvedMode = resolveModalMode(mode, mobileMode);
-  const showSwipeIndicator = resolvedMode === "sheet";
+  const enableSwipeSheet = resolvedMode === "sheet" || (resolvedMode === "fullscreen" && isMobileViewport());
+  const showSwipeIndicator = enableSwipeSheet;
   const layer = document.createElement("div");
   layer.id = PROFILE_MODAL_LAYER_ID;
   layer.className = "profile-modal-layer";
@@ -1088,12 +1178,15 @@ function openModal({
 
   const modal = layer.querySelector(".profile-modal");
   const backdrop = layer.querySelector(".profile-modal-backdrop");
+  if (enableSwipeSheet && modal) {
+    modal.classList.add("profile-modal--swipe");
+  }
 
   if (resolvedMode === "sheet" || resolvedMode === "fullscreen") {
     document.body.classList.add("modal-open");
   }
 
-  if (resolvedMode === "sheet" && modal) {
+  if (enableSwipeSheet && modal) {
     requestAnimationFrame(() => {
       modal.classList.add("show");
     });
@@ -1124,7 +1217,7 @@ function openChoicePicker({ title, description = "", options, selectedValue, onS
               data-choice-value="${escapeHtml(option.value)}"
             >
               <span>${escapeHtml(option.label)}</span>
-              ${isSelected ? '<span class="choice-check" aria-hidden="true">✓</span>' : ""}
+              ${isSelected ? '<span class="choice-check" aria-hidden="true"></span>' : ""}
             </button>
           `;
         })
@@ -1137,7 +1230,8 @@ function openChoicePicker({ title, description = "", options, selectedValue, onS
     bodyMarkup,
     footerMarkup: `<button type="button" class="control-surface" data-modal-close="true">Cancel</button>`,
     mode: "sheet",
-    mobileMode: "sheet"
+    mobileMode: "sheet",
+    modalClassName: "profile-modal--picker-sheet"
   });
 
   layer.querySelectorAll(".profile-choice-option").forEach((button) => {
@@ -1145,6 +1239,95 @@ function openChoicePicker({ title, description = "", options, selectedValue, onS
       const value = button.getAttribute("data-choice-value") || "";
       await onSelect(value);
       closeModal();
+    });
+  });
+}
+
+function openNestedChoicePicker({ title, description = "", options, selectedValue, onSelect }) {
+  const existingLayer = document.querySelector(".profile-modal-layer--nested");
+  if (existingLayer) {
+    existingLayer.remove();
+  }
+
+  const bodyMarkup = `
+    ${description ? `<p class="profile-picker-help">${escapeHtml(description)}</p>` : ""}
+    <div class="profile-choice-list">
+      ${options
+        .map((option) => {
+          const isSelected = option.value === selectedValue;
+          return `
+            <button
+              type="button"
+              class="profile-choice-option${isSelected ? " is-selected" : ""}"
+              data-choice-value="${escapeHtml(option.value)}"
+            >
+              <span>${escapeHtml(option.label)}</span>
+              ${isSelected ? '<span class="choice-check" aria-hidden="true"></span>' : ""}
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  const layer = document.createElement("div");
+  layer.className = "profile-modal-layer profile-modal-layer--nested";
+  layer.innerHTML = `
+    <div class="profile-modal-backdrop" data-modal-close="true"></div>
+    <div class="profile-modal card-surface profile-modal--sheet profile-modal--swipe profile-modal--picker-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+      <div class="swipe-indicator" aria-hidden="true"></div>
+      <div class="profile-modal-head">
+        <h3>${escapeHtml(title)}</h3>
+        <button type="button" class="control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
+      </div>
+      <div class="profile-modal-body">${bodyMarkup}</div>
+      <div class="profile-modal-footer">
+        <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
+      </div>
+    </div>
+  `;
+
+  const closeLayer = ({ immediate = false } = {}) => {
+    if (!layer.isConnected) return;
+    const modal = layer.querySelector(".profile-modal");
+    if (immediate) {
+      layer.remove();
+      return;
+    }
+    if (modal?.classList.contains("profile-modal--swipe")) {
+      modal.classList.remove("show");
+      window.setTimeout(() => {
+        layer.remove();
+      }, 340);
+      return;
+    }
+    layer.remove();
+  };
+
+  layer.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-modal-close='true']")) {
+      closeLayer();
+    }
+  });
+
+  document.body.appendChild(layer);
+
+  const modal = layer.querySelector(".profile-modal");
+  const backdrop = layer.querySelector(".profile-modal-backdrop");
+
+  requestAnimationFrame(() => {
+    modal?.classList.add("show");
+  });
+
+  if (typeof window.addSwipeToCloseSimple === "function" && modal && backdrop) {
+    window.addSwipeToCloseSimple(modal, backdrop, () => closeLayer({ immediate: true }));
+  }
+
+  layer.querySelectorAll(".profile-choice-option").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const value = button.getAttribute("data-choice-value") || "";
+      await onSelect(value);
+      closeLayer();
     });
   });
 }
@@ -1165,7 +1348,7 @@ function openPreferencePicker(key) {
     }));
 
     openChoicePicker({
-      title: "Current term",
+      title: "Current Term",
       description: "Used for courses, schedule, and assignments",
       options,
       selectedValue: state.settings.currentTerm,
@@ -1203,7 +1386,7 @@ function openPreferencePicker(key) {
     ];
 
     openChoicePicker({
-      title: "Time format",
+      title: "Time Format",
       options,
       selectedValue: state.settings.timeFormat,
       onSelect: async (value) => {
@@ -1256,6 +1439,7 @@ function openCalendarIntegrationsModal() {
 
   const content = layer.querySelector("#calendar-integrations-modal-content");
   if (!content) return;
+  const useMobileFeedModePicker = isMobileViewport();
 
   const render = () => {
     const modeValue = local.data.settings.feedMode === "combined" ? "combined" : "separate";
@@ -1265,6 +1449,26 @@ function openCalendarIntegrationsModal() {
       { value: "separate", label: "Separate Calendars" },
       { value: "combined", label: "Single Combined Calendar" }
     ];
+    const selectedFeedModeOption = feedModeOptions.find((option) => option.value === modeValue) || feedModeOptions[0];
+    const feedModeControlMarkup = useMobileFeedModePicker
+      ? `
+        <button
+          type="button"
+          id="calendar-feed-mode-picker"
+          class="control-surface profile-picker-trigger profile-modal-picker-trigger"
+          aria-haspopup="dialog"
+          ${local.busy ? "disabled" : ""}
+        >
+          <span class="picker-value">${escapeHtml(selectedFeedModeOption.label)}</span>
+          <span class="picker-chevron" aria-hidden="true">›</span>
+        </button>
+        <select id="calendar-feed-mode-select" class="profile-native-select" style="display:none;"${local.busy ? " disabled" : ""}>
+          ${feedModeOptions
+            .map((option) => `<option value="${escapeHtml(option.value)}"${option.value === modeValue ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+            .join("")}
+        </select>
+      `
+      : renderCustomSelectMarkup("calendar-feed-mode-select", feedModeOptions, modeValue, { disabled: local.busy });
 
     content.innerHTML = `
       <p class="profile-picker-help">Create private subscription links for Google Calendar.</p>
@@ -1272,7 +1476,7 @@ function openCalendarIntegrationsModal() {
       <div class="calendar-integration-mode-row">
         <label class="profile-modal-label" for="calendar-feed-mode-select">Feed mode</label>
         <div class="calendar-integration-mode-controls">
-          ${renderCustomSelectMarkup("calendar-feed-mode-select", feedModeOptions, modeValue, { disabled: local.busy })}
+          ${feedModeControlMarkup}
           <button class="control-surface" type="button" id="calendar-feed-mode-save"${disableAttr}>${escapeHtml(saveLabel)}</button>
         </div>
       </div>
@@ -1284,7 +1488,31 @@ function openCalendarIntegrationsModal() {
         <button class="danger-action-btn" type="button" id="calendar-disconnect-links"${disableAttr}>Disconnect</button>
       </div>
     `;
-    initializeProfileCustomSelects();
+    if (!useMobileFeedModePicker) {
+      initializeProfileCustomSelects();
+    } else {
+      const feedModePickerButton = content.querySelector("#calendar-feed-mode-picker");
+      const feedModeSelect = content.querySelector("#calendar-feed-mode-select");
+
+      feedModePickerButton?.addEventListener("click", () => {
+        if (feedModePickerButton.disabled) return;
+        openNestedChoicePicker({
+          title: "Feed mode",
+          description: "Choose how subscription feeds are grouped.",
+          options: feedModeOptions,
+          selectedValue: String(feedModeSelect?.value || modeValue),
+          onSelect: async (value) => {
+            if (feedModeSelect) {
+              feedModeSelect.value = value;
+              feedModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+
+            const selected = feedModeOptions.find((option) => option.value === value) || feedModeOptions[0];
+            updatePickerLabel("calendar-feed-mode-picker", selected.label);
+          }
+        });
+      });
+    }
 
     content.querySelector("#calendar-feed-mode-save")?.addEventListener("click", async () => {
       const select = content.querySelector("#calendar-feed-mode-select");
@@ -1397,29 +1625,6 @@ function openCalendarIntegrationsModal() {
     });
 }
 
-function openFaqModal() {
-  openModal({
-    title: "FAQ",
-    bodyMarkup: `
-      <div class="profile-faq-list">
-        <div class="profile-faq-item">
-          <h4>Can I browse courses without an account?</h4>
-          <p>Yes. Browsing courses is available in guest mode.</p>
-        </div>
-        <div class="profile-faq-item">
-          <h4>What requires sign in?</h4>
-          <p>Saving schedules, managing assignments, and profile sync require sign in.</p>
-        </div>
-        <div class="profile-faq-item">
-          <h4>How do I change my term?</h4>
-          <p>Use Current term in the Academic card. Your selection is saved automatically.</p>
-        </div>
-      </div>
-    `,
-    footerMarkup: `<button type="button" class="control-surface" data-modal-close="true">Close</button>`
-  });
-}
-
 function openAboutModal() {
   const version = import.meta.env.VITE_APP_VERSION || "1.0.0";
   const build = import.meta.env.MODE || "production";
@@ -1439,11 +1644,11 @@ function openAboutModal() {
 
 function openClearCacheModal() {
   const layer = openModal({
-    title: "Clear cache",
+    title: "Clear Cache",
     bodyMarkup: `<p>Clear locally stored app preferences and temporary cache?</p>`,
     footerMarkup: `
       <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="control-surface" id="profile-confirm-clear-cache">Clear cache</button>
+      <button type="button" class="control-surface" id="profile-confirm-clear-cache">Clear Cache</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"
@@ -1481,7 +1686,7 @@ function clearProfileCache() {
 
 function openDeleteAccountModal() {
   const layer = openModal({
-    title: "Delete account",
+    title: "Delete Account",
     bodyMarkup: `
       <p>This action permanently deletes your account and all related data.</p>
       <p>Type <strong>DELETE</strong> to confirm.</p>
@@ -1490,7 +1695,7 @@ function openDeleteAccountModal() {
     `,
     footerMarkup: `
       <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="danger-action-btn" id="profile-confirm-delete" disabled>Delete account</button>
+      <button type="button" class="danger-action-btn" id="profile-confirm-delete" disabled>Delete Account</button>
     `,
     mode: "fullscreen-mobile"
   });
@@ -1529,11 +1734,11 @@ function openDeleteAccountModal() {
 
 function openSignOutModal() {
   const layer = openModal({
-    title: "Sign out?",
+    title: "Sign Out?",
     bodyMarkup: `<p>You can sign in again at any time.</p>`,
     footerMarkup: `
       <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="control-surface" id="profile-confirm-signout">Sign out</button>
+      <button type="button" class="control-surface" id="profile-confirm-signout">Sign Out</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"
@@ -1549,7 +1754,7 @@ function openEditProfileModal() {
   const displayName = getProfileDisplayName(state.profile, state.user);
 
   const layer = openModal({
-    title: "Edit profile",
+    title: "Edit Profile",
     bodyMarkup: `
       <form id="profile-edit-form" novalidate>
         <label class="profile-modal-label" for="profile-edit-display-name">Display name</label>
@@ -1621,6 +1826,7 @@ function openEditProfileModal() {
 function openProgramYearSetupModal() {
   const program = state.profile?.program ? String(state.profile.program) : "";
   const year = state.profile?.year ? String(state.profile.year) : "";
+  const useMobileYearPicker = isMobileViewport();
   const yearOptions = [
     { value: "", label: "Not Set" },
     { value: "1", label: "Year 1" },
@@ -1628,6 +1834,26 @@ function openProgramYearSetupModal() {
     { value: "3", label: "Year 3" },
     { value: "4", label: "Year 4" }
   ];
+  const selectedYearOption = yearOptions.find((option) => option.value === year) || yearOptions[0];
+  const yearSelectOptionsMarkup = yearOptions
+    .map((option) => `<option value="${escapeHtml(option.value)}"${option.value === year ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+    .join("");
+  const yearControlMarkup = useMobileYearPicker
+    ? `
+      <button
+        type="button"
+        id="profile-program-year-picker"
+        class="control-surface profile-picker-trigger profile-modal-picker-trigger"
+        aria-haspopup="dialog"
+      >
+        <span class="picker-value">${escapeHtml(selectedYearOption.label)}</span>
+        <span class="picker-chevron" aria-hidden="true">›</span>
+      </button>
+      <select id="profile-edit-year" class="profile-native-select" style="display:none;">
+        ${yearSelectOptionsMarkup}
+      </select>
+    `
+    : renderCustomSelectMarkup("profile-edit-year", yearOptions, year);
 
   const layer = openModal({
     title: "Set Up Academic Details",
@@ -1638,7 +1864,7 @@ function openProgramYearSetupModal() {
         <p class="profile-inline-error" id="profile-edit-program-error"></p>
 
         <label class="profile-modal-label" for="profile-edit-year">Year</label>
-        ${renderCustomSelectMarkup("profile-edit-year", yearOptions, year)}
+        ${yearControlMarkup}
         <p class="profile-inline-error" id="profile-edit-year-error"></p>
       </form>
     `,
@@ -1649,7 +1875,29 @@ function openProgramYearSetupModal() {
     mode: "dialog",
     mobileMode: "sheet"
   });
-  initializeProfileCustomSelects();
+  if (!useMobileYearPicker) {
+    initializeProfileCustomSelects();
+  } else {
+    const yearPickerButton = layer.querySelector("#profile-program-year-picker");
+    const yearSelect = layer.querySelector("#profile-edit-year");
+
+    yearPickerButton?.addEventListener("click", () => {
+      openNestedChoicePicker({
+        title: "Year",
+        options: yearOptions,
+        selectedValue: String(yearSelect?.value || ""),
+        onSelect: async (value) => {
+          if (yearSelect) {
+            yearSelect.value = value;
+            yearSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+
+          const selected = yearOptions.find((option) => option.value === value) || yearOptions[0];
+          updatePickerLabel("profile-program-year-picker", selected.label);
+        }
+      });
+    });
+  }
 
   const form = layer.querySelector("#profile-program-year-form");
   form?.addEventListener("submit", async (event) => {
@@ -1819,8 +2067,6 @@ function applyRouteFocus(route) {
 
   if (route === "/settings") {
     target = document.getElementById(state.isAuthenticated ? "profile-preferences" : "profile-identity");
-  } else if (route === "/help") {
-    target = document.getElementById("profile-help");
   }
 
   if (!target) return;
@@ -1862,7 +2108,12 @@ async function loadSignedInState() {
 
 async function initializeProfile() {
   const root = getRoot();
-  if (!root) return;
+  if (!root) {
+    teardownProfileMobileHeaderBehavior();
+    return;
+  }
+
+  initializeProfileMobileHeaderBehavior();
 
   const route = getCurrentRouteForProfile();
 
@@ -1877,12 +2128,7 @@ async function initializeProfile() {
     closeModal();
 
     if (!state.isAuthenticated) {
-      state.settings = buildInitialSettings();
-      state.calendarIntegrationState = null;
-      state.calendarIntegrationError = null;
-      applyPreferencesToDocument(state.settings);
-      renderGuestView(route);
-      applyRouteFocus(route);
+      navigateTo("/login");
       return;
     }
 
@@ -1905,7 +2151,9 @@ document.addEventListener("pageLoaded", (event) => {
   const route = event?.detail?.path || getCurrentAppPath();
   if (PROFILE_ROUTES.has(route)) {
     window.setTimeout(() => initializeProfile(), 20);
+    return;
   }
+  teardownProfileMobileHeaderBehavior();
 });
 
 export { initializeProfile };

@@ -4,6 +4,7 @@ import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTim
 import * as wanakana from 'wanakana';
 import { getCurrentAppPath } from './path-utils.js';
 import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from './preferences.js';
+import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 
 // Import components to ensure web components are defined
 import './components.js';
@@ -2233,6 +2234,11 @@ function initializeCustomSelects() {
         // Click handler for opening/closing dropdown
         trigger.addEventListener('click', (e) => {
             e.stopPropagation();
+
+            if (openSemesterMobileSheet({ targetSelect })) {
+                customSelect.classList.remove('open');
+                return;
+            }
 
             // Close other custom selects
             document.querySelectorAll('.custom-select').forEach(otherSelect => {

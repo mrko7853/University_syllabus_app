@@ -10,7 +10,7 @@ function normalizeTerm(term) {
 }
 
 function getCourseParams() {
-  const match = getCurrentAppPath().match(/^\/course\/([^\/]+)\/(\d{4})\/([^\/]+)$/);
+  const match = getCurrentAppPath().match(/^\/courses?\/([^\/]+)\/(\d{4})\/([^\/]+)$/);
   if (!match) return null;
   const [, courseCode, year, term] = match;
   return {

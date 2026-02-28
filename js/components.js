@@ -8,6 +8,8 @@ import {
   normalizeTermValue,
   setPreferredTermValue
 } from "./preferences.js";
+import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
+import { readSavedCourses, syncSavedCoursesForUser } from "./saved-courses.js";
 
 function bootstrapStoredPreferences() {
   const applyBootPreferences = () => {
@@ -80,7 +82,6 @@ function normalizeShortTitle(shortTitle) {
 }
 
 const HOME_DESKTOP_BREAKPOINT = 1024;
-const HOME_SAVED_COURSES_KEY = 'ila_saved_courses';
 const HOME_SEMESTER_MIN_CREDITS = 2;
 const HOME_SEMESTER_MAX_CREDITS = 24;
 const HOME_DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -259,47 +260,6 @@ function isSemesterSelectionTarget(target) {
   );
 }
 
-function readSavedCourses(limit = 5) {
-  try {
-    const raw = window.localStorage.getItem(HOME_SAVED_COURSES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .map((item) => {
-        const title = String(item?.title || item?.course_title || item?.courseName || item?.code || '').trim();
-        const code = String(item?.course_code || item?.code || '').trim();
-        const year = Number(item?.year) || null;
-        const term = item?.term ? normalizeTermName(item.term) : null;
-        let day = item?.day || null;
-        let period = Number(item?.period) || null;
-
-        if ((!day || !period) && item?.time_slot) {
-          const slot = parseCourseTimeSlot(item.time_slot);
-          if (slot) {
-            day = slot.day;
-            period = slot.period;
-          }
-        }
-
-        return {
-          title: title || code || 'Saved Course',
-          code: code || null,
-          day: day && HOME_DAY_ORDER.includes(day) ? day : null,
-          period: Number.isFinite(period) && period > 0 ? period : null,
-          year,
-          term
-        };
-      })
-      .filter((entry) => entry.title)
-      .slice(0, limit);
-  } catch (error) {
-    console.warn('Unable to read saved courses from storage:', error);
-    return [];
-  }
-}
-
 let homePlannerDataCache = {
   key: null,
   updatedAt: 0,
@@ -319,7 +279,7 @@ function invalidateHomePlannerDataCache() {
 async function fetchHomePlannerData() {
   const { year, term } = getCurrentHomeSemesterContext();
   const selectedSemesterValue = formatSemesterValue(term, year);
-  const savedCourses = readSavedCourses(5);
+  let savedCourses = readSavedCourses(5);
 
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user || null;
@@ -350,6 +310,13 @@ async function fetchHomePlannerData() {
       assignmentsDueSoon: [],
       savedCourses
     };
+  }
+
+  try {
+    savedCourses = (await syncSavedCoursesForUser(user.id)).slice(0, 5);
+  } catch (savedSyncError) {
+    console.warn('Unable to sync saved courses for user:', savedSyncError);
+    savedCourses = readSavedCourses(5);
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -706,6 +673,12 @@ function initializeHomeCustomSelects() {
     trigger.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+
+      if (openSemesterMobileSheet({ targetSelect })) {
+        customSelect.classList.remove('open');
+        return;
+      }
+
       homeMain.querySelectorAll('.custom-select').forEach((other) => {
         if (other !== customSelect) other.classList.remove('open');
       });
@@ -2522,7 +2495,7 @@ class ReviewSuggestionWidget extends HTMLElement {
     };
     this.handleCardClick = () => {
       if (!this.suggestedCourse) return;
-      const route = `/course/${encodeURIComponent(this.suggestedCourse.code)}/${this.suggestedCourse.year}/${encodeURIComponent(this.suggestedCourse.term)}`;
+      const route = `/courses/${encodeURIComponent(this.suggestedCourse.code)}/${this.suggestedCourse.year}/${encodeURIComponent(this.suggestedCourse.term)}`;
       if (window.router?.navigate) {
         window.router.navigate(route);
         return;
@@ -3001,6 +2974,7 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
   constructor() {
     super();
     this.handleSavedAction = this.handleSavedAction.bind(this);
+    this.handleSavedCoursesChanged = () => this.refreshWidget(true);
     this.savedEntries = [];
   }
 
@@ -3008,11 +2982,14 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
     super.connectedCallback();
     this.removeEventListener('click', this.handleSavedAction);
     this.addEventListener('click', this.handleSavedAction);
+    window.removeEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
+    window.addEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('click', this.handleSavedAction);
+    window.removeEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
   }
 
   renderWidget(data) {

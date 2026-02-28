@@ -1,4 +1,4 @@
-import { cp, mkdir } from 'fs/promises';
+import { cp, mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,11 +14,31 @@ const routeAliases = {
   register: 'register.html',
   home: 'index.html',
   courses: 'courses.html',
+  course: 'course.html',
   dashboard: 'courses.html',
   settings: 'profile.html',
   help: 'profile.html',
   index: 'index.html',
 };
+
+const nestedRouteFallbacks = {
+  course: '/dev/course/',
+  courses: '/dev/courses/',
+};
+
+function buildHtaccessForNestedAlias(rewriteBase) {
+  return [
+    '<IfModule mod_rewrite.c>',
+    'RewriteEngine On',
+    `RewriteBase ${rewriteBase}`,
+    'RewriteCond %{REQUEST_FILENAME} -f [OR]',
+    'RewriteCond %{REQUEST_FILENAME} -d',
+    'RewriteRule ^ - [L]',
+    'RewriteRule ^ index.html [L]',
+    '</IfModule>',
+    '',
+  ].join('\n');
+}
 
 async function createAliases() {
   for (const [route, sourceHtml] of Object.entries(routeAliases)) {
@@ -28,6 +48,11 @@ async function createAliases() {
 
     await mkdir(targetDir, { recursive: true });
     await cp(sourcePath, targetPath);
+
+    if (nestedRouteFallbacks[route]) {
+      const htaccessPath = path.join(targetDir, '.htaccess');
+      await writeFile(htaccessPath, buildHtaccessForNestedAlias(nestedRouteFallbacks[route]), 'utf8');
+    }
   }
 
   console.log('Created extensionless route aliases in dist/.');
