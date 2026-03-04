@@ -561,6 +561,10 @@ class SimpleRouter {
         this.updateActiveNav('')
 
         await this.initializeShared()
+        const isAuthenticated = await this.checkAuthentication()
+        await this.updateMobileGuestAuthHeader(isAuthenticated)
+        await this.hydrateDesktopProfileNavInitials(isAuthenticated)
+        this.handleGuestDashboard(isAuthenticated, path)
 
         const coursePageModule = await import('./course-page.js')
         if (coursePageModule && typeof coursePageModule.initializeCoursePage === 'function') {
@@ -575,9 +579,6 @@ class SimpleRouter {
         return
       }
     }
-
-    // Clear course page mode when leaving course URLs
-    document.body.classList.remove('course-page-mode')
 
     // Extract base path for route matching
     const basePath = this.extractBasePath(path)
@@ -619,6 +620,7 @@ class SimpleRouter {
     try {
       // If protected route and user not authenticated, show locked message
       if (isProtectedRoute && !isAuthenticated) {
+        document.body.classList.remove('course-page-mode')
         this.showLockedPage(basePath)
         this.hideLoadingBar()
         return
@@ -665,6 +667,10 @@ class SimpleRouter {
         console.log('Router: Page content updated')
       }
 
+      // Remove course detail page layout mode only after replacement content mounts.
+      // This prevents a brief left-shift of the outgoing course header under sidebar nav.
+      document.body.classList.remove('course-page-mode')
+
       // Update loading progress
       this.updateLoadingProgress(80)
 
@@ -685,6 +691,7 @@ class SimpleRouter {
       setTimeout(() => this.hideLoadingBar(), 200)
 
     } catch (error) {
+      document.body.classList.remove('course-page-mode')
       console.error('Error loading page:', error)
       this.hideLoadingBar()
     }

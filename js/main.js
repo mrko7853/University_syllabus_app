@@ -242,12 +242,52 @@ function hexToRgba(hex, alpha = 0.38) {
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
+function darkenHexToRgba(hex, darkenFactor = 0.32, alpha = 0.9) {
+    const normalized = toHexColor(hex).slice(1);
+    const expanded = normalized.length === 3
+        ? normalized.split('').map((char) => char + char).join('')
+        : normalized;
+
+    const red = parseInt(expanded.slice(0, 2), 16);
+    const green = parseInt(expanded.slice(2, 4), 16);
+    const blue = parseInt(expanded.slice(4, 6), 16);
+
+    const darkRed = Math.max(0, Math.round(red * (1 - darkenFactor)));
+    const darkGreen = Math.max(0, Math.round(green * (1 - darkenFactor)));
+    const darkBlue = Math.max(0, Math.round(blue * (1 - darkenFactor)));
+
+    return `rgba(${darkRed}, ${darkGreen}, ${darkBlue}, ${alpha})`;
+}
+
 // Global sorting state
 let currentSortMethod = null;
+const SORT_METHOD_LABELS = {
+    'title-az': 'Course A-Z',
+    'title-za': 'Course Z-A',
+    'gpa-a-high': 'Higher % of A',
+    'gpa-f-high': 'Higher % of F'
+};
+const SORT_METHOD_SHORT_LABELS = {
+    'title-az': 'A-Z',
+    'title-za': 'Z-A',
+    'gpa-a-high': 'High A%',
+    'gpa-f-high': 'High F%'
+};
+const RANKING_TOOLTIP_DETAIL = 'Share of students in the previous class offering who received a letter grade of A.';
+const NEW_PROFESSOR_TOOLTIP_TITLE = 'New Professor';
+const NEW_PROFESSOR_TOOLTIP_DETAIL = 'This professor is new to this course, returning to teach it after a break, or new to the ILA overall.';
 
 // Global search state
 let currentSearchQuery = null;
 let suggestionsDisplayed = false; // Track if suggestions are currently shown
+let desktopSearchDebounceTimer = null;
+let courseChipTooltipElement = null;
+let activeChipTooltipTarget = null;
+let courseEvalPopoverElement = null;
+let activeCourseEvalPopoverTrigger = null;
+let courseAssessmentLayoutObserver = null;
+let courseAssessmentSeparatorUpdateRaf = 0;
+let stickyHeaderObserverCleanup = null;
 
 // Global course loading state management
 let isLoadingCourses = false;
@@ -259,6 +299,8 @@ let lastLoadedProfessorChanges = new Set(); // Cache professor changes
 const MAX_COURSE_LOAD_RETRIES = 3;
 const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
 const HOME_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000;
+const COURSE_PAGE_SEARCH_PREFILL_KEY = 'ila_courses_search_prefill';
+const COURSE_PAGE_SEARCH_PREFILL_MAX_AGE_MS = 10 * 60 * 1000;
 const HOME_PREFILTER_PERIOD_TO_TIME = {
     1: '09:00',
     2: '10:45',
@@ -313,6 +355,46 @@ function consumeHomeSlotPrefilter() {
         console.warn('Unable to consume home slot prefilter payload:', error);
         return null;
     }
+}
+
+function consumeCoursePageSearchPrefill() {
+    try {
+        const raw = window.sessionStorage.getItem(COURSE_PAGE_SEARCH_PREFILL_KEY);
+        if (!raw) return null;
+        window.sessionStorage.removeItem(COURSE_PAGE_SEARCH_PREFILL_KEY);
+
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const createdAt = Number(parsed.createdAt || 0);
+        if (createdAt && (Date.now() - createdAt) > COURSE_PAGE_SEARCH_PREFILL_MAX_AGE_MS) {
+            return null;
+        }
+
+        const query = String(parsed.query || '').trim();
+        const term = String(parsed.term || '').trim();
+        const year = Number(parsed.year);
+
+        return {
+            query: query || null,
+            term: term || null,
+            year: Number.isFinite(year) ? year : null
+        };
+    } catch (error) {
+        console.warn('Unable to consume course-page search prefill payload:', error);
+        return null;
+    }
+}
+
+function applyCoursePageSearchPrefillInputs(searchQuery) {
+    const normalized = String(searchQuery || '').trim();
+    if (!normalized) return;
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = normalized;
+
+    const searchPillInput = document.getElementById('search-pill-input');
+    if (searchPillInput) searchPillInput.value = normalized;
 }
 
 function applyHomePrefilterSemester(prefilter) {
@@ -428,6 +510,118 @@ function updateCourseFilterTriggerCount() {
     });
 }
 
+function getSortMethodLabel(method = currentSortMethod) {
+    return SORT_METHOD_LABELS[method] || SORT_METHOD_LABELS['title-az'];
+}
+
+function getSortMethodShortLabel(method = currentSortMethod) {
+    return SORT_METHOD_SHORT_LABELS[method] || SORT_METHOD_SHORT_LABELS['title-az'];
+}
+
+function updateSortStatusDisplay() {
+    const label = getSortMethodLabel();
+    const compactLabel = getSortMethodShortLabel();
+    const sortBtns = document.querySelectorAll('.page-courses .sort-btn');
+    const sortStatusPills = document.querySelectorAll('.sort-status-pill');
+
+    sortBtns.forEach((sortBtn) => {
+        const labelElement = sortBtn.querySelector('.sort-btn-label');
+        if (labelElement) {
+            labelElement.textContent = compactLabel;
+        }
+        sortBtn.setAttribute('aria-label', `Sort: ${label}`);
+        sortBtn.setAttribute('title', `Sort: ${label}`);
+    });
+
+    sortStatusPills.forEach((pill) => {
+        pill.textContent = label;
+        pill.title = `Current sort: ${label}`;
+    });
+}
+
+function getTotalVisibleCourseCards() {
+    const courseList = document.getElementById('course-list');
+    if (!courseList) return 0;
+    return courseList.querySelectorAll('.class-outside').length;
+}
+
+function getFilteredVisibleCourseCards() {
+    const courseList = document.getElementById('course-list');
+    if (!courseList) return 0;
+
+    return Array.from(courseList.querySelectorAll('.class-outside'))
+        .filter((card) => card.style.display !== 'none')
+        .length;
+}
+
+function getFilterLabelFromCheckbox(checkbox) {
+    const id = checkbox?.id;
+    if (!id) return String(checkbox?.value || '').trim();
+
+    const labelElement = document.querySelector(`label[for="${id}"]`);
+    if (!labelElement) return String(checkbox?.value || '').trim();
+
+    const clone = labelElement.cloneNode(true);
+    clone.querySelectorAll('small').forEach((small) => small.remove());
+    const normalizedLabel = clone.textContent.replace(/\s+/g, ' ').trim();
+    return normalizedLabel || String(checkbox?.value || '').trim();
+}
+
+function getAppliedCourseFilters() {
+    return Array.from(getCourseFilterCheckboxes())
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => ({
+            id: checkbox.id,
+            label: getFilterLabelFromCheckbox(checkbox)
+        }));
+}
+
+function updateActiveCourseFilterDisplay() {
+    const filterSummary = document.getElementById('course-active-filters');
+    const chipsContainer = document.getElementById('course-active-filter-chips');
+    const clearButton = document.getElementById('course-clear-active-filters');
+    const filterRow = document.getElementById('courses-toolbar-row-b');
+
+    if (!filterSummary || !chipsContainer) return;
+
+    const activeFilters = getAppliedCourseFilters();
+    chipsContainer.innerHTML = '';
+
+    if (activeFilters.length === 0) {
+        filterSummary.hidden = true;
+        if (clearButton) clearButton.hidden = true;
+        if (filterRow) filterRow.hidden = true;
+        return;
+    }
+
+    const chipMarkup = activeFilters
+        .map((filter) => `<span class="course-active-filter-chip" data-filter-id="${filter.id}">${escapeCourseMarkup(filter.label)}</span>`)
+        .join('');
+    chipsContainer.innerHTML = chipMarkup;
+
+    filterSummary.hidden = false;
+    if (clearButton) clearButton.hidden = false;
+    if (filterRow) filterRow.hidden = false;
+}
+
+function clearCourseFiltersAndSearchAndRefresh() {
+    resetCoursePageFiltersAndSearch();
+    hideCourseChipTooltip();
+    hideCourseEvalPopover();
+    return applySearchAndFilters(null);
+}
+
+function clearCourseFiltersOnlyAndRefresh() {
+    getCourseFilterCheckboxes().forEach((checkbox) => {
+        checkbox.checked = false;
+    });
+
+    hideCourseChipTooltip();
+    hideCourseEvalPopover();
+    updateCourseFilterTriggerCount();
+    return applySearchAndFilters(currentSearchQuery);
+}
+
 function resetCoursePageFiltersAndSearch() {
     getCourseFilterCheckboxes().forEach((checkbox) => {
         checkbox.checked = false;
@@ -457,22 +651,10 @@ function resetCoursePageFiltersAndSearch() {
     const courseList = document.getElementById('course-list');
     if (courseList) {
         courseList.querySelector('.no-results')?.remove();
+        courseList.querySelector('.course-empty-state')?.remove();
     }
 
     updateCourseFilterTriggerCount();
-}
-
-function buildCourseSectionLine(courseCode, compactSchedule) {
-    const safeCode = courseCode || "Code";
-    const sectionMatch = String(courseCode || "").match(/-(\d+)$/);
-
-    if (!sectionMatch) {
-        return safeCode;
-    }
-
-    const sectionNumber = parseInt(sectionMatch[1], 10);
-    const sectionLabel = Number.isFinite(sectionNumber) ? `Section ${sectionNumber}` : `Section ${sectionMatch[1]}`;
-    return sectionLabel;
 }
 
 function getTopGpaChipLabel(course, hasProfessorChanged = false) {
@@ -480,21 +662,12 @@ function getTopGpaChipLabel(course, hasProfessorChanged = false) {
         return "";
     }
 
-    const gpaGrades = [
-        { grade: "A", percent: course.gpa_a_percent },
-        { grade: "B", percent: course.gpa_b_percent },
-        { grade: "C", percent: course.gpa_c_percent },
-        { grade: "D", percent: course.gpa_d_percent },
-        { grade: "F", percent: course.gpa_f_percent }
-    ];
-
-    const validGrades = gpaGrades.filter((grade) => typeof grade.percent === "number" && grade.percent > 0);
-    if (validGrades.length === 0) {
+    const aRate = Number(course?.gpa_a_percent);
+    if (!Number.isFinite(aRate) || aRate <= 0) {
         return "";
     }
 
-    const topGrade = validGrades.reduce((best, current) => current.percent > best.percent ? current : best);
-    return `Top: ${topGrade.grade} ${Math.round(topGrade.percent)}%`;
+    return `A-rate: ${Math.round(aRate)}%`;
 }
 
 function getGpaChipMarkup(course, hasProfessorChanged = false) {
@@ -503,7 +676,7 @@ function getGpaChipMarkup(course, hasProfessorChanged = false) {
         return "";
     }
 
-    return `<span class="course-chip">${gpaSummaryLabel}</span>`;
+    return `<span class="course-chip course-chip-ranking" data-tooltip-title="${gpaSummaryLabel}" data-tooltip-detail="${RANKING_TOOLTIP_DETAIL}">${gpaSummaryLabel}</span>`;
 }
 
 function getNewProfessorChipMarkup(hasProfessorChanged = false) {
@@ -511,18 +684,41 @@ function getNewProfessorChipMarkup(hasProfessorChanged = false) {
         return "";
     }
 
-    return `<span class="course-chip course-chip-new-professor">New Professor</span>`;
+    return `<span class="course-new-prof-chip" data-tooltip-title="${escapeCourseMarkup(NEW_PROFESSOR_TOOLTIP_TITLE)}" data-tooltip-detail="${escapeCourseMarkup(NEW_PROFESSOR_TOOLTIP_DETAIL)}">New</span>`;
+}
+
+function getCourseCreditsBadgeLabel(course) {
+    const rawCredits = course && course.credits;
+    if (rawCredits === null || rawCredits === undefined || rawCredits === "") {
+        return "Credits TBA";
+    }
+
+    const normalizedCredits = String(rawCredits).trim();
+    if (!normalizedCredits) {
+        return "Credits TBA";
+    }
+
+    const parsedCredits = parseFloat(normalizedCredits.replace(/[^0-9.]/g, ""));
+    if (Number.isFinite(parsedCredits) && parsedCredits > 0) {
+        const formattedCredits = Number.isInteger(parsedCredits)
+            ? String(parsedCredits)
+            : String(parsedCredits).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
+        const creditUnit = parsedCredits === 1 ? "Credit" : "Credits";
+        return `${formattedCredits} ${creditUnit}`;
+    }
+
+    return /credit/i.test(normalizedCredits) ? normalizedCredits : `${normalizedCredits} Credits`;
 }
 
 function getCreditsChipMarkup(course) {
     const rawCredits = course && course.credits;
     if (rawCredits === null || rawCredits === undefined || rawCredits === "") {
-        return "";
+        return `<span class="course-chip course-chip-credits">Credits TBA</span>`;
     }
 
     const normalizedCredits = String(rawCredits).trim();
     if (!normalizedCredits) {
-        return "";
+        return `<span class="course-chip course-chip-credits">Credits TBA</span>`;
     }
 
     const parsedCredits = parseFloat(normalizedCredits.replace(/[^0-9.]/g, ""));
@@ -536,6 +732,317 @@ function getCreditsChipMarkup(course) {
 
     const fallbackText = /credit/i.test(normalizedCredits) ? normalizedCredits : `${normalizedCredits} Credits`;
     return `<span class="course-chip course-chip-credits">${fallbackText}</span>`;
+}
+
+function escapeCourseMarkup(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatProfessorCardName(professor) {
+    const raw = String(getRomanizedProfessorName(professor) || '').trim();
+    if (!raw) return 'TBA';
+
+    const lettersOnly = raw.replace(/[^A-Za-z]/g, '');
+    const looksAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
+    if (!looksAllCaps) return raw;
+
+    return raw
+        .toLowerCase()
+        .replace(/\b([a-z])/g, (match) => match.toUpperCase());
+}
+
+function parseEvaluationCriteriaJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return null;
+    try {
+        return JSON.parse(value);
+    } catch (_) {
+        return null;
+    }
+}
+
+function truncateEvaluationChipLabel(label, maxLength = 20) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+
+    const truncated = normalized.slice(0, maxLength + 1);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    if (lastSpaceIndex >= 10) {
+        return `${truncated.slice(0, lastSpaceIndex).trim()}...`;
+    }
+    return `${truncated.slice(0, maxLength).trim()}...`;
+}
+
+const EVALUATION_LABEL_SPELLING_FIXES = [
+    [/\bmideterm\b/gi, 'midterm'],
+    [/\battendence\b/gi, 'attendance'],
+    [/\bpartcipation\b/gi, 'participation'],
+    [/\bparticpation\b/gi, 'participation'],
+    [/\bparticipaton\b/gi, 'participation'],
+    [/\bcontributon\b/gi, 'contribution'],
+    [/\bcontributons\b/gi, 'contributions'],
+    [/\bcontribitions\b/gi, 'contributions']
+];
+
+function correctEvaluationLabelTypos(label) {
+    let normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+
+    EVALUATION_LABEL_SPELLING_FIXES.forEach(([pattern, replacement]) => {
+        normalized = normalized.replace(pattern, (match) => {
+            if (match === match.toUpperCase()) return replacement.toUpperCase();
+            if (match.charAt(0) === match.charAt(0).toUpperCase()) {
+                return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+            }
+            return replacement;
+        });
+    });
+
+    return normalized.replace(/\s+/g, ' ').trim();
+}
+
+function titleCaseEvaluationLabel(label) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return normalized.replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+}
+
+function normalizeEvaluationComponents(course) {
+    const parsed = parseEvaluationCriteriaJson(course?.evaluation_criteria_json);
+    const rawComponents = Array.isArray(parsed?.components) ? parsed.components : [];
+    return rawComponents
+        .map((component) => {
+            const name = correctEvaluationLabelTypos(component?.name);
+            if (!name) return null;
+
+            const weightValue = Number(component?.weight);
+            const hasWeight = Number.isFinite(weightValue);
+            const notes = String(component?.notes || '').replace(/\s+/g, ' ').trim();
+
+            return {
+                name,
+                weight: hasWeight ? weightValue : null,
+                notes: notes || null
+            };
+        })
+        .filter(Boolean);
+}
+
+function normalizeEvaluationLabelPrefix(name) {
+    const normalized = correctEvaluationLabelTypos(name);
+    if (!normalized) return '';
+    const lower = normalized.toLowerCase();
+    if (lower.startsWith('presentation')) return 'Presentation';
+    if (/^attendance and contributions?\b/.test(lower)) return 'Attendance And Participations';
+    return titleCaseEvaluationLabel(normalized);
+}
+
+function canonicalEvaluationTagFromName(name) {
+    const normalized = normalizeEvaluationLabelPrefix(name);
+    if (!normalized) return '';
+    if (normalized === 'Presentation' || normalized === 'Attendance And Participations') return normalized;
+    const lower = normalized.toLowerCase();
+    const quantityMatch = normalized.match(/\b(\d+)\b/);
+    const quantity = quantityMatch ? quantityMatch[1] : null;
+
+    if (lower.includes('attendance')) return 'Attendance';
+    if (lower.includes('participation')) return 'Participation';
+    if (lower.includes('weekly')) return 'Weekly';
+    if (lower.includes('midterm')) return 'Midterm';
+    if (lower.includes('final presentation') || lower === 'presentation') return 'Presentation';
+    if (lower.includes('paper')) return quantity ? `${quantity}x Paper` : 'Paper';
+    if (lower.includes('report')) return 'Report';
+    if (lower.includes('exam') || lower.includes('test')) return 'Exam';
+    if (lower.includes('debate')) return 'Debate';
+    if (lower.includes('group')) return 'Group';
+
+    return truncateEvaluationChipLabel(normalized, 20);
+}
+
+function deriveEvaluationTagsFromComponents(components, maxTags = 6) {
+    if (!Array.isArray(components) || maxTags <= 0) return [];
+
+    const tags = [];
+    const seen = new Set();
+
+    const addTag = (value) => {
+        const label = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!label) return;
+        const key = label.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        tags.push(label);
+    };
+
+    const sortedComponents = components
+        .map((component, index) => ({ component, index }))
+        .sort((a, b) => {
+            const aWeight = Number.isFinite(a.component.weight) ? a.component.weight : null;
+            const bWeight = Number.isFinite(b.component.weight) ? b.component.weight : null;
+            if (aWeight === null && bWeight === null) return a.index - b.index;
+            if (aWeight === null) return 1;
+            if (bWeight === null) return -1;
+            if (bWeight !== aWeight) return bWeight - aWeight;
+            return a.index - b.index;
+        });
+
+    sortedComponents.forEach(({ component }) => {
+        addTag(canonicalEvaluationTagFromName(component.name));
+    });
+
+    const keywordText = components
+        .map((component) => `${component.name || ''} ${component.notes || ''}`)
+        .join(' ')
+        .toLowerCase();
+
+    const keywordTags = [
+        ['group', 'Group'],
+        ['debate', 'Debate'],
+        ['paper', 'Paper'],
+        ['report', 'Report'],
+        ['exam', 'Exam'],
+        ['test', 'Exam']
+    ];
+
+    keywordTags.forEach(([keyword, label]) => {
+        if (keywordText.includes(keyword)) {
+            addTag(label);
+        }
+    });
+
+    return tags.slice(0, maxTags);
+}
+
+function getCourseEvaluationTags(course, maxTags = 6) {
+    const dbTags = Array.isArray(course?.evaluation_tags)
+        ? course.evaluation_tags
+            .map((tag) => normalizeEvaluationLabelPrefix(tag))
+            .filter(Boolean)
+        : [];
+
+    if (dbTags.length > 0) {
+        return Array.from(new Set(dbTags)).slice(0, maxTags);
+    }
+
+    const components = normalizeEvaluationComponents(course);
+    return deriveEvaluationTagsFromComponents(components, maxTags);
+}
+
+function formatEvaluationWeight(weight) {
+    if (!Number.isFinite(weight)) return '';
+    if (Number.isInteger(weight)) return `${weight}%`;
+    return `${weight.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function getCourseEvaluationBreakdownText(course) {
+    const components = normalizeEvaluationComponents(course);
+    if (!components.length) return '';
+
+    const breakdown = components.map((component) => {
+        const label = normalizeEvaluationLabelPrefix(component.name) || canonicalEvaluationTagFromName(component.name) || component.name;
+        const weightText = formatEvaluationWeight(component.weight);
+        return weightText ? `${label} ${weightText}` : label;
+    });
+
+    return breakdown.join(' • ');
+}
+
+function getAssessmentPreviewTagItems(course, maxTags = 6) {
+    const components = normalizeEvaluationComponents(course);
+    const orderedByWeight = components
+        .map((component, index) => ({ component, index }))
+        .sort((a, b) => {
+            const aWeight = Number.isFinite(a.component.weight) ? a.component.weight : null;
+            const bWeight = Number.isFinite(b.component.weight) ? b.component.weight : null;
+            if (aWeight === null && bWeight === null) return a.index - b.index;
+            if (aWeight === null) return 1;
+            if (bWeight === null) return -1;
+            if (bWeight !== aWeight) return bWeight - aWeight;
+            return a.index - b.index;
+        });
+
+    const orderedTags = [];
+    const seen = new Set();
+    const addTag = (shortLabel, fullLabel = shortLabel) => {
+        const normalizedShort = String(shortLabel || '').replace(/\s+/g, ' ').trim();
+        if (!normalizedShort) return;
+        const key = normalizedShort.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        orderedTags.push({
+            label: normalizedShort,
+            fullLabel: String(fullLabel || normalizedShort).replace(/\s+/g, ' ').trim() || normalizedShort
+        });
+    };
+
+    orderedByWeight.forEach(({ component }) => {
+        const fullLabel = correctEvaluationLabelTypos(component.name) || component.name;
+        addTag(canonicalEvaluationTagFromName(fullLabel), fullLabel);
+    });
+
+    getCourseEvaluationTags(course, maxTags).forEach((tag) => {
+        const fullLabel = correctEvaluationLabelTypos(tag);
+        const shortLabel = canonicalEvaluationTagFromName(fullLabel) || normalizeEvaluationLabelPrefix(fullLabel);
+        addTag(shortLabel, fullLabel || shortLabel);
+    });
+
+    return orderedTags.slice(0, maxTags);
+}
+
+function getAssessmentPreviewTags(course, maxTags = 6) {
+    return getAssessmentPreviewTagItems(course, maxTags).map((item) => item.label);
+}
+
+function getCourseEvaluationChipMarkup(course) {
+    const tagItems = getAssessmentPreviewTagItems(course, 6);
+    if (!tagItems.length) return '';
+
+    const visibleLimit = 2;
+    const visibleTagItems = tagItems.slice(0, visibleLimit);
+    const overflowCount = Math.max(0, tagItems.length - visibleTagItems.length);
+    const breakdown = getCourseEvaluationBreakdownText(course);
+    const tooltipAttrs = breakdown
+        ? ` data-tooltip-title="Assessment Breakdown" data-tooltip-detail="${escapeCourseMarkup(breakdown)}"`
+        : '';
+
+    const tokenMarkup = visibleTagItems
+        .map(({ label }) => {
+            const safeLabel = escapeCourseMarkup(label);
+            return `<span class="course-assessment-item"><span class="course-assessment-token">${safeLabel}</span></span>`;
+        })
+        .join('');
+
+    const overflowMarkup = overflowCount > 0
+        ? `
+            <span class="course-assessment-overflow-line">
+                <button
+                    type="button"
+                    class="course-eval-more-link"
+                    data-action="open-evaluation-details"
+                    aria-label="Open full assessment breakdown"
+                >+${overflowCount} more</button>
+            </span>
+        `
+        : '';
+
+    return `
+        <div class="course-assessment-zone"${tooltipAttrs}>
+            <p class="course-assessment-inline">
+                <span class="course-assessment-icon" aria-hidden="true"></span>
+                <span class="course-assessment-values">
+                    <span class="course-assessment-primary">${tokenMarkup}</span>
+                    ${overflowMarkup}
+                </span>
+            </p>
+        </div>
+    `;
 }
 
 function getCourseTypeLabel(courseType) {
@@ -660,49 +1167,58 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         let displayTimeSlot = rawTimeSlot;
-        let compactSchedule = course.course_code || "Code";
         if (specialMatch) {
             displayTimeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
-            compactSchedule = "Mon/Thu P3";
         } else if (match) {
-            const period = (match[2].match(/[1-5]/) || [null])[0];
             displayTimeSlot = `${days[match[1]]} ${times[match[2]]}`;
-            compactSchedule = period ? `${days[match[1]]} P${period}` : (days[match[1]] || (course.course_code || "Code"));
         }
-
-        const sectionLine = buildCourseSectionLine(course.course_code, compactSchedule);
 
         // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
         const courseBorderColor = hexToRgba(courseColor, 0.38);
+        const courseHoverBorderColor = darkenHexToRgba(courseColor, 0.34, 0.88);
 
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
 
         // Check if professor has changed across semesters
         const hasProfessorChanged = professorChanges.has(course.course_code);
-        const professorName = getRomanizedProfessorName(course.professor);
-        const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
+        const professorDisplay = formatProfessorCardName(course.professor);
         const creditsChip = getCreditsChipMarkup(course);
         const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
+        const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const courseTypeLabel = getCourseTypeLabel(course.type);
+        const normalizedTitle = normalizeCourseTitle(course.title);
+        const timeDisplay = String(displayTimeSlot || '').replace(/ - /g, ' – ');
+        const cardAriaLabel = `Open course info for ${normalizedTitle}`.replace(/"/g, '&quot;');
 
         courseHTML += `
-        <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}' style="--course-card-border: ${courseBorderColor};">
-            <div class="class-container" style="--course-card-accent: ${courseColor}; --course-card-border: ${courseBorderColor};" data-course='${escapedCourseJSON}'>
-                <p id="course-code">${course.course_code}</p>
-                <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
-                <div class="course-meta-row">
-                    <p class="course-section-line">${sectionLine}</p>
-                    <span class="course-type-label">${courseTypeLabel}</span>
+        <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}' style="--course-card-border: ${courseBorderColor}; --course-card-border-hover: ${courseHoverBorderColor};" role="button" tabindex="0" aria-label="${cardAriaLabel}">
+            <div class="class-container" style="--course-card-accent: ${courseColor}; --course-card-border: ${courseBorderColor}; --course-card-border-hover: ${courseHoverBorderColor};" data-course='${escapedCourseJSON}'>
+                <div class="course-card-header"></div>
+                <div class="course-top-row">
+                    <div class="course-title-block">
+                        <h2 id="course-title">${normalizedTitle}</h2>
+                    </div>
+                    <div class="course-top-badges">
+                        <span class="course-top-badge course-type-label">${escapeCourseMarkup(courseTypeLabel)}</span>
+                    </div>
                 </div>
-                <h3 id="course-professor"><div class="course-professor-icon"></div>${professorDisplay}</h3>
-                <h3 id="course-time"><div class="course-time-icon"></div>${displayTimeSlot}</h3>
-                <div class="course-chip-row">
-                    ${creditsChip}
-                    ${gpaSummaryChip}
-                    ${newProfessorChip}
+                <div class="course-info-rows">
+                    <h3 id="course-professor">
+                        <div class="course-professor-icon"></div>
+                        <span class="course-professor-line">
+                            <span class="course-professor-name">${escapeCourseMarkup(professorDisplay)}</span>
+                            ${newProfessorChip}
+                        </span>
+                    </h3>
+                    <h3 id="course-time"><div class="course-time-icon"></div>${timeDisplay}</h3>
+                    ${evaluationChipRow}
+                </div>
+                <div class="course-footer-row">
+                    <div class="course-footer-left">${creditsChip}</div>
+                    <div class="course-footer-right">${gpaSummaryChip}</div>
                 </div>
             </div>
         </div>
@@ -761,20 +1277,20 @@ function createSkeletonCourse() {
         <div class="skeleton-class-outside">
             <div class="skeleton-class-container">
                 <div class="skeleton-layout-probe" aria-hidden="true">
-                    <p class="skeleton-probe-code">12001103-003</p>
-                    <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
+                    <h2 class="skeleton-probe-title">Academic Presentations and Debate in Global Contexts</h2>
                     <div class="skeleton-probe-meta-row">
-                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                        <p class="skeleton-probe-section">Foundation</p>
                         <span class="skeleton-probe-type">Foundation</span>
+                        <span class="skeleton-probe-type">2 Credits</span>
                     </div>
-                    <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
-                    <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
+                    <h3 class="skeleton-probe-professor">Shirah Malka Cohen</h3>
+                    <h3 class="skeleton-probe-time">Wed 09:00 – 10:30</h3>
                     <div class="skeleton-probe-chip-row">
-                        <span class="skeleton-probe-chip">2 Credits</span>
-                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                        <span class="skeleton-probe-chip">Assessment</span>
+                        <span class="skeleton-probe-chip">Midterm</span>
+                        <span class="skeleton-probe-chip">Presentation</span>
                     </div>
                 </div>
-                <div class="skeleton-code-line"></div>
                 <div class="skeleton-title-stack">
                     <div class="skeleton-title-line"></div>
                     <div class="skeleton-title-line short"></div>
@@ -965,6 +1481,9 @@ function applyFilters() {
 // Unified function that applies both search and filter criteria
 async function applySearchAndFilters(searchQuery) {
     updateCourseFilterTriggerCount();
+    updateActiveCourseFilterDisplay();
+    hideCourseChipTooltip();
+    hideCourseEvalPopover();
 
     // Don't apply filters while courses are still loading
     if (isLoadingCourses) {
@@ -976,28 +1495,7 @@ async function applySearchAndFilters(searchQuery) {
     const courseList = document.getElementById("course-list");
     if (!courseList) return;
 
-    // Get yearSelect and termSelect dynamically
-    const yearSelect = document.getElementById("year-select");
-    const termSelect = document.getElementById("term-select");
-    if (!yearSelect || !termSelect) return;
-
-    // If suggestions are currently displayed, reload the courses first
-    if (suggestionsDisplayed) {
-        await showCourse(yearSelect.value, termSelect.value);
-        suggestionsDisplayed = false;
-
-        // Remove the suggestion header if it exists
-        const courseMainDiv = document.getElementById("course-main-div");
-        if (courseMainDiv) {
-            const existingHeader = courseMainDiv.querySelector('.suggestion-header');
-            if (existingHeader) existingHeader.remove();
-        }
-
-        // Re-apply current sort if one is selected
-        if (currentSortMethod) {
-            sortCourses(currentSortMethod);
-        }
-    }
+    const activeSearchQuery = typeof searchQuery === 'string' ? searchQuery : currentSearchQuery;
 
     const classContainers = courseList.querySelectorAll(".class-outside");
 
@@ -1011,8 +1509,8 @@ async function applySearchAndFilters(searchQuery) {
     let hasResults = false;
 
     // Remove any existing no-results message
-    const existingNoResults = courseList.querySelector(".no-results");
-    if (existingNoResults) existingNoResults.remove();
+    courseList.querySelector(".no-results")?.remove();
+    courseList.querySelector(".course-empty-state")?.remove();
 
     classContainers.forEach(container => {
         let shouldShow = true;
@@ -1024,12 +1522,12 @@ async function applySearchAndFilters(searchQuery) {
         const filterMatches = containerMatchesFilters(container, courseData);
 
         // If there's an active search query, also check search criteria
-        if (searchQuery && searchQuery.trim()) {
+        if (activeSearchQuery && activeSearchQuery.trim()) {
             const title = normalizeCourseTitle(courseData.title || '').toLowerCase();
             const professorOriginal = (courseData.professor || '').toLowerCase();
             const professorRomanized = romanizeProfessorName(courseData.professor || '').toLowerCase();
             const courseCode = (courseData.course_code || '').toLowerCase();
-            const query = searchQuery.toLowerCase().trim();
+            const query = activeSearchQuery.toLowerCase().trim();
 
             const searchMatches = title.includes(query) ||
                 professorOriginal.includes(query) ||
@@ -1049,58 +1547,32 @@ async function applySearchAndFilters(searchQuery) {
         }
     });
 
-    // Remove suggestion header if we have results
-    if (hasResults) {
-        const courseMainDiv = document.getElementById("course-main-div");
-        if (courseMainDiv) {
-            const existingHeader = courseMainDiv.querySelector('.suggestion-header');
-            if (existingHeader) existingHeader.remove();
-        }
+    const courseMainDiv = document.getElementById("course-main-div");
+    if (courseMainDiv) {
+        courseMainDiv.querySelector('.suggestion-header')?.remove();
     }
 
     // Handle no results case
     if (!hasResults) {
-        if (searchQuery && searchQuery.trim()) {
-            // If we have a search query but no results, show suggestions from filtered courses
-            if (allCourses && allCourses.length > 0) {
-                const filteredCourses = allCourses.filter(course => {
-                    const convertedTimeSlot = convertTimeSlotToContainerFormat(course.time_slot);
-                    const tempContainer = {
-                        id: convertedTimeSlot,
-                        dataset: { color: getCourseColorByType(course.type) }
-                    };
-                    return containerMatchesFilters(tempContainer, course);
-                });
+        const isSearchEmpty = !activeSearchQuery || !activeSearchQuery.trim();
+        const title = isSearchEmpty
+            ? "No courses match the selected filters."
+            : `No courses match "${activeSearchQuery.trim()}".`;
+        const message = isSearchEmpty
+            ? "Try adjusting filters or clear them to view all courses."
+            : "Try a different keyword or clear filters to reset the list.";
 
-                const similarCoursesWithRelevance = findSimilarCourses(searchQuery, filteredCourses, 8);
-                displaySuggestedCourses(similarCoursesWithRelevance, searchQuery);
-                suggestionsDisplayed = true;
-            } else {
-                // Show simple no results message if allCourses not available
-                let noResults = courseList.querySelector(".no-results");
-                if (!noResults) {
-                    noResults = document.createElement("p");
-                    noResults.className = "no-results";
-                    noResults.textContent = `No courses found for "${searchQuery}".`;
-                    courseList.appendChild(noResults);
-                } else {
-                    noResults.textContent = `No courses found for "${searchQuery}".`;
-                    noResults.style.display = "block";
-                }
-            }
-        } else {
-            // No search query, just show standard no results message
-            let noResults = courseList.querySelector(".no-results");
-            if (!noResults) {
-                noResults = document.createElement("p");
-                noResults.className = "no-results";
-                noResults.textContent = "No courses found for the selected filters.";
-                noResults.style.display = "none";
-                courseList.appendChild(noResults);
-            }
-            noResults.style.display = "block";
-        }
+        const emptyState = document.createElement("div");
+        emptyState.className = "course-empty-state no-results";
+        emptyState.innerHTML = `
+            <h3 class="course-empty-title">${title}</h3>
+            <p class="course-empty-message">${message}</p>
+            <button type="button" class="course-empty-clear-btn control-surface control-surface--secondary" data-action="clear-course-filters">Clear filters</button>
+        `;
+        courseList.appendChild(emptyState);
     }
+
+    suggestionsDisplayed = false;
 
     // Update the course filter paragraph after applying filters
     updateCourseFilterParagraph();
@@ -1153,19 +1625,238 @@ async function updateCoursesAndFilters() {
     }
 }
 
-// Set up course list click event listener dynamically
+function getCourseDataFromCard(cardElement) {
+    const container = cardElement?.querySelector('.class-container');
+    if (!container?.dataset?.course) return null;
+
+    try {
+        return JSON.parse(container.dataset.course);
+    } catch (error) {
+        console.warn('Failed to parse course card data', error);
+        return null;
+    }
+}
+
+function canShowCourseChipTooltip() {
+    return window.innerWidth >= 1024
+        && window.matchMedia
+        && window.matchMedia('(hover: hover)').matches;
+}
+
+function ensureCourseChipTooltip() {
+    if (courseChipTooltipElement && document.body.contains(courseChipTooltipElement)) {
+        return courseChipTooltipElement;
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'calendar-course-tooltip course-chip-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tooltip);
+    courseChipTooltipElement = tooltip;
+    return tooltip;
+}
+
+function positionCourseChipTooltip(clientX, clientY) {
+    const tooltip = courseChipTooltipElement;
+    if (!tooltip) return;
+
+    const offset = 14;
+    const maxX = window.innerWidth - tooltip.offsetWidth - 8;
+    const maxY = window.innerHeight - tooltip.offsetHeight - 8;
+    const left = Math.max(8, Math.min(clientX + offset, maxX));
+    const top = Math.max(8, Math.min(clientY + offset, maxY));
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+}
+
+function showCourseChipTooltip(chip, event) {
+    if (!canShowCourseChipTooltip()) return;
+
+    const title = String(chip?.dataset?.tooltipTitle || '').trim();
+    if (!title) return;
+
+    const tooltip = ensureCourseChipTooltip();
+    if (!tooltip) return;
+
+    const detail = String(chip?.dataset?.tooltipDetail || '').trim();
+    tooltip.innerHTML = `
+        <div class="calendar-course-tooltip-title">${title}</div>
+        ${detail ? `<div class="calendar-course-tooltip-detail">${detail}</div>` : ''}
+    `;
+
+    tooltip.classList.add('is-visible');
+    positionCourseChipTooltip(event.clientX, event.clientY);
+    activeChipTooltipTarget = chip;
+}
+
+function hideCourseChipTooltip() {
+    activeChipTooltipTarget = null;
+    if (!courseChipTooltipElement) return;
+    courseChipTooltipElement.classList.remove('is-visible');
+}
+
+function ensureCourseEvalPopover() {
+    if (courseEvalPopoverElement && document.body.contains(courseEvalPopoverElement)) {
+        return courseEvalPopoverElement;
+    }
+
+    const popover = document.createElement('div');
+    popover.className = 'course-eval-popover';
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-live', 'polite');
+    popover.hidden = true;
+    document.body.appendChild(popover);
+    courseEvalPopoverElement = popover;
+    return popover;
+}
+
+function hideCourseEvalPopover() {
+    activeCourseEvalPopoverTrigger = null;
+    if (!courseEvalPopoverElement) return;
+    courseEvalPopoverElement.hidden = true;
+    courseEvalPopoverElement.classList.remove('is-visible');
+}
+
+function positionCourseEvalPopover(trigger) {
+    if (!courseEvalPopoverElement || !trigger) return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const maxWidth = courseEvalPopoverElement.offsetWidth;
+    const viewportPadding = 10;
+    const preferredTop = triggerRect.bottom + 10;
+    const preferredLeft = triggerRect.left + (triggerRect.width / 2) - (maxWidth / 2);
+    const maxLeft = window.innerWidth - maxWidth - viewportPadding;
+    const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+    const top = Math.max(viewportPadding, preferredTop);
+
+    courseEvalPopoverElement.style.left = `${left}px`;
+    courseEvalPopoverElement.style.top = `${top}px`;
+}
+
+function toggleCourseEvalPopover(trigger) {
+    const breakdown = String(trigger?.dataset?.breakdown || '').trim();
+    if (!breakdown) return;
+
+    const popover = ensureCourseEvalPopover();
+    if (!popover) return;
+
+    if (activeCourseEvalPopoverTrigger === trigger && !popover.hidden) {
+        hideCourseEvalPopover();
+        return;
+    }
+
+    popover.innerHTML = `
+        <p class="course-eval-popover-title">Evaluation Criteria</p>
+        <p class="course-eval-popover-detail">${escapeCourseMarkup(breakdown)}</p>
+    `;
+
+    popover.hidden = false;
+    popover.classList.add('is-visible');
+    activeCourseEvalPopoverTrigger = trigger;
+    positionCourseEvalPopover(trigger);
+}
+
+// Set up course list event listeners dynamically
 function setupCourseListClickListener() {
     const courseList = document.getElementById("course-list");
-    if (courseList) {
-        courseList.addEventListener("click", function (event) {
-            const clickedContainer = event.target.closest(".class-container");
-            if (clickedContainer) {
-                // Parse the course data and open the shared menu
-                const courseData = JSON.parse(clickedContainer.dataset.course);
-                openCourseInfoMenu(courseData);
+    if (!courseList || courseList.dataset.interactionsAttached === 'true') return;
+
+    courseList.dataset.interactionsAttached = 'true';
+
+    courseList.addEventListener("click", function (event) {
+        const clearFiltersButton = event.target.closest('[data-action="clear-course-filters"]');
+        if (clearFiltersButton) {
+            event.preventDefault();
+            clearCourseFiltersAndSearchAndRefresh();
+            return;
+        }
+
+        const openEvaluationDetailsTrigger = event.target.closest('[data-action="open-evaluation-details"]');
+        if (openEvaluationDetailsTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+            const evaluationCard = openEvaluationDetailsTrigger.closest('.class-outside');
+            const courseData = evaluationCard ? getCourseDataFromCard(evaluationCard) : null;
+            if (courseData) {
+                openCourseInfoMenu(courseData, true, { initialTab: 'overview', focusAssessment: true });
             }
-        });
-    }
+            return;
+        }
+
+        const evalPopoverTrigger = event.target.closest('[data-action="toggle-eval-popover"]');
+        if (evalPopoverTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleCourseEvalPopover(evalPopoverTrigger);
+            return;
+        }
+
+        if (courseEvalPopoverElement && !courseEvalPopoverElement.hidden) {
+            const clickedInsidePopover = event.target.closest('.course-eval-popover');
+            if (!clickedInsidePopover) {
+                hideCourseEvalPopover();
+            }
+        }
+
+        const clickedCard = event.target.closest(".class-outside");
+        if (!clickedCard || !courseList.contains(clickedCard)) return;
+
+        const courseData = getCourseDataFromCard(clickedCard);
+        if (courseData) {
+            openCourseInfoMenu(courseData);
+        }
+    });
+
+    courseList.addEventListener("keydown", function (event) {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.target.closest('button, a, input, textarea, select')) return;
+
+        const card = event.target.closest(".class-outside");
+        if (!card || !courseList.contains(card)) return;
+
+        event.preventDefault();
+        const courseData = getCourseDataFromCard(card);
+        if (courseData) {
+            openCourseInfoMenu(courseData);
+        }
+    });
+
+    courseList.addEventListener('pointerover', (event) => {
+        const tooltipTarget = event.target.closest('[data-tooltip-title]');
+        if (!tooltipTarget || !courseList.contains(tooltipTarget)) return;
+        showCourseChipTooltip(tooltipTarget, event);
+    });
+
+    courseList.addEventListener('pointermove', (event) => {
+        if (!activeChipTooltipTarget) return;
+        if (event.target.closest('[data-tooltip-title]') !== activeChipTooltipTarget) return;
+        positionCourseChipTooltip(event.clientX, event.clientY);
+    });
+
+    courseList.addEventListener('pointerout', (event) => {
+        if (!activeChipTooltipTarget) return;
+        const leavingChip = event.target.closest('[data-tooltip-title]');
+        if (!leavingChip || leavingChip !== activeChipTooltipTarget) return;
+        if (event.relatedTarget && leavingChip.contains(event.relatedTarget)) return;
+        hideCourseChipTooltip();
+    });
+
+    window.addEventListener('resize', () => {
+        hideCourseChipTooltip();
+        hideCourseEvalPopover();
+    });
+    window.addEventListener('scroll', () => {
+        if (courseEvalPopoverElement && !courseEvalPopoverElement.hidden && activeCourseEvalPopoverTrigger) {
+            positionCourseEvalPopover(activeCourseEvalPopoverTrigger);
+        }
+    }, true);
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            hideCourseEvalPopover();
+        }
+    });
 }
 
 // Initialize the application
@@ -1384,6 +2075,8 @@ function setupDashboardEventListeners() {
     sortBtns.forEach(sortBtn => {
         if (sortBtn && filterContainer && sortBtn.dataset.listenerAttached !== 'true') {
             sortBtn.dataset.listenerAttached = 'true';
+            sortBtn.setAttribute('aria-label', 'Sort');
+            sortBtn.setAttribute('title', 'Sort');
             console.log('Attaching sort button listener');
             sortBtn.addEventListener("click", (event) => {
                 event.preventDefault();
@@ -1436,6 +2129,7 @@ function setupDashboardEventListeners() {
                 // Apply sorting
                 currentSortMethod = sortMethod;
                 sortCourses(sortMethod);
+                updateSortStatusDisplay();
 
                 // Close dropdown
                 const sortWrapper = sortDropdown.closest('.sort-wrapper');
@@ -1477,6 +2171,31 @@ function setupDashboardEventListeners() {
         }
     });
     updateCourseFilterTriggerCount();
+    updateSortStatusDisplay();
+    updateActiveCourseFilterDisplay();
+
+    const clearActiveFiltersBtn = document.getElementById('course-clear-active-filters');
+    if (clearActiveFiltersBtn && clearActiveFiltersBtn.dataset.listenerAttached !== 'true') {
+        clearActiveFiltersBtn.dataset.listenerAttached = 'true';
+        clearActiveFiltersBtn.addEventListener('click', async () => {
+            await clearCourseFiltersOnlyAndRefresh();
+        });
+    }
+
+    const activeFilterChips = document.getElementById('course-active-filter-chips');
+    if (activeFilterChips && activeFilterChips.dataset.listenerAttached !== 'true') {
+        activeFilterChips.dataset.listenerAttached = 'true';
+        activeFilterChips.addEventListener('click', async (event) => {
+            const chip = event.target.closest('.course-active-filter-chip[data-filter-id]');
+            if (!chip) return;
+
+            const targetCheckbox = document.getElementById(chip.dataset.filterId);
+            if (!targetCheckbox) return;
+
+            targetCheckbox.checked = false;
+            await applySearchAndFilters(currentSearchQuery);
+        });
+    }
 
     // Close filter modal when clicking outside
     if (filterBackground) {
@@ -1609,6 +2328,7 @@ function setupDashboardEventListeners() {
             if (defaultSortOption) {
                 defaultSortOption.classList.add('selected');
             }
+            updateSortStatusDisplay();
 
             // Clear search input and search state
             const searchInput = document.getElementById('search-input');
@@ -1887,6 +2607,11 @@ function setupDesktopSearchPill() {
         }
 
         showDesktopPillAutocomplete(query, searchPillAutocomplete);
+
+        window.clearTimeout(desktopSearchDebounceTimer);
+        desktopSearchDebounceTimer = window.setTimeout(() => {
+            performSearch(query);
+        }, 120);
     });
 
     // Focus event - load courses and show autocomplete if has content
@@ -1928,11 +2653,13 @@ function setupDesktopSearchPill() {
             // Otherwise perform search
             const searchQuery = searchPillInput.value.trim();
             if (searchQuery) {
+                window.clearTimeout(desktopSearchDebounceTimer);
                 performSearch(searchQuery);
                 searchPillAutocomplete.style.display = 'none';
                 desktopHighlightIndex = -1;
             } else {
                 // Empty search - clear search and show all courses
+                window.clearTimeout(desktopSearchDebounceTimer);
                 searchPillAutocomplete.style.display = 'none';
                 desktopHighlightIndex = -1;
                 currentSearchQuery = null;
@@ -2037,6 +2764,7 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
                 }
             } else {
                 // On courses page - perform search as normal
+                window.clearTimeout(desktopSearchDebounceTimer);
                 performSearch(course.title);
             }
         });
@@ -2324,8 +3052,8 @@ function initializeFilterCheckboxes() {
     updateCourseFilterTriggerCount();
 }
 
-// Responsive layout is now handled purely via CSS with .container-above-mobile and .container-above-desktop
-// No JavaScript DOM manipulation needed - see blaze.css for media query based show/hide
+// Responsive courses toolbar layout is handled via CSS.
+// No JavaScript DOM manipulation is needed for toolbar structure changes.
 
 async function calendarSchedule(year, term) {
     displayedYear = year;
@@ -2453,23 +3181,56 @@ if (document.readyState === 'loading') {
     }, 100); // Small delay to ensure elements are rendered
 }
 
-// Simple sticky observer for visual effects
+// Sticky header scroll state for courses page
 function initStickyObserver() {
-    const containerAbove = document.querySelector('.container-above');
-    if (!containerAbove) return;
+    if (typeof stickyHeaderObserverCleanup === 'function') {
+        stickyHeaderObserverCleanup();
+        stickyHeaderObserverCleanup = null;
+    }
 
-    const observer = new IntersectionObserver(
-        ([entry]) => {
-            if (entry.intersectionRatio < 1) {
-                containerAbove.classList.add('scrolled');
-            } else {
-                containerAbove.classList.remove('scrolled');
-            }
-        },
-        { threshold: [1] }
-    );
+    const stickyHeaders = Array.from(document.querySelectorAll('.page-courses .courses-toolbar-shell, .page-courses .courses-sticky-header'));
+    if (!stickyHeaders.length) return;
 
-    observer.observe(containerAbove);
+    const appContent = document.getElementById('app-content');
+    let rafId = 0;
+
+    const getScrollTop = () => {
+        const windowScrollY = window.scrollY || window.pageYOffset || 0;
+        const rootScrollY = document.documentElement?.scrollTop || 0;
+        const bodyScrollY = document.body?.scrollTop || 0;
+        const contentScrollY = appContent ? appContent.scrollTop : 0;
+        return Math.max(windowScrollY, rootScrollY, bodyScrollY, contentScrollY);
+    };
+
+    const applyScrollState = () => {
+        rafId = 0;
+        const isScrolled = getScrollTop() > 0;
+        stickyHeaders.forEach((header) => {
+            header.classList.toggle('is-scrolled', isScrolled);
+        });
+    };
+
+    const requestApply = () => {
+        if (rafId) return;
+        rafId = window.requestAnimationFrame(applyScrollState);
+    };
+
+    window.addEventListener('scroll', requestApply, { passive: true });
+    appContent?.addEventListener('scroll', requestApply, { passive: true });
+    document.addEventListener('scroll', requestApply, { passive: true, capture: true });
+    window.addEventListener('resize', requestApply);
+    applyScrollState();
+
+    stickyHeaderObserverCleanup = () => {
+        if (rafId) {
+            window.cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+        window.removeEventListener('scroll', requestApply);
+        appContent?.removeEventListener('scroll', requestApply);
+        document.removeEventListener('scroll', requestApply, true);
+        window.removeEventListener('resize', requestApply);
+    };
 }
 
 // Function to handle mobile modal animations and scroll prevention
@@ -3065,53 +3826,63 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 
         const rawTimeSlot = course.time_slot || "";
         let timeSlot = rawTimeSlot;
-        let compactSchedule = course.course_code || "Code";
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
         const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         if (specialMatch) {
             timeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
-            compactSchedule = "Mon/Thu P3";
         } else if (match) {
-            const period = (match[2].match(/[1-5]/) || [null])[0];
             timeSlot = `${days[match[1]]} ${times[match[2]]}`;
-            compactSchedule = period ? `${days[match[1]]} P${period}` : (days[match[1]] || (course.course_code || "Code"));
         }
 
         const suggestedCourseColor = getCourseColorByType(course.type);
         const suggestedCourseBorderColor = hexToRgba(suggestedCourseColor, 0.38);
-        const sectionLine = buildCourseSectionLine(course.course_code, compactSchedule);
+        const suggestedCourseHoverBorderColor = darkenHexToRgba(suggestedCourseColor, 0.34, 0.88);
         const hasProfessorChanged = lastLoadedProfessorChanges.has(course.course_code);
         const creditsChip = getCreditsChipMarkup(course);
         const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
-        const professorName = romanizeProfessorName(course.professor);
-        const professorDisplay = hasProfessorChanged ? `${professorName} *` : professorName;
+        const evaluationChipRow = getCourseEvaluationChipMarkup(course);
+        const professorDisplay = formatProfessorCardName(course.professor);
         const courseTypeLabel = getCourseTypeLabel(course.type);
+        const suggestedTitle = normalizeCourseTitle(course.title);
+        const timeDisplay = String(timeSlot || '').replace(/ - /g, ' – ');
+        const suggestedCardAriaLabel = `Open course info for ${suggestedTitle}`.replace(/"/g, '&quot;');
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
 
         coursesHTML += `
-        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="--course-card-border: ${suggestedCourseBorderColor}; opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;">
+        <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="--course-card-border: ${suggestedCourseBorderColor}; --course-card-border-hover: ${suggestedCourseHoverBorderColor}; opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;" role="button" tabindex="0" aria-label="${suggestedCardAriaLabel}">
             <div class="class-container" style="--course-card-accent: ${suggestedCourseColor}; --course-card-border: ${suggestedCourseBorderColor}; position: relative;" data-course='${escapedCourseJSON}'>
                 <div class="class-suggestion">
                     <div class="class-suggestion-label">
                         Suggested
                     </div>
                 </div>
-                <p id="course-code">${course.course_code}</p>
-                <h2 id="course-title">${normalizeCourseTitle(course.title)}</h2>
-                <div class="course-meta-row">
-                    <p class="course-section-line">${sectionLine}</p>
-                    <span class="course-type-label">${courseTypeLabel}</span>
+                <div class="course-card-header"></div>
+                <div class="course-top-row">
+                    <div class="course-title-block">
+                        <h2 id="course-title">${suggestedTitle}</h2>
+                    </div>
+                    <div class="course-top-badges">
+                        <span class="course-top-badge course-type-label">${escapeCourseMarkup(courseTypeLabel)}</span>
+                    </div>
                 </div>
-                <h3 id="course-professor"><div class="course-professor-icon"></div>${professorDisplay}</h3>
-                <h3 id="course-time"><div class="course-time-icon"></div>${timeSlot}</h3>
-                <div class="course-chip-row">
-                    ${creditsChip}
-                    ${gpaSummaryChip}
-                    ${newProfessorChip}
+                <div class="course-info-rows">
+                    <h3 id="course-professor">
+                        <div class="course-professor-icon"></div>
+                        <span class="course-professor-line">
+                            <span class="course-professor-name">${escapeCourseMarkup(professorDisplay)}</span>
+                            ${newProfessorChip}
+                        </span>
+                    </h3>
+                    <h3 id="course-time"><div class="course-time-icon"></div>${timeDisplay}</h3>
+                    ${evaluationChipRow}
+                </div>
+                <div class="course-footer-row">
+                    <div class="course-footer-left">${creditsChip}</div>
+                    <div class="course-footer-right">${gpaSummaryChip}</div>
                 </div>
             </div>
         </div>
@@ -3303,8 +4074,11 @@ export async function initializeDashboard() {
     initializeCustomSelects();
 
     const pendingHomePrefilter = consumeHomeSlotPrefilter();
+    const pendingCoursePageSearchPrefill = !pendingHomePrefilter ? consumeCoursePageSearchPrefill() : null;
     if (pendingHomePrefilter) {
         applyHomePrefilterSemester(pendingHomePrefilter);
+    } else if (pendingCoursePageSearchPrefill?.term && pendingCoursePageSearchPrefill?.year) {
+        applyHomePrefilterSemester(pendingCoursePageSearchPrefill);
     } else {
         resetCoursePageFiltersAndSearch();
     }
@@ -3326,6 +4100,9 @@ export async function initializeDashboard() {
 
     if (pendingHomePrefilter) {
         await applyHomePrefilterFilters(pendingHomePrefilter);
+    } else if (pendingCoursePageSearchPrefill?.query) {
+        applyCoursePageSearchPrefillInputs(pendingCoursePageSearchPrefill.query);
+        await performSearch(pendingCoursePageSearchPrefill.query);
     }
 
     // Update the course filter paragraph to show current state
@@ -3384,60 +4161,25 @@ Object.defineProperty(window, 'currentSearchQuery', {
 // Function to update the course filter paragraph with search/filter info
 function updateCourseFilterParagraph() {
     updateCourseFilterTriggerCount();
+    updateActiveCourseFilterDisplay();
 
-    // Update all course filter paragraphs (mobile and desktop)
     const courseFilterParagraphs = document.querySelectorAll(".course-filter-paragraph");
     if (courseFilterParagraphs.length === 0) return;
 
-    let message = "";
+    const totalCount = getTotalVisibleCourseCards();
+    const visibleCount = getFilteredVisibleCourseCards();
+    const isFiltered = totalCount > 0 && visibleCount !== totalCount;
+    const visibleLabel = `${visibleCount} course${visibleCount === 1 ? '' : 's'}`;
 
-    // Check if there's an active search
-    if (currentSearchQuery && currentSearchQuery.trim()) {
-        const searchTerm = currentSearchQuery.trim();
-
-        // Check if there are active day filters
-        const filterDaysDiv = document.getElementById("filter-by-days");
-        const activeDays = [];
-
-        if (filterDaysDiv) {
-            const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
-            checkedInputs.forEach((input) => {
-                if (input.value === "Mon") activeDays.push("Monday");
-                else if (input.value === "Tue") activeDays.push("Tuesday");
-                else if (input.value === "Wed") activeDays.push("Wednesday");
-                else if (input.value === "Thu") activeDays.push("Thursday");
-                else if (input.value === "Fri") activeDays.push("Friday");
-            });
-        }
-
-        // Construct message for search results
-        if (activeDays.length > 0) {
-            message = `Showing searched courses for "${searchTerm}" on ${activeDays.join(", ")}`;
-        } else {
-            message = `Showing searched courses for "${searchTerm}"`;
-        }
+    let message = '';
+    if (!isFiltered) {
+        message = `Showing ${visibleLabel}`;
     } else {
-        // No search, show filter info
-        const filterDaysDiv = document.getElementById("filter-by-days");
-        const activeDays = [];
-
-        if (filterDaysDiv) {
-            const checkedInputs = filterDaysDiv.querySelectorAll("input[type='checkbox']:checked");
-            checkedInputs.forEach((input) => {
-                if (input.value === "Mon") activeDays.push("Monday");
-                else if (input.value === "Tue") activeDays.push("Tuesday");
-                else if (input.value === "Wed") activeDays.push("Wednesday");
-                else if (input.value === "Thu") activeDays.push("Thursday");
-                else if (input.value === "Fri") activeDays.push("Friday");
-            });
-        }
-
-        message = `Showing ${activeDays.join(", ") || "All Days"} Courses`;
+        message = `Showing ${visibleLabel} • ${totalCount} total`;
     }
 
-    // Update all instances
     courseFilterParagraphs.forEach(paragraph => {
-        paragraph.innerHTML = message;
+        paragraph.textContent = message;
     });
 }
 

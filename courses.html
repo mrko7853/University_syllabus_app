@@ -166,129 +166,107 @@
             </div>
         </div>
 
-        <section id="syllabus-main">
-            <!-- Desktop version: container-above inside course-main-div -->
-            <div class="container-above container-above-desktop">
-                <div class="title-box">
-                    <h2 class="course-main-title"></h2>
-                    <div id="filter-year-term">
-                        <div class="filter-year-term-container">
-                            <div class="custom-select" data-target="semester-select">
-                                <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                                    <span class="custom-select-value">Loading...</span>
-                                    <div class="custom-select-arrow"></div>
+        <div class="courses-toolbar-shell">
+            <div class="courses-toolbar courses-sticky-header">
+                <div class="courses-sticky-inner">
+                    <div class="courses-toolbar-row courses-toolbar-row-a">
+                        <div id="filter-year-term" class="courses-toolbar-term">
+                            <div class="filter-year-term-container">
+                                <div class="custom-select" data-target="semester-select">
+                                    <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                        <span class="custom-select-value">Loading...</span>
+                                        <div class="custom-select-arrow"></div>
+                                    </div>
+                                    <div class="custom-select-options">
+                                        <!-- Options populated dynamically from database -->
+                                    </div>
                                 </div>
-                                <div class="custom-select-options">
+                                <select name="semester" id="semester-select" class="semester-select" style="display: none;">
                                     <!-- Options populated dynamically from database -->
-                                </div>
+                                </select>
                             </div>
-                            <select name="semester" id="semester-select" class="semester-select" style="display: none;">
-                                <!-- Options populated dynamically from database -->
-                            </select>
                         </div>
-                    </div>
-                    <h3 class="course-main-paragraph course-filter-paragraph"></h3>
-                </div>
-                <div class="buttons-box">
-                    <!-- Desktop inline search pill -->
-                    <div class="search-pill-container">
-                        <div class="search-pill">
-                            <div class="search-pill-icon"></div>
-                            <input type="text" class="search-pill-input" id="search-pill-input"
-                                placeholder="Search courses..." autocomplete="off">
-                        </div>
-                        <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
-                    </div>
-                    <!-- Mobile search button (hidden on desktop) -->
-                    <button class="search-btn control-surface control-surface--secondary">
-                        <div></div>
-                    </button>
-                    <div class="sort-wrapper">
-                        <button class="sort-btn">
-                            <div></div>
-                        </button>
-                        <div class="sort-dropdown">
-                            <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
-                            <div class="sort-option" data-sort="title-za">Course Z-A</div>
-                            <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
-                            <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
-                        </div>
-                    </div>
-                    <button class="filter-btn control-surface control-surface--secondary">
-                        <div></div>
-                    </button>
-                </div>
-            </div>
 
-            <!-- Mobile version: container-above outside course-main-div -->
-            <div class="container-above container-above-mobile">
-                <div class="title-box">
-                    <h2 class="course-main-title"></h2>
-                    <div id="filter-year-term-mobile">
-                        <div class="filter-year-term-container">
-                            <div class="custom-select" data-target="semester-select-mobile">
-                                <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                                    <span class="custom-select-value">Loading...</span>
-                                    <div class="custom-select-arrow"></div>
+                        <div class="courses-toolbar-search">
+                            <div class="search-pill-container">
+                                <div class="search-pill">
+                                    <div class="search-pill-icon"></div>
+                                    <input type="text" class="search-pill-input" id="search-pill-input"
+                                        placeholder="Search courses..." autocomplete="off">
                                 </div>
-                                <div class="custom-select-options">
-                                    <!-- Options populated dynamically from database -->
+                                <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
+                            </div>
+                        </div>
+
+                        <div class="courses-toolbar-actions">
+                            <button type="button" class="search-btn control-surface control-surface--secondary"
+                                aria-label="Search courses" title="Search courses">
+                                <div class="search-btn-icon" aria-hidden="true"></div>
+                                <span class="search-btn-label">Search</span>
+                            </button>
+                            <div class="sort-wrapper">
+                                <button type="button" class="sort-btn control-surface control-surface--secondary"
+                                    aria-label="Sort" title="Sort">
+                                    <div class="sort-btn-icon" aria-hidden="true"></div>
+                                    <span class="sort-btn-label" aria-live="polite">A-Z</span>
+                                </button>
+                                <div class="sort-dropdown">
+                                    <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
+                                    <div class="sort-option" data-sort="title-za">Course Z-A</div>
+                                    <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
+                                    <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                                 </div>
                             </div>
-                            <select name="semester" id="semester-select-mobile" class="semester-select"
-                                style="display: none;">
-                                <!-- Options populated dynamically from database -->
-                            </select>
+                            <button type="button" class="filter-btn control-surface control-surface--secondary"
+                                aria-label="Filters">
+                                <div class="filter-btn-icon" aria-hidden="true"></div>
+                                <span class="filter-btn-label">Filters</span>
+                                <span class="course-filter-count-chip" aria-hidden="true" hidden></span>
+                            </button>
                         </div>
                     </div>
-                    <h3 class="course-main-paragraph course-filter-paragraph"></h3>
-                </div>
-                <div class="buttons-box">
-                    <button class="search-btn control-surface control-surface--secondary">
-                        <div></div>
-                    </button>
-                    <div class="sort-wrapper">
-                        <button class="sort-btn">
-                            <div></div>
-                        </button>
-                        <div class="sort-dropdown">
-                            <div class="sort-option selected" data-sort="title-az">Course A-Z</div>
-                            <div class="sort-option" data-sort="title-za">Course Z-A</div>
-                            <div class="sort-option" data-sort="gpa-a-high">Higher % of A</div>
-                            <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
+
+                    <div class="courses-toolbar-row courses-toolbar-row-b" id="courses-toolbar-row-b" hidden>
+                        <div class="course-active-filters" id="course-active-filters" hidden>
+                            <div class="course-active-filter-chips" id="course-active-filter-chips"></div>
+                            <button type="button" id="course-clear-active-filters"
+                                class="course-active-filters-clear control-surface control-surface--secondary">Clear</button>
                         </div>
                     </div>
-                    <button class="filter-btn control-surface control-surface--secondary">
-                        <div></div>
-                    </button>
                 </div>
             </div>
+        </div>
+
+        <main class="courses-page-main">
+            <section id="syllabus-main">
 
             <div class="main-content">
 
-                <div class="main-container" id="course-main-div">
+                <div class="main-container courses-section" id="course-main-div">
+                    <div class="courses-section-header">
+                        <h3 class="course-main-paragraph course-filter-paragraph" id="course-results-summary"></h3>
+                    </div>
                     <!-- Hidden inputs to store parsed term and year values (shared) -->
                     <input type="hidden" id="term-select" value="Fall">
                     <input type="hidden" id="year-select" value="">
-                    <div id="course-list" class="loading">
+                    <div id="course-list" class="loading course-grid">
                         <!-- Initial skeleton placeholders - replaced when courses load -->
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
                                 <div class="skeleton-layout-probe" aria-hidden="true">
-                                    <p class="skeleton-probe-code">12001103-003</p>
                                     <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
                                     <div class="skeleton-probe-meta-row">
-                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <p class="skeleton-probe-section">Foundation</p>
                                         <span class="skeleton-probe-type">Foundation</span>
                                     </div>
                                     <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
                                     <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
                                     <div class="skeleton-probe-chip-row">
                                         <span class="skeleton-probe-chip">2 Credits</span>
-                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                        <span class="skeleton-probe-chip">Weekly</span>
+                                        <span class="skeleton-probe-chip">A-rate: 38%</span>
                                     </div>
                                 </div>
-                                <div class="skeleton-code-line"></div>
                                 <div class="skeleton-title-stack">
                                     <div class="skeleton-title-line"></div>
                                     <div class="skeleton-title-line short"></div>
@@ -313,20 +291,19 @@
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
                                 <div class="skeleton-layout-probe" aria-hidden="true">
-                                    <p class="skeleton-probe-code">12001103-003</p>
                                     <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
                                     <div class="skeleton-probe-meta-row">
-                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <p class="skeleton-probe-section">Foundation</p>
                                         <span class="skeleton-probe-type">Foundation</span>
                                     </div>
                                     <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
                                     <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
                                     <div class="skeleton-probe-chip-row">
                                         <span class="skeleton-probe-chip">2 Credits</span>
-                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                        <span class="skeleton-probe-chip">Weekly</span>
+                                        <span class="skeleton-probe-chip">A-rate: 38%</span>
                                     </div>
                                 </div>
-                                <div class="skeleton-code-line"></div>
                                 <div class="skeleton-title-stack">
                                     <div class="skeleton-title-line"></div>
                                     <div class="skeleton-title-line short"></div>
@@ -351,20 +328,19 @@
                         <div class="skeleton-class-outside">
                             <div class="skeleton-class-container">
                                 <div class="skeleton-layout-probe" aria-hidden="true">
-                                    <p class="skeleton-probe-code">12001103-003</p>
                                     <h2 class="skeleton-probe-title">Academic Presentations and Debate</h2>
                                     <div class="skeleton-probe-meta-row">
-                                        <p class="skeleton-probe-section">Wed P1 • Section 3</p>
+                                        <p class="skeleton-probe-section">Foundation</p>
                                         <span class="skeleton-probe-type">Foundation</span>
                                     </div>
                                     <h3 class="skeleton-probe-professor">SHIRAH MALKA COHEN</h3>
                                     <h3 class="skeleton-probe-time">Wed 09:00 - 10:30</h3>
                                     <div class="skeleton-probe-chip-row">
                                         <span class="skeleton-probe-chip">2 Credits</span>
-                                        <span class="skeleton-probe-chip">Top: A 38%</span>
+                                        <span class="skeleton-probe-chip">Weekly</span>
+                                        <span class="skeleton-probe-chip">A-rate: 38%</span>
                                     </div>
                                 </div>
-                                <div class="skeleton-code-line"></div>
                                 <div class="skeleton-title-stack">
                                     <div class="skeleton-title-line"></div>
                                     <div class="skeleton-title-line short"></div>
@@ -416,7 +392,8 @@
                     </div>
                 </div>
             </div>
-        </section>
+            </section>
+        </main>
 
         </div>
     </div>

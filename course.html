@@ -14,13 +14,106 @@
 
 <body>
   <section id="syllabus-main">
-    <div class="course-page" id="course-page">
-      <div class="course-page-header">
-        <button class="course-page-back" id="course-page-back">← Back to Courses</button>
-        <h1 class="course-page-title" id="course-page-title">Course</h1>
+    <div class="course-page is-loading" id="course-page">
+      <div class="course-page-toolbar-shell">
+        <div class="course-page-toolbar">
+          <div class="course-page-toolbar-term" id="course-page-filter-year-term">
+            <select class="semester-select" id="course-page-semester-select" aria-label="Select semester">
+              <option value="">Loading...</option>
+            </select>
+            <div class="custom-select course-page-semester-custom-select" data-target="course-page-semester-select">
+              <button type="button" class="custom-select-trigger control-surface control-surface--primary">
+                <span class="custom-select-value">Loading...</span>
+                <span class="custom-select-arrow" aria-hidden="true"></span>
+              </button>
+              <div class="custom-select-options"></div>
+            </div>
+          </div>
+
+          <form class="course-page-toolbar-search" id="course-page-search-form" role="search">
+            <button
+              type="button"
+              class="course-page-toolbar-search-trigger control-surface control-surface--primary"
+              id="course-page-search-trigger"
+              aria-label="Search courses"
+              title="Search courses"
+            >
+              <span class="search-pill-icon" aria-hidden="true"></span>
+            </button>
+            <label class="search-pill control-surface control-surface--primary" for="course-page-search-input">
+              <span class="search-pill-icon" aria-hidden="true"></span>
+              <input
+                type="text"
+                id="course-page-search-input"
+                class="search-pill-input"
+                placeholder="Search courses..."
+                autocomplete="off"
+                spellcheck="false"
+              >
+            </label>
+          </form>
+        </div>
       </div>
+
+      <div class="search-container hidden" id="course-page-search-container">
+        <div class="search-background" id="course-page-search-background">
+          <div class="search-modal" id="course-page-search-modal">
+            <div class="swipe-indicator"></div>
+            <h2>
+              <div></div>Search Courses
+            </h2>
+            <div class="search-input-container">
+              <input
+                type="text"
+                class="search-input"
+                id="course-page-modal-search-input"
+                placeholder="Enter course title, professor name, or course code..."
+                autocomplete="off"
+                spellcheck="false"
+              >
+              <div class="search-autocomplete" id="course-page-modal-search-autocomplete"></div>
+            </div>
+            <div class="search-buttons">
+              <button class="search-submit" id="course-page-modal-search-submit">Search</button>
+              <button class="search-cancel" id="course-page-modal-search-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="course-page-card" id="course-page-card">
-        <div class="course-page-loading" id="course-page-loading">Loading course…</div>
+        <div class="course-page-skeleton" id="course-page-skeleton" aria-hidden="true">
+          <section class="course-page-skeleton-card">
+            <div class="course-page-skeleton-title-row">
+              <span class="course-page-skeleton-dot"></span>
+              <span class="course-page-skeleton-line course-page-skeleton-line-title"></span>
+            </div>
+            <div class="course-page-skeleton-badges">
+              <span class="course-page-skeleton-chip"></span>
+              <span class="course-page-skeleton-chip"></span>
+              <span class="course-page-skeleton-chip"></span>
+            </div>
+          </section>
+          <section class="course-page-skeleton-card">
+            <span class="course-page-skeleton-line course-page-skeleton-line-heading"></span>
+            <div class="course-page-skeleton-grid">
+              <span class="course-page-skeleton-line"></span>
+              <span class="course-page-skeleton-line"></span>
+              <span class="course-page-skeleton-line"></span>
+              <span class="course-page-skeleton-line"></span>
+              <span class="course-page-skeleton-line"></span>
+              <span class="course-page-skeleton-line"></span>
+            </div>
+          </section>
+          <section class="course-page-skeleton-card">
+            <span class="course-page-skeleton-line course-page-skeleton-line-heading"></span>
+            <div class="course-page-skeleton-accordion">
+              <span class="course-page-skeleton-accordion-row"></span>
+              <span class="course-page-skeleton-accordion-row"></span>
+              <span class="course-page-skeleton-accordion-row"></span>
+            </div>
+          </section>
+        </div>
 
         <div class="class-info course-fullscreen sheet courseinfo-sheet" id="class-info">
           <div class="class-info-header sheet-header courseinfo-header">
@@ -44,6 +137,8 @@
             </div>
           </div>
         </div>
+
+        <div id="course-page-footer-dock" aria-hidden="true"></div>
       </div>
     </div>
   </section>

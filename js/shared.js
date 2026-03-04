@@ -30,6 +30,10 @@ const SLOT_PERIOD_TO_TIME = {
 const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective']);
 const SLOT_ALLOWED_TIMES = new Set(Object.values(SLOT_PERIOD_TO_TIME));
+let courseEvalTooltipElement = null;
+let activeCourseEvalTooltipTarget = null;
+let courseEvalInfoPopoverElement = null;
+let activeCourseEvalInfoTrigger = null;
 
 function normalizeSlotDay(day) {
     const raw = String(day || '').trim();
@@ -383,6 +387,292 @@ function formatCourseTimeCompactLabel(rawTimeSlot) {
     return raw.replace(/\s*-\s*/g, '–');
 }
 
+function parseEvaluationCriteriaJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return null;
+    try {
+        return JSON.parse(value);
+    } catch (_) {
+        return null;
+    }
+}
+
+function truncateEvaluationChipLabel(label, maxLength = 20) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+
+    const truncated = normalized.slice(0, maxLength + 1);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    if (lastSpaceIndex >= 10) {
+        return `${truncated.slice(0, lastSpaceIndex).trim()}...`;
+    }
+    return `${truncated.slice(0, maxLength).trim()}...`;
+}
+
+const EVALUATION_LABEL_SPELLING_FIXES = [
+    [/\bmideterm\b/gi, 'midterm'],
+    [/\battendence\b/gi, 'attendance'],
+    [/\bpartcipation\b/gi, 'participation'],
+    [/\bparticpation\b/gi, 'participation'],
+    [/\bparticipaton\b/gi, 'participation'],
+    [/\bcontributon\b/gi, 'contribution'],
+    [/\bcontributons\b/gi, 'contributions'],
+    [/\bcontribitions\b/gi, 'contributions']
+];
+
+function correctEvaluationLabelTypos(label) {
+    let normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+
+    EVALUATION_LABEL_SPELLING_FIXES.forEach(([pattern, replacement]) => {
+        normalized = normalized.replace(pattern, (match) => {
+            if (match === match.toUpperCase()) return replacement.toUpperCase();
+            if (match.charAt(0) === match.charAt(0).toUpperCase()) {
+                return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+            }
+            return replacement;
+        });
+    });
+
+    return normalized.replace(/\s+/g, ' ').trim();
+}
+
+function titleCaseEvaluationLabel(label) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return normalized.replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+}
+
+function normalizeEvaluationLabelPrefix(name) {
+    const normalized = correctEvaluationLabelTypos(name);
+    if (!normalized) return '';
+    const lower = normalized.toLowerCase();
+    if (lower.startsWith('presentation')) return 'Presentation';
+    if (/^attendance and contributions?\b/.test(lower)) return 'Attendance And Participations';
+    return titleCaseEvaluationLabel(normalized);
+}
+
+function canonicalEvaluationTagFromName(name) {
+    const normalized = normalizeEvaluationLabelPrefix(name);
+    if (!normalized) return '';
+    if (normalized === 'Presentation' || normalized === 'Attendance And Participations') return normalized;
+    const lower = normalized.toLowerCase();
+    const quantityMatch = normalized.match(/\b(\d+)\b/);
+    const quantity = quantityMatch ? quantityMatch[1] : null;
+
+    if (lower.includes('attendance')) return 'Attendance';
+    if (lower.includes('participation')) return 'Participation';
+    if (lower.includes('weekly')) return 'Weekly';
+    if (lower.includes('midterm')) return 'Midterm';
+    if (lower.includes('final presentation') || lower === 'presentation') return 'Presentation';
+    if (lower.includes('paper')) return quantity ? `${quantity}x Paper` : 'Paper';
+    if (lower.includes('report')) return 'Report';
+    if (lower.includes('exam') || lower.includes('test')) return 'Exam';
+    if (lower.includes('debate')) return 'Debate';
+    if (lower.includes('group')) return 'Group';
+
+    return truncateEvaluationChipLabel(normalized, 20);
+}
+
+function normalizeCourseEvaluationComponents(course) {
+    const parsed = parseEvaluationCriteriaJson(course?.evaluation_criteria_json);
+    const components = Array.isArray(parsed?.components) ? parsed.components : [];
+    return components
+        .map((component) => {
+            const name = correctEvaluationLabelTypos(component?.name);
+            if (!name) return null;
+            const weightValue = Number(component?.weight);
+            const hasWeight = Number.isFinite(weightValue);
+            const notes = String(component?.notes || '').replace(/\s+/g, ' ').trim();
+            return {
+                name,
+                weight: hasWeight ? weightValue : null,
+                notes: notes || null
+            };
+        })
+        .filter(Boolean);
+}
+
+function deriveEvaluationTagsFromComponents(components, maxTags = 6) {
+    if (!Array.isArray(components) || maxTags <= 0) return [];
+
+    const tags = [];
+    const seen = new Set();
+    const addTag = (value) => {
+        const label = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!label) return;
+        const key = label.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        tags.push(label);
+    };
+
+    const sorted = components
+        .map((component, index) => ({ component, index }))
+        .sort((a, b) => {
+            const aWeight = Number.isFinite(a.component.weight) ? a.component.weight : null;
+            const bWeight = Number.isFinite(b.component.weight) ? b.component.weight : null;
+            if (aWeight === null && bWeight === null) return a.index - b.index;
+            if (aWeight === null) return 1;
+            if (bWeight === null) return -1;
+            if (bWeight !== aWeight) return bWeight - aWeight;
+            return a.index - b.index;
+        });
+
+    sorted.forEach(({ component }) => {
+        addTag(canonicalEvaluationTagFromName(component.name));
+    });
+
+    const keywordText = components
+        .map((component) => `${component.name || ''} ${component.notes || ''}`)
+        .join(' ')
+        .toLowerCase();
+
+    const keywordTags = [
+        ['group', 'Group'],
+        ['debate', 'Debate'],
+        ['paper', 'Paper'],
+        ['report', 'Report'],
+        ['exam', 'Exam'],
+        ['test', 'Exam']
+    ];
+
+    keywordTags.forEach(([keyword, tag]) => {
+        if (keywordText.includes(keyword)) {
+            addTag(tag);
+        }
+    });
+
+    return tags.slice(0, maxTags);
+}
+
+function formatEvaluationWeight(weight) {
+    if (!Number.isFinite(weight)) return '';
+    if (Number.isInteger(weight)) return `${weight}%`;
+    return `${weight.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function getCourseEvaluationMeta(course) {
+    const maxStoredTags = 12;
+    const dbTags = Array.isArray(course?.evaluation_tags)
+        ? course.evaluation_tags
+            .map((tag) => normalizeEvaluationLabelPrefix(tag))
+            .filter(Boolean)
+        : [];
+
+    const components = normalizeCourseEvaluationComponents(course);
+    const tags = dbTags.length > 0
+        ? Array.from(new Set(dbTags)).slice(0, maxStoredTags)
+        : deriveEvaluationTagsFromComponents(components, maxStoredTags);
+
+    const normalizedComponents = components.map((component) => {
+        const displayLabel = normalizeEvaluationLabelPrefix(component.name) || canonicalEvaluationTagFromName(component.name);
+        return {
+            ...component,
+            displayLabel
+        };
+    });
+
+    const breakdown = normalizedComponents
+        .map((component) => {
+            const label = component.displayLabel || canonicalEvaluationTagFromName(component.name) || component.name;
+            const weight = formatEvaluationWeight(component.weight);
+            return weight ? `${label} ${weight}` : label;
+        })
+        .join(' • ');
+
+    return {
+        tags,
+        breakdown,
+        components: normalizedComponents
+    };
+}
+
+function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
+    const expanded = !!options.expanded;
+    const raw = String(rawTimeSlot || '').trim();
+    if (!raw) return 'TBA';
+
+    const dayMapJPToAbbr = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri', 土: 'Sat', 日: 'Sun' };
+    const dayMapAbbrToFull = {
+        Mon: 'Monday',
+        Tue: 'Tuesday',
+        Wed: 'Wednesday',
+        Thu: 'Thursday',
+        Fri: 'Friday',
+        Sat: 'Saturday',
+        Sun: 'Sunday'
+    };
+    const dayMapFullToAbbr = {
+        Monday: 'Mon',
+        Tuesday: 'Tue',
+        Wednesday: 'Wed',
+        Thursday: 'Thu',
+        Friday: 'Fri',
+        Saturday: 'Sat',
+        Sunday: 'Sun'
+    };
+    const periodWords = {
+        '1': 'first',
+        '2': 'second',
+        '3': 'third',
+        '4': 'fourth',
+        '5': 'fifth'
+    };
+    const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5' };
+    const timeMap = {
+        '1': '09:00 - 10:30',
+        '2': '10:45 - 12:15',
+        '3': '13:10 - 14:40',
+        '4': '14:55 - 16:25',
+        '5': '16:40 - 18:10'
+    };
+
+    const buildLabel = (dayAbbr, period, timeRange) => {
+        if (expanded) {
+            const fullDay = dayMapAbbrToFull[dayAbbr] || dayAbbr;
+            const periodWord = period ? periodWords[period] : '';
+            if (periodWord && timeRange) return `${fullDay} ${periodWord} period · ${timeRange}`;
+            if (periodWord) return `${fullDay} ${periodWord} period`;
+            if (timeRange) return `${fullDay} · ${timeRange}`;
+            return fullDay;
+        }
+
+        if (period && timeRange) return `${dayAbbr} P${period} · ${timeRange}`;
+        if (period) return `${dayAbbr} P${period}`;
+        if (timeRange) return `${dayAbbr} ${timeRange}`;
+        return dayAbbr;
+    };
+
+    const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
+    if (jpMatch) {
+        const dayAbbr = dayMapJPToAbbr[jpMatch[1]] || jpMatch[1];
+        const period = jpMatch[2];
+        return buildLabel(dayAbbr, period, timeMap[period] || '');
+    }
+
+    const enFullMatch = raw.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})$/i);
+    if (enFullMatch) {
+        const normalizedDay = enFullMatch[1].charAt(0).toUpperCase() + enFullMatch[1].slice(1).toLowerCase();
+        const dayAbbr = dayMapFullToAbbr[normalizedDay] || normalizedDay;
+        const start = enFullMatch[2];
+        const end = enFullMatch[3];
+        return buildLabel(dayAbbr, periodByStart[start], `${start} - ${end}`);
+    }
+
+    const enAbbrMatch = raw.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})$/i);
+    if (enAbbrMatch) {
+        const dayAbbr = enAbbrMatch[1].charAt(0).toUpperCase() + enAbbrMatch[1].slice(1).toLowerCase();
+        const start = enAbbrMatch[2];
+        const end = enAbbrMatch[3];
+        return buildLabel(dayAbbr, periodByStart[start], `${start} - ${end}`);
+    }
+
+    return raw.replace(/\s*[–—-]\s*/g, ' - ');
+}
+
 const COURSE_INFO_ACTIVE_TAB_KEY = 'ila_course_info_active_tab_v1';
 const COURSE_INFO_TAB_VALUES = new Set(['overview', 'assignments', 'reviews']);
 const COURSE_INFO_MOBILE_BREAKPOINT = 1023;
@@ -553,6 +843,20 @@ function unlockBodyScrollForCourseInfoSheet() {
     }
 }
 
+function syncModalOpenClass() {
+    const hasOpenModal = Boolean(document.querySelector(
+        '.profile-modal.profile-modal--swipe.show,' +
+        ' .semester-mobile-sheet.show,' +
+        ' .search-modal.show,' +
+        ' .filter-popup.show,' +
+        ' .class-info:not(.course-fullscreen).show,' +
+        ' .modal.modal--mobile-swipe:not(.hidden),' +
+        ' .conflict-container:not(.hidden)'
+    ));
+
+    document.body.classList.toggle('modal-open', hasOpenModal);
+}
+
 function showGlobalToast(message, durationMs = 2200) {
     if (!message) return;
 
@@ -622,11 +926,334 @@ function renderCourseActionPill(label, options = {}) {
     return `<button ${attrs}>${icon}<span>${escapeHtml(label)}</span></button>`;
 }
 
+function canShowCourseEvaluationHoverTooltip() {
+    return window.innerWidth >= 1024
+        && window.matchMedia
+        && window.matchMedia('(hover: hover)').matches;
+}
+
+function ensureCourseEvaluationTooltip() {
+    if (courseEvalTooltipElement && document.body.contains(courseEvalTooltipElement)) {
+        return courseEvalTooltipElement;
+    }
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'calendar-course-tooltip course-chip-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    document.body.appendChild(tooltip);
+    courseEvalTooltipElement = tooltip;
+    return tooltip;
+}
+
+function positionCourseEvaluationTooltip(clientX, clientY) {
+    if (!courseEvalTooltipElement) return;
+    const offset = 14;
+    const maxX = window.innerWidth - courseEvalTooltipElement.offsetWidth - 8;
+    const maxY = window.innerHeight - courseEvalTooltipElement.offsetHeight - 8;
+    const left = Math.max(8, Math.min(clientX + offset, maxX));
+    const top = Math.max(8, Math.min(clientY + offset, maxY));
+    courseEvalTooltipElement.style.left = `${left}px`;
+    courseEvalTooltipElement.style.top = `${top}px`;
+}
+
+function hideCourseEvaluationTooltip() {
+    activeCourseEvalTooltipTarget = null;
+    if (!courseEvalTooltipElement) return;
+    courseEvalTooltipElement.classList.remove('is-visible');
+}
+
+function showCourseEvaluationTooltip(target, event) {
+    if (!canShowCourseEvaluationHoverTooltip()) return;
+    const breakdown = String(target?.dataset?.courseEvalBreakdown || '').trim();
+    if (!breakdown) return;
+    const tooltip = ensureCourseEvaluationTooltip();
+    if (!tooltip) return;
+
+    tooltip.innerHTML = `
+        <div class="calendar-course-tooltip-title">Evaluation Criteria</div>
+        <div class="calendar-course-tooltip-detail">${escapeHtml(breakdown)}</div>
+    `;
+    tooltip.classList.add('is-visible');
+    positionCourseEvaluationTooltip(event.clientX, event.clientY);
+    activeCourseEvalTooltipTarget = target;
+}
+
+function ensureCourseEvaluationInfoPopover() {
+    if (courseEvalInfoPopoverElement && document.body.contains(courseEvalInfoPopoverElement)) {
+        return courseEvalInfoPopoverElement;
+    }
+
+    const popover = document.createElement('div');
+    popover.className = 'course-eval-popover';
+    popover.setAttribute('role', 'dialog');
+    popover.hidden = true;
+    document.body.appendChild(popover);
+    courseEvalInfoPopoverElement = popover;
+    return popover;
+}
+
+function hideCourseEvaluationInfoPopover() {
+    activeCourseEvalInfoTrigger = null;
+    if (!courseEvalInfoPopoverElement) return;
+    courseEvalInfoPopoverElement.hidden = true;
+    courseEvalInfoPopoverElement.classList.remove('is-visible');
+}
+
+function positionCourseEvaluationInfoPopover(trigger) {
+    if (!courseEvalInfoPopoverElement || !trigger) return;
+    const triggerRect = trigger.getBoundingClientRect();
+    const width = courseEvalInfoPopoverElement.offsetWidth;
+    const padding = 10;
+    const left = Math.max(
+        padding,
+        Math.min(triggerRect.left + (triggerRect.width / 2) - (width / 2), window.innerWidth - width - padding)
+    );
+    const top = Math.max(padding, triggerRect.bottom + 10);
+    courseEvalInfoPopoverElement.style.left = `${left}px`;
+    courseEvalInfoPopoverElement.style.top = `${top}px`;
+}
+
+function toggleCourseEvaluationInfoPopover(trigger) {
+    const breakdown = String(trigger?.dataset?.courseEvalBreakdown || '').trim();
+    if (!breakdown) return;
+    const popover = ensureCourseEvaluationInfoPopover();
+    if (!popover) return;
+
+    if (activeCourseEvalInfoTrigger === trigger && !popover.hidden) {
+        hideCourseEvaluationInfoPopover();
+        return;
+    }
+
+    popover.innerHTML = `
+        <p class="course-eval-popover-title">Evaluation Criteria</p>
+        <p class="course-eval-popover-detail">${escapeHtml(breakdown)}</p>
+    `;
+    popover.hidden = false;
+    popover.classList.add('is-visible');
+    activeCourseEvalInfoTrigger = trigger;
+    positionCourseEvaluationInfoPopover(trigger);
+}
+
+function bindCourseEvaluationOverviewInteractions(classContent, classInfo) {
+    if (!classContent || !classInfo) return () => { };
+
+    hideCourseEvaluationTooltip();
+    hideCourseEvaluationInfoPopover();
+
+    const pointerOverHandler = (event) => {
+        const target = event.target.closest('[data-course-eval-tooltip]');
+        if (!target || !classContent.contains(target)) return;
+        showCourseEvaluationTooltip(target, event);
+    };
+
+    const pointerMoveHandler = (event) => {
+        if (!activeCourseEvalTooltipTarget) return;
+        if (event.target.closest('[data-course-eval-tooltip]') !== activeCourseEvalTooltipTarget) return;
+        positionCourseEvaluationTooltip(event.clientX, event.clientY);
+    };
+
+    const pointerOutHandler = (event) => {
+        if (!activeCourseEvalTooltipTarget) return;
+        const leaving = event.target.closest('[data-course-eval-tooltip]');
+        if (!leaving || leaving !== activeCourseEvalTooltipTarget) return;
+        if (event.relatedTarget && leaving.contains(event.relatedTarget)) return;
+        hideCourseEvaluationTooltip();
+    };
+
+    const clickHandler = (event) => {
+        const trigger = event.target.closest('[data-action="course-eval-more"]');
+        if (trigger && classContent.contains(trigger)) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleCourseEvaluationInfoPopover(trigger);
+            return;
+        }
+
+        const clickedInsidePopover = event.target.closest('.course-eval-popover');
+        if (!clickedInsidePopover) {
+            hideCourseEvaluationInfoPopover();
+        }
+    };
+
+    const keydownHandler = (event) => {
+        if (event.key === 'Escape') {
+            hideCourseEvaluationInfoPopover();
+        }
+    };
+
+    const resizeHandler = () => {
+        hideCourseEvaluationTooltip();
+        hideCourseEvaluationInfoPopover();
+    };
+
+    classContent.addEventListener('pointerover', pointerOverHandler);
+    classContent.addEventListener('pointermove', pointerMoveHandler);
+    classContent.addEventListener('pointerout', pointerOutHandler);
+    classInfo.addEventListener('click', clickHandler);
+    document.addEventListener('keydown', keydownHandler);
+    window.addEventListener('resize', resizeHandler);
+    window.addEventListener('scroll', resizeHandler, true);
+
+    return () => {
+        classContent.removeEventListener('pointerover', pointerOverHandler);
+        classContent.removeEventListener('pointermove', pointerMoveHandler);
+        classContent.removeEventListener('pointerout', pointerOutHandler);
+        classInfo.removeEventListener('click', clickHandler);
+        document.removeEventListener('keydown', keydownHandler);
+        window.removeEventListener('resize', resizeHandler);
+        window.removeEventListener('scroll', resizeHandler, true);
+        hideCourseEvaluationTooltip();
+        hideCourseEvaluationInfoPopover();
+    };
+}
+
+function bindAssessmentBreakdownAccordionAnimations(classContent) {
+    if (!classContent) return () => { };
+
+    const accordions = Array.from(classContent.querySelectorAll('.course-assessment-breakdown-accordion'));
+    if (!accordions.length) return () => { };
+
+    const reduceMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
+    const prefersReducedMotion = () => Boolean(reduceMotionQuery?.matches);
+    const cleanupFns = [];
+
+    accordions.forEach((accordion) => {
+        const summary = accordion.querySelector('.course-assessment-breakdown-summary');
+        const panel = accordion.querySelector('.course-assessment-breakdown-panel');
+        if (!summary || !panel) return;
+
+        accordion.open = false;
+        accordion.classList.remove('is-expanded');
+        panel.style.height = '0px';
+
+        let isAnimating = false;
+        let transitionHandler = null;
+
+        const clearTransitionHandler = () => {
+            if (!transitionHandler) return;
+            panel.removeEventListener('transitionend', transitionHandler);
+            transitionHandler = null;
+        };
+
+        const openAccordion = () => {
+            if (accordion.classList.contains('is-expanded') && !isAnimating) return;
+
+            clearTransitionHandler();
+
+            if (prefersReducedMotion()) {
+                accordion.open = true;
+                accordion.classList.add('is-expanded');
+                panel.style.height = 'auto';
+                isAnimating = false;
+                return;
+            }
+
+            isAnimating = true;
+            const startHeight = panel.getBoundingClientRect().height;
+            accordion.open = true;
+            accordion.classList.add('is-expanded');
+            panel.style.height = `${startHeight}px`;
+            void panel.offsetHeight;
+            const targetHeight = panel.scrollHeight;
+            panel.style.height = `${targetHeight}px`;
+
+            transitionHandler = (event) => {
+                if (event.propertyName !== 'height') return;
+                clearTransitionHandler();
+                isAnimating = false;
+                panel.style.height = 'auto';
+            };
+            panel.addEventListener('transitionend', transitionHandler);
+        };
+
+        const closeAccordion = () => {
+            if (!accordion.classList.contains('is-expanded') && !isAnimating) return;
+
+            clearTransitionHandler();
+
+            if (prefersReducedMotion()) {
+                accordion.classList.remove('is-expanded');
+                accordion.open = false;
+                panel.style.height = '0px';
+                isAnimating = false;
+                return;
+            }
+
+            isAnimating = true;
+            const startHeight = panel.getBoundingClientRect().height || panel.scrollHeight;
+            panel.style.height = `${startHeight}px`;
+            void panel.offsetHeight;
+            accordion.classList.remove('is-expanded');
+            panel.style.height = '0px';
+
+            transitionHandler = (event) => {
+                if (event.propertyName !== 'height') return;
+                clearTransitionHandler();
+                accordion.open = false;
+                isAnimating = false;
+                panel.style.height = '0px';
+            };
+            panel.addEventListener('transitionend', transitionHandler);
+        };
+
+        const summaryClickHandler = (event) => {
+            event.preventDefault();
+            if (isAnimating) return;
+            if (accordion.classList.contains('is-expanded')) closeAccordion();
+            else openAccordion();
+        };
+
+        summary.addEventListener('click', summaryClickHandler);
+
+        cleanupFns.push(() => {
+            clearTransitionHandler();
+            summary.removeEventListener('click', summaryClickHandler);
+            panel.style.height = accordion.classList.contains('is-expanded') ? 'auto' : '0px';
+        });
+    });
+
+    return () => {
+        cleanupFns.forEach((cleanupFn) => cleanupFn());
+    };
+}
+
 function CourseInfoContent(model, options = {}) {
     const isMobile = options.isMobile === true;
     const badges = Array.isArray(model?.badges) ? model.badges : [];
     const detailRows = Array.isArray(model?.detailRows) ? model.detailRows : [];
     const heroActions = Array.isArray(model?.heroActions) ? model.heroActions : [];
+    const evaluationComponents = Array.isArray(model?.evaluation?.components) ? model.evaluation.components : [];
+    const assessmentBreakdownSection = evaluationComponents.length
+        ? `
+            <section class="ds-card course-assessment-breakdown-card" id="course-assessment-breakdown" tabindex="-1">
+                <div class="ds-card-header">
+                    <h3>Assessment Breakdown</h3>
+                </div>
+                <div class="course-assessment-breakdown-list">
+                    ${evaluationComponents.map((component) => {
+                        const weightText = formatEvaluationWeight(component.weight);
+                        const detailsText = String(component.notes || '').trim();
+                        return `
+                            <details class="course-assessment-breakdown-accordion">
+                                <summary class="course-assessment-breakdown-summary">
+                                    <div class="course-assessment-breakdown-main">
+                                        <span class="course-assessment-breakdown-name">${escapeHtml(component.displayLabel || component.name || 'Component')}</span>
+                                        <span class="course-assessment-breakdown-weight">${escapeHtml(weightText || '—')}</span>
+                                    </div>
+                                    <span class="course-assessment-breakdown-chevron" aria-hidden="true"></span>
+                                </summary>
+                                <div class="course-assessment-breakdown-panel">
+                                    ${detailsText
+                ? `<p class="course-assessment-breakdown-notes">${escapeHtml(detailsText)}</p>`
+                : '<p class="course-assessment-breakdown-notes course-assessment-breakdown-notes--empty">No additional details provided.</p>'}
+                                </div>
+                            </details>
+                        `;
+                    }).join('')}
+                </div>
+            </section>
+        `
+        : '';
     const placeConflictInsideTimeRow = isMobile && detailRows.some((row) => String(row?.label || '').trim().toLowerCase() === 'time');
 
     return `
@@ -684,6 +1311,8 @@ function CourseInfoContent(model, options = {}) {
                 : '<div class="course-info-inline-warning" id="course-conflict-preview" style="display:none;"></div>')}
                 </div>
             </section>
+
+            ${assessmentBreakdownSection}
         </div>
     `;
 }
@@ -802,35 +1431,69 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
         </div>
     `;
 
+    const dialog = modal.querySelector('.modal-dialog');
+    const enableMobileSwipeSheet = isCourseInfoMobileViewport() &&
+        (modal.classList.contains('review-modal-host') || modal.classList.contains('modal--confirm'));
+    const closeDelayMs = enableMobileSwipeSheet ? (SWIPE_CLOSE_DURATION_MS + 20) : 220;
+
+    if (enableMobileSwipeSheet && dialog) {
+        modal.classList.add('modal--mobile-swipe');
+        dialog.classList.add('mobile-swipe-sheet');
+        if (!dialog.querySelector('.swipe-indicator')) {
+            const indicator = document.createElement('div');
+            indicator.className = 'swipe-indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            dialog.insertBefore(indicator, dialog.firstChild);
+        }
+        dialog.style.setProperty('--modal-translate-y', '100vh');
+    }
+
     let isClosed = false;
     let focusTrapCleanup = null;
-    const requestClose = () => {
+    const requestClose = ({ immediate = false } = {}) => {
         if (typeof modal.__requestClose === 'function') {
             const handled = modal.__requestClose();
-            if (handled === true) return;
+            if (handled === true) return false;
         }
-        close();
+        close({ immediate });
+        return true;
     };
 
-    const close = () => {
+    const close = ({ immediate = false } = {}) => {
         if (isClosed) return;
         isClosed = true;
-        modal.classList.add('hidden');
+
+        const finalizeClose = () => {
+            try {
+                dialog?._swipeCleanup?.();
+            } catch (_) { }
+            modal.remove();
+            if (enableMobileSwipeSheet) {
+                syncModalOpenClass();
+            }
+            if (typeof onClose === 'function') {
+                onClose();
+            } else {
+                document.body.style.overflow = document.body.classList.contains('modal-open') ? 'hidden' : 'auto';
+            }
+        };
+
         if (typeof focusTrapCleanup === 'function') {
             focusTrapCleanup();
             focusTrapCleanup = null;
         }
-        setTimeout(() => {
-            try {
-                modal.querySelector('.modal-dialog')?._swipeCleanup?.();
-            } catch (_) { }
-            modal.remove();
-            if (typeof onClose === 'function') {
-                onClose();
-            } else {
-                document.body.style.overflow = 'auto';
-            }
-        }, 220);
+
+        if (immediate) {
+            finalizeClose();
+            return;
+        }
+
+        modal.classList.add('hidden');
+        if (enableMobileSwipeSheet && dialog) {
+            dialog.style.setProperty('--modal-translate-y', '100vh');
+        }
+
+        setTimeout(finalizeClose, closeDelayMs);
     };
 
     modal.addEventListener('click', (event) => {
@@ -840,8 +1503,15 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
     });
 
     document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-    const dialog = modal.querySelector('.modal-dialog');
+    if (enableMobileSwipeSheet) {
+        document.body.classList.add('modal-open');
+        requestAnimationFrame(() => {
+            dialog?.style.setProperty('--modal-translate-y', '0px');
+        });
+    } else {
+        document.body.style.overflow = 'hidden';
+    }
+
     focusTrapCleanup = createFocusTrap(dialog, { onEscape: requestClose });
 
     window.setTimeout(() => {
@@ -855,6 +1525,13 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
     }, 20);
 
     if (typeof onMount === 'function') onMount(modal, close);
+
+    if (enableMobileSwipeSheet && dialog && typeof window.addSwipeToCloseSimple === 'function') {
+        window.addSwipeToCloseSimple(dialog, modal, () => {
+            requestClose({ immediate: true });
+        });
+    }
+
     return { modal, close };
 }
 
@@ -1919,6 +2596,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const requestVersion = ++courseInfoOpenRequestVersion;
     cleanupActiveCourseInfoTabController();
     const requestedInitialTab = normalizeCourseInfoTab(options?.initialTab || readStoredCourseInfoTab());
+    const shouldFocusAssessment = options?.focusAssessment === true;
     const isMobileCourseInfo = isCourseInfoMobileViewport();
 
     // Function to properly format time slots from Japanese to English
@@ -2040,6 +2718,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         classInfo._courseInfoExternalModalWatchCleanup();
         classInfo._courseInfoExternalModalWatchCleanup = null;
     }
+    if (typeof classInfo._courseEvalInteractionsCleanup === 'function') {
+        classInfo._courseEvalInteractionsCleanup();
+        classInfo._courseEvalInteractionsCleanup = null;
+    }
+    if (typeof classInfo._courseAssessmentAccordionCleanup === 'function') {
+        classInfo._courseAssessmentAccordionCleanup();
+        classInfo._courseAssessmentAccordionCleanup = null;
+    }
     if (typeof classInfo._classInfoSwipeCleanup === 'function') {
         classInfo._classInfoSwipeCleanup();
         classInfo._classInfoSwipeCleanup = null;
@@ -2079,6 +2765,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }
     };
 
+    const releaseCourseEvalOverviewInteractions = () => {
+        if (typeof classInfo._courseEvalInteractionsCleanup === 'function') {
+            classInfo._courseEvalInteractionsCleanup();
+            classInfo._courseEvalInteractionsCleanup = null;
+        }
+    };
+    const releaseCourseAssessmentAccordionInteractions = () => {
+        if (typeof classInfo._courseAssessmentAccordionCleanup === 'function') {
+            classInfo._courseAssessmentAccordionCleanup();
+            classInfo._courseAssessmentAccordionCleanup = null;
+        }
+    };
+
     let classInfoBackground = document.getElementById("class-info-background");
 
     const closeCourseInfoSheet = ({ restoreURL = true, immediate = false } = {}) => {
@@ -2109,6 +2808,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             releaseCourseInfoFocusTrap();
             releaseCourseInfoResizeObserver();
             releaseCourseInfoExternalModalWatch();
+            releaseCourseEvalOverviewInteractions();
+            releaseCourseAssessmentAccordionInteractions();
             cleanupActiveCourseInfoTabController();
 
             if (activeBackground && activeBackground.parentNode) {
@@ -2270,7 +2971,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         button.style.cursor = '';
 
         if (state === 'locked') {
-            button.textContent = "Semester Locked";
+            button.textContent = "Semester Ended";
             button.classList.add('is-locked');
             button.disabled = true;
             button.style.cursor = "not-allowed";
@@ -2325,6 +3026,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const heroSubline = course.department || course.track || course.category || '';
     const courseCodeValue = String(course.course_code || '').trim() || 'N/A';
     const timeDetailLabel = fullTimeLabel || compactTimeLabel || 'TBA';
+    const evaluationMeta = getCourseEvaluationMeta(course);
     const visibleBadges = [
         ...(session ? [{
             label: isAlreadySelected ? 'Registered' : 'Not registered',
@@ -2351,6 +3053,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             { label: 'Share', action: 'share-course', variant: 'secondary', icon: 'pill-icon--share' },
             ...(course.url ? [{ label: 'Syllabus', action: 'open-syllabus', href: course.url, variant: 'secondary', icon: 'pill-icon--external' }] : [])
         ],
+        evaluation: evaluationMeta,
         detailRows: [
             { label: 'Professor', value: getRomanizedProfessorName(course.professor) || 'TBA' },
             { label: 'Course Code', value: courseCodeValue },
@@ -2390,6 +3093,18 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     }
 
     classContent.innerHTML = CourseInfoContent(courseInfoModel, { isMobile: isMobileCourseInfo && !isDedicatedCoursePage });
+    releaseCourseEvalOverviewInteractions();
+    releaseCourseAssessmentAccordionInteractions();
+    classInfo._courseEvalInteractionsCleanup = bindCourseEvaluationOverviewInteractions(classContent, classInfo);
+    classInfo._courseAssessmentAccordionCleanup = bindAssessmentBreakdownAccordionAnimations(classContent);
+    const focusAssessmentBreakdown = () => {
+        if (!shouldFocusAssessment) return;
+        const target = classContent.querySelector('#course-assessment-breakdown');
+        if (!target) return;
+        target.classList.add('is-targeted');
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => target.classList.remove('is-targeted'), 1200);
+    };
 
     const syncSavedStatusBadge = () => {
         const badgesWrap = classContent.querySelector('.ds-badges') || classInfo.querySelector('[data-courseinfo-header-tags]');
@@ -2949,7 +3664,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     classReview.classList.add('ds-card');
     if (!isMobileCourseInfo) {
         const desktopReviewCtaLabel = userReview ? 'Edit Review' : 'Write Review';
-        const desktopReviewCtaIcon = userReview ? '<span class="pill-icon pill-icon--edit" aria-hidden="true"></span>' : '';
+        const desktopReviewCtaIcon = '<span class="pill-icon pill-icon--edit" aria-hidden="true"></span>';
         classReview.innerHTML = `
             <div class="course-info-reviews-header">
                 <div class="course-info-reviews-title">
@@ -3096,12 +3811,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
         renderDesktopReviews();
     } else {
+        const shouldShowMobileReviewCta = !!(currentUserId && isAlreadySelected && !userReview);
         classReview.innerHTML = `
             <div class="course-info-reviews-header">
                 <div class="course-info-reviews-title">
                     <h3>Course Reviews</h3>
                     <p class="total-reviews">${stats.totalReviews} review${stats.totalReviews !== 1 ? 's' : ''}</p>
                 </div>
+                ${shouldShowMobileReviewCta ? `
+                    <button type="button" class="btn-secondary add-review-btn" data-action="mobile-review-cta">
+                        <span class="pill-icon pill-icon--edit" aria-hidden="true"></span>
+                        <span>Write Review</span>
+                    </button>
+                ` : ''}
             </div>
             ${stats.totalReviews > 0 ? `
                 <div class="course-review-summary-stack">
@@ -3153,6 +3875,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 </div>
             ` : ''}
         `;
+
+        classReview.querySelector('[data-action="mobile-review-cta"]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.openAddReviewModal(course.course_code, course.academic_year, course.term, String(course.title || ''));
+        });
 
         const reviewsListEl = classReview.querySelector(`#reviews-list-${reviewListKey}`);
         const reviewsFooterEl = classReview.querySelector(`#reviews-footer-${reviewListKey}`);
@@ -3542,11 +4269,9 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 ));
 
                 if (!isRegisteredForCourse) {
-                    classAssignments.classList.remove('course-assignments-guest-mode');
-                    setGuestAssignmentsModalOverlay(false);
-                    classAssignments.innerHTML = '';
-                    classAssignments.style.display = 'none';
-                    updateOverviewAssignmentsShortcut(0);
+                    renderAssignmentsEmptyState('Add this course to your schedule to start adding assignments to it.', {
+                        showLink: false
+                    });
                 } else {
                     // Fetch by user + course code (not exact year/term) and match in JS to tolerate missing metadata.
                     const { data: userAssignments, error: assignmentsError } = await supabase
@@ -3656,9 +4381,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 };
                                 if (dueMeta.isOverdue) {
                                     return { text: 'Overdue', class: 'status-overdue' };
-                                }
-                                if (dueMeta.daysUntilDue === 0 && String(assignment?.status || '') !== 'completed') {
-                                    return { text: 'Due today', class: 'status-due-today' };
                                 }
                                 return statusMap[status] || { text: status ? String(status) : 'Not Started', class: 'status-not-started' };
                             };
@@ -3930,14 +4652,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             }, 10);
         }
     }
+    window.setTimeout(focusAssessmentBreakdown, 80);
 
-    const hideFooterForGuest = !session && !isDedicatedCoursePage;
+    const hideFooterForGuest = !session;
     classInfo.classList.toggle('courseinfo-guest-hide-footer', hideFooterForGuest);
 
     courseInfoActions.innerHTML = hideFooterForGuest ? '' : `
         <div class="course-info-footer-layout">
             <div class="course-info-footer-secondary">
-                <button type="button" class="btn-secondary" data-action="toggle-save-course">${isSavedForLater ? 'Unsave' : 'Save'}</button>
+                <button type="button" class="btn-secondary course-info-save-btn" data-action="toggle-save-course" aria-label="Save Course" title="Save Course">
+                    <span class="course-info-save-icon" aria-hidden="true"></span>
+                    <span class="course-info-save-label">Save</span>
+                </button>
+                <button type="button" class="btn-secondary course-info-write-review-btn" data-action="write-review-footer" hidden>Write Review</button>
             </div>
             <div class="course-info-footer-primary">
                 <button id="class-add-remove"></button>
@@ -3946,17 +4673,28 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     `;
 
     const saveToggleBtn = courseInfoActions.querySelector('[data-action="toggle-save-course"]');
+    const writeReviewFooterBtn = courseInfoActions.querySelector('[data-action="write-review-footer"]');
     const footerLayout = courseInfoActions.querySelector('.course-info-footer-layout');
     const footerSecondary = footerLayout?.querySelector('.course-info-footer-secondary');
     updateFooterActionLayout = (isSelected) => {
+        const shouldShowWriteReview = !!(session && isSelected && !userHasReviewed);
+        const shouldShowSecondary = true;
+
         if (footerSecondary) {
-            footerSecondary.hidden = !!isSelected;
+            footerSecondary.hidden = !shouldShowSecondary;
         }
         if (footerLayout) {
-            footerLayout.classList.toggle('is-primary-only', !!isSelected);
+            footerLayout.classList.toggle('is-primary-only', !shouldShowSecondary);
+            footerLayout.classList.toggle('has-write-review', shouldShowWriteReview);
         }
         if (saveToggleBtn) {
-            saveToggleBtn.textContent = isSavedForLater ? 'Unsave' : 'Save';
+            saveToggleBtn.hidden = false;
+            saveToggleBtn.classList.toggle('is-saved', !!isSavedForLater);
+            saveToggleBtn.setAttribute('aria-label', isSavedForLater ? 'Unsave Course' : 'Save Course');
+            saveToggleBtn.setAttribute('title', isSavedForLater ? 'Unsave Course' : 'Save Course');
+        }
+        if (writeReviewFooterBtn) {
+            writeReviewFooterBtn.hidden = !shouldShowWriteReview;
         }
     };
     updateFooterActionLayout(isAlreadySelected);
@@ -3975,7 +4713,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     credits: course.credits
                 });
                 isSavedForLater = !!result?.saved;
-                saveToggleBtn.textContent = isSavedForLater ? 'Unsave' : 'Save';
                 syncSavedStatusBadge();
                 updateFooterActionLayout(isAlreadySelected);
             } catch (saveError) {
@@ -3984,6 +4721,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             } finally {
                 saveToggleBtn.disabled = false;
             }
+        });
+    }
+
+    if (writeReviewFooterBtn) {
+        writeReviewFooterBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.openAddReviewModal(course.course_code, course.academic_year, course.term, String(course.title || ''));
         });
     }
 
@@ -3999,8 +4743,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     return;
                 }
                 const firstConflict = conflictResult.conflictingCourses[0];
-                const timeText = formatCourseTimeCompactLabel(firstConflict?.time_slot || course.time_slot);
-                previewTarget.textContent = `Conflicts with ${timeText} course`;
+                const timeText = formatConflictPreviewTimeLabel(
+                    firstConflict?.time_slot || course.time_slot,
+                    { expanded: !isCourseInfoMobileViewport() }
+                );
+                previewTarget.textContent = `Conflicts with ${timeText} course.`;
                 previewTarget.style.display = 'block';
             } catch (previewError) {
                 console.warn('Unable to load course conflict preview:', previewError);
@@ -5151,13 +5898,6 @@ function openReviewFormModal({
                 modal.__reviewKeyboardSafetyCleanup = cleanupKeyboardSafety;
             }
 
-            const modalDialog = modal.querySelector('.modal-dialog');
-            if (isCourseInfoMobileViewport() && modalDialog && typeof window.addSwipeToCloseSimple === 'function') {
-                window.addSwipeToCloseSimple(modalDialog, modal, () => {
-                    modal.__requestClose?.();
-                });
-            }
-
             modal.querySelector('[data-action="submit-review-submit"]')?.addEventListener('click', () => {
                 window.submitReview(courseCode, defaultYear, defaultTerm);
             });
@@ -6074,7 +6814,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                 .eq('term', currentTerm);
 
             console.log('Fetched courses data:', coursesData);
-            console.log('Looking for conflicts with new course:', courseCode, 'with time slot:', timeSlot);
+            console.log('Looking for conflicts with new course:', courseCode, 'with time slot:', timeSlot, '.');
 
             if (coursesData) {
                 console.log('Processing', coursesData.length, 'courses for conflicts');
@@ -6521,6 +7261,19 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         </div>
     `;
 
+    const modalDialog = modalContainer.querySelector('.conflict-modal-dialog');
+    const isConflictMobileSheet = isMobileSheet();
+    if (isConflictMobileSheet && modalDialog) {
+        modalDialog.classList.add('mobile-swipe-sheet');
+        if (!modalDialog.querySelector('.swipe-indicator')) {
+            const indicator = document.createElement('div');
+            indicator.className = 'swipe-indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            modalDialog.insertBefore(indicator, modalDialog.firstChild);
+        }
+        modalDialog.style.setProperty('--modal-translate-y', '100vh');
+    }
+
     // Add to body
     document.body.appendChild(modalContainer);
     document.body.classList.add('modal-open');
@@ -6539,23 +7292,37 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         }
     };
 
-    function closeModal() {
-        modalContainer.classList.remove('show');
-        modalContainer.classList.add('hidden');
-        document.body.classList.remove('modal-open');
-        setTimeout(() => {
+    function closeModal({ immediate = false } = {}) {
+        const finalizeClose = () => {
             modalContainer.remove();
             if (previousFocusedElement && typeof previousFocusedElement.focus === 'function') {
                 previousFocusedElement.focus();
             }
-        }, 300);
+        };
+
+        if (immediate) {
+            finalizeClose();
+            syncModalOpenClass();
+            return;
+        }
+
+        modalContainer.classList.remove('show');
+        modalContainer.classList.add('hidden');
+        syncModalOpenClass();
+        if (isConflictMobileSheet && modalDialog) {
+            modalDialog.style.setProperty('--modal-translate-y', '100vh');
+            if (background) {
+                background.style.opacity = '0';
+            }
+        }
+        setTimeout(finalizeClose, isConflictMobileSheet ? (SWIPE_CLOSE_DURATION_MS + 20) : 300);
     }
 
-    function resolveConflict(shouldReplace, actionType = 'dismiss') {
+    function resolveConflict(shouldReplace, actionType = 'dismiss', closeOptions = undefined) {
         if (resolved) return;
         resolved = true;
         document.removeEventListener('keydown', handleEscape);
-        closeModal();
+        closeModal(closeOptions);
         if (onResolve) {
             onResolve(Boolean(shouldReplace), safeConflictingCourses, actionType);
         }
@@ -6585,10 +7352,19 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
 
     requestAnimationFrame(() => {
         modalContainer.classList.remove('hidden');
+        if (isConflictMobileSheet && modalDialog) {
+            modalDialog.style.setProperty('--modal-translate-y', '0px');
+        }
         if (closeBtn) {
             closeBtn.focus();
         }
     });
+
+    if (isConflictMobileSheet && modalDialog && background && typeof window.addSwipeToCloseSimple === 'function') {
+        window.addSwipeToCloseSimple(modalDialog, background, () => {
+            resolveConflict(false, 'dismiss', { immediate: true });
+        });
+    }
 }
 
 const MOBILE_SHEET_BREAKPOINT = 1023;
@@ -7336,6 +8112,8 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     function getScrollableElement() {
         return modal.querySelector('.filter-content') ||
             modal.querySelector('.profile-modal-body') ||
+            modal.querySelector('.modal-body') ||
+            modal.querySelector('.conflict-content') ||
             modal.querySelector('.class-content-wrapper') ||
             modal;
     }
