@@ -5,6 +5,7 @@ import * as wanakana from 'wanakana';
 import { getCurrentAppPath } from './path-utils.js';
 import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from './preferences.js';
 import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
+import { readSavedCourses, syncSavedCoursesForUser } from './saved-courses.js';
 
 // Import components to ensure web components are defined
 import './components.js';
@@ -296,6 +297,7 @@ let lastLoadedCourses = null; // Cache the last loaded courses data
 let lastLoadedYear = null;
 let lastLoadedTerm = null;
 let lastLoadedProfessorChanges = new Set(); // Cache professor changes
+let lastLoadedStatusLookup = new Map(); // Cache per-course registered/saved status by semester
 const MAX_COURSE_LOAD_RETRIES = 3;
 const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
 const HOME_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000;
@@ -734,6 +736,120 @@ function getCreditsChipMarkup(course) {
     return `<span class="course-chip course-chip-credits">${fallbackText}</span>`;
 }
 
+function normalizeCourseTermLabel(termValue) {
+    const raw = String(termValue || '').trim();
+    if (!raw) return '';
+    if (raw.includes('/')) return normalizeCourseTermLabel(raw.split('/').pop());
+
+    const lowered = raw.toLowerCase();
+    if (lowered.includes('fall') || raw.includes('秋')) return 'Fall';
+    if (lowered.includes('spring') || raw.includes('春')) return 'Spring';
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+function buildCourseStatusKey(courseLike = {}, fallbackYear = null, fallbackTerm = null) {
+    const code = String(courseLike?.course_code || courseLike?.code || '').trim().toUpperCase();
+    if (!code) return '';
+
+    const yearValue = Number(courseLike?.academic_year ?? courseLike?.year ?? fallbackYear);
+    const termValue = normalizeCourseTermLabel(courseLike?.term || fallbackTerm);
+    if (!Number.isFinite(yearValue) || !termValue) return '';
+
+    return `${code}|${Math.trunc(yearValue)}|${termValue}`;
+}
+
+async function buildCourseStatusLookup(courses = [], year, term) {
+    const lookup = new Map();
+    if (!Array.isArray(courses) || courses.length === 0) return lookup;
+
+    const fallbackYear = Number(year);
+    const fallbackTerm = normalizeCourseTermLabel(term);
+
+    let session = null;
+    try {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session || null;
+    } catch (error) {
+        console.warn('Unable to read auth session for course status chips:', error);
+    }
+
+    let savedCourses = readSavedCourses(Number.POSITIVE_INFINITY);
+    if (session?.user?.id) {
+        try {
+            savedCourses = await syncSavedCoursesForUser(session.user.id);
+        } catch (error) {
+            console.warn('Unable to sync saved courses for status chips:', error);
+        }
+    }
+
+    const savedCourseKeys = new Set(
+        (Array.isArray(savedCourses) ? savedCourses : [])
+            .map((entry) => buildCourseStatusKey(entry, fallbackYear, fallbackTerm))
+            .filter(Boolean)
+    );
+
+    const registeredCourseKeys = new Set();
+    if (session?.user?.id) {
+        try {
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('courses_selection')
+                .eq('id', session.user.id)
+                .single();
+
+            if (profileError) throw profileError;
+
+            const selectedCourses = Array.isArray(profileData?.courses_selection)
+                ? profileData.courses_selection
+                : [];
+
+            selectedCourses.forEach((entry) => {
+                const normalizedEntry = {
+                    ...entry,
+                    course_code: entry?.course_code || entry?.code || ''
+                };
+                const key = buildCourseStatusKey(normalizedEntry, fallbackYear, fallbackTerm);
+                if (key) registeredCourseKeys.add(key);
+            });
+        } catch (error) {
+            console.warn('Unable to read registered courses for status chips:', error);
+        }
+    }
+
+    courses.forEach((course) => {
+        const key = buildCourseStatusKey(course, fallbackYear, fallbackTerm);
+        if (!key) return;
+
+        if (registeredCourseKeys.has(key)) {
+            lookup.set(key, 'Registered');
+            return;
+        }
+        if (savedCourseKeys.has(key)) {
+            lookup.set(key, 'Saved');
+        }
+    });
+
+    return lookup;
+}
+
+function getMobileCourseTypeChipMarkup(courseTypeLabel) {
+    const label = String(courseTypeLabel || '').trim();
+    if (!label) return '';
+    return `<span class="course-chip course-chip-mobile-type">${escapeCourseMarkup(label)}</span>`;
+}
+
+function getCourseStatusChipMarkup(statusLabel) {
+    const label = String(statusLabel || '').trim();
+    if (!label) return '';
+
+    const lower = label.toLowerCase();
+    const variantClass = lower === 'registered'
+        ? 'course-chip-status-registered'
+        : 'course-chip-status-saved';
+
+    return `<span class="course-chip course-chip-status ${variantClass}">${escapeCourseMarkup(label)}</span>`;
+}
+
 function escapeCourseMarkup(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -1020,16 +1136,12 @@ function getCourseEvaluationChipMarkup(course) {
         .join('');
 
     const overflowMarkup = overflowCount > 0
-        ? `
-            <span class="course-assessment-overflow-line">
-                <button
+        ? `<span class="course-assessment-item course-assessment-item--overflow"><button
                     type="button"
                     class="course-eval-more-link"
                     data-action="open-evaluation-details"
-                    aria-label="Open full assessment breakdown"
-                >+${overflowCount} more</button>
-            </span>
-        `
+                    aria-label="Open full assessment breakdown (+${overflowCount})"
+                >+${overflowCount}</button></span>`
         : '';
 
     return `
@@ -1037,8 +1149,7 @@ function getCourseEvaluationChipMarkup(course) {
             <p class="course-assessment-inline">
                 <span class="course-assessment-icon" aria-hidden="true"></span>
                 <span class="course-assessment-values">
-                    <span class="course-assessment-primary">${tokenMarkup}</span>
-                    ${overflowMarkup}
+                    <span class="course-assessment-primary">${tokenMarkup}${overflowMarkup}</span>
                 </span>
             </p>
         </div>
@@ -1087,7 +1198,7 @@ async function showCourse(year, term) {
     // This handles the case where DOM was replaced but we already have the data
     if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term && !isLoadingCourses) {
         console.log('Using cached course data for rendering');
-        renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges);
+        renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedStatusLookup);
         return;
     }
 
@@ -1097,7 +1208,7 @@ async function showCourse(year, term) {
         // Wait a bit for the loading to complete, then check again
         await new Promise(resolve => setTimeout(resolve, 100));
         if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term) {
-            renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges);
+            renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedStatusLookup);
         }
         return;
     }
@@ -1124,17 +1235,19 @@ async function showCourse(year, term) {
         // Fetch professor change data for all courses
         const courseCodes = courses.map(c => c.course_code).filter(Boolean);
         const professorChanges = await fetchProfessorChanges(courseCodes);
+        const courseStatusLookup = await buildCourseStatusLookup(courses, year, term);
 
         // Cache the loaded courses and professor changes
         lastLoadedCourses = courses;
         lastLoadedYear = year;
         lastLoadedTerm = term;
         lastLoadedProfessorChanges = professorChanges;
+        lastLoadedStatusLookup = courseStatusLookup;
 
         // Re-get courseList in case DOM changed during fetch
         const currentCourseList = document.getElementById("course-list");
         if (currentCourseList) {
-            renderCourses(courses, currentCourseList, year, term, professorChanges);
+            renderCourses(courses, currentCourseList, year, term, professorChanges, courseStatusLookup);
         }
     } catch (error) {
         console.error('Failed to load courses after all retries:', error);
@@ -1143,7 +1256,7 @@ async function showCourse(year, term) {
 }
 
 // Separate function to render courses to the DOM
-function renderCourses(courses, courseList, year, term, professorChanges = new Set()) {
+function renderCourses(courses, courseList, year, term, professorChanges = new Set(), courseStatusLookup = new Map()) {
     const days = {
         "月曜日": "Mon", "月": "Mon",
         "火曜日": "Tue", "火": "Tue",
@@ -1189,6 +1302,10 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
         const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const courseTypeLabel = getCourseTypeLabel(course.type);
+        const mobileTypeChip = getMobileCourseTypeChipMarkup(courseTypeLabel);
+        const statusKey = buildCourseStatusKey(course, year, term);
+        const courseStatusLabel = (courseStatusLookup instanceof Map ? courseStatusLookup.get(statusKey) : '') || '';
+        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel);
         const normalizedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(displayTimeSlot || '').replace(/ - /g, ' – ');
         const cardAriaLabel = `Open course info for ${normalizedTitle}`.replace(/"/g, '&quot;');
@@ -1217,7 +1334,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                     ${evaluationChipRow}
                 </div>
                 <div class="course-footer-row">
-                    <div class="course-footer-left">${creditsChip}</div>
+                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}</div>
                     <div class="course-footer-right">${gpaSummaryChip}</div>
                 </div>
             </div>
@@ -3846,6 +3963,10 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const professorDisplay = formatProfessorCardName(course.professor);
         const courseTypeLabel = getCourseTypeLabel(course.type);
+        const mobileTypeChip = getMobileCourseTypeChipMarkup(courseTypeLabel);
+        const statusKey = buildCourseStatusKey(course, lastLoadedYear, lastLoadedTerm);
+        const courseStatusLabel = (lastLoadedStatusLookup instanceof Map ? lastLoadedStatusLookup.get(statusKey) : '') || '';
+        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel);
         const suggestedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(timeSlot || '').replace(/ - /g, ' – ');
         const suggestedCardAriaLabel = `Open course info for ${suggestedTitle}`.replace(/"/g, '&quot;');
@@ -3881,7 +4002,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                     ${evaluationChipRow}
                 </div>
                 <div class="course-footer-row">
-                    <div class="course-footer-left">${creditsChip}</div>
+                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}</div>
                     <div class="course-footer-right">${gpaSummaryChip}</div>
                 </div>
             </div>

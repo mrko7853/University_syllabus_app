@@ -3,8 +3,41 @@ import { getCurrentAppPath, withBase } from "./path-utils.js";
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
 const COURSE_PAGE_SEARCH_PREFILL_KEY = "ila_courses_search_prefill";
+const COURSE_PAGE_OPEN_REVIEW_INTENT_KEY = "ila_open_review_from_suggestion";
 let hasCoursePageStickyOffsetListeners = false;
 let hasCoursePageFooterDockListeners = false;
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightMatches(value, query) {
+  const text = String(value || "");
+  const normalizedQuery = String(query || "").trim();
+  if (!normalizedQuery || normalizedQuery.length < 2) {
+    return escapeHtml(text);
+  }
+
+  const pattern = new RegExp(`(${escapeRegExp(normalizedQuery)})`, "ig");
+  return text
+    .split(pattern)
+    .map((part, index) => {
+      if (index % 2 === 1) {
+        return `<mark style="background: #E3D5E9; padding: 0 2px; border-radius: 3px;">${escapeHtml(part)}</mark>`;
+      }
+      return escapeHtml(part);
+    })
+    .join("");
+}
 
 function normalizeTerm(term) {
   if (!term) return null;
@@ -38,6 +71,211 @@ function parseSemesterValue(value) {
 
 function normalizeCourseCode(code) {
   return String(code || "").replace(/[^\d]/g, "");
+}
+
+function normalizeCourseCodeForIntent(code) {
+  return String(code || "").trim().toUpperCase();
+}
+
+function maybeConsumeOpenReviewIntent(course, routeYear, routeTerm) {
+  let payload = null;
+  try {
+    const raw = sessionStorage.getItem(COURSE_PAGE_OPEN_REVIEW_INTENT_KEY);
+    if (!raw) return false;
+    payload = JSON.parse(raw);
+  } catch (_) {
+    try {
+      sessionStorage.removeItem(COURSE_PAGE_OPEN_REVIEW_INTENT_KEY);
+    } catch (_) { }
+    return false;
+  }
+
+  const timestamp = Number(payload?.timestamp) || 0;
+  const isExpired = timestamp > 0 && (Date.now() - timestamp) > (5 * 60 * 1000);
+  if (isExpired) {
+    try {
+      sessionStorage.removeItem(COURSE_PAGE_OPEN_REVIEW_INTENT_KEY);
+    } catch (_) { }
+    return false;
+  }
+
+  const intentCode = normalizeCourseCodeForIntent(payload?.courseCode);
+  const intentYear = Number(payload?.year) || null;
+  const intentTerm = normalizeTerm(payload?.term);
+  const currentCode = normalizeCourseCodeForIntent(course?.course_code);
+  const currentYear = Number(routeYear) || Number(course?.academic_year) || null;
+  const currentTerm = normalizeTerm(routeTerm || course?.term);
+
+  const matches = Boolean(intentCode)
+    && intentCode === currentCode
+    && intentYear === currentYear
+    && intentTerm === currentTerm;
+
+  if (!matches) {
+    return false;
+  }
+
+  try {
+    sessionStorage.removeItem(COURSE_PAGE_OPEN_REVIEW_INTENT_KEY);
+  } catch (_) { }
+  return true;
+}
+
+function buildCoursePagePath(courseCode, year, term) {
+  const normalizedTerm = normalizeTerm(term);
+  const encodedCode = encodeURIComponent(String(courseCode || "").trim());
+  const encodedYear = encodeURIComponent(String(year || "").trim());
+  const encodedTerm = encodeURIComponent(String(normalizedTerm || term || "").toLowerCase());
+  return `/courses/${encodedCode}/${encodedYear}/${encodedTerm}`;
+}
+
+function setupCoursePageAutocomplete({
+  input,
+  container,
+  courses,
+  activeYear,
+  activeTerm,
+  onBeforeNavigate
+}) {
+  if (!input || !container || !Array.isArray(courses)) return;
+  if (input.dataset.autocompleteBound === "true") return;
+  input.dataset.autocompleteBound = "true";
+
+  const stopScrollChain = (event) => {
+    event.stopPropagation();
+  };
+  container.addEventListener("wheel", stopScrollChain, { passive: false });
+  container.addEventListener("touchmove", stopScrollChain, { passive: true });
+
+  let highlightedIndex = -1;
+  let suggestions = [];
+
+  const close = () => {
+    highlightedIndex = -1;
+    suggestions = [];
+    container.innerHTML = "";
+    container.style.display = "none";
+  };
+
+  const navigateToCourse = (course) => {
+    const courseCode = String(course?.course_code || "").trim();
+    if (!courseCode) return;
+    if (typeof onBeforeNavigate === "function") {
+      onBeforeNavigate();
+    }
+    const targetPath = buildCoursePagePath(courseCode, activeYear, activeTerm);
+    if (window.router?.navigate) {
+      window.router.navigate(targetPath);
+    } else {
+      window.location.href = withBase(targetPath);
+    }
+  };
+
+  const render = () => {
+    const queryText = String(input.value || "").trim();
+    const query = queryText.toLowerCase();
+    if (query.length < 2) {
+      close();
+      return;
+    }
+
+    suggestions = courses
+      .filter((course) => {
+        const title = String(course?.title || "").toLowerCase();
+        const professor = String(course?.professor || "").toLowerCase();
+        const code = String(course?.course_code || "").toLowerCase();
+        return title.includes(query) || professor.includes(query) || code.includes(query);
+      })
+      .slice(0, 6);
+
+    if (!suggestions.length) {
+      close();
+      return;
+    }
+
+    if (highlightedIndex >= suggestions.length) {
+      highlightedIndex = -1;
+    }
+
+    const itemsMarkup = suggestions.map((course, index) => {
+      const title = highlightMatches(course?.title || "", queryText);
+      const professor = highlightMatches(course?.professor || "", queryText);
+      const code = highlightMatches(course?.course_code || "", queryText);
+      const highlightedClass = highlightedIndex === index ? " highlighted" : "";
+      return `
+        <div class="search-autocomplete-item${highlightedClass}" data-autocomplete-index="${index}">
+          <div class="item-title">${title}</div>
+          <div class="item-details">
+            <span class="item-code">${code}</span>
+            <span class="item-professor">${professor}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    if (container.classList.contains("search-pill-autocomplete")) {
+      container.innerHTML = `<div class="search-pill-autocomplete-inner">${itemsMarkup}</div>`;
+    } else {
+      container.innerHTML = itemsMarkup;
+    }
+
+    container.style.display = "block";
+
+    container.querySelectorAll(".search-autocomplete-item").forEach((itemEl) => {
+      itemEl.addEventListener("click", () => {
+        const index = Number(itemEl.getAttribute("data-autocomplete-index"));
+        if (!Number.isInteger(index)) return;
+        const selected = suggestions[index];
+        if (!selected) return;
+        input.value = String(selected?.title || selected?.course_code || "");
+        close();
+        navigateToCourse(selected);
+      });
+    });
+  };
+
+  input.addEventListener("input", render);
+  input.addEventListener("focus", render);
+  input.addEventListener("click", render);
+
+  input.addEventListener("keydown", (event) => {
+    if (container.style.display !== "block" || !suggestions.length) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      highlightedIndex = (highlightedIndex + 1) % suggestions.length;
+      render();
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      highlightedIndex = highlightedIndex <= 0 ? suggestions.length - 1 : highlightedIndex - 1;
+      render();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+
+    if (event.key === "Enter" && highlightedIndex >= 0) {
+      event.preventDefault();
+      const selected = suggestions[highlightedIndex];
+      if (!selected) return;
+      input.value = String(selected?.title || selected?.course_code || "");
+      close();
+      navigateToCourse(selected);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target === input) return;
+    if (container.contains(event.target)) return;
+    close();
+  });
 }
 
 function seedCoursesSearchPrefill(payload) {
@@ -484,11 +722,13 @@ export async function initializeCoursePage() {
   const card = document.getElementById("course-page-card");
   const searchForm = document.getElementById("course-page-search-form");
   const searchInput = document.getElementById("course-page-search-input");
+  const searchAutocomplete = document.getElementById("course-page-search-autocomplete");
   const mobileSearchTrigger = document.getElementById("course-page-search-trigger");
   const searchModalContainer = document.getElementById("course-page-search-container");
   const searchModalBackground = document.getElementById("course-page-search-background");
   const searchModal = document.getElementById("course-page-search-modal");
   const searchModalInput = document.getElementById("course-page-modal-search-input");
+  const searchModalAutocomplete = document.getElementById("course-page-modal-search-autocomplete");
   const searchModalSubmit = document.getElementById("course-page-modal-search-submit");
   const searchModalCancel = document.getElementById("course-page-modal-search-cancel");
 
@@ -538,6 +778,25 @@ export async function initializeCoursePage() {
       activeYear: year,
       activeTerm: term
     });
+    setupCoursePageAutocomplete({
+      input: searchInput,
+      container: searchAutocomplete,
+      courses,
+      activeYear: year,
+      activeTerm: term
+    });
+    setupCoursePageAutocomplete({
+      input: searchModalInput,
+      container: searchModalAutocomplete,
+      courses,
+      activeYear: year,
+      activeTerm: term,
+      onBeforeNavigate: () => {
+        searchModal.classList.remove("show");
+        searchModalContainer?.classList.add("hidden");
+        document.body.classList.remove("modal-open");
+      }
+    });
 
     await setupCoursePageSemesterSelector({
       course,
@@ -548,6 +807,14 @@ export async function initializeCoursePage() {
     document.body.classList.add('course-page-mode');
 
     await openCourseInfoMenu(course, false, { presentation: 'page' });
+    if (maybeConsumeOpenReviewIntent(course, year, term) && typeof window.openAddReviewModal === 'function') {
+      await window.openAddReviewModal(
+        String(course.course_code || ''),
+        Number(course.academic_year) || year,
+        normalizeTerm(course.term || term),
+        String(course.title || '')
+      );
+    }
     syncCoursePageFooterDock();
     updateCoursePageStickyOffset();
 

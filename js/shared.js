@@ -1219,6 +1219,7 @@ function bindAssessmentBreakdownAccordionAnimations(classContent) {
 
 function CourseInfoContent(model, options = {}) {
     const isMobile = options.isMobile === true;
+    const placeConflictInsideTimeRowOnMobile = options.placeConflictInsideTimeRowOnMobile === true;
     const badges = Array.isArray(model?.badges) ? model.badges : [];
     const detailRows = Array.isArray(model?.detailRows) ? model.detailRows : [];
     const heroActions = Array.isArray(model?.heroActions) ? model.heroActions : [];
@@ -1254,7 +1255,8 @@ function CourseInfoContent(model, options = {}) {
             </section>
         `
         : '';
-    const placeConflictInsideTimeRow = isMobile && detailRows.some((row) => String(row?.label || '').trim().toLowerCase() === 'time');
+    const placeConflictInsideTimeRow = (isMobile || placeConflictInsideTimeRowOnMobile) &&
+        detailRows.some((row) => String(row?.label || '').trim().toLowerCase() === 'time');
 
     return `
         <div class="course-info-stack">
@@ -3092,7 +3094,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         return;
     }
 
-    classContent.innerHTML = CourseInfoContent(courseInfoModel, { isMobile: isMobileCourseInfo && !isDedicatedCoursePage });
+    classContent.innerHTML = CourseInfoContent(courseInfoModel, {
+        isMobile: isMobileCourseInfo && !isDedicatedCoursePage,
+        placeConflictInsideTimeRowOnMobile: isMobileCourseInfo
+    });
     releaseCourseEvalOverviewInteractions();
     releaseCourseAssessmentAccordionInteractions();
     classInfo._courseEvalInteractionsCleanup = bindCourseEvaluationOverviewInteractions(classContent, classInfo);
@@ -3201,7 +3206,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     // Show GPA only if we have valid data AND professor hasn't changed
     if (hasValidGpaData && !hasProfessorChanged) {
         classGPA.style.display = 'block';
-        const useDsCardGpa = isMobileCourseInfo || !isDedicatedCoursePage;
+        const useDsCardGpa = true;
         classGPA.classList.toggle('ds-card', useDsCardGpa);
         classGPA.innerHTML = `
             ${useDsCardGpa
@@ -3811,7 +3816,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
         renderDesktopReviews();
     } else {
-        const shouldShowMobileReviewCta = !!(currentUserId && isAlreadySelected && !userReview);
+        const shouldShowMobileReviewCta = !!(currentUserId && !userReview);
         classReview.innerHTML = `
             <div class="course-info-reviews-header">
                 <div class="course-info-reviews-title">
@@ -4141,6 +4146,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             setGuestAssignmentsModalOverlay(false);
             const showLink = options.showLink !== false;
             const linkText = options.linkText || 'Open assignments';
+            const linkIcon = options.linkIcon || null;
             const linkId = options.linkId || 'add-assignment-link';
             const targetHref = options.targetHref || buildCourseAssignmentsPageURL();
 
@@ -4149,7 +4155,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 <div class="class-subtitle-assignments">
                     <p class="subtitle-opacity">Your Assignments</p>
                     ${showLink ? `
-                        <a href="${targetHref}" class="add-assignment-link" id="${linkId}">${linkText}</a>
+                        <a href="${targetHref}" class="add-assignment-link${linkIcon ? ' add-assignment-link--icon' : ''}" id="${linkId}">
+                            ${linkIcon === 'plus' ? '<span class="add-assignment-link-icon" aria-hidden="true"></span>' : ''}
+                            <span>${linkText}</span>
+                        </a>
                     ` : ''}
                 </div>
                 <div class="no-course-assignments">
@@ -4450,7 +4459,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                             }
                         } else {
                             renderAssignmentsEmptyState('No assignments for this course yet.', {
-                                linkText: 'Add an assignment'
+                                linkText: 'Add Assignment',
+                                linkIcon: 'plus'
                             });
                         }
                     }

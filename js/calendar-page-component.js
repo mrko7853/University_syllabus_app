@@ -2,6 +2,7 @@ import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSe
 import { supabase } from "../supabase.js";
 
 const CALENDAR_VIEW_STORAGE_KEY = "ila_calendar_view_mode";
+const CALENDAR_BUSY_SLOTS_STORAGE_KEY = "ila_calendar_busy_slots_v1";
 const VIEW_WEEK = "week";
 const VIEW_DAY = "day";
 const VIEW_LIST = "list";
@@ -58,6 +59,7 @@ class CalendarPageComponent extends HTMLElement {
       showSaved: false,
       showEmptySlots: true
     };
+    this.busySlots = new Set();
 
     this.allRegisteredCourses = [];
     this.mobileCoursesBySlot = new Map();
@@ -76,6 +78,7 @@ class CalendarPageComponent extends HTMLElement {
     this.activeSlotTrigger = null;
     this.activeFilterTrigger = null;
     this.toolbarCleanupFns = [];
+    this.stickyToolbarObserverCleanup = null;
     this.filterCloseTimer = null;
 
     this.innerHTML = `
@@ -127,9 +130,8 @@ class CalendarPageComponent extends HTMLElement {
           <div class="calendar-slot-popover hidden" id="calendar-slot-popover" role="dialog" aria-modal="false" aria-labelledby="calendar-slot-popover-title">
             <p class="calendar-slot-popover-title" id="calendar-slot-popover-title">Empty slot</p>
             <p class="calendar-slot-popover-subtitle" id="calendar-slot-popover-subtitle"></p>
-            <button type="button" class="calendar-slot-action-btn calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
-            <button type="button" class="calendar-slot-action-btn" data-action="slot-busy" disabled>Mark as busy (soon)</button>
-            <button type="button" class="calendar-slot-action-btn" data-action="slot-assignment" disabled>Add assignment (soon)</button>
+            <button type="button" class="calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
+            <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
           </div>
 
           <div class="calendar-slot-sheet-layer hidden" id="calendar-slot-sheet-layer" aria-hidden="true">
@@ -141,10 +143,9 @@ class CalendarPageComponent extends HTMLElement {
                 <p id="calendar-slot-sheet-subtitle"></p>
               </div>
               <div class="calendar-slot-sheet-actions">
-                <button type="button" class="calendar-slot-action-btn calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
-                <button type="button" class="calendar-slot-action-btn" data-action="slot-busy" disabled>Mark as busy (soon)</button>
-                <button type="button" class="calendar-slot-action-btn" data-action="slot-assignment" disabled>Add assignment (soon)</button>
-                <button type="button" class="calendar-slot-action-btn" data-action="slot-cancel">Cancel</button>
+                <button type="button" class="calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
+                <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
+                <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-cancel">Cancel</button>
               </div>
             </div>
           </div>
@@ -186,6 +187,8 @@ class CalendarPageComponent extends HTMLElement {
     this.boundPageLoadedHandler = this.handlePageLoaded.bind(this);
     this.boundDocumentPointerDown = this.handleDocumentPointerDown.bind(this);
     this.boundRootActionClick = this.handleRootActionClick.bind(this);
+    this.boundSlotPopoverActionClick = this.handleRootActionClick.bind(this);
+    this.originalSlotPopoverParent = this.slotPopover?.parentElement || null;
 
     this.buildMobileViewSkeleton();
     this.checkMobile();
@@ -203,6 +206,8 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileView.addEventListener("touchend", this.boundTouchEndHandler, { passive: true });
     this.listView?.addEventListener("click", this.boundListViewClickHandler);
     this.addEventListener("click", this.boundRootActionClick);
+    this.mountSlotPopoverToBody();
+    this.slotPopover?.addEventListener("click", this.boundSlotPopoverActionClick);
 
     window.addEventListener("resize", this.boundResizeHandler);
     document.addEventListener("pageLoaded", this.boundPageLoadedHandler);
@@ -225,6 +230,8 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileView.removeEventListener("touchend", this.boundTouchEndHandler);
     this.listView?.removeEventListener("click", this.boundListViewClickHandler);
     this.removeEventListener("click", this.boundRootActionClick);
+    this.slotPopover?.removeEventListener("click", this.boundSlotPopoverActionClick);
+    this.restoreSlotPopoverParent();
 
     window.removeEventListener("resize", this.boundResizeHandler);
     document.removeEventListener("pageLoaded", this.boundPageLoadedHandler);
@@ -240,6 +247,24 @@ class CalendarPageComponent extends HTMLElement {
   handlePageLoaded() {
     this.setupToolbarControls();
     this.checkMobile();
+  }
+
+  mountSlotPopoverToBody() {
+    if (!this.slotPopover) return;
+    if (!this.originalSlotPopoverParent) {
+      this.originalSlotPopoverParent = this.slotPopover.parentElement || null;
+    }
+
+    if (this.slotPopover.parentElement !== document.body) {
+      document.body.appendChild(this.slotPopover);
+    }
+  }
+
+  restoreSlotPopoverParent() {
+    if (!this.slotPopover || !this.originalSlotPopoverParent) return;
+    if (this.slotPopover.parentElement !== this.originalSlotPopoverParent) {
+      this.originalSlotPopoverParent.appendChild(this.slotPopover);
+    }
   }
 
   normalizeCalendarView(value) {
@@ -455,6 +480,7 @@ class CalendarPageComponent extends HTMLElement {
   setupToolbarControls() {
     this.cleanupToolbarControls();
     this.ensureCalendarFilterMarkup();
+    this.setupStickyToolbarObserver();
 
     const filterTriggerDesktop = document.getElementById("calendar-filter-trigger");
     const filterTriggerMobile = document.getElementById("calendar-filter-trigger-mobile");
@@ -595,6 +621,63 @@ class CalendarPageComponent extends HTMLElement {
       }
     });
     this.toolbarCleanupFns = [];
+    this.cleanupStickyToolbarObserver();
+  }
+
+  setupStickyToolbarObserver() {
+    this.cleanupStickyToolbarObserver();
+
+    const stickyBars = Array.from(document.querySelectorAll(
+      "#course-summary.calendar-page-modern .container-above.container-above-desktop, #course-summary.calendar-page-modern .container-above.container-above-mobile"
+    ));
+    if (!stickyBars.length) return;
+
+    const appContent = document.getElementById("app-content");
+    let rafId = 0;
+
+    const getScrollTop = () => {
+      const windowScrollY = window.scrollY || window.pageYOffset || 0;
+      const rootScrollY = document.documentElement?.scrollTop || 0;
+      const bodyScrollY = document.body?.scrollTop || 0;
+      const contentScrollY = appContent ? appContent.scrollTop : 0;
+      return Math.max(windowScrollY, rootScrollY, bodyScrollY, contentScrollY);
+    };
+
+    const applyScrollState = () => {
+      rafId = 0;
+      const isScrolled = getScrollTop() > 0;
+      stickyBars.forEach((bar) => bar.classList.toggle("is-scrolled", isScrolled));
+    };
+
+    const requestApply = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(applyScrollState);
+    };
+
+    window.addEventListener("scroll", requestApply, { passive: true });
+    appContent?.addEventListener("scroll", requestApply, { passive: true });
+    document.addEventListener("scroll", requestApply, { passive: true, capture: true });
+    window.addEventListener("resize", requestApply);
+    applyScrollState();
+
+    this.stickyToolbarObserverCleanup = () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      window.removeEventListener("scroll", requestApply);
+      appContent?.removeEventListener("scroll", requestApply);
+      document.removeEventListener("scroll", requestApply, true);
+      window.removeEventListener("resize", requestApply);
+      stickyBars.forEach((bar) => bar.classList.remove("is-scrolled"));
+    };
+  }
+
+  cleanupStickyToolbarObserver() {
+    if (typeof this.stickyToolbarObserverCleanup === "function") {
+      this.stickyToolbarObserverCleanup();
+    }
+    this.stickyToolbarObserverCleanup = null;
   }
 
   getAppliedFilterCount() {
@@ -967,7 +1050,7 @@ class CalendarPageComponent extends HTMLElement {
     const action = actionButton.dataset.action;
     if (!action) return;
 
-    if (action === "slot-find" || action === "slot-cancel") {
+    if (action === "slot-find" || action === "slot-busy" || action === "slot-cancel") {
       event.preventDefault();
       this.handleSlotAction(action);
       return;
@@ -1203,7 +1286,7 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
-    const actionButton = event.target.closest("[data-action='mobile-slot-find']");
+    const actionButton = event.target.closest("[data-action='mobile-slot-find'], [data-action='mobile-slot-manage']");
     if (actionButton) {
       const dayCode = actionButton.dataset.dayCode;
       const periodNumber = parseInt(actionButton.dataset.periodNumber, 10);
@@ -1361,6 +1444,62 @@ class CalendarPageComponent extends HTMLElement {
     return `${dayCode}-${periodNumber}`;
   }
 
+  getBusySlotSemesterKey() {
+    const year = Number.isFinite(parseInt(this.displayedYear, 10)) ? parseInt(this.displayedYear, 10) : null;
+    const term = this.normalizeTermValue(this.displayedTerm);
+    if (!year || !term) return null;
+    return `${year}-${term}`;
+  }
+
+  loadBusySlotsForDisplayedSemester() {
+    this.busySlots = new Set();
+    const semesterKey = this.getBusySlotSemesterKey();
+    if (!semesterKey) return;
+
+    try {
+      const raw = window.localStorage.getItem(CALENDAR_BUSY_SLOTS_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      const values = Array.isArray(parsed?.[semesterKey]) ? parsed[semesterKey] : [];
+      values.forEach((value) => {
+        const normalized = String(value || "").trim();
+        if (!normalized) return;
+        this.busySlots.add(normalized);
+      });
+    } catch (error) {
+      console.warn("Unable to load busy slot state:", error);
+    }
+  }
+
+  persistBusySlotsForDisplayedSemester() {
+    const semesterKey = this.getBusySlotSemesterKey();
+    if (!semesterKey) return;
+
+    try {
+      const raw = window.localStorage.getItem(CALENDAR_BUSY_SLOTS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      parsed[semesterKey] = Array.from(this.busySlots);
+      window.localStorage.setItem(CALENDAR_BUSY_SLOTS_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (error) {
+      console.warn("Unable to save busy slot state:", error);
+    }
+  }
+
+  isSlotBusy(dayCode, periodNumber) {
+    return this.busySlots.has(this.getSlotKey(dayCode, periodNumber));
+  }
+
+  setSlotBusy(dayCode, periodNumber, isBusy) {
+    const key = this.getSlotKey(dayCode, periodNumber);
+    if (isBusy) {
+      this.busySlots.add(key);
+    } else {
+      this.busySlots.delete(key);
+    }
+    this.persistBusySlotsForDisplayedSemester();
+  }
+
   getCoursesForSlot(dayCode, periodNumber) {
     const key = this.getSlotKey(dayCode, periodNumber);
     return this.mobileCoursesBySlot.get(key) || [];
@@ -1416,6 +1555,7 @@ class CalendarPageComponent extends HTMLElement {
     this.closeSlotSheet(false);
 
     this.slotPopoverSubtitle.textContent = this.getSlotSubtitle(this.activeSlot.day, this.activeSlot.period);
+    this.syncSlotActionButtons();
     this.slotPopover.classList.remove("hidden");
 
     if (this.activeSlotTrigger) this.positionSlotPopover(this.activeSlotTrigger);
@@ -1471,6 +1611,7 @@ class CalendarPageComponent extends HTMLElement {
     this.closeSlotPopover(false);
 
     this.slotSheetSubtitle.textContent = this.getSlotSubtitle(this.activeSlot.day, this.activeSlot.period);
+    this.syncSlotActionButtons();
     this.slotSheetLayer.classList.remove("hidden");
     this.slotSheetLayer.setAttribute("aria-hidden", "false");
 
@@ -1513,10 +1654,41 @@ class CalendarPageComponent extends HTMLElement {
     this.closeSlotSheet(restoreFocus);
   }
 
+  syncSlotActionButtons() {
+    if (!this.activeSlot) return;
+    const isBusy = this.isSlotBusy(this.activeSlot.day, this.activeSlot.period);
+    const label = isBusy ? "Mark as available" : "Mark as busy";
+    const aria = isBusy ? "Mark this slot as available" : "Mark this slot as busy";
+
+    const buttons = [];
+    if (this.slotPopover) {
+      const btn = this.slotPopover.querySelector("[data-action='slot-busy']");
+      if (btn) buttons.push(btn);
+    }
+    if (this.slotSheet) {
+      const btn = this.slotSheet.querySelector("[data-action='slot-busy']");
+      if (btn) buttons.push(btn);
+    }
+
+    buttons.forEach((button) => {
+      button.disabled = false;
+      button.textContent = label;
+      button.setAttribute("aria-label", aria);
+    });
+  }
+
   handleSlotAction(action) {
     if (!this.activeSlot || !action) return;
 
     if (action === "slot-cancel") {
+      this.closeSlotActionMenus(true);
+      return;
+    }
+
+    if (action === "slot-busy") {
+      const currentlyBusy = this.isSlotBusy(this.activeSlot.day, this.activeSlot.period);
+      this.setSlotBusy(this.activeSlot.day, this.activeSlot.period, !currentlyBusy);
+      this.applyActiveFiltersAndRender();
       this.closeSlotActionMenus(true);
       return;
     }
@@ -1601,26 +1773,44 @@ class CalendarPageComponent extends HTMLElement {
             panelContainer.appendChild(card);
           });
         } else {
-          toggleButton.dataset.hasCourses = this.filterState.showEmptySlots ? "false" : "hidden";
-          const emptyChip = document.createElement("div");
-          emptyChip.className = "calendar-mobile-empty-chip";
-          emptyChip.textContent = this.filterState.showEmptySlots ? "Empty" : "Hidden";
-          compactContainer.appendChild(emptyChip);
+          const isBusy = this.isSlotBusy(dayCode, periodDef.number);
+          if (isBusy) {
+            toggleButton.dataset.hasCourses = "false";
+            const busyChip = document.createElement("div");
+            busyChip.className = "calendar-mobile-empty-chip";
+            busyChip.textContent = "Busy";
+            compactContainer.appendChild(busyChip);
 
-          if (this.filterState.showEmptySlots) {
-            const actionBtn = document.createElement("button");
-            actionBtn.type = "button";
-            actionBtn.className = "calendar-mobile-empty-action";
-            actionBtn.dataset.action = "mobile-slot-find";
-            actionBtn.dataset.dayCode = dayCode;
-            actionBtn.dataset.periodNumber = String(periodDef.number);
-            actionBtn.textContent = "Find courses for this slot";
-            panelContainer.appendChild(actionBtn);
+            const manageBtn = document.createElement("button");
+            manageBtn.type = "button";
+            manageBtn.className = "calendar-mobile-empty-action";
+            manageBtn.dataset.action = "mobile-slot-manage";
+            manageBtn.dataset.dayCode = dayCode;
+            manageBtn.dataset.periodNumber = String(periodDef.number);
+            manageBtn.textContent = "Manage busy slot";
+            panelContainer.appendChild(manageBtn);
           } else {
-            const emptyState = document.createElement("div");
-            emptyState.className = "calendar-mobile-empty";
-            emptyState.textContent = "No class scheduled";
-            panelContainer.appendChild(emptyState);
+            toggleButton.dataset.hasCourses = this.filterState.showEmptySlots ? "false" : "hidden";
+            const emptyChip = document.createElement("div");
+            emptyChip.className = "calendar-mobile-empty-chip";
+            emptyChip.textContent = this.filterState.showEmptySlots ? "Empty" : "Hidden";
+            compactContainer.appendChild(emptyChip);
+
+            if (this.filterState.showEmptySlots) {
+              const actionBtn = document.createElement("button");
+              actionBtn.type = "button";
+              actionBtn.className = "calendar-mobile-empty-action";
+              actionBtn.dataset.action = "mobile-slot-find";
+              actionBtn.dataset.dayCode = dayCode;
+              actionBtn.dataset.periodNumber = String(periodDef.number);
+              actionBtn.textContent = "Find courses for this slot";
+              panelContainer.appendChild(actionBtn);
+            } else {
+              const emptyState = document.createElement("div");
+              emptyState.className = "calendar-mobile-empty";
+              emptyState.textContent = "No class scheduled";
+              panelContainer.appendChild(emptyState);
+            }
           }
         }
       });
@@ -2064,6 +2254,7 @@ class CalendarPageComponent extends HTMLElement {
   async showCourse(year, term) {
     this.displayedYear = parseInt(year, 10);
     this.displayedTerm = this.normalizeTermValue(term);
+    this.loadBusySlotsForDisplayedSemester();
 
     try {
       this.currentUser = null;
@@ -2181,16 +2372,29 @@ class CalendarPageComponent extends HTMLElement {
           }
 
           slotCell.appendChild(courseButton);
-        } else if (this.filterState.showEmptySlots) {
-          const emptyButton = document.createElement("button");
-          emptyButton.type = "button";
-          emptyButton.className = "calendar-empty-slot-btn";
-          emptyButton.dataset.day = dayCode;
-          emptyButton.dataset.period = String(periodDef.number);
-          emptyButton.dataset.action = "slot-empty";
-          emptyButton.textContent = "+ Add";
-          emptyButton.setAttribute("aria-label", `Add course in empty slot ${dayCode} period ${periodDef.number} (${periodDef.timeRange})`);
-          slotCell.appendChild(emptyButton);
+        } else {
+          const isBusy = this.isSlotBusy(dayCode, periodDef.number);
+          if (isBusy) {
+            const busyButton = document.createElement("button");
+            busyButton.type = "button";
+            busyButton.className = "calendar-busy-slot-btn";
+            busyButton.dataset.day = dayCode;
+            busyButton.dataset.period = String(periodDef.number);
+            busyButton.dataset.action = "slot-busy-state";
+            busyButton.textContent = "Busy";
+            busyButton.setAttribute("aria-label", `Busy slot ${dayCode} period ${periodDef.number} (${periodDef.timeRange})`);
+            slotCell.appendChild(busyButton);
+          } else if (this.filterState.showEmptySlots) {
+            const emptyButton = document.createElement("button");
+            emptyButton.type = "button";
+            emptyButton.className = "calendar-empty-slot-btn";
+            emptyButton.dataset.day = dayCode;
+            emptyButton.dataset.period = String(periodDef.number);
+            emptyButton.dataset.action = "slot-empty";
+            emptyButton.textContent = "+ Add";
+            emptyButton.setAttribute("aria-label", `Empty slot ${dayCode} period ${periodDef.number} (${periodDef.timeRange})`);
+            slotCell.appendChild(emptyButton);
+          }
         }
       });
     });
@@ -2259,7 +2463,7 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
-    const popoverAction = event.target.closest("[data-action='slot-busy'], [data-action='slot-assignment']");
+    const popoverAction = event.target.closest("[data-action='slot-busy']");
     if (popoverAction) return;
 
     if (event.target.closest("[data-action='slot-sheet-close']")) {
@@ -2267,12 +2471,12 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
-    const emptyButton = event.target.closest(".calendar-empty-slot-btn");
-    if (emptyButton) {
-      const day = emptyButton.dataset.day;
-      const period = parseInt(emptyButton.dataset.period, 10);
+    const slotActionTrigger = event.target.closest(".calendar-empty-slot-btn, .calendar-busy-slot-btn");
+    if (slotActionTrigger) {
+      const day = slotActionTrigger.dataset.day;
+      const period = parseInt(slotActionTrigger.dataset.period, 10);
       if (day && Number.isFinite(period)) {
-        this.openSlotActionMenu({ day, period }, emptyButton);
+        this.openSlotActionMenu({ day, period }, slotActionTrigger);
       }
       return;
     }

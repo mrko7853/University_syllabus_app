@@ -36,6 +36,45 @@ function bootstrapStoredPreferences() {
 
 bootstrapStoredPreferences();
 
+function syncAppViewportHeight() {
+  const root = document.documentElement;
+  if (!root) return;
+
+  const viewportHeight = Math.round(
+    window.visualViewport?.height
+    || window.innerHeight
+    || document.documentElement.clientHeight
+    || 0
+  );
+  if (viewportHeight <= 0) return;
+
+  root.style.setProperty('--vh', `${viewportHeight * 0.01}px`);
+  root.style.setProperty('--app-height', `${viewportHeight}px`);
+}
+
+function initializeAppViewportHeightSync() {
+  if (window.__appViewportHeightSyncBound) return;
+  window.__appViewportHeightSyncBound = true;
+
+  syncAppViewportHeight();
+
+  window.addEventListener('resize', syncAppViewportHeight, { passive: true });
+  window.addEventListener('orientationchange', () => {
+    window.setTimeout(syncAppViewportHeight, 250);
+  }, { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncAppViewportHeight);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    syncAppViewportHeight();
+  });
+}
+
+initializeAppViewportHeightSync();
+
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
   if (!title) return title;
@@ -103,6 +142,7 @@ const HOME_PERIOD_BY_NUMBER = HOME_PERIODS.reduce((acc, slot) => {
   acc[slot.period] = slot;
   return acc;
 }, {});
+const HOME_REVIEW_SUGGESTION_OPEN_REVIEW_KEY = 'ila_open_review_from_suggestion';
 
 function escapeHtml(value) {
   return String(value || '')
@@ -111,6 +151,29 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightHomeSearchMatch(value, query) {
+  const text = String(value || '');
+  const normalizedQuery = String(query || '').trim();
+  if (!normalizedQuery || normalizedQuery.length < 2) {
+    return escapeHtml(text);
+  }
+
+  const pattern = new RegExp(`(${escapeRegExp(normalizedQuery)})`, 'ig');
+  return text
+    .split(pattern)
+    .map((part, index) => {
+      if (index % 2 === 1) {
+        return `<mark class="home-search-match">${escapeHtml(part)}</mark>`;
+      }
+      return escapeHtml(part);
+    })
+    .join('');
 }
 
 function normalizeTermName(termValue) {
@@ -535,6 +598,14 @@ const homeDesktopHeaderState = {
   searchCourses: [],
   initializedAtLeastOnce: false
 };
+let homeMobileHeaderBehaviorCleanup = null;
+let homeMobileSearchModalCleanup = null;
+let homeMobileModalLockCount = 0;
+let homeMobileModalScrollY = 0;
+
+function isHomeMobileViewport() {
+  return window.innerWidth <= 1023;
+}
 
 async function populateHomeSemesterDropdown() {
   const homeMain = document.getElementById('home-main');
@@ -750,7 +821,23 @@ async function loadHomeSearchCourses() {
   return homeDesktopHeaderState.searchCourses;
 }
 
-function renderHomeSearchAutocomplete(query, input, autocompleteContainer) {
+function getHomeSearchSuggestions(query, limit = 6) {
+  const trimmed = String(query || '').trim();
+  if (trimmed.length < 2) return [];
+
+  const normalizedQuery = trimmed.toLowerCase();
+  return (homeDesktopHeaderState.searchCourses || [])
+    .filter((course) => {
+      const title = String(course?.title || '').toLowerCase();
+      const professor = String(course?.professor || '').toLowerCase();
+      const code = String(course?.course_code || '').toLowerCase();
+      return title.includes(normalizedQuery) || professor.includes(normalizedQuery) || code.includes(normalizedQuery);
+    })
+    .slice(0, limit);
+}
+
+function renderHomeSearchAutocomplete(query, input, autocompleteContainer, options = {}) {
+  const { onSelect } = options;
   const trimmed = String(query || '').trim();
   if (trimmed.length < 2) {
     autocompleteContainer.style.display = 'none';
@@ -758,15 +845,7 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer) {
     return;
   }
 
-  const normalizedQuery = trimmed.toLowerCase();
-  const suggestions = (homeDesktopHeaderState.searchCourses || [])
-    .filter((course) => {
-      const title = String(course?.title || '').toLowerCase();
-      const professor = String(course?.professor || '').toLowerCase();
-      const code = String(course?.course_code || '').toLowerCase();
-      return title.includes(normalizedQuery) || professor.includes(normalizedQuery) || code.includes(normalizedQuery);
-    })
-    .slice(0, 6);
+  const suggestions = getHomeSearchSuggestions(trimmed, 6);
 
   if (!suggestions.length) {
     autocompleteContainer.style.display = 'none';
@@ -774,12 +853,13 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer) {
     return;
   }
 
-  autocompleteContainer.innerHTML = suggestions.map((course) => {
-    const title = escapeHtml(course?.title || '');
-    const professor = escapeHtml(course?.professor || '');
-    const code = escapeHtml(course?.course_code || '');
+  autocompleteContainer.innerHTML = suggestions.map((course, index) => {
+    const rawCode = String(course?.course_code || '');
+    const title = highlightHomeSearchMatch(course?.title || '', trimmed);
+    const professor = highlightHomeSearchMatch(course?.professor || '', trimmed);
+    const code = highlightHomeSearchMatch(rawCode, trimmed);
     return `
-      <div class="search-autocomplete-item" data-course-code="${code}">
+      <div class="search-autocomplete-item" data-suggestion-index="${index}">
         <div class="item-title">${title}</div>
         <div class="item-details">
           <span class="item-code">${code}</span>
@@ -793,13 +873,17 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer) {
 
   autocompleteContainer.querySelectorAll('.search-autocomplete-item').forEach((item) => {
     item.addEventListener('click', () => {
-      const courseCode = item.dataset.courseCode;
-      const selectedCourse = (homeDesktopHeaderState.searchCourses || []).find((course) => String(course?.course_code || '') === String(courseCode || ''));
+      const index = Number(item.dataset.suggestionIndex);
+      const selectedCourse = Number.isInteger(index) ? suggestions[index] : null;
       input.value = selectedCourse?.title || '';
       autocompleteContainer.style.display = 'none';
       autocompleteContainer.innerHTML = '';
       if (selectedCourse) {
-        openCourseInfoMenu(selectedCourse);
+        if (typeof onSelect === 'function') {
+          onSelect(selectedCourse);
+        } else {
+          openCourseInfoMenu(selectedCourse);
+        }
       }
     });
   });
@@ -853,10 +937,336 @@ function setupHomeSearchAutocomplete() {
   }
 }
 
+function lockHomeMobileModalScroll() {
+  homeMobileModalLockCount += 1;
+  if (homeMobileModalLockCount !== 1) return;
+
+  homeMobileModalScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+  document.body.classList.add('home-modal-open');
+  document.body.style.top = `-${homeMobileModalScrollY}px`;
+}
+
+function unlockHomeMobileModalScroll({ force = false } = {}) {
+  const wasLocked = document.body.classList.contains('home-modal-open');
+  if (force) {
+    homeMobileModalLockCount = 0;
+  } else {
+    homeMobileModalLockCount = Math.max(0, homeMobileModalLockCount - 1);
+  }
+  if (homeMobileModalLockCount > 0) return;
+
+  document.body.classList.remove('home-modal-open');
+  document.body.style.top = '';
+  if (wasLocked) {
+    window.scrollTo(0, homeMobileModalScrollY);
+  }
+}
+
+function teardownHomeMobileSearchModal() {
+  if (typeof homeMobileSearchModalCleanup === 'function') {
+    homeMobileSearchModalCleanup();
+    homeMobileSearchModalCleanup = null;
+  }
+  unlockHomeMobileModalScroll({ force: true });
+}
+
+function setupHomeMobileSearchModal() {
+  teardownHomeMobileSearchModal();
+
+  const homeMain = document.getElementById('home-main');
+  if (!homeMain) return;
+
+  const searchContainer = homeMain.querySelector('#home-search-container');
+  const searchModal = homeMain.querySelector('#home-search-modal');
+  const searchBackground = homeMain.querySelector('#home-search-container .search-background');
+  const searchInput = homeMain.querySelector('#home-search-input');
+  const searchAutocomplete = homeMain.querySelector('#home-search-autocomplete');
+  const searchSubmit = homeMain.querySelector('#home-search-submit');
+  const searchCancel = homeMain.querySelector('#home-search-cancel');
+  const searchButton = homeMain.querySelector('.home-container-above .search-btn');
+  let closeTimerId = null;
+
+  if (!searchContainer || !searchModal || !searchInput || !searchAutocomplete || !searchButton) return;
+
+  const closeSearchModal = ({ forceUnlock = false, immediate = false } = {}) => {
+    if (closeTimerId) {
+      window.clearTimeout(closeTimerId);
+      closeTimerId = null;
+    }
+
+    searchModal.classList.remove('show');
+    searchAutocomplete.style.display = 'none';
+    searchAutocomplete.innerHTML = '';
+
+    const finalizeClose = () => {
+      searchContainer.classList.add('hidden');
+      if (forceUnlock) {
+        unlockHomeMobileModalScroll({ force: true });
+      } else {
+        unlockHomeMobileModalScroll();
+      }
+    };
+
+    if (immediate) {
+      finalizeClose();
+      return;
+    }
+
+    closeTimerId = window.setTimeout(() => {
+      closeTimerId = null;
+      finalizeClose();
+    }, 400);
+  };
+
+  const openSearchModal = async () => {
+    if (!isHomeMobileViewport()) return;
+    if (closeTimerId) {
+      window.clearTimeout(closeTimerId);
+      closeTimerId = null;
+    }
+    if (!searchContainer.classList.contains('hidden')) return;
+
+    searchContainer.classList.remove('hidden');
+    searchModal.classList.add('show');
+    lockHomeMobileModalScroll();
+
+    await loadHomeSearchCourses();
+    renderHomeSearchAutocomplete(searchInput.value, searchInput, searchAutocomplete, {
+      onSelect: (selectedCourse) => {
+        closeSearchModal();
+        openCourseInfoMenu(selectedCourse);
+      }
+    });
+
+    window.setTimeout(() => {
+      searchInput.focus();
+      if (searchInput.value) searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+    }, 90);
+  };
+
+  const handleSearchSubmit = async () => {
+    const query = String(searchInput.value || '').trim();
+    if (!query) {
+      closeSearchModal();
+      return;
+    }
+
+    await loadHomeSearchCourses();
+    const firstSuggestion = getHomeSearchSuggestions(query, 1)[0];
+    if (!firstSuggestion) {
+      closeSearchModal();
+      return;
+    }
+
+    closeSearchModal();
+    openCourseInfoMenu(firstSuggestion);
+  };
+
+  const handleSearchButtonClick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSearchModal();
+  };
+
+  const handleSearchCancel = (event) => {
+    event.preventDefault();
+    closeSearchModal();
+  };
+
+  const handleSearchBackgroundClick = (event) => {
+    if (event.target !== searchBackground) return;
+    closeSearchModal();
+  };
+
+  const handleSearchInput = () => {
+    renderHomeSearchAutocomplete(searchInput.value, searchInput, searchAutocomplete, {
+      onSelect: (selectedCourse) => {
+        closeSearchModal();
+        openCourseInfoMenu(selectedCourse);
+      }
+    });
+  };
+
+  const handleSearchKeydown = async (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const firstItem = searchAutocomplete.querySelector('.search-autocomplete-item');
+      if (firstItem) {
+        firstItem.click();
+        return;
+      }
+      await handleSearchSubmit();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSearchModal();
+    }
+  };
+
+  if (searchBackground && typeof window.addSwipeToCloseSimple === 'function' && searchModal.dataset.swipeBound !== 'true') {
+    window.addSwipeToCloseSimple(searchModal, searchBackground, () => {
+      closeSearchModal({ forceUnlock: true, immediate: true });
+    });
+    searchModal.dataset.swipeBound = 'true';
+  }
+
+  searchButton.addEventListener('click', handleSearchButtonClick);
+  searchCancel?.addEventListener('click', handleSearchCancel);
+  searchSubmit?.addEventListener('click', handleSearchSubmit);
+  searchBackground?.addEventListener('click', handleSearchBackgroundClick);
+  searchInput.addEventListener('input', handleSearchInput);
+  searchInput.addEventListener('keydown', handleSearchKeydown);
+
+  homeMobileSearchModalCleanup = () => {
+    if (closeTimerId) {
+      window.clearTimeout(closeTimerId);
+      closeTimerId = null;
+    }
+    searchButton.removeEventListener('click', handleSearchButtonClick);
+    searchCancel?.removeEventListener('click', handleSearchCancel);
+    searchSubmit?.removeEventListener('click', handleSearchSubmit);
+    searchBackground?.removeEventListener('click', handleSearchBackgroundClick);
+    searchInput.removeEventListener('input', handleSearchInput);
+    searchInput.removeEventListener('keydown', handleSearchKeydown);
+    searchModal.classList.remove('show');
+    searchContainer.classList.add('hidden');
+    unlockHomeMobileModalScroll({ force: true });
+  };
+}
+
+function teardownHomeMobileStickyHeaderBehavior() {
+  if (typeof homeMobileHeaderBehaviorCleanup === 'function') {
+    homeMobileHeaderBehaviorCleanup();
+    homeMobileHeaderBehaviorCleanup = null;
+  }
+
+  document.querySelector('.app-header')?.classList.remove('app-header--hidden');
+  document.querySelector('#home-main .home-container-above.container-above-desktop')?.classList.remove('home-toolbar--hidden');
+  document.body.classList.remove('home-mobile-header-sticky');
+  document.documentElement.style.removeProperty('--home-mobile-header-height');
+  document.documentElement.style.removeProperty('--home-mobile-toolbar-height');
+}
+
+function initializeHomeMobileStickyHeaderBehavior() {
+  teardownHomeMobileStickyHeaderBehavior();
+
+  const homeMain = document.getElementById('home-main');
+  const header = document.querySelector('.app-header');
+  const homeToolbar = homeMain?.querySelector('.home-container-above.container-above-desktop');
+  const appContent = document.getElementById('app-content');
+  if (!homeMain || !header || !homeToolbar) return;
+
+  if (!isHomeMobileViewport()) {
+    header.classList.remove('app-header--hidden');
+    homeToolbar.classList.remove('home-toolbar--hidden');
+    return;
+  }
+
+  document.body.classList.add('home-mobile-header-sticky');
+
+  const setHeights = () => {
+    const headerHeight = Math.ceil(header.getBoundingClientRect().height || 0);
+    const toolbarHeight = Math.ceil(homeToolbar.getBoundingClientRect().height || 0);
+    document.documentElement.style.setProperty('--home-mobile-header-height', `${headerHeight}px`);
+    document.documentElement.style.setProperty('--home-mobile-toolbar-height', `${toolbarHeight}px`);
+  };
+
+  const getCurrentScrollY = () => {
+    const windowScrollY = window.scrollY || window.pageYOffset || 0;
+    const rootScrollY = document.documentElement?.scrollTop || 0;
+    const bodyScrollY = document.body?.scrollTop || 0;
+    const docScrollY = document.scrollingElement?.scrollTop || 0;
+    const contentScrollY = appContent ? appContent.scrollTop : 0;
+    const homeScrollY = homeMain.scrollTop || 0;
+    return Math.max(windowScrollY, rootScrollY, bodyScrollY, docScrollY, contentScrollY, homeScrollY);
+  };
+
+  let lastScrollY = getCurrentScrollY();
+  let ticking = false;
+  const scrollThreshold = 6;
+  const topRevealThreshold = 8;
+
+  const applyScrollState = () => {
+    ticking = false;
+    const currentScrollY = getCurrentScrollY();
+
+    if (currentScrollY <= topRevealThreshold) {
+      header.classList.remove('app-header--hidden');
+      homeToolbar.classList.remove('home-toolbar--hidden');
+      lastScrollY = currentScrollY;
+      return;
+    }
+
+    const deltaY = currentScrollY - lastScrollY;
+    if (Math.abs(deltaY) <= scrollThreshold) return;
+
+    if (deltaY > 0) {
+      header.classList.add('app-header--hidden');
+      homeToolbar.classList.add('home-toolbar--hidden');
+    } else {
+      header.classList.remove('app-header--hidden');
+      homeToolbar.classList.remove('home-toolbar--hidden');
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(applyScrollState);
+  };
+
+  const onResize = () => {
+    if (!document.getElementById('home-main')) {
+      teardownHomeMobileStickyHeaderBehavior();
+      return;
+    }
+
+    if (!isHomeMobileViewport()) {
+      teardownHomeMobileStickyHeaderBehavior();
+      return;
+    }
+
+    setHeights();
+    header.classList.remove('app-header--hidden');
+    homeToolbar.classList.remove('home-toolbar--hidden');
+  };
+
+  setHeights();
+  header.classList.remove('app-header--hidden');
+  homeToolbar.classList.remove('home-toolbar--hidden');
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  appContent?.addEventListener('scroll', onScroll, { passive: true });
+  homeMain.addEventListener('scroll', onScroll, { passive: true });
+  document.addEventListener('scroll', onScroll, { passive: true, capture: true });
+  window.addEventListener('resize', onResize);
+
+  homeMobileHeaderBehaviorCleanup = () => {
+    window.removeEventListener('scroll', onScroll);
+    appContent?.removeEventListener('scroll', onScroll);
+    homeMain.removeEventListener('scroll', onScroll);
+    document.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', onResize);
+    header.classList.remove('app-header--hidden');
+    homeToolbar.classList.remove('home-toolbar--hidden');
+  };
+}
+
 async function initializeHomeDesktopHeader() {
   const homeMain = document.getElementById('home-main');
   const desktopHeader = homeMain?.querySelector('.home-container-above.container-above-desktop');
-  if (!homeMain || !desktopHeader) return;
+  if (!homeMain || !desktopHeader) {
+    teardownHomeMobileStickyHeaderBehavior();
+    teardownHomeMobileSearchModal();
+    return;
+  }
+
+  setupHomeMobileSearchModal();
+  initializeHomeMobileStickyHeaderBehavior();
 
   try {
     await populateHomeSemesterDropdown();
@@ -1272,7 +1682,9 @@ class TermBox extends HTMLElement {
         <div class="total-courses">
           <div class="total-courses-container">
             <h2 class="total-text" id="next-class-label">Next Class</h2>
-            <h2 class="total-count" id="next-class-name">Loading...</h2>
+            <div class="home-next-class-title-wrap" id="next-class-title-wrap">
+              <h2 class="total-count" id="next-class-name">Loading...</h2>
+            </div>
             <h2 class="total-text" id="next-class-time">Calculating...</h2>
           </div>
         </div>
@@ -1414,14 +1826,31 @@ class TermBox extends HTMLElement {
     const labelEl = this.querySelector('#next-class-label');
     const nameEl = this.querySelector('#next-class-name');
     const timeEl = this.querySelector('#next-class-time');
+    const titleWrapEl = this.querySelector('#next-class-title-wrap');
 
     if (!labelEl || !nameEl || !timeEl) return;
     this.currentNextClassCourse = null;
+
+    const applyTitleAccent = (courseType) => {
+      if (!titleWrapEl) return;
+      const accent = getCourseColorByType(courseType);
+      if (accent) {
+        titleWrapEl.style.setProperty('--next-class-accent', accent);
+      } else {
+        titleWrapEl.style.removeProperty('--next-class-accent');
+      }
+    };
+
+    const resetTitleAccent = () => {
+      if (!titleWrapEl) return;
+      titleWrapEl.style.removeProperty('--next-class-accent');
+    };
 
     try {
       // Get current user
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
+        resetTitleAccent();
         nameEl.textContent = 'Please log in';
         timeEl.textContent = '';
         return;
@@ -1449,6 +1878,7 @@ class TermBox extends HTMLElement {
       });
 
       if (semesterCourses.length === 0) {
+        resetTitleAccent();
         labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
@@ -1466,6 +1896,7 @@ class TermBox extends HTMLElement {
       const nextClass = this.findNextClass(userCourses, year, term);
 
       if (!nextClass) {
+        resetTitleAccent();
         labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
@@ -1476,18 +1907,20 @@ class TermBox extends HTMLElement {
       // Display the class info
       let displayName = nextClass.course.title || nextClass.course.course_code;
 
-      // Truncate to 30 characters if needed
-      if (displayName.length > 22) {
-        displayName = displayName.substring(0, 22) + '...';
+      // Truncate to 32 characters if needed
+      if (displayName.length > 32) {
+        displayName = `${displayName.substring(0, 32).trimEnd()}…`;
       }
 
       if (nextClass.isCurrent) {
+        applyTitleAccent(nextClass.course?.type);
         labelEl.textContent = 'Current Class';
         nameEl.textContent = displayName;
         timeEl.textContent = '';
         timeEl.style.display = 'none';
         this.currentNextClassCourse = nextClass.course;
       } else {
+        applyTitleAccent(nextClass.course?.type);
         labelEl.textContent = 'Next Class';
         nameEl.textContent = displayName;
         timeEl.textContent = nextClass.timeRemaining;
@@ -1496,6 +1929,7 @@ class TermBox extends HTMLElement {
       }
     } catch (error) {
       console.error('Error updating next class:', error);
+      resetTitleAccent();
       nameEl.textContent = 'Error loading';
       timeEl.textContent = '';
     }
@@ -2414,7 +2848,10 @@ class LatestCoursesPreview extends HTMLElement {
   constructor() {
     super();
     this.handleActionClick = this.handleActionClick.bind(this);
-    this.handlePageLoaded = () => setTimeout(() => this.renderQuickActions(), 70);
+    this.handlePageLoaded = () => setTimeout(() => {
+      this.renderQuickActions();
+      this.bindQuickActionHandlers();
+    }, 70);
     this.renderQuickActions();
   }
 
@@ -2427,28 +2864,29 @@ class LatestCoursesPreview extends HTMLElement {
         <div class="home-quick-actions-stack">
           <button type="button" class="home-quick-action-btn" data-action="add-assignment">Add assignment</button>
           <button type="button" class="home-quick-action-btn" data-action="browse-courses">Browse courses</button>
-          <button type="button" class="home-quick-action-btn" data-action="write-review">Write review</button>
         </div>
       </div>
     `;
   }
 
+  bindQuickActionHandlers() {
+    const actionStack = this.querySelector('.home-quick-actions-stack');
+    if (!actionStack) return;
+    actionStack.removeEventListener('click', this.handleActionClick);
+    actionStack.addEventListener('click', this.handleActionClick);
+  }
+
   connectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
-
-    const card = this.querySelector('.home-courses-preview');
-    if (card) {
-      card.removeEventListener('click', this.handleActionClick);
-      card.addEventListener('click', this.handleActionClick);
-    }
+    this.bindQuickActionHandlers();
   }
 
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
-    const card = this.querySelector('.home-courses-preview');
-    if (card) {
-      card.removeEventListener('click', this.handleActionClick);
+    const actionStack = this.querySelector('.home-quick-actions-stack');
+    if (actionStack) {
+      actionStack.removeEventListener('click', this.handleActionClick);
     }
   }
 
@@ -2473,15 +2911,6 @@ class LatestCoursesPreview extends HTMLElement {
       return;
     }
 
-    if (action === 'write-review') {
-      const reviewCard = document.querySelector('#home-review-suggestion-container .home-review-suggestion');
-      const reviewContainer = document.getElementById('home-review-suggestion-container');
-      if (reviewCard && reviewContainer && reviewContainer.style.display !== 'none') {
-        reviewCard.click();
-        return;
-      }
-      navigateToRoute('/courses');
-    }
   }
 }
 
@@ -2493,30 +2922,27 @@ class ReviewSuggestionWidget extends HTMLElement {
     this.handlePageLoaded = () => {
       setTimeout(() => this.refreshSuggestion(), 120);
     };
-    this.handleCardClick = () => {
-      if (!this.suggestedCourse) return;
-      const route = `/courses/${encodeURIComponent(this.suggestedCourse.code)}/${this.suggestedCourse.year}/${encodeURIComponent(this.suggestedCourse.term)}`;
-      if (window.router?.navigate) {
-        window.router.navigate(route);
-        return;
-      }
-      window.location.href = withBase(route);
+    this.handleCourseCardClick = () => {
+      this.openSuggestedCourseForReview();
     };
-    this.handleCardKeyDown = (event) => {
+    this.handleCourseCardKeyDown = (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        this.handleCardClick();
+        this.openSuggestedCourseForReview();
       }
     };
-
+    this.handleWriteReviewClick = (event) => {
+      event.preventDefault();
+      this.openSuggestedCourseForReview();
+    };
     this.innerHTML = `
       <div class="home-review-suggestion">
         <div class="home-review-suggestion-header">
           <h2 class="home-review-suggestion-title">Suggestion</h2>
-          <span class="home-review-suggestion-link">Write Review</span>
+          <button type="button" class="home-calendar-link home-review-suggestion-link">Write Review</button>
         </div>
         <p class="home-review-suggestion-text">Review a course you have registered for.</p>
-        <div class="home-review-suggestion-course-card">
+        <div class="home-review-suggestion-course-card" role="button" tabindex="0">
           <h3 class="home-review-suggestion-course">Loading...</h3>
           <p class="home-review-suggestion-meta"></p>
         </div>
@@ -2524,28 +2950,62 @@ class ReviewSuggestionWidget extends HTMLElement {
     `;
   }
 
+  openSuggestedCourseForReview() {
+    if (!this.suggestedCourse) return false;
+    const code = this.normalizeCourseCode(this.suggestedCourse.code);
+    const year = Number(this.suggestedCourse.year) || new Date().getFullYear();
+    const term = this.normalizeTerm(this.suggestedCourse.term);
+    try {
+      sessionStorage.setItem(HOME_REVIEW_SUGGESTION_OPEN_REVIEW_KEY, JSON.stringify({
+        courseCode: code,
+        year,
+        term,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.warn('Unable to store review suggestion modal intent:', error);
+    }
+    const route = `/courses/${encodeURIComponent(code)}/${year}/${encodeURIComponent(term)}`;
+    if (window.router?.navigate) {
+      window.router.navigate(route);
+      return true;
+    }
+    window.location.href = withBase(route);
+    return true;
+  }
+
   connectedCallback() {
     this.refreshSuggestion();
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
 
-    const card = this.querySelector('.home-review-suggestion');
-    if (card) {
-      card.setAttribute('role', 'button');
-      card.setAttribute('tabindex', '0');
-      card.removeEventListener('click', this.handleCardClick);
-      card.removeEventListener('keydown', this.handleCardKeyDown);
-      card.addEventListener('click', this.handleCardClick);
-      card.addEventListener('keydown', this.handleCardKeyDown);
+    const courseCard = this.querySelector('.home-review-suggestion-course-card');
+    if (courseCard) {
+      courseCard.removeEventListener('click', this.handleCourseCardClick);
+      courseCard.removeEventListener('keydown', this.handleCourseCardKeyDown);
+      courseCard.addEventListener('click', this.handleCourseCardClick);
+      courseCard.addEventListener('keydown', this.handleCourseCardKeyDown);
+    }
+
+    const writeReviewButton = this.querySelector('.home-review-suggestion-link');
+    if (writeReviewButton) {
+      writeReviewButton.removeEventListener('click', this.handleWriteReviewClick);
+      writeReviewButton.addEventListener('click', this.handleWriteReviewClick);
     }
   }
 
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
-    const card = this.querySelector('.home-review-suggestion');
-    if (card) {
-      card.removeEventListener('click', this.handleCardClick);
-      card.removeEventListener('keydown', this.handleCardKeyDown);
+
+    const courseCard = this.querySelector('.home-review-suggestion-course-card');
+    if (courseCard) {
+      courseCard.removeEventListener('click', this.handleCourseCardClick);
+      courseCard.removeEventListener('keydown', this.handleCourseCardKeyDown);
+    }
+
+    const writeReviewButton = this.querySelector('.home-review-suggestion-link');
+    if (writeReviewButton) {
+      writeReviewButton.removeEventListener('click', this.handleWriteReviewClick);
     }
   }
 
@@ -2573,16 +3033,20 @@ class ReviewSuggestionWidget extends HTMLElement {
     return raw;
   }
 
+  normalizeCourseCode(codeValue) {
+    return String(codeValue || '').trim().toUpperCase();
+  }
+
   getCourseSuggestionKey(course) {
     if (!course) return '';
-    const code = String(course.code || '').trim();
+    const code = this.normalizeCourseCode(course.code);
     const year = Number(course.year) || '';
     const term = this.normalizeTerm(course.term || '');
     return `${code}|${year}|${term}`;
   }
 
   getReviewedCourseKey(code, termValue) {
-    const normalizedCode = String(code || '').trim();
+    const normalizedCode = this.normalizeCourseCode(code);
     const normalizedTerm = this.normalizeTerm(termValue || '');
     return `${normalizedCode}|${normalizedTerm}`;
   }
@@ -2635,6 +3099,7 @@ class ReviewSuggestionWidget extends HTMLElement {
       ).values()];
 
       let reviewedCourseKeys = new Set();
+      let reviewedCourseCodes = new Set();
       try {
         const { data: reviewedCourses, error: reviewedCoursesError } = await supabase
           .from('course_reviews')
@@ -2645,18 +3110,22 @@ class ReviewSuggestionWidget extends HTMLElement {
           throw reviewedCoursesError;
         }
 
-        reviewedCourseKeys = new Set(
-          (reviewedCourses || []).map((review) =>
-            this.getReviewedCourseKey(review.course_code, review.term)
-          )
-        );
+        reviewedCourseKeys = new Set((reviewedCourses || []).map((review) => (
+          this.getReviewedCourseKey(review.course_code, review.term)
+        )));
+        reviewedCourseCodes = new Set((reviewedCourses || []).map((review) => (
+          this.normalizeCourseCode(review.course_code)
+        )));
       } catch (error) {
         console.error('Error loading reviewed courses for suggestion widget:', error);
       }
 
       const availableCourses = uniqueSelectedCourses.filter((course) => {
+        const normalizedCode = this.normalizeCourseCode(course.code);
         const reviewedKey = this.getReviewedCourseKey(course.code, course.term);
-        return !reviewedCourseKeys.has(reviewedKey);
+        if (reviewedCourseKeys.has(reviewedKey)) return false;
+        if (reviewedCourseCodes.has(normalizedCode)) return false;
+        return true;
       });
 
       if (availableCourses.length === 0) {
@@ -2668,14 +3137,14 @@ class ReviewSuggestionWidget extends HTMLElement {
       const selectedCourse = this.pickRandomCourse(availableCourses) || availableCourses[0];
       const year = Number(selectedCourse.year) || new Date().getFullYear();
       const term = this.normalizeTerm(selectedCourse.term);
-      const code = String(selectedCourse.code);
+      const code = this.normalizeCourseCode(selectedCourse.code);
 
       let displayTitle = code;
       let courseType = null;
       try {
         const semesterCourses = await fetchCourseData(year, term);
         const matchedCourse = Array.isArray(semesterCourses)
-          ? semesterCourses.find((course) => course.course_code === code)
+          ? semesterCourses.find((course) => this.normalizeCourseCode(course.course_code) === code)
           : null;
         if (matchedCourse) {
           displayTitle = normalizeCourseTitle(matchedCourse.title || code);
@@ -3095,7 +3564,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Due soon</h2>
+            <h2 class="home-planner-module-title">Due Soon</h2>
           </div>
           <p class="home-planner-empty">Sign in to see upcoming deadlines.</p>
         </div>
@@ -3108,7 +3577,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Due soon</h2>
+            <h2 class="home-planner-module-title">Due Soon</h2>
           </div>
           <p class="home-planner-empty">No deadlines in the next 7 days.</p>
           <button type="button" class="home-module-link-btn" data-action="open-assignments">Open assignments</button>
@@ -3120,7 +3589,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
-          <h2 class="home-planner-module-title">Due soon</h2>
+          <h2 class="home-planner-module-title">Due Soon</h2>
           <span class="home-module-badge">${data.assignmentsDueSoon.length}</span>
         </div>
         <ul class="home-planner-list">

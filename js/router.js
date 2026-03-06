@@ -418,6 +418,16 @@ class SimpleRouter {
     // Clear mobile state
     window.currentDay = null
 
+    // Reset home/profile sticky header mode when leaving those pages.
+    document.body.classList.remove('home-mobile-header-sticky')
+    document.body.classList.remove('home-modal-open')
+    document.body.classList.remove('profile-page-header-sticky')
+    document.querySelector('.app-header')?.classList.remove('app-header--hidden')
+    document.querySelector('#home-main .home-container-above.container-above-desktop')?.classList.remove('home-toolbar--hidden')
+    document.documentElement.style.removeProperty('--home-mobile-header-height')
+    document.documentElement.style.removeProperty('--home-mobile-toolbar-height')
+    document.documentElement.style.removeProperty('--profile-mobile-header-height')
+
     // Clear event listeners that might interfere
     const oldSelects = document.querySelectorAll('#year-select, #term-select')
     oldSelects.forEach(select => {
@@ -570,6 +580,12 @@ class SimpleRouter {
         if (coursePageModule && typeof coursePageModule.initializeCoursePage === 'function') {
           await coursePageModule.initializeCoursePage()
         }
+
+        // Keep lifecycle parity with standard routes so page-level teardown/setup
+        // listeners (like home sticky header cleanup) run for course-detail URLs too.
+        document.dispatchEvent(new CustomEvent('pageLoaded', {
+          detail: { path }
+        }))
 
         this.hideLoadingBar()
         return
@@ -1905,6 +1921,16 @@ class SimpleRouter {
     const searchSubmit = modal.querySelector('#global-search-submit')
     const yearSelect = modal.querySelector('#search-year-select')
     const termSelect = modal.querySelector('#search-term-select')
+    const autocompleteContainer = modal.querySelector('#global-search-autocomplete')
+
+    if (autocompleteContainer && autocompleteContainer.dataset.scrollBound !== 'true') {
+      const stopScrollChain = (event) => {
+        event.stopPropagation()
+      }
+      autocompleteContainer.addEventListener('wheel', stopScrollChain, { passive: false })
+      autocompleteContainer.addEventListener('touchmove', stopScrollChain, { passive: true })
+      autocompleteContainer.dataset.scrollBound = 'true'
+    }
 
     // Handle Enter key in search input
     if (searchInput) {
@@ -2400,7 +2426,7 @@ class SimpleRouter {
         left: 0;
         width: 100%;
         height: 100%;
-        z-index: 10000;
+        z-index: 10060;
         display: none;
         align-items: center;
         justify-content: center;
@@ -2503,41 +2529,66 @@ class SimpleRouter {
 
       .global-search-autocomplete {
         position: absolute;
-        top: 100%;
+        top: calc(100% + 14px);
         left: 0;
         right: 0;
-        background: white;
-        border: 1px solid #ddd;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
-        max-height: 200px;
+        margin-top: 0;
+        border: 1px solid var(--control-border, #d3c9de);
+        background: var(--control-bg, #fff);
+        border-radius: 20px;
+        max-height: min(52dvh, 360px);
         overflow-y: auto;
-        z-index: 1000;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        z-index: 10063;
         display: none;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--control-shadow-hover, 0 8px 24px rgba(15, 23, 42, 0.12));
+      }
+
+      .global-search-autocomplete::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        box-shadow: inset 0 1px 0 var(--control-highlight, rgba(255, 255, 255, 0.88));
+        border-radius: 20px;
+        pointer-events: none;
+        z-index: 10;
       }
 
       .global-autocomplete-item {
-        padding: 0.75rem;
+        padding: 12px 20px;
         cursor: pointer;
-        border-bottom: 1px solid #f0f0f0;
         transition: background-color 0.2s ease;
+        position: relative;
+        z-index: 1;
       }
 
       .global-autocomplete-item:hover,
       .global-autocomplete-item.highlighted {
-        background-color: #f8f9fa;
+        background-color: #f8f5ff;
+      }
+
+      .global-autocomplete-item:first-child {
+        border-radius: 18px 18px 0 0;
       }
 
       .global-autocomplete-item:last-child {
-        border-bottom: none;
+        border-radius: 0 0 18px 18px;
+      }
+
+      .global-autocomplete-item:only-child {
+        border-radius: 18px;
       }
 
       .global-autocomplete-item .item-title {
         font-weight: 500;
-        color: #333;
-        margin-bottom: 0.25rem;
+        color: #1b2435;
+        margin-bottom: 4px;
         line-height: 1.3;
+        font-family: var(--secondary-font, 'Libre Bodoni'), sans-serif;
       }
 
       .global-autocomplete-item .item-title mark {
@@ -2549,14 +2600,16 @@ class SimpleRouter {
 
       .global-autocomplete-item .item-details {
         display: flex;
-        gap: 0.75rem;
-        font-size: 0.85rem;
+        gap: 15px;
+        font-size: 14px;
         color: #666;
+        opacity: 0.6;
+        font-family: var(--secondary-font, 'Libre Bodoni'), sans-serif;
       }
 
       .global-autocomplete-item .item-code {
-        font-weight: 500;
-        color: #007bff;
+        font-weight: 400;
+        color: #666;
       }
 
       .global-autocomplete-item .item-professor {
@@ -2634,10 +2687,72 @@ class SimpleRouter {
         color: #333;
       }
 
+      @media (max-width: 1023px) {
+        .search-modal-content {
+          width: 100%;
+          max-width: none;
+          height: 100dvh;
+          max-height: 100dvh;
+          border-radius: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .search-modal-body {
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .search-modal-body .search-input-container {
+          margin-bottom: 0;
+          flex: 1 1 auto;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .global-search-autocomplete {
+          position: static;
+          top: auto;
+          left: auto;
+          right: auto;
+          margin-top: 14px;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+          background: transparent;
+          max-height: none;
+          height: 100%;
+          flex: 1 1 auto;
+          min-height: 0;
+        }
+
+        .global-search-autocomplete::after {
+          content: none;
+        }
+
+        .global-autocomplete-item:first-child,
+        .global-autocomplete-item:last-child,
+        .global-autocomplete-item:only-child {
+          border-radius: 0;
+        }
+
+        .search-modal-body:has(#global-search-autocomplete[style*="display: block"]) .search-filters,
+        .search-modal-body:has(#global-search-autocomplete[style*="display: block"]) .search-actions {
+          display: none;
+        }
+      }
+
       @media (max-width: 480px) {
         .search-modal-content {
-          width: 95%;
-          margin: 1rem;
+          width: 100%;
+          max-width: none;
+          height: 100dvh;
+          max-height: 100dvh;
+          margin: 0;
+          border-radius: 0;
         }
 
         .search-modal-header,
