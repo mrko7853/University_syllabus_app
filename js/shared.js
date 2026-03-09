@@ -1524,7 +1524,7 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
         dialog.classList.add('mobile-swipe-sheet');
         if (!dialog.querySelector('.swipe-indicator')) {
             const indicator = document.createElement('div');
-            indicator.className = 'swipe-indicator';
+            indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
             indicator.setAttribute('aria-hidden', 'true');
             dialog.insertBefore(indicator, dialog.firstChild);
         }
@@ -1618,7 +1618,7 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
     return { modal, close };
 }
 
-function openConfirmModal({ title = 'Confirm', message = 'Are you sure?', confirmLabel = 'Confirm', cancelLabel = 'Cancel', destructive = false }) {
+export function openConfirmModal({ title = 'Confirm', message = 'Are you sure?', confirmLabel = 'Confirm', cancelLabel = 'Cancel', destructive = false }) {
     return new Promise((resolve) => {
         let settled = false;
         const settle = (value) => {
@@ -5673,26 +5673,26 @@ function attachReviewModalFormEnhancements(root, { isEdit = false, initialQualit
             nativeSelect.classList.add('review-form-native-select');
 
             const wrapper = document.createElement('div');
-            wrapper.className = 'review-form-custom-select profile-custom-select';
+            wrapper.className = 'ui-select custom-select review-form-custom-select profile-custom-select';
             wrapper.dataset.target = nativeSelect.id || '';
 
             const trigger = document.createElement('button');
             trigger.type = 'button';
-            trigger.className = 'custom-select-trigger control-surface';
+            trigger.className = 'ui-select__trigger custom-select-trigger control-surface';
             trigger.setAttribute('aria-haspopup', 'listbox');
             trigger.setAttribute('aria-expanded', 'false');
 
             const valueEl = document.createElement('span');
-            valueEl.className = 'custom-select-value';
+            valueEl.className = 'ui-select__value custom-select-value';
             const arrowEl = document.createElement('span');
-            arrowEl.className = 'custom-select-arrow';
+            arrowEl.className = 'ui-select__arrow custom-select-arrow';
             arrowEl.setAttribute('aria-hidden', 'true');
             trigger.append(valueEl, arrowEl);
 
             const optionsEl = document.createElement('div');
-            optionsEl.className = 'custom-select-options';
+            optionsEl.className = 'ui-select__menu custom-select-options';
             const optionsInnerEl = document.createElement('div');
-            optionsInnerEl.className = 'custom-select-options-inner';
+            optionsInnerEl.className = 'ui-select__options-inner custom-select-options-inner';
             optionsEl.appendChild(optionsInnerEl);
 
             const syncFromNative = () => {
@@ -5709,7 +5709,7 @@ function attachReviewModalFormEnhancements(root, { isEdit = false, initialQualit
             Array.from(nativeSelect.options).forEach((option) => {
                 const optionEl = document.createElement('button');
                 optionEl.type = 'button';
-                optionEl.className = 'custom-select-option';
+                optionEl.className = 'ui-select__option custom-select-option';
                 optionEl.dataset.value = option.value;
                 optionEl.setAttribute('role', 'option');
                 optionEl.setAttribute('aria-selected', 'false');
@@ -7427,7 +7427,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         modalDialog.classList.add('mobile-swipe-sheet');
         if (!modalDialog.querySelector('.swipe-indicator')) {
             const indicator = document.createElement('div');
-            indicator.className = 'swipe-indicator';
+            indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
             indicator.setAttribute('aria-hidden', 'true');
             modalDialog.insertBefore(indicator, modalDialog.firstChild);
         }

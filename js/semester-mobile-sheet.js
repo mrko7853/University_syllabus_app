@@ -22,9 +22,32 @@ function getSelectOptions(targetSelect) {
   return Array.from(targetSelect.options)
     .map((option) => ({
       value: String(option.value || ''),
-      label: String(option.textContent || option.label || option.value || '').trim()
+      label: String(option.textContent || option.label || option.value || '').trim(),
+      color: String(option.dataset?.color || '').trim()
     }))
     .filter((option) => option.value && option.label);
+}
+
+function parseHexColor(hexColor) {
+  const normalized = String(hexColor || '').trim();
+  const match = normalized.match(/^#([0-9a-f]{3,8})$/i);
+  if (!match) return null;
+  let hex = match[1];
+  if (hex.length === 3 || hex.length === 4) {
+    hex = hex.split('').map((char) => char + char).join('');
+  }
+  if (hex.length !== 6 && hex.length !== 8) return null;
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  if (![r, g, b].every(Number.isFinite)) return null;
+  return { r, g, b };
+}
+
+function toRgba(color, alpha) {
+  const parsed = parseHexColor(color);
+  if (!parsed) return '';
+  return `rgba(${parsed.r}, ${parsed.g}, ${parsed.b}, ${alpha})`;
 }
 
 function removeActiveSheetNode() {
@@ -102,14 +125,18 @@ export function openSemesterMobileSheet({
   backdrop.className = 'semester-mobile-sheet-backdrop';
 
   const sheet = document.createElement('div');
-  sheet.className = 'semester-mobile-sheet';
+  sheet.className = 'ui-swipe-sheet semester-mobile-sheet';
   sheet.dataset.swipeLockSelector = '.semester-mobile-sheet-options';
+  const sheetVariant = String(targetSelect.dataset.mobileSheetVariant || '').trim();
+  if (sheetVariant) {
+    sheet.classList.add(`semester-mobile-sheet--${sheetVariant}`);
+  }
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-modal', 'true');
   sheet.setAttribute('aria-label', title);
 
   const indicator = document.createElement('div');
-  indicator.className = 'swipe-indicator';
+  indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
   indicator.setAttribute('aria-hidden', 'true');
 
   const header = document.createElement('div');
@@ -139,6 +166,17 @@ export function openSemesterMobileSheet({
     if (option.value === selectedValue) {
       button.classList.add('is-selected');
     }
+    const optionBg = option.color || '';
+    const optionBorder = toRgba(option.color, 0.62);
+    const optionSelectedBg = option.color || '';
+    const optionSelectedBorder = toRgba(option.color, 0.86);
+    if (optionBg && optionBorder) {
+      button.classList.add('semester-mobile-sheet-option--course-tinted');
+      button.style.setProperty('--semester-option-bg', optionBg);
+      button.style.setProperty('--semester-option-border', optionBorder);
+      button.style.setProperty('--semester-option-selected-bg', optionSelectedBg || optionBg);
+      button.style.setProperty('--semester-option-selected-border', optionSelectedBorder || optionBorder);
+    }
 
     const label = document.createElement('span');
     label.className = 'semester-mobile-sheet-option-label';
@@ -159,7 +197,7 @@ export function openSemesterMobileSheet({
 
   const cancelButton = document.createElement('button');
   cancelButton.type = 'button';
-  cancelButton.className = 'semester-mobile-sheet-cancel';
+  cancelButton.className = 'ui-btn ui-btn--secondary semester-mobile-sheet-cancel control-surface control-surface--secondary';
   cancelButton.textContent = 'Cancel';
 
   footer.appendChild(cancelButton);

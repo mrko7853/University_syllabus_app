@@ -18,20 +18,23 @@
 <body>
 
   <app-navigation></app-navigation>
-  <div class="app-header">
-    <div class="app-logo"></div>
+  <div class="app-header app-header--title-mode">
+    <div class="app-header-brand">
+      <div class="app-logo"></div>
+      <h1 class="app-mobile-page-title" aria-live="polite">Calendar</h1>
+    </div>
     <div class="app-misc">
       <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
     </div>
   </div>
 
-  <div id="app-content">
+  <div id="app-content" class="ui-page">
 
     <!-- Search modal (shared component) -->
     <div class="search-container hidden">
       <div class="search-background">
-        <div class="search-modal">
-          <div class="swipe-indicator"></div>
+        <div class="ui-swipe-sheet search-modal">
+          <div class="swipe-indicator ui-swipe-sheet__handle"></div>
           <h2>
             <div></div>Search Courses
           </h2>
@@ -55,12 +58,12 @@
         <div class="calendar-toolbar-shell">
           <div id="filter-year-term">
             <div class="filter-year-term-container">
-              <div class="custom-select" data-target="semester-select">
-                <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                  <span class="custom-select-value">Loading...</span>
-                  <div class="custom-select-arrow"></div>
+              <div class="ui-select custom-select" data-target="semester-select">
+                <div class="ui-select__trigger custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                  <span class="ui-select__value custom-select-value">Loading...</span>
+                  <div class="ui-select__arrow custom-select-arrow"></div>
                 </div>
-                <div class="custom-select-options">
+                <div class="ui-select__menu custom-select-options">
                   <!-- Options populated dynamically from database -->
                 </div>
               </div>
@@ -71,16 +74,16 @@
           </div>
 
           <div class="calendar-toolbar-center" role="tablist" aria-label="Calendar view">
-            <button type="button" id="calendar-view-week" class="calendar-view-btn is-active"
+            <button type="button" id="calendar-view-week" class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn is-active"
               aria-selected="true" data-calendar-view="week">Week</button>
-            <button type="button" id="calendar-view-day" class="calendar-view-btn"
+            <button type="button" id="calendar-view-day" class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn"
               aria-selected="false" data-calendar-view="day">Day</button>
-            <button type="button" id="calendar-view-list" class="calendar-view-btn"
+            <button type="button" id="calendar-view-list" class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn"
               aria-selected="false" data-calendar-view="list">List</button>
           </div>
 
           <div class="calendar-toolbar-right">
-            <button type="button" id="calendar-filter-trigger" class="calendar-filter-trigger control-surface control-surface--secondary"
+            <button type="button" id="calendar-filter-trigger" class="ui-btn ui-btn--secondary calendar-filter-trigger control-surface control-surface--secondary"
               aria-haspopup="dialog" aria-expanded="false">
               <span class="calendar-filter-trigger-icon" aria-hidden="true"></span>
               <span class="calendar-filter-trigger-label">Filters</span>
@@ -92,9 +95,9 @@
       <div id="calendar-filter-popover" class="filter-container hidden" role="dialog"
         aria-labelledby="calendar-filter-heading" aria-modal="true">
         <div class="filter-background" id="calendar-filter-background">
-          <div class="filter-popup calendar-filter-popup">
+          <div class="ui-swipe-sheet filter-popup calendar-filter-popup">
             <div class="filter-header">
-              <div class="swipe-indicator"></div>
+              <div class="swipe-indicator ui-swipe-sheet__handle"></div>
               <div class="filter-buttons">
                 <button type="button" id="calendar-filter-see-results">See Results</button>
                 <button type="button" id="calendar-filter-clear-all">Clear All</button>
@@ -119,19 +122,19 @@
         </div>
       </div>
 
-      <div class="main-content">
+      <div class="ui-page-content main-content">
 
         <!-- Mobile toolbar -->
         <div class="container-above container-above-mobile">
           <div class="calendar-toolbar-shell">
             <div id="filter-year-term-mobile">
               <div class="filter-year-term-container">
-                <div class="custom-select" data-target="semester-select-mobile">
-                  <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                    <span class="custom-select-value">Loading...</span>
-                    <div class="custom-select-arrow"></div>
+                <div class="ui-select custom-select" data-target="semester-select-mobile">
+                  <div class="ui-select__trigger custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                    <span class="ui-select__value custom-select-value">Loading...</span>
+                    <div class="ui-select__arrow custom-select-arrow"></div>
                   </div>
-                  <div class="custom-select-options">
+                  <div class="ui-select__menu custom-select-options">
                     <!-- Options populated dynamically from database -->
                   </div>
                 </div>
@@ -141,12 +144,12 @@
               </div>
             </div>
             <div class="calendar-toolbar-center calendar-toolbar-center-mobile" role="tablist" aria-label="Calendar view">
-              <button type="button" id="calendar-view-day-mobile" class="calendar-view-btn"
+              <button type="button" id="calendar-view-day-mobile" class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn"
                 aria-selected="false" data-calendar-view="day">Day</button>
-              <button type="button" id="calendar-view-list-mobile" class="calendar-view-btn"
+              <button type="button" id="calendar-view-list-mobile" class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn"
                 aria-selected="false" data-calendar-view="list">List</button>
             </div>
-            <button type="button" id="calendar-filter-trigger-mobile" class="calendar-filter-trigger control-surface control-surface--secondary"
+            <button type="button" id="calendar-filter-trigger-mobile" class="ui-btn ui-btn--secondary calendar-filter-trigger control-surface control-surface--secondary"
               aria-haspopup="dialog" aria-expanded="false">
               <span class="calendar-filter-trigger-icon" aria-hidden="true"></span>
               <span class="calendar-filter-trigger-label">Filters</span>
@@ -169,7 +172,7 @@
 
     <div class="class-info sheet courseinfo-sheet" id="class-info">
       <div class="class-info-header sheet-header courseinfo-header">
-        <div class="swipe-indicator courseinfo-grabber"></div>
+        <div class="swipe-indicator ui-swipe-sheet__handle courseinfo-grabber"></div>
         <div class="class-header">
           <button id="class-close"></button>
           <h2>Class Info</h2>

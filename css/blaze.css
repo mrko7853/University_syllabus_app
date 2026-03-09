@@ -1,11 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Encode+Sans:wght@100..900&family=Geist:wght@100..900&display=swap');
 
 html,
 body {
     margin: 0;
     border: 0;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family, Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif);
     line-height: 1.5;
 }
 
@@ -17,18 +16,118 @@ body {
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
     --safe-area-left: env(safe-area-inset-left, 0px);
     --safe-area-right: env(safe-area-inset-right, 0px);
+
+    /* Canonical semantic color roles */
+    --color-bg-app: #f7f8fb;
+    --color-bg-module: #f2ebf6;
+    --color-bg-card: #ffffff;
+    --color-bg-card-subtle: #fbf9fd;
+    --color-bg-control: #ffffff;
+    --color-text-primary: #1b2435;
+    --color-text-secondary: rgba(23, 32, 51, 0.78);
+    --color-text-tertiary: rgba(23, 32, 51, 0.62);
+    --color-stroke-subtle: rgba(15, 23, 42, 0.10);
+    --color-shadow-soft: 0 4px 12px rgba(50, 50, 93, 0.08);
+    --color-accent-primary: #d4c4e0;
+    --color-accent-primary-soft: #efe7f5;
+    --color-accent-primary-border: rgba(113, 91, 135, 0.42);
+    --color-status-overdue-bg: rgba(254, 226, 226, 0.92);
+    --color-status-overdue-text: #b91c1c;
+    --color-status-completed-bg: rgba(204, 241, 216, 0.90);
+    --color-status-completed-text: #14532d;
+    --color-status-progress-bg: rgba(254, 243, 199, 0.90);
+    --color-status-progress-text: #7c5a00;
+    --color-status-neutral-bg: rgba(235, 236, 240, 0.82);
+    --color-status-neutral-text: rgba(36, 43, 57, 0.70);
+    --color-course-blue-bg: #aed3f2;
+    --color-course-yellow-bg: #efdc8f;
+    --color-course-green-bg: #c1e0c8;
+    --color-course-purple-bg: #bda7f2;
+    --color-course-text: #1f2a3d;
+
+    /* Global reusable UI tokens */
+    --ui-page-padding-x-mobile: 15px;
+    --ui-page-padding-x-desktop: 26px;
+    --ui-section-gap-mobile: 16px;
+    --ui-toolbar-gap: 10px;
+    --ui-header-divider: rgba(15, 23, 42, 0.06);
+    --ui-header-divider-strong: rgba(15, 23, 42, 0.08);
+
+    --ui-font-family: Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --ui-fs-h1: 30px;
+    --ui-fs-h2: 24px;
+    --ui-fs-h3: 20px;
+    --ui-fs-h4: 18px;
+    --ui-fs-body: 16px;
+    --ui-fs-subtitle: 15px;
+    --ui-fw-h1: 700;
+    --ui-fw-h2: 650;
+    --ui-fw-h3: 620;
+    --ui-fw-h4: 600;
+    --ui-fw-body: 500;
+    --ui-fw-subtitle: 500;
+
+    --ui-text-title: var(--color-text-primary);
+    --ui-text-heading: var(--color-text-primary);
+    --ui-text-body: var(--color-text-primary);
+    --ui-text-subtitle: var(--color-text-secondary);
+    --ui-text-muted: var(--color-text-tertiary);
+
+    --ui-control-height: 48px;
+    --ui-control-height-mobile: 42px;
+    --ui-control-radius-pill: 999px;
+    --ui-control-radius-round: 999px;
+    --ui-control-bg: var(--color-bg-control);
+    --ui-control-bg-hover: var(--color-bg-card-subtle);
+    --ui-control-bg-active: var(--color-accent-primary-soft);
+    --ui-control-border: var(--color-stroke-subtle);
+    --ui-control-border-hover: var(--color-accent-primary-border);
+    --ui-control-shadow: var(--color-shadow-soft);
+    --ui-control-shadow-hover: 0 6px 16px rgba(50, 50, 93, 0.12);
+    --ui-control-shadow-press: 0 2px 8px rgba(50, 50, 93, 0.08);
+    --ui-control-highlight: rgba(255, 255, 255, 0.62);
+    --ui-focus-ring: rgba(124, 92, 168, 0.45);
+
+    --ui-surface-page: var(--color-bg-app);
+    --ui-surface-panel: var(--color-bg-module);
+    --ui-surface-card: var(--color-bg-card);
+    --ui-card-radius: 22px;
+    --ui-card-border: 1px solid var(--color-stroke-subtle);
+    --ui-card-shadow: var(--color-shadow-soft);
+
+    --ui-sheet-radius-top: 22px;
+    --ui-sheet-backdrop: rgba(18, 16, 24, 0.56);
+    --ui-sheet-padding: 14px;
+    --ui-sheet-handle-color: rgba(120, 120, 160, 0.38);
+
+    --ui-slider-track-height: 6px;
+    --ui-slider-track-bg: var(--color-stroke-subtle);
+    --ui-slider-fill-bg: var(--color-accent-primary);
+    --ui-slider-thumb-size: 18px;
+    --ui-slider-thumb-bg: var(--color-bg-control);
+    --ui-slider-thumb-border: 1px solid var(--color-stroke-subtle);
 }
 
 @media (max-width: 1023px) {
     :root {
+        --ui-section-gap-mobile: 20px;
+        --ui-fs-h1: 26px;
+        --ui-fs-h2: 20px;
+        --ui-fs-h3: 18px;
+        --ui-fs-h4: 17px;
+        --ui-fs-body: 16px;
+        --ui-fs-subtitle: 15px;
+        --ui-control-height: 50px;
+        --ui-control-height-mobile: 50px;
         --small-desktop: 16px !important;
         --small-h1-desktop: 26px !important;
         --small-h2-desktop: 20px !important;
         --small-h3-desktop: 18px !important;
-        --h1: 26px !important;
-        --h2: 20px !important;
-        --h3: 18px !important;
-        --p: 16px !important;
+        --h1: var(--ui-fs-h1) !important;
+        --h2: var(--ui-fs-h2) !important;
+        --h3: var(--ui-fs-h3) !important;
+        --h4: var(--ui-fs-h4) !important;
+        --p: var(--ui-fs-body) !important;
         --mobile-nav-height: 64px;
     }
 
@@ -47,14 +146,19 @@ body {
         opacity: 0 !important;
         pointer-events: none !important;
     }
+
+    .main-content {
+        margin-left: var(--ui-page-padding-x-mobile);
+        margin-right: var(--ui-page-padding-x-mobile);
+    }
 }
 
 :root {
-    --h1: 30px;
-    --h2: 24px;
-    --h3: 20px;
-    --h4: 18px;
-    --p: 16px;
+    --h1: var(--ui-fs-h1);
+    --h2: var(--ui-fs-h2);
+    --h3: var(--ui-fs-h3);
+    --h4: var(--ui-fs-h4);
+    --p: var(--ui-fs-body);
     --small-desktop: 14px;
     --small-h1-desktop: 28px;
     --small-h2-desktop: 18px;
@@ -64,63 +168,325 @@ body {
     --icon-size-small-desktop: 20px;
     --size-mobile: 25px;
     --phone-h1: 30px;
-    --secondary-font: Geist;
+    --secondary-font: var(--ui-font-family);
     --card-radius: 18px;
-    --card-shadow: 0 6px 16px rgba(50, 50, 93, 0.12);
+    --card-shadow: var(--color-shadow-soft);
     --card-border: 1px solid rgba(255, 255, 255, 0.62);
-    --control-bg: #ffffff;
-    --control-bg-hover: #fcfbff;
-    --control-bg-active: #f6f4fa;
-    --control-border: rgba(120, 120, 160, 0.18);
-    --control-border-hover: rgba(120, 120, 160, 0.3);
-    --control-shadow: 0 2px 8px rgba(50, 50, 93, 0.12);
-    --control-shadow-hover: 0 3px 10px rgba(50, 50, 93, 0.15);
-    --control-highlight: rgba(255, 255, 255, 0.62);
-    --control-radius-pill: 999px;
-    --control-radius-round: 999px;
-    --control-press-shadow: 0 1px 4px rgba(50, 50, 93, 0.1);
+    --control-bg: var(--ui-control-bg);
+    --control-bg-hover: var(--ui-control-bg-hover);
+    --control-bg-active: var(--ui-control-bg-active);
+    --control-border: var(--ui-control-border);
+    --control-border-hover: var(--ui-control-border-hover);
+    --control-shadow: var(--ui-control-shadow);
+    --control-shadow-hover: var(--ui-control-shadow-hover);
+    --control-highlight: var(--ui-control-highlight);
+    --control-radius-pill: var(--ui-control-radius-pill);
+    --control-radius-round: var(--ui-control-radius-round);
+    --control-press-shadow: var(--ui-control-shadow-press);
     --control-press-translate: 1px;
-    --control-focus-ring: rgba(124, 92, 168, 0.45);
-    --surface: #ffffff;
-    --surface-tint: #f3ecf7;
-    --surface-2: rgba(255, 255, 255, 0.72);
-    --border: rgba(10, 37, 64, 0.12);
-    --shadow: 0 10px 30px rgba(17, 24, 39, 0.10);
+    --control-focus-ring: var(--ui-focus-ring);
+    --surface: var(--ui-surface-page);
+    --surface-tint: var(--color-bg-module);
+    --surface-2: var(--color-bg-card-subtle);
+    --border: var(--color-stroke-subtle);
+    --shadow: var(--color-shadow-soft);
     --shadow-pressed: 0 4px 12px rgba(10, 37, 64, 0.1);
-    --radius-card: 22px;
+    --radius-card: var(--ui-card-radius);
     --radius-pill: 999px;
     --radius: 30px;
     --radius-inner: 18px;
-    --font-ui: Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --font-ui: var(--ui-font-family);
     --course-meta-badge-border: rgba(255, 255, 255, .82);
+    --status-overdue-bg: var(--color-status-overdue-bg);
+    --status-overdue-text: var(--color-status-overdue-text);
+    --status-completed-bg: var(--color-status-completed-bg);
+    --status-completed-text: var(--color-status-completed-text);
+    --status-progress-bg: var(--color-status-progress-bg);
+    --status-progress-text: var(--color-status-progress-text);
+    --status-neutral-bg: var(--color-status-neutral-bg);
+    --status-neutral-text: var(--color-status-neutral-text);
+    --course-identity-blue: var(--color-course-blue-bg);
+    --course-identity-yellow: var(--color-course-yellow-bg);
+    --course-identity-green: var(--color-course-green-bg);
+    --course-identity-purple: var(--color-course-purple-bg);
 }
 
 /* General style */
 
 p {
     font-size: var(--p);
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-body);
+    color: var(--ui-text-body);
 }
 
 a {
     font-size: var(--p);
+    font-family: var(--ui-font-family);
 }
 
 h1 {
     font-size: var(--h1);
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-h1);
+    color: var(--ui-text-title);
 }
 
 h2 {
     font-size: var(--h2);
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-h2);
+    color: var(--ui-text-heading);
 }
 
 h3 {
     font-size: var(--h3);
-    font-family: var(--secondary-font), sans-serif;
-    font-weight: 400;
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-heading);
+}
+
+h4 {
+    font-size: var(--h4);
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
 }
 
 p {
     font-size: var(--p);
+}
+
+.ui-text-subtitle,
+.course-main-paragraph,
+.assignments-module-subtitle,
+.setting-desc {
+    font-size: var(--ui-fs-subtitle);
+    font-weight: var(--ui-fw-subtitle);
+    color: var(--ui-text-subtitle);
+}
+
+/* Reusable UI component contracts */
+.ui-page {
+    --ui-current-page-padding-x: var(--ui-page-padding-x-desktop);
+    --ui-current-section-gap: var(--ui-section-gap-mobile);
+}
+
+.ui-page-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-current-section-gap);
+}
+
+.ui-stack-16 {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap-mobile);
+}
+
+.ui-card {
+    border-radius: var(--ui-card-radius);
+    border: var(--ui-card-border);
+    background: var(--ui-surface-panel);
+    box-shadow: var(--ui-card-shadow);
+}
+
+.ui-btn,
+.control-surface {
+    --control-surface-radius: var(--ui-control-radius-pill);
+    border: 1px solid var(--ui-control-border);
+    border-radius: var(--control-surface-radius);
+    background-color: var(--ui-control-bg);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+    filter: none;
+    font-family: var(--ui-font-family);
+}
+
+.ui-btn--primary,
+.control-surface--primary {
+    --control-surface-radius: var(--ui-control-radius-pill);
+}
+
+.ui-btn--secondary,
+.control-surface--secondary,
+.ui-btn--icon {
+    --control-surface-radius: var(--ui-control-radius-round);
+}
+
+.ui-btn--destructive {
+    border-color: rgba(185, 28, 28, 0.72);
+    background: rgba(239, 68, 68, 0.2);
+    color: #991b1b;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 2px 10px rgba(127, 29, 29, 0.22);
+}
+
+.ui-selector {
+    --control-surface-radius: var(--ui-control-radius-pill);
+    border: 1px solid var(--ui-control-border);
+    border-radius: var(--control-surface-radius);
+    background: var(--ui-control-bg);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow);
+}
+
+.ui-btn:focus,
+.control-surface:focus {
+    outline: none;
+}
+
+.ui-btn:focus-visible,
+.control-surface:focus-visible {
+    outline: 2px solid var(--ui-focus-ring);
+    outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .ui-btn:hover,
+    .control-surface:hover {
+        border-color: var(--ui-control-border-hover);
+        background-color: var(--ui-control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-hover);
+    }
+}
+
+.ui-btn:active,
+.control-surface:active {
+    border-color: var(--ui-control-border-hover);
+    background-color: var(--ui-control-bg-active);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-press);
+    transform: translateY(var(--control-press-translate));
+}
+
+.ui-pill,
+.assignment-quick-filter,
+.course-active-filter-chip,
+.status-pill,
+.sort-status-pill {
+    border-radius: var(--ui-control-radius-pill);
+    font-family: var(--ui-font-family);
+}
+
+.ui-pill--filter,
+.assignment-quick-filter,
+.course-active-filter-chip {
+    border: 1px solid var(--ui-control-border);
+    background: color-mix(in srgb, var(--ui-surface-panel) 65%, #fff 35%);
+    color: var(--ui-text-heading);
+}
+
+.ui-segment,
+#course-summary.calendar-page-modern .calendar-toolbar-center,
+#assignments-main.page-assignments .calendar-toolbar-center.assignments-toolbar-segmented {
+    border: 1px solid var(--ui-control-border);
+    border-radius: var(--ui-control-radius-pill);
+    background: var(--ui-control-bg);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow);
+}
+
+.ui-segment__item,
+.calendar-view-btn {
+    font-family: var(--ui-font-family);
+    color: var(--ui-text-heading);
+}
+
+.ui-select,
+.custom-select {
+    position: relative;
+}
+
+.ui-select__trigger,
+.custom-select-trigger {
+    font-family: var(--ui-font-family);
+}
+
+.ui-select__value,
+.custom-select-value {
+    font-family: var(--ui-font-family);
+    color: var(--ui-text-heading);
+}
+
+.ui-select__arrow,
+.custom-select-arrow {
+    color: var(--ui-text-muted);
+}
+
+.ui-select__menu,
+.custom-select-options {
+    border: 1px solid var(--ui-control-border);
+    background: var(--ui-control-bg);
+    box-shadow: var(--ui-control-shadow-hover);
+}
+
+.ui-select__options-inner,
+.custom-select-options-inner {
+    display: flex;
+    flex-direction: column;
+}
+
+.ui-select__option,
+.custom-select-option {
+    font-family: var(--ui-font-family);
+}
+
+.ui-swipe-sheet,
+.profile-modal.profile-modal--swipe,
+.semester-mobile-sheet,
+.modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
+.conflict-container .conflict-modal-dialog.mobile-swipe-sheet {
+    border-radius: var(--ui-sheet-radius-top) var(--ui-sheet-radius-top) 0 0;
+    background: var(--ui-control-bg);
+}
+
+.ui-swipe-sheet__handle::before,
+.ui-swipe-sheet .ui-swipe-sheet__handle::before {
+    background: var(--ui-sheet-handle-color);
+}
+
+.ui-swipe-sheet__header,
+.ui-swipe-sheet__body,
+.ui-swipe-sheet__footer {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+input[type="range"],
+.ui-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: var(--ui-slider-track-height);
+    border-radius: var(--ui-control-radius-pill);
+    background: var(--ui-slider-track-bg);
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb,
+.ui-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: var(--ui-slider-thumb-size);
+    height: var(--ui-slider-thumb-size);
+    border-radius: 50%;
+    border: var(--ui-slider-thumb-border);
+    background: var(--ui-slider-thumb-bg);
+    box-shadow: var(--ui-control-shadow);
+}
+
+input[type="range"]::-moz-range-thumb,
+.ui-slider::-moz-range-thumb {
+    width: var(--ui-slider-thumb-size);
+    height: var(--ui-slider-thumb-size);
+    border-radius: 50%;
+    border: var(--ui-slider-thumb-border);
+    background: var(--ui-slider-thumb-bg);
+    box-shadow: var(--ui-control-shadow);
+}
+
+@media (max-width: 1023px) {
+    .ui-page {
+        --ui-current-page-padding-x: var(--ui-page-padding-x-mobile);
+    }
 }
 
 app-navigation {
@@ -287,40 +653,43 @@ section {
     display: flex;
     justify-content: center;
     flex-direction: column;
-    margin: 0px 20px;
+    margin: 0 var(--ui-page-padding-x-desktop);
+    gap: var(--ui-section-gap-mobile);
     max-width: 900px;
-    background: white;
+    background: var(--ui-surface-page);
 }
 
 .main-container {
-    background: #E3D5E9;
+    background: var(--ui-surface-panel);
     padding: 20px;
-    border-radius: 28px;
+    border-radius: var(--ui-card-radius);
     position: relative;
-    border: 1px solid rgba(0, 0, 0, .06);
-    box-shadow: 0 6px 18px #0a25401a;
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     filter: none;
 }
 
 #course-main-div,
 #calendar-main-div {
-    margin: 20px 0;
+    margin: var(--ui-section-gap-mobile) 0;
 }
 
 #home-courses-preview-container {
-    margin: 20px 0;
+    margin: var(--ui-section-gap-mobile) 0;
 }
 
 #home-review-suggestion-container {
-    margin: 20px 0;
+    margin: var(--ui-section-gap-mobile) 0;
     display: none;
 }
 
 #auth-main {
-    background: #E3D5E9;
+    background: var(--ui-surface-panel);
     margin: 20px;
     padding: 30px;
-    border-radius: 50px;
+    border-radius: var(--ui-card-radius);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     position: relative;
 }
 
@@ -446,49 +815,6 @@ select:focus-visible {
     outline-offset: 2px;
 }
 
-.control-surface {
-    --control-surface-radius: var(--control-radius-pill);
-    border: 1px solid var(--control-border);
-    border-radius: var(--control-surface-radius);
-    background-color: var(--control-bg);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
-    transform: translateY(0);
-    filter: none;
-}
-
-.control-surface--primary {
-    --control-surface-radius: var(--control-radius-pill);
-}
-
-.control-surface--secondary {
-    --control-surface-radius: var(--control-radius-round);
-}
-
-.control-surface:focus {
-    outline: none;
-}
-
-.control-surface:focus-visible {
-    outline: 2px solid var(--control-focus-ring);
-    outline-offset: 2px;
-}
-
-@media (hover: hover) and (pointer: fine) {
-    .control-surface:hover {
-        border-color: var(--control-border-hover);
-        background-color: var(--control-bg-hover);
-        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
-    }
-}
-
-.control-surface:active {
-    border-color: var(--control-border-hover);
-    background-color: var(--control-bg-active);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
-    transform: translateY(var(--control-press-translate));
-}
-
 .desktop-app-logo {
     background-image: url(/assets/logo-full.svg);
     background-position: center;
@@ -556,10 +882,10 @@ course-calendar::after {
 .main-container.home-widget-card,
 #home-courses-preview-container,
 #home-review-suggestion-container {
-    background: #E3D5E9;
+    background: var(--ui-surface-panel);
     border-radius: var(--radius-card);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 6px 18px rgba(10, 37, 64, 0.10);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     filter: none;
 }
 
@@ -642,9 +968,9 @@ course-calendar::after {
 
 #guest-browse-container,
 #guest-schedule-container {
-    background: #E3D5E9;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 6px 18px rgba(10, 37, 64, 0.10);
+    background: var(--ui-surface-panel);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     filter: none;
 }
 
@@ -819,8 +1145,8 @@ course-calendar::after {
 }
 
 .guest-personalize-btn {
-    background: #e3d5e9 !important;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--ui-control-bg-active) !important;
+    border: 1px solid var(--ui-control-border);
     width: fit-content;
     padding: 8px 16px;
     font-size: 14px;
@@ -999,7 +1325,7 @@ course-calendar::after {
     gap: 6px;
     padding: 4px 10px;
     border-radius: 999px;
-    background: #f3ecf7d1;
+    background: var(--color-bg-card-subtle);
     border: 1px solid rgba(0, 0, 0, 0.05);
     font-family: var(--secondary-font), sans-serif;
     font-size: 12px;
@@ -1092,7 +1418,7 @@ home-due-soon-widget {
 .home-planner-kpi {
     padding: 9px 10px;
     border-radius: 14px;
-    background: #f3ecf7d1;
+    background: var(--color-bg-card-subtle);
     border: 1px solid rgba(0, 0, 0, 0.05);
     display: flex;
     flex-direction: column;
@@ -1186,7 +1512,7 @@ home-due-soon-widget {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
-    color: #1f1727;
+    color: var(--ui-text-heading);
 }
 
 .home-module-badge {
@@ -1219,7 +1545,7 @@ home-due-soon-widget {
     gap: 12px;
     padding: 10px 12px;
     border-radius: 14px;
-    background: #f3ecf7d1;
+    background: var(--color-bg-card-subtle);
     border: 1px solid rgba(0, 0, 0, 0.05);
     font-family: var(--secondary-font), sans-serif;
     font-size: 13px;
@@ -1372,7 +1698,7 @@ home-due-soon-widget {
     font-family: var(--secondary-font), sans-serif;
     font-size: 20px;
     font-weight: 500;
-    color: #1f1727;
+    color: var(--ui-text-heading);
 }
 
 .home-progress-meta {
@@ -1389,7 +1715,7 @@ home-due-soon-widget {
 
 .home-progress-stat {
     border-radius: 14px;
-    background: #f3ecf7d1;
+    background: var(--color-bg-card-subtle);
     border: 1px solid rgba(0, 0, 0, 0.05);
     padding: 10px 12px;
     display: flex;
@@ -1435,7 +1761,7 @@ home-due-soon-widget {
     width: 100%;
     height: 8px;
     border-radius: 999px;
-    background: #f3ecf7d1;
+    background: var(--color-bg-card-subtle);
     overflow: hidden;
 }
 
@@ -1516,10 +1842,10 @@ home-due-soon-widget {
     align-items: center;
     justify-content: space-between;
     margin: 0;
-    font-family: var(--secondary-font), sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
-    font-weight: 500;
-    color: #1f1727;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-heading);
 }
 
 .home-calendar-widget {
@@ -1562,7 +1888,7 @@ latest-courses-preview {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
-    color: #1f1727;
+    color: var(--ui-text-heading);
 }
 
 .home-review-suggestion-link,
@@ -1639,7 +1965,7 @@ latest-courses-preview {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
-    color: #1f1727;
+    color: var(--ui-text-heading);
 }
 
 .home-review-suggestion-text {
@@ -2396,6 +2722,7 @@ calendar-page #calendar-main td.calendar-first {}
     overflow: hidden;
     border-bottom-left-radius: 20px;
     border-top-left-radius: 20px;
+    border-top-right-radius: 0px;
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
 }
 
@@ -2513,7 +2840,7 @@ calendar-page #calendar-main td.calendar-first {}
     opacity: 0;
 }
 
-.search-modal h2 {
+.search-modal :is(h2, h3) {
     font-size: var(--h1);
     font-weight: 800;
     margin: 0 0 20px 0;
@@ -2522,7 +2849,7 @@ calendar-page #calendar-main td.calendar-first {}
     gap: 15px;
 }
 
-.search-modal h2 div {
+.search-modal :is(h2, h3) div {
     background-image: url(/assets/search.svg);
     background-position: center;
     background-repeat: no-repeat;
@@ -2538,7 +2865,7 @@ calendar-page #calendar-main td.calendar-first {}
     border: 2px solid #E3D5E9;
     border-radius: 50px;
     font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     outline: none;
     margin-bottom: 25px;
     box-sizing: border-box;
@@ -2562,7 +2889,7 @@ calendar-page #calendar-main td.calendar-first {}
 
 .search-submit,
 .search-cancel {
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
     font-weight: 400;
     width: 160px;
@@ -3100,9 +3427,9 @@ calendar-page #calendar-main td.calendar-first {}
 .search-btn,
 .sort-btn,
 .filter-btn {
-    font-family: 'Libre Bodoni', sans-serif;
-    font-size: var(--h3);
-    font-weight: 400;
+    font-family: var(--ui-font-family);
+    font-size: var(--ui-fs-body);
+    font-weight: var(--ui-fw-body);
 }
 
 .filter-btn {
@@ -3212,6 +3539,7 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 .emoji-picker-remove {
+    width: auto;
     background: var(--control-bg);
     border: 1px solid var(--control-border);
     color: black;
@@ -3565,7 +3893,7 @@ calendar-page #calendar-main td.calendar-first {}
 .search-pill-autocomplete .search-autocomplete-item .item-title {
     font-weight: 500;
     margin-bottom: 4px;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
 }
 
 .search-pill-autocomplete .search-autocomplete-item .item-details {
@@ -3814,7 +4142,7 @@ calendar-page #calendar-main td.calendar-first {}
     align-items: flex-end;
 }
 
-.class-header h2 {
+.class-header :is(h2, h3) {
     font-size: var(--h1);
     font-weight: 900;
     margin: 0;
@@ -4094,7 +4422,7 @@ td p {
         padding: calc(10px + var(--safe-area-top)) 15px 15px 15px;
         width: 100%;
         box-sizing: border-box;
-        background-color: rgb(255 255 255 / 20%) !important;
+        background-color: #ffffff !important;
         border-radius: 0px;
         align-items: center;
         /* Ensure proper sticky behavior */
@@ -4107,8 +4435,8 @@ td p {
     }
 
     .container-above::before {
-        background-color: rgb(255 255 255 / 20%) !important;
-        border-radius: 0px;
+        content: none !important;
+        display: none !important;
     }
 
     .course-main-paragraph {
@@ -4474,7 +4802,7 @@ td p {
 }
 
 #class-add-remove {
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
     font-weight: 400;
     width: fit-content;
@@ -4648,6 +4976,7 @@ td p {
     #app-content {
         box-sizing: border-box;
         padding-bottom: var(--mobile-nav-safe-height, calc(var(--mobile-nav-height) + var(--safe-area-bottom)));
+        background: var(--ui-surface-page);
     }
 
     html,
@@ -4720,16 +5049,16 @@ td p {
 }
 
 #home-courses-preview-container {
-    background: #E3D5E9;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 6px 18px rgba(10, 37, 64, 0.10);
+    background: var(--ui-surface-panel);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     filter: none;
 }
 
 #calendar-container {
-    background: #E3D5E9;
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 6px 18px rgba(10, 37, 64, 0.10);
+    background: var(--ui-surface-panel);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
     filter: none;
 }
 
@@ -5031,7 +5360,7 @@ td p {
         flex-direction: column;
     }
 
-    .search-modal h2 {
+    .search-modal :is(h2, h3) {
         margin: 0;
         padding: 20px 15px 14px;
         font-family: var(--font-ui);
@@ -5041,7 +5370,7 @@ td p {
         gap: 0;
     }
 
-    .search-modal h2 div {
+    .search-modal :is(h2, h3) div {
         display: none !important;
     }
 
@@ -5057,19 +5386,23 @@ td p {
     .search-modal .search-input {
         margin-bottom: 0;
         width: 100%;
-        min-height: 50px;
-        height: 50px;
-        padding: 0 18px;
+        --search-modal-input-height: 52px;
+        min-height: var(--search-modal-input-height);
+        height: var(--search-modal-input-height);
+        padding: 14px 18px;
+        line-height: 1.25;
         border: 1px solid var(--control-border);
         border-radius: var(--control-radius-pill);
         background-color: var(--control-bg);
         box-shadow: var(--control-shadow);
         color: #1b2435;
-        font-family: var(--secondary-font), sans-serif;
-        font-size: var(--p) !important;
+        font-family: var(--font-ui);
+        font-size: 16px !important;
         font-weight: 500;
-        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
-        transform: translateY(0);
+        -webkit-appearance: none;
+        appearance: none;
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        transform: none;
         -webkit-text-size-adjust: 100%;
         -moz-text-size-adjust: 100%;
         -ms-text-size-adjust: 100%;
@@ -5078,6 +5411,7 @@ td p {
 
     .search-modal .search-input::placeholder {
         color: #999;
+        line-height: 1.25;
     }
 
     .search-modal .search-input:focus,
@@ -5086,7 +5420,7 @@ td p {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-active);
         box-shadow: var(--control-press-shadow);
-        transform: translateY(var(--control-press-translate));
+        transform: none;
     }
 
     .search-modal .search-input:focus-visible {
@@ -5297,7 +5631,7 @@ td p {
         padding: 0px 20px 20px 20px;
     }
 
-    .class-header h2 {
+    .class-header :is(h2, h3) {
         position: unset;
         width: unset;
         text-align: unset;
@@ -5513,7 +5847,7 @@ td p {
     justify-self: end;
 }
 
-.class-info .class-header h2 {
+.class-info .class-header :is(h2, h3) {
     grid-area: title;
     position: static;
     width: auto;
@@ -5989,7 +6323,7 @@ td p {
 }
 
 /* Class info type-weight normalization (match home/profile UI style) */
-.class-info .class-header h2,
+.class-info .class-header :is(h2, h3),
 .class-info .course-header h2,
 .class-info .class-content h2,
 .class-info #class-add-remove.class-info-course-action {
@@ -6855,38 +7189,38 @@ td p {
 }
 
 .class-info .status-badge.status-not-started {
-    background: #e9ecef;
-    color: #6c757d;
-    border-color: rgba(108, 117, 125, 0.2);
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
+    border-color: var(--color-stroke-subtle);
 }
 
 .class-info .status-badge.status-ongoing {
-    background: rgba(254, 243, 199, 0.9);
-    color: #7c5a00;
+    background: var(--color-status-progress-bg);
+    color: var(--color-status-progress-text);
     border-color: rgba(146, 111, 0, 0.14);
 }
 
 .class-info .status-badge.status-in-progress {
-    background: rgba(219, 234, 254, 0.9);
-    color: #1d4ed8;
-    border-color: rgba(59, 130, 246, 0.16);
+    background: var(--color-status-progress-bg);
+    color: var(--color-status-progress-text);
+    border-color: rgba(146, 111, 0, 0.14);
 }
 
 .class-info .status-badge.status-completed {
-    background: rgba(204, 241, 216, 0.9);
-    color: #14532d;
+    background: var(--color-status-completed-bg);
+    color: var(--color-status-completed-text);
     border-color: rgba(20, 83, 45, 0.14);
 }
 
 .class-info .status-badge.status-overdue {
-    background: rgba(254, 226, 226, 0.92);
-    color: #b91c1c;
+    background: var(--color-status-overdue-bg);
+    color: var(--color-status-overdue-text);
     border-color: rgba(220, 38, 38, 0.18);
 }
 
 .class-info .status-badge.status-due-today {
-    background: rgba(254, 243, 199, 0.9);
-    color: #7c5a00;
+    background: var(--color-status-progress-bg);
+    color: var(--color-status-progress-text);
     border-color: rgba(146, 111, 0, 0.16);
 }
 
@@ -7457,7 +7791,7 @@ td p {
 .edit-review-btn {
     width: fit-content;
     padding: 0 20px;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
     font-weight: 400;
 }
@@ -7774,7 +8108,7 @@ td p {
     border: 2px solid #E3E2E2;
     border-radius: 10px;
     font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     transition: border-color 0.2s ease;
     background: white;
 }
@@ -7816,7 +8150,7 @@ td p {
     border-radius: var(--control-radius-pill);
     padding: 14px 20px;
     font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     font-weight: 500;
     cursor: pointer;
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
@@ -7876,7 +8210,7 @@ td p {
     border-radius: var(--control-radius-pill);
     color: #666;
     font-size: 14px;
-    font-family: 'Libre Bodoni', sans-serif;
+    font-family: var(--ui-font-family);
     cursor: pointer;
     padding: 10px 14px;
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
@@ -8364,7 +8698,7 @@ td p {
     padding: 10px 20px !important;
     border-radius: var(--control-radius-pill) !important;
     cursor: pointer !important;
-    font-family: 'Libre Bodoni', sans-serif !important;
+    font-family: var(--ui-font-family) !important;
     font-size: 16px !important;
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow) !important;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease !important;
@@ -9149,6 +9483,15 @@ body.modal-open .app-header {
     pointer-events: none !important;
 }
 
+body.modal-open #home-main .home-container-above.container-above-desktop,
+body.modal-open .page-courses .courses-toolbar-shell,
+body.modal-open #assignments-main.page-assignments .assignments-toolbar-shell,
+body.modal-open #course-summary.calendar-page-modern .container-above.container-above-desktop,
+body.modal-open #course-summary.calendar-page-modern .container-above.container-above-mobile {
+    z-index: 900 !important;
+    pointer-events: none !important;
+}
+
 @media (max-width: 1023px) {
     .conflict-container .conflict-backdrop,
     .conflict-container .search-background {
@@ -9389,13 +9732,20 @@ calendar-page .mobile-day-buttons {
         display: flex !important;
         width: 100%;
         height: auto;
-        padding: calc(10px + var(--safe-area-top)) 15px 10px 15px;
+        padding: calc(10px + var(--safe-area-top)) var(--ui-page-padding-x-mobile) 10px var(--ui-page-padding-x-mobile);
         background-color: #FFFFFF;
         border-bottom: 1px solid #E3E2E2;
         justify-content: space-between;
         align-items: center;
         box-sizing: border-box;
         touch-action: manipulation;
+    }
+
+    .app-header-brand {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        flex: 1 1 auto;
     }
 
     body.profile-page-header-sticky .app-header {
@@ -9444,6 +9794,8 @@ calendar-page .mobile-day-buttons {
         left: 0;
         right: 0;
         z-index: 9400;
+        background: #ffffff;
+        border-bottom: 1px solid rgba(10, 37, 64, 0.12);
         transform: translateY(0);
         opacity: 1;
         transition: transform 0.22s ease, opacity 0.22s ease;
@@ -9458,6 +9810,65 @@ calendar-page .mobile-day-buttons {
 
     body.home-mobile-header-sticky #app-content {
         padding-top: calc(var(--home-mobile-header-height, calc(var(--safe-area-top) + 52px)) + var(--home-mobile-toolbar-height, 0px));
+    }
+
+    body.mobile-page-header-sticky .app-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9500;
+        transform: translateY(0);
+        opacity: 1;
+        transition: transform 0.22s ease, opacity 0.22s ease;
+        will-change: transform, opacity;
+    }
+
+    body.mobile-page-header-sticky .app-header.app-header--hidden {
+        transform: translateY(calc(-100% - 2px));
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    body.mobile-page-header-sticky .page-courses .courses-toolbar-shell,
+    body.mobile-page-header-sticky #assignments-main.page-assignments .assignments-toolbar-shell,
+    body.mobile-page-header-sticky #course-summary.calendar-page-modern .container-above.container-above-mobile {
+        position: fixed;
+        top: var(--mobile-page-header-height, calc(var(--safe-area-top) + 52px));
+        left: 0;
+        right: 0;
+        z-index: 9400;
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        transform: translateY(0);
+        opacity: 1;
+        transition: transform 0.22s ease, opacity 0.22s ease;
+        will-change: transform, opacity;
+        background: #ffffff;
+        border-bottom: 1px solid var(--color-stroke-subtle);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+
+    body.mobile-page-header-sticky #assignments-main.page-assignments .assignments-toolbar-shell {
+        padding: var(--assignments-page-padding-top) var(--assignments-page-padding-x);
+    }
+
+    body.mobile-page-header-sticky #course-summary.calendar-page-modern .container-above.container-above-mobile {
+        padding-top: 10px;
+    }
+
+    body.mobile-page-header-sticky .page-courses .courses-toolbar-shell.app-mobile-toolbar--hidden,
+    body.mobile-page-header-sticky #assignments-main.page-assignments .assignments-toolbar-shell.app-mobile-toolbar--hidden,
+    body.mobile-page-header-sticky #course-summary.calendar-page-modern .container-above.container-above-mobile.app-mobile-toolbar--hidden {
+        transform: translateY(calc(-100% - 2px));
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    body.mobile-page-header-sticky #app-content {
+        padding-top: calc(var(--mobile-page-header-height, calc(var(--safe-area-top) + 52px)) + var(--mobile-page-toolbar-height, 0px));
     }
 
     body.home-modal-open {
@@ -9481,6 +9892,14 @@ calendar-page .mobile-day-buttons {
     body.home-modal-open #home-main .home-container-above.container-above-desktop {
         z-index: 900 !important;
         pointer-events: none !important;
+    }
+
+    .app-header,
+    #home-main .home-container-above.container-above-desktop,
+    .page-courses .courses-toolbar-shell,
+    #assignments-main.page-assignments .assignments-toolbar-shell,
+    #course-summary.calendar-page-modern .container-above.container-above-mobile {
+        background-color: #ffffff;
     }
 
     .app-misc {
@@ -9518,7 +9937,29 @@ calendar-page .mobile-day-buttons {
         background-size: cover;
         width: 100px;
         height: 31px;
+        flex: 0 0 auto;
         touch-action: manipulation;
+    }
+
+    .app-mobile-page-title {
+        display: none;
+        margin: 0;
+        font-family: var(--ui-font-family);
+        font-size: var(--ui-fs-h3);
+        font-weight: var(--ui-fw-h3);
+        line-height: 1.1;
+        color: var(--ui-text-title);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .app-header.app-header--title-mode .app-logo {
+        display: none;
+    }
+
+    .app-header.app-header--title-mode .app-mobile-page-title {
+        display: block;
     }
 
     button#profile-mobile {
@@ -9598,29 +10039,42 @@ calendar-page .mobile-day-buttons {
 
 .auth-container {
     z-index: 1001;
-    background-color: #FFFFFF;
+    background-color: var(--ui-surface-page);
     width: 100%;
     height: 100%;
     position: absolute;
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: var(--ui-section-gap-mobile) var(--ui-page-padding-x-mobile);
+    box-sizing: border-box;
 }
 
 .auth-background {
-    background-color: #E3D5EA;
-    padding: 50px;
+    background-color: var(--ui-surface-panel);
+    border: var(--ui-card-border);
+    border-radius: var(--ui-card-radius);
+    box-shadow: var(--ui-card-shadow);
+    padding: 32px;
     text-align: center;
+    width: min(100%, 460px);
+}
+
+.auth-card {
+    width: min(100%, 460px);
+    padding: 32px;
 }
 
 #login-form {
     display: flex;
     flex-direction: column;
+    gap: 12px;
 }
 
 .sign-up-btn {
     width: 100%;
-    height: 70px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
 }
 
 .no-courses-container {
@@ -9750,10 +10204,10 @@ calendar-page .mobile-day-buttons {
     align-items: center;
     gap: 6px;
     padding: 10px 20px;
-    background: #BDAAC6;
-    border: 1px solid rgba(189, 170, 198, 0.45);
+    background: var(--color-accent-primary-soft);
+    border: 1px solid var(--color-accent-primary-border);
     border-radius: var(--control-radius-pill);
-    color: white;
+    color: var(--color-text-primary);
     font-family: var(--secondary-font), sans-serif;
     font-size: 14px;
     font-weight: 600;
@@ -9763,8 +10217,8 @@ calendar-page .mobile-day-buttons {
 }
 
 .new-assignment-btn:hover {
-    background: #a593af;
-    border-color: rgba(165, 147, 175, 0.5);
+    background: color-mix(in srgb, var(--color-accent-primary-soft) 78%, var(--color-accent-primary) 22%);
+    border-color: var(--color-accent-primary-border);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), var(--control-shadow-hover);
 }
 
@@ -9796,18 +10250,18 @@ calendar-page .mobile-day-buttons {
 }
 
 .status-not-started {
-    background: #e9ecef;
-    color: #6c757d;
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
 }
 
 .status-ongoing {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--color-status-progress-bg);
+    color: var(--color-status-progress-text);
 }
 
 .status-completed {
-    background: #d4edda;
-    color: #155724;
+    background: var(--color-status-completed-bg);
+    color: var(--color-status-completed-text);
 }
 
 /* Action buttons */
@@ -10132,6 +10586,15 @@ body.assignment-modal-open {
 body.assignment-modal-open app-navigation,
 body.assignment-modal-open .app-header {
     z-index: 900 !important;
+    pointer-events: none !important;
+}
+
+body.assignment-modal-open #assignments-main.page-assignments .assignments-toolbar-shell,
+body.assignment-modal-open .page-courses .courses-toolbar-shell,
+body.assignment-modal-open #course-summary.calendar-page-modern .container-above.container-above-desktop,
+body.assignment-modal-open #course-summary.calendar-page-modern .container-above.container-above-mobile {
+    z-index: 900 !important;
+    pointer-events: none !important;
 }
 
 .assignment-modal {
@@ -10854,9 +11317,89 @@ body.assignment-modal-open .app-header {
 }
 
 /* Modal footer */
+.assignment-modal-top-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 10px 20px 10px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.97);
+}
+
+.assignment-modal-top-actions .assignment-modal-delete {
+    width: 50%;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(185, 28, 28, 0.16);
+    background: rgba(239, 68, 68, 0.04);
+    color: rgba(153, 27, 27, 0.86);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--control-shadow);
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+}
+
+#assignment-modal-overlay[data-assignment-mode="new"] .assignment-modal-top-actions {
+    display: none;
+}
+
+#assignment-modal-overlay[data-assignment-mode="edit"] .assignment-modal-top-actions {
+    display: flex;
+    flex-direction: row-reverse;
+}
+
+.assignment-modal-top-actions .assignment-modal-delete > span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+.assignment-modal-top-actions .assignment-modal-delete-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    align-self: center;
+    background: currentColor;
+    -webkit-mask: center / contain no-repeat url(/assets/trash.svg);
+    mask: center / contain no-repeat url(/assets/trash.svg);
+    display: inline-flex;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .assignment-modal-top-actions .assignment-modal-delete:hover {
+        border-color: rgba(185, 28, 28, 0.26);
+        background-color: rgba(239, 68, 68, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), var(--control-shadow-hover);
+    }
+}
+
+.assignment-modal-top-actions .assignment-modal-delete:active {
+    border-color: rgba(153, 27, 27, 0.34);
+    background-color: rgba(220, 38, 38, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+.assignment-modal-top-actions .assignment-modal-delete:focus-visible {
+    outline: 2px solid rgba(220, 38, 38, 0.35);
+    outline-offset: 2px;
+}
+
 .assignment-modal-footer {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     gap: 12px;
     padding: 12px 22px 16px;
@@ -10864,22 +11407,20 @@ body.assignment-modal-open .app-header {
     background: rgba(255, 255, 255, 0.97);
 }
 
-.assignment-modal-footer-left,
 .assignment-modal-footer-right {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
     align-items: center;
     gap: 8px;
 }
 
-.assignment-modal-footer-right {
-    margin-left: auto;
-}
-
-.assignment-modal-footer .assignment-modal-delete,
 .assignment-modal-footer .cancel-btn,
 .assignment-modal-footer .save-btn {
     min-height: 42px;
     height: 42px;
+    width: 100%;
+    min-width: 0;
     border-radius: 999px;
     border: 1px solid var(--control-border);
     padding: 0 16px;
@@ -10896,39 +11437,24 @@ body.assignment-modal-open .app-header {
     transform: translateY(0);
 }
 
-.assignment-modal-footer .assignment-modal-delete {
-    width: auto;
-    min-height: 38px;
-    height: 38px;
-    padding: 0 14px;
-    border-color: rgba(185, 28, 28, 0.35);
-    background: rgba(254, 226, 226, 0.6);
-    color: #991b1b;
-    font-size: 13px;
-}
-
 .assignment-modal-footer .cancel-btn {
-    width: auto;
     background: var(--control-bg);
     color: #1b2435;
 }
 
 .assignment-modal-footer .save-btn {
-    --control-border: rgba(122, 102, 143, 0.42);
-    --control-border-hover: rgba(113, 91, 135, 0.56);
-    --control-bg: #d9c5e8;
-    --control-bg-hover: #d1bbe2;
-    --control-bg-active: #c8b0da;
+    --control-border: var(--color-accent-primary-border);
+    --control-border-hover: color-mix(in srgb, var(--color-accent-primary-border) 80%, #2e1f3c 20%);
+    --control-bg: var(--color-accent-primary-soft);
+    --control-bg-hover: color-mix(in srgb, var(--color-accent-primary-soft) 82%, var(--color-accent-primary) 18%);
+    --control-bg-active: color-mix(in srgb, var(--color-accent-primary-soft) 72%, var(--color-accent-primary) 28%);
     --control-highlight: rgba(255, 255, 255, 0.84);
-    min-width: 160px;
-    width: auto;
     border-color: var(--control-border);
     background-color: var(--control-bg);
-    color: #1b2435;
+    color: var(--color-text-primary);
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .assignment-modal-footer .assignment-modal-delete:hover,
     .assignment-modal-footer .cancel-btn:hover,
     .assignment-modal-footer .save-btn:hover {
         border-color: var(--control-border-hover);
@@ -10936,12 +11462,6 @@ body.assignment-modal-open .app-header {
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 
-    .assignment-modal-footer .assignment-modal-delete:hover {
-        border-color: rgba(185, 28, 28, 0.46);
-        background: rgba(254, 226, 226, 0.84);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76), 0 4px 10px rgba(127, 29, 29, 0.1);
-    }
-
     .assignment-modal-footer .save-btn:hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
@@ -10949,7 +11469,6 @@ body.assignment-modal-open .app-header {
     }
 }
 
-.assignment-modal-footer .assignment-modal-delete:active,
 .assignment-modal-footer .cancel-btn:active,
 .assignment-modal-footer .save-btn:active {
     border-color: var(--control-border-hover);
@@ -10961,7 +11480,6 @@ body.assignment-modal-open .app-header {
     background-color: var(--control-bg-active);
 }
 
-.assignment-modal-footer .assignment-modal-delete:focus-visible,
 .assignment-modal-footer .cancel-btn:focus-visible,
 .assignment-modal-footer .save-btn:focus-visible {
     outline: 2px solid var(--control-focus-ring);
@@ -11250,13 +11768,19 @@ body.assignment-modal-open .app-header {
         flex-wrap: wrap;
     }
 
-    .assignment-modal-footer-left,
     .assignment-modal-footer-right {
         width: 100%;
     }
 
     .assignment-modal-footer-right {
-        justify-content: flex-end;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .assignment-modal-footer .cancel-btn,
+    .assignment-modal-footer .save-btn {
+        width: 100%;
+        min-width: 0;
     }
 }
 
@@ -11793,7 +12317,7 @@ body.course-page-mode {
     display: none;
 }
 
-.course-page-mode .course-fullscreen .class-header h2,
+.course-page-mode .course-fullscreen .class-header :is(h2, h3),
 .course-page-mode .course-fullscreen .swipe-indicator {
     display: none;
 }
@@ -11820,7 +12344,7 @@ body.course-page-mode {
 @media (max-width: 1023px) {
     #course-summary.calendar-page-modern {
         position: relative;
-        background: #fff;
+        background: var(--ui-surface-page);
         overflow-x: clip;
     }
 
@@ -11840,7 +12364,7 @@ body.course-page-mode {
         margin: 0 0 10px !important;
         padding: 15px !important;
         border-radius: 20px !important;
-        background: #fff;
+        background: var(--ui-surface-panel);
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper {
@@ -11852,7 +12376,7 @@ body.course-page-mode {
     #course-summary.calendar-page-modern calendar-page .calendar-container-main {
         border-radius: 14px;
         border: 1px solid rgba(229, 229, 234, 1);
-        background: #fff;
+        background: var(--ui-surface-card);
         overflow: hidden;
     }
 
@@ -11968,7 +12492,7 @@ body.course-page-mode {
     }
 
     #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time {
-        background-color: #fff;
+        background-color: var(--ui-surface-card);
     }
 
     #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell:not(.highlight-current-day):not(.highlight-current-time) {
@@ -12071,7 +12595,7 @@ calendar-page .calendar-mobile-view {
 
     #course-summary.calendar-page-modern calendar-page .calendar-container-main {
         border-radius: 0px;
-        background: #fff;
+        background: var(--ui-surface-page);
         border: none;
         padding: 0px;
         box-sizing: border-box;
@@ -12218,7 +12742,7 @@ calendar-page .calendar-mobile-view {
 
     #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-time {
         margin: 0;
-        font-family: 'Libre Bodoni', serif;
+        font-family: var(--ui-font-family);
         font-size: var(--p);
         font-weight: 700;
         color: #1f1826;
@@ -12240,7 +12764,7 @@ calendar-page .calendar-mobile-view {
         border-radius: 999px;
         padding: 11px 16px 10px;
         box-sizing: border-box;
-        font-family: 'Libre Bodoni', serif;
+        font-family: var(--ui-font-family);
         font-size: var(--p);
         font-weight: 700;
         color: #16101c;
@@ -12338,7 +12862,7 @@ calendar-page .calendar-mobile-view {
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-title {
-        font-family: 'Libre Bodoni', serif;
+        font-family: var(--ui-font-family);
         font-size: 25px;
         font-weight: 700;
         line-height: 1.08;
@@ -12532,7 +13056,7 @@ calendar-page .calendar-mobile-view {
 
     #home-main .home-next-class-inline {
         display: block;
-        background: #f3ecf7d1;
+        background: var(--color-bg-card-subtle);
         border: 1px solid rgba(0, 0, 0, 0.05);
         border-radius: 18px;
         box-shadow: none;
@@ -12632,10 +13156,10 @@ calendar-page .calendar-mobile-view {
         right: auto;
         bottom: auto;
         z-index: auto;
-        background: #E3D5E9;
+        background: var(--ui-surface-panel);
         border-radius: 28px;
-        border: 1px solid rgba(0, 0, 0, 0.06);
-        box-shadow: 0 6px 18px rgba(10, 37, 64, 0.10);
+        border: var(--ui-card-border);
+        box-shadow: var(--ui-card-shadow);
         filter: none;
         padding: 22px !important;
         margin: 0 !important;
@@ -12680,14 +13204,24 @@ calendar-page .calendar-mobile-view {
 }
 
 @media (max-width: 1023px) {
+    #home-main {
+        background: var(--ui-surface-page);
+    }
+
     #home-main .home-container-above.container-above-desktop {
         display: flex !important;
         flex-direction: row;
         align-items: center;
         gap: 8px;
         margin: 0 !important;
-        padding: 10px 15px;
+        padding: 10px 15px 10px;
         z-index: 1400;
+        background: #ffffff !important;
+        border-bottom: 1px solid rgba(10, 37, 64, 0.12);
+    }
+
+    #home-main .home-main-content {
+        padding-top: var(--ui-section-gap-mobile);
     }
 
     #home-main .home-container-above .title-box,
@@ -12741,7 +13275,9 @@ calendar-page .calendar-mobile-view {
 
     #home-main .home-top-content {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        padding-top: 20px;
         margin: 15px !important;
+        margin-top: 0 !important;
         gap: 15px !important;
     }
 
@@ -13080,13 +13616,13 @@ calendar-page .calendar-mobile-view {
     background: transparent;
     filter: none;
     box-shadow: 0 6px 14px rgba(18, 27, 43, 0.08);
-    border: 1px solid var(--course-card-border, rgba(120, 120, 160, 0.26));
+    border: 0;
     overflow: hidden;
     width: 100%;
     min-width: 0;
     justify-self: stretch;
     transform: translateY(0);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 #course-list .class-outside::after {
@@ -13095,10 +13631,9 @@ calendar-page .calendar-mobile-view {
 
 #course-list .class-container {
     padding: 18px;
-    border-top-left-radius: var(--card-radius);
-    border-top-right-radius: var(--card-radius);
+    border-radius: var(--card-radius);
     background: var(--course-card-accent, #E3D5E9) !important;
-    border: none;
+    border: 1px solid var(--course-card-border, var(--control-border));
     color: #172033;
     width: 100%;
     box-sizing: border-box;
@@ -13585,9 +14120,12 @@ calendar-page .calendar-mobile-view {
 
 @media (hover: hover) and (pointer: fine) {
     #course-list .class-outside:hover {
-        border-color: var(--course-card-border-hover, rgba(61, 60, 90, 0.45));
-        box-shadow: 0 12px 24px rgba(18, 27, 43, 0.16), 0 0 0 1px var(--course-card-border-hover, rgba(61, 60, 90, 0.45));
+        box-shadow: 0 10px 20px rgba(18, 27, 43, 0.14);
         transform: translateY(-2px);
+    }
+
+    #course-list .class-outside:hover .class-container {
+        border-color: var(--course-card-border, var(--control-border));
     }
 }
 
@@ -13919,9 +14457,9 @@ calendar-page .calendar-mobile-view {
     margin-left: 85px;
     box-sizing: border-box;
     margin-right: auto;
-    padding: 16px 26px;
+    padding: var(--ui-section-gap-mobile) var(--ui-page-padding-x-desktop);
     font-family: var(--font-ui);
-    background: white;
+    background: var(--ui-surface-page);
     min-height: 100%;
 }
 
@@ -13936,15 +14474,14 @@ calendar-page .calendar-mobile-view {
 .profile-page .page-inner {
     width: 100%;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap-mobile);
 }
 
 .profile-page .profile-section {
-    margin-top: 16px;
-    margin-left: 0;
-}
-
-.profile-page .profile-section:first-child {
     margin-top: 0;
+    margin-left: 0;
 }
 
 .profile-page .profile-section:empty {
@@ -13952,10 +14489,10 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-page .card-surface {
-    background: #e3d5e9;
-    border: 1px solid rgba(0, 0, 0, .06);
-    box-shadow: 0 6px 18px #0a25401a;
-    border-radius: var(--radius-card);
+    background: var(--ui-surface-panel);
+    border: var(--ui-card-border);
+    box-shadow: var(--ui-card-shadow);
+    border-radius: var(--ui-card-radius);
     filter: none;
 }
 
@@ -13971,8 +14508,8 @@ calendar-page .calendar-mobile-view {
     margin: 0;
     font-family: var(--font-ui);
     font-size: var(--h3);
-    font-weight: 600;
-    color: #000;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-title);
 }
 
 .profile-page .card-body {
@@ -13987,23 +14524,23 @@ calendar-page .calendar-mobile-view {
     align-items: center;
     justify-content: center;
     padding: 0 18px;
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     width: auto;
     filter: none;
     font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    color: #000;
+    font-size: var(--ui-fs-subtitle);
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
     line-height: 1;
     white-space: nowrap;
 }
 
 .profile-page .icon-btn,
 .profile-modal-layer .icon-btn {
-    width: 52px;
-    min-width: 52px;
-    height: 52px;
+    width: var(--ui-control-height);
+    min-width: var(--ui-control-height);
+    height: var(--ui-control-height);
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -14038,8 +14575,8 @@ calendar-page .calendar-mobile-view {
     font-size: 14px;
     line-height: 1.3;
     font-family: var(--font-ui);
-    font-weight: 600;
-    color: #000;
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
 }
 
 .profile-page .setting-desc {
@@ -14047,14 +14584,14 @@ calendar-page .calendar-mobile-view {
     font-size: 14px;
     line-height: 1.3;
     font-family: var(--font-ui);
-    color: rgba(0, 0, 0, 0.72);
+    color: var(--ui-text-subtitle);
 }
 
 .profile-page .setting-control {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     justify-content: flex-end;
     flex: 0 1 auto;
     min-width: 248px;
@@ -14079,8 +14616,8 @@ calendar-page .calendar-mobile-view {
 .profile-page .setting-control select.control-surface,
 .profile-page .setting-control .profile-picker-trigger,
 .profile-page .setting-control .custom-select-trigger {
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     max-width: 100%;
     flex-shrink: 0;
 }
@@ -14110,20 +14647,20 @@ calendar-page .calendar-mobile-view {
     font-family: var(--font-ui);
     font-weight: 600;
     line-height: 1.15;
-    color: #000;
+    color: var(--ui-text-title);
 }
 
 .profile-page .identity-meta .email {
     font-size: 14px;
     font-family: var(--font-ui);
-    color: rgba(0, 0, 0, 0.72);
+    color: var(--ui-text-subtitle);
     margin-top: 4px;
 }
 
 .profile-page .profile-action-pill,
 .profile-modal-layer .profile-action-pill {
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     padding: 0 20px;
     min-width: 108px;
     gap: 8px;
@@ -14131,9 +14668,9 @@ calendar-page .calendar-mobile-view {
     align-items: center;
     justify-content: center;
     font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    color: #000;
+    font-size: var(--ui-fs-subtitle);
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -14176,6 +14713,7 @@ calendar-page .calendar-mobile-view {
 .profile-page .profile-static-value {
     font-size: 14px;
     font-weight: 600;
+    color: var(--ui-text-heading);
     white-space: nowrap;
 }
 
@@ -14204,42 +14742,42 @@ calendar-page .calendar-mobile-view {
 
 .profile-page .nav-row {
     width: 100%;
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     height: auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    border: 1px solid var(--control-border);
+    border: 1px solid var(--ui-control-border);
     border-radius: 14px;
-    background: var(--control-bg);
+    background: var(--ui-control-bg);
     font-size: 14px;
     font-family: var(--font-ui);
-    font-weight: 600;
+    font-weight: var(--ui-fw-h4);
     text-align: left;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow);
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     padding: 12px 14px;
-    color: #000;
+    color: var(--ui-text-heading);
 }
 
 @media (hover: hover) and (pointer: fine) {
     .profile-page .nav-row:hover {
-        border-color: var(--control-border-hover);
-        background-color: var(--control-bg-hover);
-        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+        border-color: var(--ui-control-border-hover);
+        background-color: var(--ui-control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-hover);
     }
 }
 
 .profile-page .nav-row:active {
-    border-color: var(--control-border-hover);
-    background-color: var(--control-bg-active);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    border-color: var(--ui-control-border-hover);
+    background-color: var(--ui-control-bg-active);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-press);
     transform: translateY(var(--control-press-translate));
 }
 
 .profile-page .nav-row:focus-visible {
-    outline: 2px solid var(--control-focus-ring);
+    outline: 2px solid var(--ui-focus-ring);
     outline-offset: 2px;
 }
 
@@ -14259,8 +14797,8 @@ calendar-page .calendar-mobile-view {
     justify-content: center;
     font-size: 12px;
     font-weight: 700;
-    background: #f3ecf7d1;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--ui-surface-panel) 78%, #fff 22%);
+    border: 1px solid var(--ui-control-border);
 }
 
 .profile-page .nav-row-chevron,
@@ -14276,13 +14814,13 @@ calendar-page .calendar-mobile-view {
     justify-content: center;
     min-height: 30px;
     padding: 5px 11px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--ui-control-radius-pill);
     font-size: 12px;
     font-family: var(--font-ui);
-    font-weight: 500;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: #f3ecf7d1;
-    color: #000;
+    font-weight: var(--ui-fw-subtitle);
+    border: 1px solid var(--ui-control-border);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    color: var(--ui-text-heading);
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -14293,36 +14831,36 @@ calendar-page .calendar-mobile-view {
     justify-content: center;
     min-height: 30px;
     padding: 5px 11px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--ui-control-radius-pill);
     font-size: 12px;
     font-family: var(--font-ui);
-    font-weight: 600;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: #f3ecf7d1;
-    color: #000;
+    font-weight: var(--ui-fw-h4);
+    border: 1px solid var(--ui-control-border);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    color: var(--ui-text-heading);
     white-space: nowrap;
 }
 
 .profile-page .status-pill--signed-in {
     margin-top: 7px;
-    background: #f3ecf7d1;
-    border-color: rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    border-color: var(--ui-control-border);
     width: fit-content;
 }
 
 .profile-page .status-pill--not-set {
-    background: #f3ecf7d1;
-    border-color: rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    border-color: var(--ui-control-border);
 }
 
 .profile-page .status-pill--value {
-    background: #f3ecf7d1;
-    border-color: rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    border-color: var(--ui-control-border);
 }
 
 .profile-page .status-pill--neutral {
-    background: #f3ecf7d1;
-    border-color: rgba(0, 0, 0, 0.08);
+    background: color-mix(in srgb, var(--ui-surface-panel) 80%, #fff 20%);
+    border-color: var(--ui-control-border);
 }
 
 .profile-page .status-pill--soon {
@@ -14337,19 +14875,20 @@ calendar-page .calendar-mobile-view {
     opacity: 0.76;
     margin: 10px 16px 0;
     font-family: var(--font-ui);
-    color: rgba(0, 0, 0, 0.72);
+    color: var(--ui-text-subtitle);
 }
 
 .profile-page .profile-body-copy {
     margin: 0;
     font-size: 14px;
+    color: var(--ui-text-body);
 }
 
 .profile-page .profile-inline-notice {
     margin: 8px 0 0;
-    color: rgba(0, 0, 0, 0.78);
+    color: var(--ui-text-subtitle);
     background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--ui-control-border);
     border-radius: 12px;
     padding: 8px 10px;
     font-size: 13px;
@@ -14365,27 +14904,27 @@ calendar-page .calendar-mobile-view {
 
 .profile-page .profile-subblock {
     border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--ui-control-border);
     overflow: hidden;
-    background: #f3ecf7d1;
+    background: color-mix(in srgb, var(--ui-surface-panel) 84%, #fff 16%);
 }
 
 .profile-page .profile-subtitle {
     margin: 0;
     font-size: 13px;
     font-family: var(--font-ui);
-    font-weight: 600;
-    color: #000;
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
     letter-spacing: 0.01em;
     padding: 13px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid var(--ui-control-border);
 }
 
 .profile-page .danger-zone {
     margin-top: 15px;
     border-radius: 16px;
     border: 1px dashed rgba(170, 85, 85, 0.45);
-    background: #f3ecf7d1;
+    background: color-mix(in srgb, var(--ui-surface-panel) 84%, #fff 16%);
 }
 
 #profile-help-subblock {
@@ -14397,7 +14936,7 @@ calendar-page .calendar-mobile-view {
     padding: 0;
     color: rgba(153, 28, 28, 0.92);
     padding: 13px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, .08);
+    border-bottom: 1px solid var(--ui-control-border);
 }
 
 .profile-page .danger-copy {
@@ -14435,12 +14974,12 @@ calendar-page .calendar-mobile-view {
 .profile-modal-layer .danger-action-btn {
     border: 1px solid rgba(185, 28, 28, 0.72);
     background: rgba(239, 68, 68, 0.2);
-    border-radius: var(--radius-pill);
+    border-radius: var(--ui-control-radius-pill);
     padding: 0 18px;
     font-family: var(--font-ui);
-    font-weight: 600;
-    min-height: 52px;
-    height: 52px;
+    font-weight: var(--ui-fw-h4);
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     color: #991b1b;
     display: inline-flex;
     align-items: center;
@@ -14511,13 +15050,13 @@ calendar-page .calendar-mobile-view {
     width: fit-content;
     max-width: 100%;
     min-width: 184px;
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     padding: 0 18px;
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
-    color: black;
+    color: var(--ui-text-heading);
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     filter: none;
     transform: translateY(0);
@@ -14645,10 +15184,10 @@ calendar-page .calendar-mobile-view {
     padding: 10px 20px;
     cursor: pointer;
     transition: background-color .2s;
-    font-size: 13px;
+    font-size: var(--ui-fs-subtitle);
     font-family: var(--font-ui);
-    font-weight: 600;
-    color: black;
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
     white-space: nowrap;
 }
 
@@ -14669,7 +15208,7 @@ calendar-page .calendar-mobile-view {
 
 #profile-main .profile-custom-select .custom-select-option:hover,
 .profile-modal-layer .profile-custom-select .custom-select-option:hover {
-    background-color: #f8f5ff;
+    background-color: var(--ui-control-bg-hover);
 }
 
 #profile-main .profile-custom-select .custom-select-option.selected,
@@ -14697,16 +15236,16 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-page .toggle {
-    min-height: 52px;
-    height: 52px;
-    border: 1px solid var(--control-border);
-    border-radius: var(--radius-pill);
-    background: var(--control-bg);
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
+    border: 1px solid var(--ui-control-border);
+    border-radius: var(--ui-control-radius-pill);
+    background: var(--ui-control-bg);
     padding: 6px 12px 6px 7px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow);
     min-width: 122px;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     white-space: nowrap;
@@ -14715,7 +15254,7 @@ calendar-page .calendar-mobile-view {
 .profile-page .toggle-track {
     width: 50px;
     height: 30px;
-    border-radius: var(--radius-pill);
+    border-radius: var(--ui-control-radius-pill);
     border: 1px solid rgba(120, 120, 160, 0.3);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 244, 251, 0.95) 100%);
     display: inline-flex;
@@ -14737,7 +15276,7 @@ calendar-page .calendar-mobile-view {
 .profile-page .toggle-state {
     font-size: 12px;
     font-family: var(--font-ui);
-    font-weight: 600;
+    font-weight: var(--ui-fw-h4);
     min-width: 24px;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -14746,7 +15285,7 @@ calendar-page .calendar-mobile-view {
 
 .profile-page .toggle[aria-checked="true"] .toggle-track {
     background: linear-gradient(180deg, rgba(239, 230, 247, 0.96) 0%, rgba(228, 214, 238, 0.92) 100%);
-    border-color: var(--control-border-hover);
+    border-color: var(--ui-control-border-hover);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 1px 4px rgba(124, 92, 168, 0.22);
 }
 
@@ -14761,21 +15300,21 @@ calendar-page .calendar-mobile-view {
 
 @media (hover: hover) and (pointer: fine) {
     .profile-page .toggle:hover {
-        border-color: var(--control-border-hover);
-        background-color: var(--control-bg-hover);
-        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+        border-color: var(--ui-control-border-hover);
+        background-color: var(--ui-control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-hover);
     }
 }
 
 .profile-page .toggle:active {
-    border-color: var(--control-border-hover);
-    background-color: var(--control-bg-active);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    border-color: var(--ui-control-border-hover);
+    background-color: var(--ui-control-bg-active);
+    box-shadow: inset 0 1px 0 var(--ui-control-highlight), var(--ui-control-shadow-press);
     transform: translateY(var(--control-press-translate));
 }
 
 .profile-page .toggle:focus-visible {
-    outline: 2px solid var(--control-focus-ring);
+    outline: 2px solid var(--ui-focus-ring);
     outline-offset: 2px;
 }
 
@@ -14792,7 +15331,7 @@ calendar-page .calendar-mobile-view {
 .profile-modal-backdrop {
     position: fixed;
     inset: 0;
-    background-color: rgba(18, 16, 24, 0.64);
+    background-color: var(--ui-sheet-backdrop);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
 }
@@ -14855,7 +15394,7 @@ calendar-page .calendar-mobile-view {
     width: 42px;
     height: 4px;
     border-radius: 2px;
-    background: rgba(15, 23, 38, 0.2);
+    background: var(--ui-sheet-handle-color);
 }
 
 .profile-modal-head {
@@ -14874,17 +15413,17 @@ calendar-page .calendar-mobile-view {
 .profile-modal-head h3 {
     margin: 0;
     font-size: var(--h2);
-    font-weight: 500;
+    font-weight: var(--ui-fw-h3);
     font-family: var(--font-ui);
     line-height: 1.1;
-    color: #000;
+    color: var(--ui-text-title);
 }
 
 .profile-modal-layer .profile-modal-head .icon-btn {
-    width: 52px;
-    min-width: 52px;
-    height: 52px;
-    min-height: 52px;
+    width: var(--ui-control-height);
+    min-width: var(--ui-control-height);
+    height: var(--ui-control-height);
+    min-height: var(--ui-control-height);
     border-radius: var(--control-radius-round);
     background: var(--control-bg);
     border: 1px solid var(--control-border);
@@ -14955,17 +15494,17 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-modal-footer .danger-action-btn {
-    min-height: 52px;
+    min-height: var(--ui-control-height);
 }
 
 .profile-modal-layer .control-surface:not(.icon-btn) {
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     border-radius: var(--control-radius-pill);
-    color: #1b2435;
+    color: var(--ui-text-body);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--control-shadow);
     font-size: var(--p);
-    font-weight: 500;
+    font-weight: var(--ui-fw-body);
     line-height: 1.2;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     transform: translateY(0);
@@ -15010,7 +15549,7 @@ calendar-page .calendar-mobile-view {
 }
 
 .profile-modal-layer .danger-action-btn {
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     border: 1px solid rgba(196, 68, 89, 0.58);
     background-color: rgba(241, 176, 188, 0.82);
     color: #45131d;
@@ -15045,8 +15584,8 @@ calendar-page .calendar-mobile-view {
     margin-bottom: 8px;
     font-size: 14px;
     font-family: var(--font-ui);
-    font-weight: 600;
-    color: rgba(23, 32, 51, 0.9);
+    font-weight: var(--ui-fw-h4);
+    color: var(--ui-text-heading);
 }
 
 .profile-modal-input {
@@ -15057,12 +15596,12 @@ calendar-page .calendar-mobile-view {
     background-color: var(--control-bg);
     box-shadow: var(--control-shadow);
     padding: 0 18px;
-    min-height: 52px;
-    height: 52px;
+    min-height: var(--ui-control-height);
+    height: var(--ui-control-height);
     font-size: var(--p);
     font-family: var(--secondary-font), sans-serif;
     margin-bottom: 0;
-    color: #1b2435;
+    color: var(--ui-text-body);
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     transform: translateY(0);
 }
@@ -15075,7 +15614,7 @@ calendar-page .calendar-mobile-view {
 
 .profile-modal-input::placeholder,
 .profile-modal .search-input.profile-modal-input::placeholder {
-    color: #999;
+    color: var(--ui-text-muted);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -15115,7 +15654,7 @@ calendar-page .calendar-mobile-view {
     font-size: var(--p);
     line-height: 1.45;
     font-family: var(--secondary-font), serif;
-    color: #000;
+    color: var(--ui-text-body);
 }
 
 .profile-choice-list {
@@ -15126,7 +15665,7 @@ calendar-page .calendar-mobile-view {
 
 .profile-choice-option {
     width: 100%;
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     border-radius: var(--card-radius);
     border: 1px solid rgba(120, 120, 160, 0.24);
     background:
@@ -15206,7 +15745,7 @@ calendar-page .calendar-mobile-view {
     font-size: 15px;
     font-family: var(--font-ui);
     font-weight: 560;
-    color: #000;
+    color: var(--ui-text-heading);
 }
 
 .profile-modal-layer .calendar-integration-feed-actions {
@@ -15217,7 +15756,7 @@ calendar-page .calendar-mobile-view {
 
 .profile-modal-layer .calendar-integration-feed-actions .control-surface {
     width: 100%;
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     text-align: center;
     justify-content: center;
     text-decoration: none;
@@ -15326,7 +15865,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #profile-main {
         margin-left: 0;
         max-width: none;
-        padding: 16px 16px 16px;
+        padding: var(--ui-section-gap-mobile) var(--ui-page-padding-x-mobile);
     }
 
     .profile-page .card-head {
@@ -15482,7 +16021,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .profile-modal-backdrop {
-        background: rgba(0, 0, 0, 0.5);
+        background: var(--ui-sheet-backdrop);
     }
 
     #profile-clear-cache,
@@ -15505,7 +16044,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .profile-page .profile-section {
-        margin-top: 16px;
+        margin-top: 0;
     }
 
     .profile-modal-layer .profile-modal-head .icon-btn {
@@ -15562,7 +16101,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .class-info:not(.course-fullscreen),
     .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
     .conflict-container .conflict-modal-dialog.mobile-swipe-sheet {
-        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: min(700px, 100vw);
         max-width: 700px;
         max-height: calc(100dvh - (var(--safe-area-top) + var(--safe-area-bottom) + 16px));
         background: rgba(248, 246, 252, 0.98);
@@ -15570,7 +16112,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         border-bottom: 0;
         box-shadow: 0 -12px 36px rgba(15, 23, 42, 0.18);
         border-radius: 26px 26px 0 0;
-        padding: 8px 20px calc(20px + var(--safe-area-bottom));
+        padding: 8px var(--ui-page-padding-x-mobile) calc(var(--ui-page-padding-x-mobile) + var(--safe-area-bottom));
         box-sizing: border-box;
         transform: translate(var(--mobile-swipe-sheet-translate-x, 0), var(--modal-translate-y, 100vh));
         transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
@@ -15646,7 +16188,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         content: '';
         width: 56px;
         height: 5px;
-        background-color: rgba(15, 23, 42, 0.18);
+        background-color: var(--ui-sheet-handle-color);
         border-radius: 999px;
     }
 
@@ -15661,7 +16203,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .profile-modal.profile-modal--swipe .profile-modal-head h3 {
         font-size: 22px;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--ui-text-heading);
         line-height: 1.2;
     }
 
@@ -15670,17 +16212,39 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .profile-modal.profile-modal--swipe .profile-modal-body {
-        padding: 0 4px;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
         overflow: auto;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
+        box-sizing: border-box;
+    }
+
+    .profile-modal.profile-modal--swipe .profile-modal-body>*,
+    .profile-modal.profile-modal--swipe .profile-choice-list,
+    .profile-modal.profile-modal--swipe .profile-choice-option,
+    .profile-modal.profile-modal--swipe .profile-picker-help,
+    .profile-modal.profile-modal--swipe .profile-modal-input,
+    .profile-modal.profile-modal--swipe .profile-modal-picker-trigger,
+    .profile-modal.profile-modal--swipe .profile-custom-select,
+    .profile-modal.profile-modal--swipe .profile-custom-select .custom-select-trigger,
+    .profile-modal.profile-modal--swipe .profile-custom-select .custom-select-options {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
 
     .profile-modal.profile-modal--swipe .profile-modal-footer {
+        width: 100%;
+        min-width: 0;
         justify-content: stretch;
         gap: 10px;
         margin-top: 0;
-        padding: 18px 4px 0;
+        padding: 18px 0 0;
         border-top: 1px solid rgba(15, 23, 42, 0.08);
     }
 
@@ -15715,7 +16279,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         gap: 10px;
     }
 
-    .class-info:not(.course-fullscreen) .class-header h2 {
+    .class-info:not(.course-fullscreen) .class-header :is(h2, h3) {
         justify-self: start;
         text-align: left;
         font-size: 22px;
@@ -15783,15 +16347,6 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         gap: 12px;
     }
 
-    .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-modal-body,
-    .profile-modal.profile-modal--swipe.profile-modal--fullscreen .profile-modal-body {
-        /* Add internal shadow bleed space inside the scroll container without changing visual alignment */
-        margin-left: -12px;
-        margin-right: -12px;
-        padding-left: 12px;
-        padding-right: 12px;
-    }
-
     .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-modal-footer,
     .profile-modal.profile-modal--swipe.profile-modal--fullscreen .profile-modal-footer {
         padding: 18px 0 0;
@@ -15802,11 +16357,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .profile-modal.profile-modal--swipe.profile-modal--fullscreen .profile-modal-footer .control-surface,
     .profile-modal.profile-modal--swipe.profile-modal--fullscreen .profile-modal-footer .danger-action-btn {
         width: 100%;
-        min-height: 66px;
+        min-height: calc(var(--ui-control-height-mobile) + 16px);
         height: auto;
-        border-radius: 999px !important;
-        font-size: 18px;
-        font-weight: 500;
+        border-radius: var(--ui-control-radius-pill) !important;
+        font-size: var(--ui-fs-h4);
+        font-weight: var(--ui-fw-body);
     }
 
     .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-modal-footer .control-surface:only-child,
@@ -15825,7 +16380,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         font-family: var(--font-ui);
         font-size: 16px;
         line-height: 1.45;
-        color: #000;
+        color: var(--ui-text-body);
         border-bottom: 0;
     }
 
@@ -15835,7 +16390,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-choice-option {
-        min-height: 52px;
+        min-height: var(--ui-control-height-mobile);
         height: auto;
         border-radius: 18px;
         padding: 16px 18px;
@@ -15844,7 +16399,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         line-height: 1.2;
         background: rgba(255, 255, 255, 0.85);
         border: 1px solid rgba(15, 23, 42, 0.08);
-        color: #0f172a;
+        color: var(--ui-text-heading);
         box-shadow: 0 6px 16px rgba(50, 50, 93, 0.08);
     }
 
@@ -15861,10 +16416,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
     /* Calendar integrations fullscreen swipe modal: match semester/year sheet content width and preserve button shadows */
     .profile-modal.profile-modal--swipe.profile-modal--fullscreen .calendar-integration-security-row {
-        margin-left: -12px;
-        margin-right: -12px;
-        padding-left: 12px;
-        padding-right: 12px;
+        margin-left: 0;
+        margin-right: 0;
+        padding-left: 0;
+        padding-right: 0;
     }
 }
 
@@ -15902,7 +16457,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 .semester-mobile-sheet-header {
     flex: 0 0 auto;
-    padding: 2px 20px 10px;
+    padding: 2px var(--ui-page-padding-x-mobile) 10px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -15917,7 +16472,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .semester-mobile-sheet-description {
     flex: 0 0 auto;
     margin: 0;
-    padding: 18px 20px 10px;
+    padding: 18px var(--ui-page-padding-x-mobile) 10px;
     font-family: var(--font-ui);
     font-size: 15px;
     color: #000;
@@ -15933,7 +16488,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     -webkit-overflow-scrolling: touch;
     scrollbar-gutter: stable;
     gap: 12px;
-    padding: 12px 20px 18px;
+    padding: 12px var(--ui-page-padding-x-mobile) 18px;
 }
 
 .semester-mobile-sheet-option {
@@ -15941,6 +16496,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     height: auto !important;
     min-height: 52px;
     border-radius: 18px !important;
+    border: 1px solid rgba(15, 23, 42, 0.08);
     padding: 16px 18px !important;
     display: flex;
     align-items: center;
@@ -15959,6 +16515,16 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     border-color: rgba(74, 163, 99, 0.35);
 }
 
+.semester-mobile-sheet--course-selector .semester-mobile-sheet-option.semester-mobile-sheet-option--course-tinted {
+    background: var(--semester-option-bg, rgba(255, 255, 255, 0.85));
+    border-color: var(--semester-option-border, rgba(15, 23, 42, 0.12));
+}
+
+.semester-mobile-sheet--course-selector .semester-mobile-sheet-option.semester-mobile-sheet-option--course-tinted.is-selected {
+    background: var(--semester-option-selected-bg, var(--semester-option-bg, rgba(255, 255, 255, 0.9)));
+    border-color: var(--semester-option-selected-border, var(--semester-option-border, rgba(15, 23, 42, 0.16)));
+}
+
 .semester-mobile-sheet-option-label {
     pointer-events: none;
     text-align: left;
@@ -15975,7 +16541,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .semester-mobile-sheet-footer {
     flex: 0 0 auto;
     border-top: 1px solid rgba(15, 23, 42, 0.08);
-    padding: 18px 20px 0;
+    padding: 18px var(--ui-page-padding-x-mobile) 0;
 }
 
 .semester-mobile-sheet-cancel {
@@ -15999,6 +16565,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
    ============================================ */
 #course-summary.calendar-page-modern {
     width: 100%;
+    background: var(--ui-surface-page);
 }
 
 #course-summary.calendar-page-modern .container-above.container-above-desktop,
@@ -16010,7 +16577,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     margin: 0;
     width: 100%;
     box-sizing: border-box;
-    background: rgba(227, 213, 233, 0.35);
+    background: var(--ui-surface-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
@@ -16069,7 +16636,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: var(--ui-toolbar-gap);
 }
 
 #course-summary.calendar-page-modern .calendar-toolbar-legend {
@@ -16199,9 +16766,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--p);
     font-weight: 400;
-    color: black;
-    background-color: white;
-    border: 2px solid #E3D5E9;
+    color: var(--ui-text-body);
+    background-color: var(--ui-control-bg);
+    border: 2px solid var(--ui-control-border);
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
@@ -16211,12 +16778,12 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern #calendar-filter-visibility input[type="checkbox"]:checked+label {
-    background-color: #E3D5E9;
-    border: 2px solid #E3D5E9;
+    background-color: var(--ui-control-bg-active);
+    border: 2px solid var(--ui-control-border-hover);
 }
 
 #course-summary.calendar-page-modern #calendar-filter-visibility input[type="checkbox"]:focus-visible+label {
-    outline: 2px solid #E3D5E9;
+    outline: 2px solid var(--ui-focus-ring);
     outline-offset: 2px;
 }
 
@@ -16229,12 +16796,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     width: 100%;
     max-width: none;
     margin: 0;
+    background: var(--ui-surface-page);
 }
 
 #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container {
-    background: #e3d5e9;
+    background: var(--ui-surface-panel);
     border-radius: var(--radius-card);
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: var(--ui-card-border);
     padding: 0px;
 }
 
@@ -16345,7 +16913,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main tbody tr td.calendar-slot-cell.highlight-current-time {
-    background: #fff !important;
+    background: var(--ui-surface-card) !important;
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell:not(.highlight-current-day):not(.highlight-current-time) {
@@ -16362,7 +16930,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time {
-    background-color: #fff;
+    background-color: var(--ui-surface-card);
     box-shadow: none;
     z-index: 1;
 }
@@ -16593,7 +17161,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time .calendar-empty-slot-btn:hover {
     border-style: solid;
     border-color: rgba(124, 92, 168, 0.24);
-    background: #fff;
+    background: var(--ui-surface-card);
     opacity: 1;
 }
 
@@ -16802,7 +17370,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     right: 0;
     bottom: 0;
     border-radius: 16px 16px 0 0;
-    background: #fff;
+    background: var(--ui-surface-card);
     padding: 10px 14px calc(14px + var(--safe-area-bottom));
     transform: translateY(100%);
     transition: transform 0.3s ease;
@@ -16888,7 +17456,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #course-summary.calendar-page-modern.calendar-view-week-active #calendar-main-div.main-container.calendar-container {
         width: 100%;
         margin: 0;
-        margin-top: 14px;
+        margin-top: 0;
     }
 
     #course-summary.calendar-page-modern calendar-page,
@@ -16953,17 +17521,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 /* Assignments planner redesign */
 #assignments-main.page-assignments {
     --assignments-sidebar-width: 85px;
-    --assignments-page-padding-x: 26px;
+    --assignments-page-padding-x: var(--ui-page-padding-x-desktop);
     --assignments-page-padding-top: 16px;
     --assignments-page-padding-bottom: 24px;
-    --assignments-panel-bg: #E3D5E9;
-    --assignments-pill-height: 48px;
-    --assignments-pill-radius: 999px;
+    --assignments-panel-bg: var(--ui-surface-panel);
+    --assignments-pill-height: var(--ui-control-height);
+    --assignments-pill-radius: var(--ui-control-radius-pill);
     min-height: calc(100vh - 60px);
     width: 100%;
     padding: 0;
     margin: 0;
-    background: #fff;
+    background: var(--ui-surface-page);
     display: block;
 }
 
@@ -17006,7 +17574,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: grid;
     grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 10px;
+    gap: var(--ui-toolbar-gap);
 }
 
 #assignments-main.page-assignments .assignments-toolbar-term {
@@ -17036,6 +17604,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .assignments-toolbar-search .search-btn.control-surface {
     display: none;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: visible;
 }
 
 #assignments-main.page-assignments .assignments-toolbar-search .search-pill {
@@ -17115,8 +17687,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 620;
-    color: #1d2435;
+    color: var(--color-text-primary);
     filter: none;
+    position: relative;
+    overflow: visible;
 }
 
 #assignments-main.page-assignments .search-btn-icon,
@@ -17124,11 +17698,18 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #assignments-main.page-assignments .filter-btn-icon {
     width: 20px;
     height: 20px;
+    display: inline-block;
+    position: static;
+    top: auto;
+    left: auto;
     background-position: center;
     background-repeat: no-repeat;
     background-size: 20px;
     filter: brightness(0) saturate(100%);
+    transform: none;
     flex: 0 0 auto;
+    align-self: center;
+    pointer-events: none;
 }
 
 #assignments-main.page-assignments .search-btn-icon {
@@ -17144,13 +17725,14 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #assignments-main.page-assignments .assignments-new-btn.control-surface {
-    --control-border: rgba(122, 102, 143, 0.42);
-    --control-border-hover: rgba(113, 91, 135, 0.56);
-    --control-bg: #d9c5e8;
-    --control-bg-hover: #d1bbe2;
-    --control-bg-active: #c8b0da;
+    --control-border: var(--color-accent-primary-border);
+    --control-border-hover: color-mix(in srgb, var(--color-accent-primary-border) 80%, #2e1f3c 20%);
+    --control-bg: var(--color-accent-primary-soft);
+    --control-bg-hover: color-mix(in srgb, var(--color-accent-primary-soft) 82%, var(--color-accent-primary) 18%);
+    --control-bg-active: color-mix(in srgb, var(--color-accent-primary-soft) 72%, var(--color-accent-primary) 28%);
     --control-highlight: rgba(255, 255, 255, 0.84);
-    color: #1b2435;
+    color: var(--color-text-primary);
+    box-shadow: inset 0 1px 0 var(--control-highlight), 0 4px 10px rgba(50, 50, 93, 0.08);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -17359,16 +17941,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     box-sizing: border-box;
     padding: 0px;
     border-radius: var(--radius-card);
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--color-stroke-subtle);
     background: var(--assignments-panel-bg);
-    box-shadow: 0 6px 18px #0a25401a;
+    box-shadow: var(--color-shadow-soft);
 }
 
 #assignments-main.page-assignments .assignments-module-header {
-    margin-bottom: 14px;
-    padding-top: 20px;
-    padding-left: 20px;
-    padding-right: 20px;
+    margin-bottom: 20px;
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas:
@@ -17383,20 +17962,20 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     grid-area: title;
     margin: 0;
     line-height: 1;
-    font-family: var(--secondary-font), sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
-    font-weight: 500;
-    color: #1f1727;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-title);
 }
 
 #assignments-main.page-assignments .assignments-module-subtitle {
     grid-area: subtitle;
     margin: 0;
     font-family: var(--font-ui);
-    font-size: 15px;
-    font-weight: 500;
+    font-size: var(--ui-fs-subtitle);
+    font-weight: var(--ui-fw-subtitle);
     line-height: 1.25;
-    color: rgba(23, 32, 51, 0.74);
+    color: var(--ui-text-subtitle);
 }
 
 #assignments-main.page-assignments .assignments-module-header .assignments-new-btn.control-surface {
@@ -17424,13 +18003,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #assignments-main.page-assignments .assignment-quick-filters {
     display: flex;
     gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    padding-bottom: 14px;
-    padding-left: 20px;
-    padding-right: 20px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    overflow-x: visible;
+    overflow-y: visible;
+    padding-top: 0;
+    padding-bottom: 18px;
+    margin-top: 0;
 }
 
 #assignments-main.page-assignments .assignment-quick-filters::-webkit-scrollbar {
@@ -17442,9 +18021,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     height: 28px;
     padding: 0 10px;
     border-radius: 999px;
-    border: 1px solid rgba(124, 108, 150, 0.3);
-    background: #f3ecf7d1;
-    color: #2f2940;
+    border: 1px solid var(--color-stroke-subtle);
+    background: var(--color-bg-control);
+    color: var(--color-text-secondary);
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 560;
@@ -17453,9 +18032,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #assignments-main.page-assignments .assignment-quick-filter.active {
-    background: var(--control-bg-active);
-    border-color: var(--control-border-hover);
+    background: var(--color-accent-primary-soft);
+    border-color: var(--color-accent-primary-border);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    color: var(--color-text-primary);
 }
 
 #assignments-main.page-assignments .assignment-summary-cards {
@@ -17463,26 +18043,25 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-top: 0px;
-    margin-bottom: 14px;
-    padding-left: 20px;
-    padding-right: 20px;
+    margin-bottom: 20px;
 }
 
 #assignments-main.page-assignments .assignment-summary-card {
     width: auto;
-    border: 1px solid rgba(104, 84, 132, 0.2);
-    background: #f3ecf7d1;
+    border: 1px solid var(--color-stroke-subtle);
+    background: var(--color-bg-card);
     border-radius: 16px;
     min-height: 65px;
     text-align: left;
     padding: 8px 12px;
     cursor: pointer;
+    box-shadow: var(--color-shadow-soft);
 }
 
 #assignments-main.page-assignments .assignment-summary-card.active {
-    border-color: rgba(80, 55, 112, 0.46);
-    background: #fff;
-    box-shadow: 0 8px 16px rgba(10, 37, 64, 0.08);
+    border-color: var(--color-accent-primary-border);
+    background: var(--color-accent-primary-soft);
+    box-shadow: 0 6px 14px rgba(50, 50, 93, 0.09);
 }
 
 #assignments-main.page-assignments .assignment-summary-card-label {
@@ -17490,7 +18069,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 610;
-    color: rgba(22, 24, 35, 0.72);
+    color: var(--color-text-secondary);
 }
 
 #assignments-main.page-assignments .assignment-summary-card-count {
@@ -17499,7 +18078,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-family: var(--font-ui);
     font-size: 22px;
     font-weight: 680;
-    color: #1d2435;
+    color: var(--color-text-primary);
 }
 
 #assignments-main.page-assignments.is-calendar-view .assignment-quick-filters,
@@ -17511,8 +18090,6 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding-left: 20px;
-    padding-right: 20px;
     padding-bottom: 20px;
 }
 
@@ -17523,9 +18100,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #assignments-main.page-assignments .assignment-row-card {
     width: 100%;
     border-radius: 16px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #ffffffb3;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 4px 12px rgba(50, 50, 93, 0.06);
+    border: 1px solid var(--color-stroke-subtle);
+    background: var(--color-bg-card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--color-shadow-soft);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -17624,25 +18201,26 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0 14px;
-    height: 30px;
+    padding: 0 10px;
+    height: 24px;
     border-radius: 999px;
-    border: 1px solid rgba(15, 23, 42, 0.14);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 1px 2px rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
     font-family: var(--font-ui);
-    font-size: 12px;
-    font-weight: 620;
-    color: #1f2a3d;
+    font-size: 11px;
+    font-weight: 560;
+    color: rgba(31, 42, 61, 0.86);
     line-height: 1;
     white-space: nowrap;
     max-width: min(300px, 42vw);
     overflow: hidden;
     text-overflow: ellipsis;
+    opacity: 0.92;
 }
 
 #assignments-main.page-assignments .assignment-course-chip--empty {
-    background: rgba(235, 236, 240, 0.76);
-    color: rgba(36, 43, 57, 0.65);
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
 }
 
 #assignments-main.page-assignments .assignment-row-right {
@@ -17651,45 +18229,48 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     gap: 10px;
     margin-left: 12px;
     flex-shrink: 0;
+    --assignment-row-action-height: 34px;
 }
 
 #assignments-main.page-assignments .status-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 34px;
-    padding: 0 14px;
+    min-height: var(--assignment-row-action-height);
+    height: var(--assignment-row-action-height);
+    padding: 0 12px;
     border-radius: 999px;
     font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 590;
+    line-height: 1;
     border: 1px solid rgba(15, 23, 42, 0.06);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
     min-width: 112px;
 }
 
 #assignments-main.page-assignments .status-not-started {
-    background: #e9ecef;
-    color: #6c757d;
-    border-color: rgba(108, 117, 125, 0.2);
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
+    border-color: var(--color-stroke-subtle);
 }
 
 #assignments-main.page-assignments .status-in-progress,
 #assignments-main.page-assignments .status-ongoing {
-    background: rgba(254, 243, 199, 0.9);
-    color: #7c5a00;
+    background: var(--color-status-progress-bg);
+    color: var(--color-status-progress-text);
     border-color: rgba(146, 111, 0, 0.14);
 }
 
 #assignments-main.page-assignments .status-completed {
-    background: rgba(204, 241, 216, 0.9);
-    color: #14532d;
+    background: var(--color-status-completed-bg);
+    color: var(--color-status-completed-text);
     border-color: rgba(20, 83, 45, 0.14);
 }
 
 #assignments-main.page-assignments .status-overdue {
-    background: rgba(254, 226, 226, 0.92);
-    color: #b91c1c;
+    background: var(--color-status-overdue-bg);
+    color: var(--color-status-overdue-text);
     border-color: rgba(220, 38, 38, 0.18);
 }
 
@@ -17734,8 +18315,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #assignments-main.page-assignments .assignment-overflow-trigger {
-    width: 34px;
-    height: 34px;
+    width: var(--assignment-row-action-height);
+    height: var(--assignment-row-action-height);
+    min-height: var(--assignment-row-action-height);
     border-radius: 999px;
     border: 1px solid var(--control-border);
     background: var(--control-bg);
@@ -17979,6 +18561,151 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     padding-top: 14px;
 }
 
+.assignment-due-date-sheet-options {
+    gap: 12px;
+    overflow-x: hidden;
+}
+
+.assignment-due-date-sheet-calendar {
+    --assignment-due-day-size: clamp(30px, 10.2vw, 46px);
+    --assignment-due-grid-gap: clamp(2px, 1.1vw, 6px);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    background: var(--control-bg);
+    padding: clamp(10px, 2.8vw, 14px);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.assignment-due-date-sheet-calendar-header {
+    display: grid;
+    grid-template-columns: clamp(34px, 9.8vw, 40px) 1fr clamp(34px, 9.8vw, 40px);
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.assignment-due-date-sheet-month {
+    margin: 0;
+    text-align: center;
+    font-family: var(--font-ui);
+    font-size: clamp(20px, 5.2vw, 30px);
+    font-weight: 620;
+    color: var(--color-text-primary);
+}
+
+.assignment-due-date-sheet-nav-btn {
+    width: clamp(34px, 9.8vw, 40px);
+    height: clamp(34px, 9.8vw, 40px);
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    box-shadow: none !important;
+}
+
+.assignment-due-date-sheet-nav-btn--prev {
+    background-image: url('/assets/chevron-left.svg');
+}
+
+.assignment-due-date-sheet-nav-btn--next {
+    background-image: url('/assets/chevron-right.svg');
+}
+
+.assignment-due-date-sheet-grid {
+    padding: 4px 2px 0;
+}
+
+.assignment-due-date-sheet-weekdays {
+    margin-bottom: 4px;
+}
+
+.assignment-due-date-sheet-weekdays span {
+    font-family: var(--font-ui);
+    font-size: clamp(12px, 3.2vw, 14px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 20px;
+}
+
+.assignment-due-date-sheet-days {
+    gap: var(--assignment-due-grid-gap);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    justify-items: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.assignment-due-date-sheet-day {
+    width: min(var(--assignment-due-day-size), 100%);
+    aspect-ratio: 1 / 1;
+    height: auto;
+    border: none;
+    background: transparent;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border-radius: 999px;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 560;
+    line-height: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: none !important;
+}
+
+.assignment-due-date-sheet-day.selected {
+    background: #BDAAC6;
+    color: #fff;
+}
+
+.assignment-due-date-sheet-day.today {
+    border: 2px solid #BDAAC6;
+}
+
+.assignment-due-date-sheet-day.other-month {
+    opacity: 0.42;
+}
+
+.assignment-due-date-sheet-day:focus-visible,
+.assignment-due-date-sheet-nav-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.assignment-due-date-sheet-quick-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.assignment-due-date-sheet-quick-btn.control-surface {
+    flex: 1 1 0;
+    min-height: 42px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: none !important;
+}
+
+.assignment-due-date-sheet .semester-mobile-sheet-cancel {
+    box-shadow: none !important;
+}
+
 .assignments-calendar-day-sheet-layer {
     z-index: 23510;
 }
@@ -18008,16 +18735,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-view-container {
     position: relative;
-    overflow: hidden;
-    border-radius: 22px;
-    border: 1px solid rgba(15, 23, 42, .08);
-    background: #ffffffb3;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 8px 18px rgba(42, 27, 63, 0.08);
-    margin: 20px;
-    padding: 14px;
+    overflow: visible;
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    filter: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 0;
 }
 
 #assignments-main.page-assignments .calendar-view-container::after {
@@ -18029,6 +18757,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     grid-template-columns: minmax(0, 1fr) minmax(320px, 320px);
     gap: 14px;
     align-items: start;
+    padding-top: 14px;
 }
 
 #assignments-main.page-assignments .calendar-nav {
@@ -18170,7 +18899,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-cell.empty {
     cursor: default;
-    background: rgba(250, 248, 253, 0.54);
+    background: var(--color-bg-card-subtle);
 }
 
 #assignments-main.page-assignments .calendar-cell.empty:focus-visible {
@@ -18179,26 +18908,26 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 @media (hover: hover) and (pointer: fine) {
     #assignments-main.page-assignments .calendar-cell:not(.empty):hover {
-        background: rgba(246, 241, 252, 0.7);
+        background: color-mix(in srgb, var(--color-accent-primary-soft) 65%, var(--color-bg-card) 35%);
     }
 }
 
 #assignments-main.page-assignments .calendar-cell.today .day-number {
-    border-color: rgba(141, 114, 173, 0.42);
-    background: rgba(189, 170, 198, 0.18);
-    color: #5a476f;
+    border-color: var(--color-accent-primary-border);
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
 }
 
 #assignments-main.page-assignments .calendar-cell.calendar-cell--selected {
-    background: rgba(245, 239, 252, 0.96);
-    border-color: rgba(132, 106, 162, 0.22);
-    box-shadow: inset 0 0 0 1px rgba(132, 106, 162, 0.12);
+    background: var(--color-accent-primary-soft);
+    border-color: var(--color-accent-primary-border);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-primary-border) 45%, transparent 55%);
 }
 
 #assignments-main.page-assignments .calendar-cell.calendar-cell--selected .day-number {
     border-color: transparent;
-    background: #bdaac6;
-    color: #fff;
+    background: var(--color-accent-primary);
+    color: var(--color-text-primary);
     box-shadow: 0 -2px 4px rgba(10, 37, 64, 0.2) inset;
 }
 
@@ -18210,12 +18939,12 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     width: 6px;
     height: 6px;
     border-radius: 999px;
-    background: #8b6dac;
-    box-shadow: 0 0 0 2px #fff;
+    background: var(--color-accent-primary);
+    box-shadow: 0 0 0 2px var(--color-bg-card);
 }
 
 #assignments-main.page-assignments .calendar-cell.calendar-cell--selected.today .day-number::after {
-    background: #efe5f7;
+    background: var(--color-bg-card);
     box-shadow: 0 0 0 2px rgba(61, 43, 78, 0.62);
 }
 
@@ -18233,7 +18962,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
-    color: #3b2f4f;
+    color: var(--color-text-secondary);
 }
 
 #assignments-main.page-assignments .day-assignments {
@@ -18265,8 +18994,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     line-height: 1;
     text-align: left;
     cursor: pointer;
-    color: #1f2a3d;
-    background: var(--calendar-course-hint, #eef2f7);
+    color: var(--color-course-text);
+    background: var(--calendar-course-hint, var(--color-bg-card-subtle));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 1px 2px rgba(15, 23, 42, 0.05);
     transform: none;
     transition: border-color 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
@@ -18307,7 +19036,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--overdue::after {
     display: inline-block;
-    background: #e11d48;
+    background: var(--color-status-overdue-text);
 }
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--due-today {
@@ -18316,7 +19045,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--due-today::after {
     display: inline-block;
-    background: #8b5cf6;
+    background: var(--color-accent-primary);
 }
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--completed {
@@ -18325,7 +19054,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--completed::after {
     display: inline-block;
-    background: #16a34a;
+    background: var(--color-status-completed-text);
 }
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--in-progress {
@@ -18334,7 +19063,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--in-progress::after {
     display: inline-block;
-    background: #eab308;
+    background: var(--color-status-progress-text);
 }
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--not-started {
@@ -18343,7 +19072,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .calendar-assignment.calendar-assignment--not-started::after {
     display: inline-block;
-    background: #94a3b8;
+    background: var(--color-status-neutral-text);
 }
 
 #assignments-main.page-assignments .calendar-more-btn {
@@ -18354,9 +19083,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     min-height: 24px;
     height: 24px;
     border-radius: 999px;
-    border: 1px dashed rgba(113, 91, 135, 0.3);
-    background: rgba(247, 243, 251, 0.85);
-    color: rgba(45, 33, 57, 0.8);
+    border: 1px dashed var(--color-accent-primary-border);
+    background: var(--color-bg-card-subtle);
+    color: var(--color-text-secondary);
     padding: 0 8px;
     font-family: var(--font-ui);
     font-size: 11px;
@@ -18377,10 +19106,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #assignments-main.page-assignments .assignments-calendar-day-detail {
     position: sticky;
     align-self: start;
-    border: 1px solid rgba(113, 91, 135, .14);
+    border: 1px solid var(--color-stroke-subtle);
     border-radius: 16px;
-    background: #ffffffbd;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 6px 14px rgba(42, 27, 63, 0.08);
+    background: var(--color-bg-card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), var(--color-shadow-soft);
     padding: 0px;
     display: flex;
     flex-direction: column;
@@ -18392,7 +19121,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #assignments-main.page-assignments .assignments-calendar-day-detail-header {
     padding: 10px 10px 8px;
     margin: 0;
-    border-bottom: 1px solid rgba(113, 91, 135, 0.12);
+    border-bottom: 1px solid var(--color-stroke-subtle);
 }
 
 #assignments-main.page-assignments .assignments-calendar-day-detail-title {
@@ -18401,7 +19130,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-size: 21px;
     font-weight: 500;
     line-height: 1.1;
-    color: #1f1727;
+    color: var(--color-text-primary);
 }
 
 #assignments-main.page-assignments .assignments-calendar-day-detail-body {
@@ -18419,8 +19148,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     min-height: 64px;
     height: auto;
     border-radius: 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #ffffff;
+    border: 1px solid var(--color-stroke-subtle);
+    background: var(--color-bg-card);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(15, 23, 42, 0.05);
     padding: 10px 12px;
     margin: 0;
@@ -18443,7 +19172,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-size: 14px;
     font-weight: 600;
     line-height: 1.25;
-    color: #0f172a;
+    color: var(--color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -18466,10 +19195,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     max-width: min(300px, 100%);
     padding: 0 14px;
     border-radius: 999px;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    background: var(--day-course-chip-bg, rgba(232, 224, 238, 0.9));
+    border: 1px solid var(--color-stroke-subtle);
+    background: var(--day-course-chip-bg, var(--color-bg-card-subtle));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 1px 2px rgba(15, 23, 42, 0.06);
-    color: #1f2a3d;
+    color: var(--color-course-text);
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 620;
@@ -18480,8 +19209,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #assignments-main.page-assignments .assignments-calendar-day-course-chip--empty {
-    background: rgba(235, 236, 240, 0.82);
-    color: rgba(36, 43, 57, 0.68);
+    background: var(--color-status-neutral-bg);
+    color: var(--color-status-neutral-text);
 }
 
 #assignments-main.page-assignments .assignments-calendar-day-row .status-badge {
@@ -18496,7 +19225,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 @media (hover: hover) and (pointer: fine) {
     #assignments-main.page-assignments .assignments-calendar-day-row:hover {
         border-color: var(--control-border-hover);
-        background-color: rgba(255, 255, 255, 0.96);
+        background-color: var(--color-bg-card);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), var(--control-shadow-hover);
     }
 }
@@ -18516,8 +19245,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     box-sizing: border-box;
     min-height: 64px;
     border-radius: 14px;
-    border: 1px dashed rgba(113, 91, 135, 0.28);
-    background: #ffffffb3;
+    border: 1px dashed var(--color-accent-primary-border);
+    background: var(--color-bg-card);
     padding: 10px 12px;
     margin: 0;
     display: flex;
@@ -18531,7 +19260,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     margin: 0;
     font-family: var(--font-ui);
     font-size: 14px;
-    color: #22192cd6;
+    color: var(--color-text-secondary);
 }
 
 #assignments-main.page-assignments .assignments-calendar-day-new-btn.control-surface {
@@ -18543,11 +19272,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     border-radius: 999px;
     font-family: var(--secondary-font), sans-serif;
     font-weight: 500;
-    --control-border: rgba(122, 102, 143, 0.42);
-    --control-border-hover: rgba(113, 91, 135, 0.56);
-    --control-bg: #d9c5e8;
-    --control-bg-hover: #d1bbe2;
-    --control-bg-active: #c8b0da;
+    --control-border: var(--color-accent-primary-border);
+    --control-border-hover: color-mix(in srgb, var(--color-accent-primary-border) 80%, #2e1f3c 20%);
+    --control-bg: var(--color-accent-primary-soft);
+    --control-bg-hover: color-mix(in srgb, var(--color-accent-primary-soft) 82%, var(--color-accent-primary) 18%);
+    --control-bg-active: color-mix(in srgb, var(--color-accent-primary-soft) 72%, var(--color-accent-primary) 28%);
     --control-highlight: rgba(255, 255, 255, 0.84);
 }
 
@@ -18558,19 +19287,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #assignments-main.page-assignments .assignments-empty {
     padding: 26px 18px;
-    border: 1px dashed rgba(120, 98, 144, 0.4);
+    border: 1px dashed var(--color-accent-primary-border);
     border-radius: 16px;
-    background: #ffffffb3;
+    background: var(--color-bg-card);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 0;
-    margin-left: 20px;
-    margin-right: 20px;
     margin-bottom: 20px;
     font-family: var(--font-ui);
-    color: rgba(34, 25, 44, 0.84);
+    color: var(--color-text-secondary);
 }
 
 #assignments-main.page-assignments .assignments-empty[hidden] {
@@ -18619,21 +19346,38 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
-    color: #1b2435;
+    color: var(--color-text-primary);
     cursor: pointer;
 }
 
 #assignments-main.page-assignments .empty-state-cta--secondary {
-    border-color: rgba(122, 102, 143, 0.24);
+    border-color: var(--color-accent-primary-border);
+}
+
+@media (min-width: 1024px) {
+    #assignments-main.page-assignments .assignments-container {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
 }
 
 @media (max-width: 1023px) {
     #assignments-main.page-assignments {
         --assignments-sidebar-width: 0px;
-        --assignments-page-padding-x: 15px;
+        --assignments-page-padding-x: var(--ui-page-padding-x-mobile);
         --assignments-page-padding-top: 10px;
-        --assignments-page-padding-bottom: 16px;
-        --assignments-pill-height: 42px;
+        --assignments-page-padding-bottom: var(--ui-section-gap-mobile);
+        --assignments-pill-height: var(--ui-control-height-mobile);
+    }
+
+    #assignments-main.page-assignments.is-calendar-view {
+        min-height: auto;
+    }
+
+    #assignments-main.page-assignments.is-calendar-view .assignments-page-main {
+        padding-bottom: 0 !important;
     }
 
     #assignments-main.page-assignments .assignments-toolbar-shell,
@@ -18644,7 +19388,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #assignments-main.page-assignments .assignments-toolbar-shell {
-        padding: calc(var(--assignments-page-padding-top) + var(--safe-area-top)) var(--assignments-page-padding-x) var(--assignments-page-padding-top);
+        padding: calc(var(--assignments-page-padding-top) + var(--safe-area-top)) var(--assignments-page-padding-x) 0;
     }
 
     #assignments-main.page-assignments .assignments-toolbar-row-a {
@@ -18688,6 +19432,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         min-height: 50px;
         padding: 0;
         display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+
+    #assignments-main.page-assignments .calendar-nav {
+        border-bottom: none !important;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-layout {
+        padding-top: 0px !important;
     }
 
     #assignments-main.page-assignments .assignments-toolbar-search .search-btn-label {
@@ -18709,6 +19464,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
     #assignments-main.page-assignments .assignments-toolbar-actions .sort-wrapper {
         display: none;
+    }
+
+    #assignments-main.page-assignments .status-badge {
+        box-sizing: border-box;
     }
 
     #assignments-main.page-assignments .assignments-toolbar-actions .sort-btn-label,
@@ -18736,11 +19495,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #assignments-main.page-assignments .assignments-page-main {
-        padding: 0 var(--assignments-page-padding-x) var(--assignments-page-padding-bottom);
+        padding: var(--ui-section-gap-mobile) var(--assignments-page-padding-x) var(--assignments-page-padding-bottom) !important;
     }
 
     #assignments-main.page-assignments .assignments-container {
-        margin-top: 12px;
+        margin-top: 0;
         border: 0;
         border-radius: 0;
         background: transparent;
@@ -18784,15 +19543,36 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         align-items: center;
     }
 
+    #assignments-main.page-assignments .assignments-module-title {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-module-header {
+        grid-template-columns: minmax(0, 50%) auto;
+        grid-template-areas: "subtitle new";
+        column-gap: 10px;
+        row-gap: 0;
+        align-items: center;
+    }
+
+    #assignments-main.page-assignments .assignments-module-subtitle {
+        display: block;
+        margin: 0;
+        grid-area: subtitle;
+    }
+
     #assignments-main.page-assignments .assignments-module-header .assignments-new-btn.control-surface {
         justify-self: end;
         align-self: center;
         min-height: var(--assignments-pill-height);
         height: var(--assignments-pill-height);
-        padding: 0 14px;
-        gap: 8px;
+        padding: 0 12px;
+        gap: 6px;
         font-size: 13px;
         font-weight: 620;
+        width: 100%;
+        min-width: fit-content;
+        max-width: none;
     }
 
     #assignments-main.page-assignments .assignments-module-header .assignments-new-btn .assignment-add-icon {
@@ -18830,7 +19610,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #assignments-main.page-assignments .assignment-course-chip {
         flex: 1 1 auto;
         min-width: 0;
-        max-width: none;
+        max-width: min(100%, calc(100vw - 190px));
         justify-content: flex-start;
     }
 
@@ -18847,13 +19627,14 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #assignments-main.page-assignments .calendar-view-container {
-        padding: 10px;
-        border-radius: 18px;
-        gap: 10px;
-        margin-top: 14px;
-        margin-left: 0px;
-        margin-right: 0px;
-        margin-bottom: 0px;
+        padding: 0;
+        border-radius: 0;
+        gap: 0;
+        margin: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        filter: none;
     }
 
     #assignments-main.page-assignments .calendar-nav,
@@ -18868,7 +19649,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
     #assignments-main.page-assignments .calendar-nav {
         grid-template-columns: auto auto minmax(0, 1fr) auto;
-        gap: 6px;
+        gap: 20px;
         padding: 0 0 8px;
     }
 
@@ -18956,6 +19737,19 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         min-height: 28px;
         font-size: 11px;
         padding: 0 10px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-course-chip {
+        height: 24px;
+        min-height: 24px;
+        max-width: 100%;
+        padding: 0 10px;
+        border-color: rgba(15, 23, 42, 0.08);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+        font-size: 11px;
+        font-weight: 560;
+        line-height: 1;
+        opacity: 0.92;
     }
 
     #assignments-main.page-assignments .assignments-calendar-day-empty {
@@ -19064,7 +19858,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page .calendar-day-agenda {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
     padding: 20px;
     padding-top: 0px !important;
     will-change: transform, opacity;
@@ -19744,7 +20538,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #course-summary.calendar-page-modern calendar-page .calendar-day-tabs {
         padding-left: 15px;
         padding-right: 15px;
-        padding-top: 10px;
+        padding-top: 20px;
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-mobile-view {
@@ -20332,8 +21126,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-list-content {
-        gap: 12px;
+        gap: 10px;
         padding: 15px;
+        padding-top: 20px !important;
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-list-day-heading {
@@ -20394,13 +21189,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-info-content-root {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--ui-section-gap-mobile);
 }
 
 #course-info-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--ui-toolbar-gap);
     flex-wrap: wrap;
     width: 100%;
 }
@@ -20414,11 +21209,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-info-actions #class-add-remove {
-    min-height: 52px;
-    border-radius: 999px;
+    min-height: var(--ui-control-height);
+    border-radius: var(--ui-control-radius-pill);
     border: 1px solid rgba(15, 23, 42, 0.08);
-    font-family: var(--font-ui);
-    font-weight: 500;
+    font-family: var(--ui-font-family);
+    font-weight: var(--ui-fw-body);
     width: 100%;
 }
 
@@ -20426,17 +21221,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .btn-secondary,
 .btn-destructive {
     width: auto;
-    min-height: 52px;
+    min-height: var(--ui-control-height);
     height: auto;
-    border-radius: 999px;
+    border-radius: var(--ui-control-radius-pill);
     padding: 0 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-family: var(--font-ui);
-    font-size: 16px !important;
-    font-weight: 500 !important;
+    font-family: var(--ui-font-family);
+    font-size: var(--ui-fs-body) !important;
+    font-weight: var(--ui-fw-body) !important;
     text-decoration: none;
     cursor: pointer;
     border: 1px solid var(--control-border);
@@ -20444,7 +21239,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     transform: translateY(0);
     background: rgba(255, 255, 255, 0.92);
-    color: #0f172a;
+    color: var(--ui-text-heading);
 }
 
 .btn-primary {
@@ -20455,7 +21250,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 .btn-secondary {
     background: rgba(255, 255, 255, 0.92);
-    color: #1b2435;
+    color: var(--ui-text-heading);
     border-color: rgba(122, 102, 143, 0.24);
 }
 
@@ -23249,7 +24044,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         gap: 8px;
     }
 
-    .courseinfo-sheet:not(.course-fullscreen) .class-header h2 {
+    .courseinfo-sheet:not(.course-fullscreen) .class-header :is(h2, h3) {
         order: 1;
         flex: 1 1 auto;
         min-width: 0;
@@ -23265,7 +24060,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         font-weight: 600 !important;
     }
 
-    .courseinfo-sheet[data-sheet-state="collapsed"]:not(.course-fullscreen) .class-header h2 {
+    .courseinfo-sheet[data-sheet-state="collapsed"]:not(.course-fullscreen) .class-header :is(h2, h3) {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -23440,18 +24235,18 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 /* Courses page layout + toolbar + section container */
 .page-courses {
     --courses-page-max-width: 1200px;
-    --courses-page-padding-x: 26px;
+    --courses-page-padding-x: var(--ui-page-padding-x-desktop);
     --courses-page-padding-top: 16px;
     --courses-page-padding-bottom: 24px;
     --courses-section-padding-x: 20px;
     --courses-section-padding-top: 32px;
     --courses-section-padding-bottom: 26px;
-    --courses-toolbar-to-section-gap: 16px;
-    --courses-panel-bg: #E3D5E9;
+    --courses-toolbar-to-section-gap: var(--ui-section-gap-mobile);
+    --courses-panel-bg: var(--ui-surface-panel);
     --courses-sidebar-width: 85px;
-    --courses-pill-height: 48px;
-    --courses-pill-radius: 999px;
-    background: #fff;
+    --courses-pill-height: var(--ui-control-height);
+    --courses-pill-radius: var(--ui-control-radius-pill);
+    background: var(--ui-surface-page);
 }
 
 .page-courses .courses-page-main {
@@ -23528,7 +24323,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--ui-toolbar-gap);
     min-width: 0;
 }
 
@@ -23536,7 +24331,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--ui-toolbar-gap);
     min-width: 0;
 }
 
@@ -23758,20 +24553,20 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .page-courses .courses-section-title {
     margin: 0;
     line-height: 1;
-    font-family: var(--secondary-font), sans-serif;
+    font-family: var(--ui-font-family);
     font-size: var(--h3);
-    font-weight: 500;
-    color: #1f1727;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-title);
 }
 
 .page-courses #course-results-summary.course-main-paragraph {
     margin: 0;
     display: block;
-    font-size: 15px !important;
+    font-size: var(--ui-fs-subtitle) !important;
     font-family: var(--font-ui);
-    font-weight: 500;
+    font-weight: var(--ui-fw-subtitle);
     line-height: 1.25;
-    color: rgba(23, 32, 51, 0.74);
+    color: var(--ui-text-subtitle);
 }
 
 .page-courses .course-active-filters {
@@ -23854,15 +24649,15 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 @media (max-width: 1023px) {
     .page-courses {
-        --courses-page-padding-x: 15px;
+        --courses-page-padding-x: var(--ui-page-padding-x-mobile);
         --courses-page-padding-top: 10px;
-        --courses-page-padding-bottom: 16px;
-        --courses-section-padding-x: 15px;
+        --courses-page-padding-bottom: var(--ui-section-gap-mobile);
+        --courses-section-padding-x: var(--ui-page-padding-x-mobile);
         --courses-section-padding-top: 24px;
-        --courses-section-padding-bottom: 16px;
-        --courses-toolbar-to-section-gap: 12px;
+        --courses-section-padding-bottom: var(--ui-section-gap-mobile);
+        --courses-toolbar-to-section-gap: var(--ui-section-gap-mobile);
         --courses-sidebar-width: 0px;
-        --courses-pill-height: 42px;
+        --courses-pill-height: var(--ui-control-height-mobile);
     }
 
     .page-courses #syllabus-main {
@@ -23871,17 +24666,19 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         margin-left: 0;
     }
 
-    .page-courses .courses-page-main,
+    .page-courses .courses-page-main {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        padding-top: var(--ui-section-gap-mobile) !important;
+        padding-bottom: var(--ui-section-gap-mobile) !important;
+    }
+
     .page-courses .courses-toolbar-shell {
         width: 100%;
         margin-left: 0;
         margin-right: 0;
-        padding-top: 15px !important;
-        padding-bottom: 15px !important;
-    }
-
-    .page-courses .courses-toolbar-shell {
-        padding: var(--courses-page-padding-top) var(--courses-page-padding-x);
+        padding: 10px 15px !important;
     }
 
     .page-courses .courses-toolbar,
@@ -24014,11 +24811,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 /* Calendar toolbar parity with courses toolbar */
 #course-summary.calendar-page-modern {
     --calendar-toolbar-sidebar-width: 85px;
-    --calendar-toolbar-padding-x: 26px;
+    --calendar-toolbar-padding-x: var(--ui-page-padding-x-desktop);
     --calendar-toolbar-padding-y: 16px;
-    --calendar-toolbar-pill-height: 48px;
-    --calendar-toolbar-pill-radius: 999px;
-    --courses-page-padding-x: 26px;
+    --calendar-toolbar-pill-height: var(--ui-control-height);
+    --calendar-toolbar-pill-radius: var(--ui-control-radius-pill);
+    --courses-page-padding-x: var(--ui-page-padding-x-desktop);
     --courses-page-padding-top: 16px;
     --courses-page-padding-bottom: 24px;
 }
@@ -24113,8 +24910,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     box-shadow: none;
     font-family: var(--font-ui);
     font-size: 13px;
-    font-weight: 620;
-    color: #1d2435;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-heading);
 }
 
 #course-summary.calendar-page-modern .calendar-view-btn.is-active {
@@ -24181,9 +24978,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 @media (max-width: 1023px) {
     #course-summary.calendar-page-modern {
         --calendar-toolbar-sidebar-width: 0px;
-        --calendar-toolbar-padding-x: 15px;
+        --calendar-toolbar-padding-x: var(--ui-page-padding-x-mobile);
         --calendar-toolbar-padding-y: 10px;
-        --calendar-toolbar-pill-height: 50px;
+        --calendar-toolbar-pill-height: var(--ui-control-height);
     }
 
     #course-summary.calendar-page-modern .container-above.container-above-mobile {
@@ -24297,4 +25094,359 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #course-summary.calendar-page-modern calendar-page #calendar-main td:not(:first-child) {
         width: calc((100% - 100px) / 5) !important;
     }
+}
+
+/* Mobile semantic color hierarchy enforcement */
+@media (max-width: 1023px) {
+    #home-main,
+    #profile-main,
+    #assignments-main.page-assignments,
+    .page-courses,
+    #course-summary.calendar-page-modern,
+    #course-summary.calendar-page-modern .main-content,
+    .page-courses .main-content {
+        background: var(--color-bg-app);
+    }
+
+    /* Calendar page canvas should read as neutral grey */
+    #course-summary.calendar-page-modern,
+    #course-summary.calendar-page-modern .main-content,
+    #course-summary.calendar-page-modern calendar-page,
+    #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper {
+        background: #f2f3f7 !important;
+    }
+
+    /* Calendar header/toolbar bar should stay white */
+    body:has(#course-summary.calendar-page-modern) .app-header,
+    #course-summary.calendar-page-modern .container-above.container-above-mobile,
+    #course-summary.calendar-page-modern .container-above.container-above-desktop {
+        background: var(--color-bg-card) !important;
+        border-bottom: 1px solid var(--color-stroke-subtle);
+    }
+
+    #home-main .main-container.home-widget-card,
+    #home-main #home-courses-preview-container,
+    #home-main #home-review-suggestion-container,
+    .profile-page .card-surface,
+    .page-courses #course-main-div.main-container.courses-section {
+        background: var(--color-bg-module);
+        border-color: var(--color-stroke-subtle);
+        box-shadow: var(--color-shadow-soft);
+    }
+
+    #assignments-main.page-assignments .assignments-container {
+        border: unset;
+        border-radius: unset;
+        padding-top: unset;
+    }
+
+    #assignments-main.page-assignments .assignment-row-card,
+    #assignments-main.page-assignments .assignment-summary-card,
+    #assignments-main.page-assignments .assignments-calendar-day-row,
+    #assignments-main.page-assignments .assignments-calendar-day-detail,
+    #assignments-main.page-assignments .assignments-empty,
+    #assignments-main.page-assignments .assignment-quick-filter {
+        background: var(--color-bg-card);
+        border-color: var(--color-stroke-subtle);
+    }
+
+    /* Full-bleed horizontal chip rail: extend to viewport edges, not page padding */
+    #assignments-main.page-assignments .assignment-quick-filters {
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-wrap: nowrap;
+        row-gap: 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        padding-top: 3px;
+        margin-top: -3px;
+        box-sizing: border-box;
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+        padding-left: max(var(--assignments-page-padding-x), var(--safe-area-left));
+        padding-right: max(var(--assignments-page-padding-x), var(--safe-area-right));
+        scroll-padding-left: max(var(--assignments-page-padding-x), var(--safe-area-left));
+        scroll-padding-right: max(var(--assignments-page-padding-x), var(--safe-area-right));
+        overscroll-behavior-x: contain;
+    }
+
+    #assignments-main.page-assignments .assignment-quick-filters::after {
+        flex: 0 0 max(var(--assignments-page-padding-x), var(--safe-area-right));
+    }
+
+    #assignments-main.page-assignments .assignment-quick-filter {
+        flex: 0 0 auto;
+    }
+
+    #assignments-main.page-assignments .assignment-summary-card.active,
+    #assignments-main.page-assignments .assignment-quick-filter.active,
+    #assignments-main.page-assignments .assignments-view-segment.calendar-view-btn.active,
+    #assignments-main.page-assignments .assignments-view-segment.calendar-view-btn.is-active {
+        background: var(--color-accent-primary-soft);
+        border-color: var(--color-accent-primary-border);
+    }
+
+    #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container,
+    #course-summary.calendar-page-modern calendar-page .calendar-container-main,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-view,
+    #course-summary.calendar-page-modern calendar-page .calendar-day-view,
+    #course-summary.calendar-page-modern calendar-page .calendar-list-view,
+    #course-summary.calendar-page-modern calendar-page .calendar-list-scroll,
+    #course-summary.calendar-page-modern calendar-page .calendar-list-content {
+        background: #f2f3f7 !important;
+        border-color: transparent;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-shell,
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-period-toggle,
+    #course-summary.calendar-page-modern calendar-page .calendar-list-empty-state {
+        background: var(--color-bg-card) !important;
+        border-color: var(--color-stroke-subtle);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--color-shadow-soft);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-list-item {
+        background: var(--calendar-list-item-bg, var(--color-bg-card)) !important;
+        border-color: var(--color-stroke-subtle);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--color-shadow-soft);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-course-card,
+    #course-summary.calendar-page-modern calendar-page .calendar-course-card {
+        border-color: var(--color-stroke-subtle);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-tab-btn,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab {
+        background: var(--color-bg-control) !important;
+        border-color: var(--color-stroke-subtle);
+        color: var(--color-text-primary) !important;
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow) !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-tab-btn.is-active,
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-day-tab.is-active,
+    #course-summary.calendar-page-modern .calendar-view-btn.is-active {
+        background: var(--color-accent-primary-soft) !important;
+        border-color: var(--color-accent-primary-border) !important;
+        color: var(--color-text-primary) !important;
+        box-shadow: inset 0 1px 0 var(--control-highlight), 0 4px 10px rgba(50, 50, 93, 0.08) !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-tab-today-chip {
+        background: var(--color-bg-card);
+        border-color: var(--color-accent-primary-border);
+        color: var(--color-text-secondary);
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main th.highlight-day,
+    #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-day {
+        background: var(--color-accent-primary-soft) !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-day {
+        background: var(--color-bg-card-subtle) !important;
+        box-shadow: inset 0 0 0 1px var(--color-accent-primary-border);
+    }
+
+    #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-day.highlight-day {
+        background: var(--color-accent-primary-soft) !important;
+    }
+
+    .page-courses .course-active-filter-chip,
+    .page-courses .sort-status-pill,
+    .page-courses .courses-toolbar-actions .search-btn.control-surface,
+    .page-courses .courses-toolbar-actions .filter-btn.control-surface,
+    .page-courses .courses-toolbar-actions .sort-btn.control-surface {
+        background: var(--color-bg-card);
+        border-color: var(--color-stroke-subtle);
+        color: var(--color-text-secondary);
+    }
+
+    #home-main .home-planner-list-item,
+    #home-main .home-progress-stat,
+    #home-main .home-due-item-btn,
+    #home-main .home-planner-conflict-box,
+    #home-main .home-planner-action-btn,
+    #home-main .home-module-link-btn,
+    #home-main .home-quick-action-btn,
+    #home-main .home-module-badge {
+        background: var(--color-bg-card);
+        border-color: var(--color-stroke-subtle);
+        color: var(--color-text-primary);
+    }
+
+    .profile-page .nav-row,
+    .profile-page .profile-subblock,
+    .profile-page .profile-inline-notice,
+    .profile-page .status-pill,
+    .profile-modal-layer .status-pill,
+    .profile-choice-option,
+    .profile-modal-layer .calendar-integration-feed-card,
+    .profile-modal.profile-modal--swipe,
+    .semester-mobile-sheet,
+    .class-info:not(.course-fullscreen) {
+        background: var(--color-bg-card);
+        border-color: var(--color-stroke-subtle);
+        color: var(--color-text-primary);
+    }
+
+    .profile-choice-option.is-selected {
+        background: var(--color-accent-primary-soft);
+        border-color: var(--color-accent-primary-border);
+    }
+}
+
+/* Global top-bar divider unification */
+.app-header,
+#home-main .home-container-above.container-above-desktop,
+.page-courses .courses-toolbar-shell,
+#assignments-main.page-assignments .assignments-toolbar-shell,
+#course-summary.calendar-page-modern .container-above.container-above-desktop,
+#course-summary.calendar-page-modern .container-above.container-above-mobile,
+.course-page-toolbar-shell {
+    border-bottom-color: var(--ui-header-divider) !important;
+}
+
+#home-main .home-container-above.container-above-desktop.is-scrolled,
+.page-courses .courses-toolbar-shell.is-scrolled,
+#assignments-main.page-assignments .assignments-toolbar-shell.is-scrolled,
+#course-summary.calendar-page-modern .container-above.container-above-desktop.is-scrolled,
+#course-summary.calendar-page-modern .container-above.container-above-mobile.is-scrolled {
+    border-bottom-color: var(--ui-header-divider-strong) !important;
+}
+
+/* Calendar-only: soften top-bar separator and remove extra scrolled shadow */
+body:has(#course-summary.calendar-page-modern) .app-header,
+#course-summary.calendar-page-modern .container-above.container-above-desktop,
+#course-summary.calendar-page-modern .container-above.container-above-mobile,
+#course-summary.calendar-page-modern .container-above.container-above-desktop.is-scrolled,
+#course-summary.calendar-page-modern .container-above.container-above-mobile.is-scrolled {
+    border-bottom-color: rgba(15, 23, 42, 0.05) !important;
+    box-shadow: none !important;
+}
+
+/* Swipe modal shadow reset: no box-shadows on any modal menu components */
+:where(
+    .ui-swipe-sheet,
+    .profile-modal.profile-modal--swipe,
+    .semester-mobile-sheet,
+    .class-info:not(.course-fullscreen),
+    .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
+    .conflict-container .conflict-modal-dialog.mobile-swipe-sheet
+) {
+    --control-shadow: none;
+    --control-shadow-hover: none;
+    --control-press-shadow: none;
+    --ui-control-shadow: none;
+    --ui-control-shadow-hover: none;
+    --ui-control-shadow-press: none;
+    --card-shadow: none;
+    --ui-card-shadow: none;
+    box-shadow: none !important;
+}
+
+:where(
+    .ui-swipe-sheet,
+    .profile-modal.profile-modal--swipe,
+    .semester-mobile-sheet,
+    .class-info:not(.course-fullscreen),
+    .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
+    .conflict-container .conflict-modal-dialog.mobile-swipe-sheet
+) *,
+:where(
+    .ui-swipe-sheet,
+    .profile-modal.profile-modal--swipe,
+    .semester-mobile-sheet,
+    .class-info:not(.course-fullscreen),
+    .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
+    .conflict-container .conflict-modal-dialog.mobile-swipe-sheet
+) *::before,
+:where(
+    .ui-swipe-sheet,
+    .profile-modal.profile-modal--swipe,
+    .semester-mobile-sheet,
+    .class-info:not(.course-fullscreen),
+    .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet,
+    .conflict-container .conflict-modal-dialog.mobile-swipe-sheet
+) *::after {
+    box-shadow: none !important;
+}
+
+/* Modal close buttons: unified icon size + no shadow */
+:where(
+    .assignment-modal-close,
+    .modal-close-btn,
+    .review-modal-host .modal-close-btn,
+    .modal--confirm .modal-close-btn,
+    .profile-modal-layer .profile-modal-head .icon-btn,
+    .class-info #class-close,
+    .conflict-container .conflict-modal-close.assignment-modal-close,
+    .auth-close-btn,
+    .close-modal
+) {
+    box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    :where(
+        .assignment-modal-close,
+        .modal-close-btn,
+        .review-modal-host .modal-close-btn,
+        .modal--confirm .modal-close-btn,
+        .profile-modal-layer .profile-modal-head .icon-btn,
+        .class-info #class-close,
+        .conflict-container .conflict-modal-close.assignment-modal-close,
+        .auth-close-btn,
+        .close-modal
+    ):hover {
+        box-shadow: none !important;
+    }
+}
+
+:where(
+    .assignment-modal-close,
+    .modal-close-btn,
+    .review-modal-host .modal-close-btn,
+    .modal--confirm .modal-close-btn,
+    .profile-modal-layer .profile-modal-head .icon-btn,
+    .class-info #class-close,
+    .conflict-container .conflict-modal-close.assignment-modal-close,
+    .auth-close-btn,
+    .close-modal
+):active {
+    box-shadow: none !important;
+}
+
+:where(
+    .modal-close-btn,
+    .review-modal-host .modal-close-btn,
+    .modal--confirm .modal-close-btn,
+    .profile-modal-layer .profile-modal-head .icon-btn,
+    .conflict-container .conflict-modal-close.assignment-modal-close,
+    .auth-close-btn,
+    .close-modal
+) {
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 20px 20px !important;
+}
+
+.auth-close-btn,
+.close-modal {
+    background-image: url(/assets/close.svg);
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
+}
+
+.assignment-modal-close .exit-icon,
+.class-info #class-close::before {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 20px;
+    background-size: 20px 20px !important;
 }

@@ -136,22 +136,22 @@ class CalendarPageComponent extends HTMLElement {
           <div class="calendar-slot-popover hidden" id="calendar-slot-popover" role="dialog" aria-modal="false" aria-labelledby="calendar-slot-popover-title">
             <p class="calendar-slot-popover-title" id="calendar-slot-popover-title">Empty slot</p>
             <p class="calendar-slot-popover-subtitle" id="calendar-slot-popover-subtitle"></p>
-            <button type="button" class="calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
-            <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
+            <button type="button" class="ui-btn ui-btn--primary calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
+            <button type="button" class="ui-btn ui-btn--secondary calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
           </div>
 
           <div class="calendar-slot-sheet-layer hidden" id="calendar-slot-sheet-layer" aria-hidden="true">
             <div class="calendar-slot-sheet-backdrop" data-action="slot-sheet-close"></div>
             <div class="calendar-slot-sheet" id="calendar-slot-sheet" role="dialog" aria-modal="true" aria-labelledby="calendar-slot-sheet-title">
-              <div class="swipe-indicator"></div>
+              <div class="swipe-indicator ui-swipe-sheet__handle"></div>
               <div class="calendar-slot-sheet-header">
                 <h3 id="calendar-slot-sheet-title">Empty slot</h3>
                 <p id="calendar-slot-sheet-subtitle"></p>
               </div>
               <div class="calendar-slot-sheet-actions">
-                <button type="button" class="calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
-                <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
-                <button type="button" class="calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-cancel">Cancel</button>
+                <button type="button" class="ui-btn ui-btn--primary calendar-slot-action-btn control-surface control-surface--primary calendar-slot-action-btn-primary" data-action="slot-find">Find courses for this slot</button>
+                <button type="button" class="ui-btn ui-btn--secondary calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-busy">Mark as busy</button>
+                <button type="button" class="ui-btn ui-btn--secondary calendar-slot-action-btn control-surface control-surface--secondary" data-action="slot-cancel">Cancel</button>
               </div>
             </div>
           </div>

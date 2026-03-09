@@ -14,26 +14,26 @@
 
 <body>
   <section id="syllabus-main">
-    <div class="course-page is-loading" id="course-page">
+    <div class="ui-page course-page is-loading" id="course-page">
       <div class="course-page-toolbar-shell">
         <div class="course-page-toolbar">
           <div class="course-page-toolbar-term" id="course-page-filter-year-term">
             <select class="semester-select" id="course-page-semester-select" aria-label="Select semester">
               <option value="">Loading...</option>
             </select>
-            <div class="custom-select course-page-semester-custom-select" data-target="course-page-semester-select">
-              <button type="button" class="custom-select-trigger control-surface control-surface--primary">
-                <span class="custom-select-value">Loading...</span>
-                <span class="custom-select-arrow" aria-hidden="true"></span>
+            <div class="ui-select custom-select course-page-semester-custom-select" data-target="course-page-semester-select">
+              <button type="button" class="ui-select__trigger custom-select-trigger control-surface control-surface--primary">
+                <span class="ui-select__value custom-select-value">Loading...</span>
+                <span class="ui-select__arrow custom-select-arrow" aria-hidden="true"></span>
               </button>
-              <div class="custom-select-options"></div>
+              <div class="ui-select__menu custom-select-options"></div>
             </div>
           </div>
 
           <form class="course-page-toolbar-search" id="course-page-search-form" role="search">
             <button
               type="button"
-              class="course-page-toolbar-search-trigger control-surface control-surface--primary"
+              class="ui-btn ui-btn--primary course-page-toolbar-search-trigger control-surface control-surface--primary"
               id="course-page-search-trigger"
               aria-label="Search courses"
               title="Search courses"
@@ -58,8 +58,8 @@
 
       <div class="search-container hidden" id="course-page-search-container">
         <div class="search-background" id="course-page-search-background">
-          <div class="search-modal" id="course-page-search-modal">
-            <div class="swipe-indicator"></div>
+          <div class="ui-swipe-sheet search-modal" id="course-page-search-modal">
+            <div class="swipe-indicator ui-swipe-sheet__handle"></div>
             <h2>
               <div></div>Search Courses
             </h2>
@@ -118,7 +118,7 @@
 
         <div class="class-info course-fullscreen sheet courseinfo-sheet" id="class-info">
           <div class="class-info-header sheet-header courseinfo-header">
-            <div class="swipe-indicator courseinfo-grabber"></div>
+            <div class="swipe-indicator ui-swipe-sheet__handle courseinfo-grabber"></div>
             <div class="class-header" id="class-header-full">
               <button id="class-close"></button>
               <h2>Class Info</h2>

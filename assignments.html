@@ -15,19 +15,22 @@
 
 <body>
     <app-navigation></app-navigation>
-    <div class="app-header">
-        <div class="app-logo"></div>
+    <div class="app-header app-header--title-mode">
+        <div class="app-header-brand">
+            <div class="app-logo"></div>
+            <h1 class="app-mobile-page-title" aria-live="polite">Assignments</h1>
+        </div>
         <div class="app-misc">
             <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
-    <div id="app-content">
+    <div id="app-content" class="ui-page">
         <!-- Search modal (shared component) -->
         <div class="search-container hidden">
             <div class="search-background">
-                <div class="search-modal">
-                    <div class="swipe-indicator"></div>
+                <div class="ui-swipe-sheet search-modal">
+                    <div class="swipe-indicator ui-swipe-sheet__handle"></div>
                     <h2>
                         <div></div>Search Assignments
                     </h2>
@@ -51,12 +54,12 @@
                         <div class="courses-toolbar-row courses-toolbar-row-a assignments-toolbar-row-a">
                             <div class="courses-toolbar-term assignments-toolbar-term" id="filter-year-term">
                                 <div class="filter-year-term-container">
-                                    <div class="custom-select" data-target="semester-select">
-                                        <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                                            <span class="custom-select-value">Loading...</span>
-                                            <div class="custom-select-arrow"></div>
+                                    <div class="ui-select custom-select" data-target="semester-select">
+                                        <div class="ui-select__trigger custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                            <span class="ui-select__value custom-select-value">Loading...</span>
+                                            <div class="ui-select__arrow custom-select-arrow"></div>
                                         </div>
-                                        <div class="custom-select-options"></div>
+                                        <div class="ui-select__menu custom-select-options"></div>
                                     </div>
                                     <select name="semester" id="semester-select" class="semester-select" style="display: none;"></select>
                                 </div>
@@ -70,7 +73,7 @@
                                             placeholder="Search assignments..." autocomplete="off">
                                     </div>
                                 </div>
-                                <button type="button" class="search-btn control-surface control-surface--secondary" id="assignments-search-btn">
+                                <button type="button" class="ui-btn ui-btn--icon search-btn control-surface control-surface--secondary" id="assignments-search-btn">
                                     <div class="search-btn-icon" aria-hidden="true"></div>
                                     <span class="search-btn-label">Search</span>
                                 </button>
@@ -78,7 +81,7 @@
 
                             <div class="courses-toolbar-actions assignments-toolbar-actions">
                                 <div class="sort-wrapper">
-                                    <button type="button" class="sort-btn control-surface control-surface--secondary" id="assignments-sort-btn">
+                                    <button type="button" class="ui-btn ui-btn--secondary sort-btn control-surface control-surface--secondary" id="assignments-sort-btn">
                                         <div class="sort-btn-icon" aria-hidden="true"></div>
                                         <span class="sort-btn-label" id="assignments-sort-label" data-sort="due_date_asc">Due date</span>
                                     </button>
@@ -90,7 +93,7 @@
                                 </div>
 
                                 <div class="assignments-filter-wrapper">
-                                    <button type="button" class="filter-btn control-surface control-surface--secondary" id="assignments-filter-btn" aria-haspopup="dialog" aria-expanded="false">
+                                    <button type="button" class="ui-btn ui-btn--icon filter-btn control-surface control-surface--secondary" id="assignments-filter-btn" aria-haspopup="dialog" aria-expanded="false">
                                         <div class="filter-btn-icon" aria-hidden="true"></div>
                                         <span class="filter-btn-label">Filters</span>
                                         <span class="assignment-filter-count-chip" id="assignment-filter-count-chip" hidden></span>
@@ -99,8 +102,8 @@
                             </div>
 
                             <div class="calendar-toolbar-center assignments-toolbar-segmented" role="tablist" aria-label="Assignments view">
-                                <button class="calendar-view-btn assignments-view-segment is-active" data-view="all-assignments" aria-selected="true">List</button>
-                                <button class="calendar-view-btn assignments-view-segment" data-view="by-due-date" aria-selected="false">Calendar</button>
+                                <button class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn assignments-view-segment is-active" data-view="all-assignments" aria-selected="true">List</button>
+                                <button class="ui-segment__item ui-pill ui-pill--filter calendar-view-btn assignments-view-segment" data-view="by-due-date" aria-selected="false">Calendar</button>
                             </div>
                         </div>
                     </div>
@@ -110,9 +113,9 @@
             <div id="assignments-filter-popover" class="filter-container hidden" role="dialog"
                 aria-labelledby="assignments-filter-heading" aria-modal="true">
                 <div class="filter-background" id="assignments-filter-background">
-                    <div class="filter-popup calendar-filter-popup assignments-filter-popup" id="assignments-filter-panel">
+                    <div class="ui-swipe-sheet filter-popup calendar-filter-popup assignments-filter-popup" id="assignments-filter-panel">
                         <div class="filter-header">
-                            <div class="swipe-indicator"></div>
+                            <div class="swipe-indicator ui-swipe-sheet__handle"></div>
                             <div class="filter-buttons">
                                 <button type="button" id="assignments-filter-see-results">See Results</button>
                                 <button type="button" id="assignments-clear-advanced-filters">Clear All</button>
@@ -149,20 +152,20 @@
                 <div class="assignments-container">
                     <header class="assignments-module-header">
                         <h1 class="assignments-module-title">Assignments</h1>
-                        <p class="assignments-module-subtitle" id="assignments-results-summary">Showing 0 items</p>
-                        <button type="button" class="assignments-new-btn control-surface control-surface--primary" id="new-assignment-btn">
+                        <p class="assignments-module-subtitle" id="assignments-results-summary">Showing 0 assignments</p>
+                        <button type="button" class="ui-btn ui-btn--primary assignments-new-btn control-surface control-surface--primary" id="new-assignment-btn">
                             <div class="assignment-add-icon assignment-icons" aria-hidden="true"></div>
-                            <span>New Assignment</span>
+                            <span>New assignment</span>
                         </button>
                     </header>
 
                     <div class="assignment-quick-filters">
-                        <button type="button" class="assignment-quick-filter active" data-filter="all">All</button>
-                        <button type="button" class="assignment-quick-filter" data-filter="due_today">Due Today</button>
-                        <button type="button" class="assignment-quick-filter" data-filter="due_soon">Due Soon</button>
-                        <button type="button" class="assignment-quick-filter" data-filter="in_progress">In Progress</button>
-                        <button type="button" class="assignment-quick-filter" data-filter="completed">Completed</button>
-                        <button type="button" class="assignment-quick-filter" data-filter="overdue">Overdue</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter active" data-filter="all">All</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter" data-filter="due_today">Due Today</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter" data-filter="due_soon">Due Soon</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter" data-filter="in_progress">In Progress</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter" data-filter="completed">Completed</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter" data-filter="overdue">Overdue</button>
                     </div>
 
                     <div class="assignment-summary-cards">
@@ -257,6 +260,12 @@
                             </div>
                         </button>
                     </div>
+                    <div class="assignment-modal-top-actions">
+                        <button type="button" class="delete-btn assignment-modal-delete" id="assignment-delete-btn">
+                            <span class="assignment-modal-delete-icon" aria-hidden="true"></span>
+                            <span>Delete Assignment</span>
+                        </button>
+                    </div>
                     <div class="assignment-modal-meta">
                         <div class="meta-item">
                             <span class="meta-label">
@@ -279,21 +288,22 @@
                                     <!-- Course options will be rendered here -->
                                 </div>
                             </div>
+                            <select id="assignment-modal-course-select" data-mobile-sheet-variant="course-selector" hidden aria-hidden="true" tabindex="-1"></select>
                         </div>
                         <div class="meta-item">
                             <span class="meta-label">
                                 <span class="col-icon assignment-status-icon"></span>
                                 Status
                             </span>
-                            <div class="status-selector custom-select" data-target="assignment-modal-status">
-                                <div class="custom-select-trigger" tabindex="0">
-                                    <span class="custom-select-value">Not Started</span>
-                                    <div class="custom-select-arrow"></div>
+                            <div class="status-selector ui-select custom-select" data-target="assignment-modal-status">
+                                <div class="ui-select__trigger custom-select-trigger" tabindex="0">
+                                    <span class="ui-select__value custom-select-value">Not Started</span>
+                                    <div class="ui-select__arrow custom-select-arrow"></div>
                                 </div>
-                                <div class="custom-select-options">
-                                    <div class="custom-select-option selected" data-value="not_started"><span class="option-tag">Not Started</span></div>
-                                    <div class="custom-select-option" data-value="in_progress"><span class="option-tag">In Progress</span></div>
-                                    <div class="custom-select-option" data-value="completed"><span class="option-tag">Completed</span></div>
+                                <div class="ui-select__menu custom-select-options">
+                                    <div class="ui-select__option custom-select-option selected" data-value="not_started"><span class="option-tag">Not Started</span></div>
+                                    <div class="ui-select__option custom-select-option" data-value="in_progress"><span class="option-tag">In Progress</span></div>
+                                    <div class="ui-select__option custom-select-option" data-value="completed"><span class="option-tag">Completed</span></div>
                                 </div>
                             </div>
                             <select class="status-select" id="assignment-modal-status">
@@ -311,9 +321,6 @@
                         </div>
                     </div>
                     <div class="assignment-modal-footer">
-                        <div class="assignment-modal-footer-left">
-                            <button type="button" class="delete-btn assignment-modal-delete" id="assignment-delete-btn">Delete</button>
-                        </div>
                         <div class="assignment-modal-footer-right">
                             <button type="button" class="cancel-btn" id="assignment-modal-cancel-btn">Cancel</button>
                             <button type="button" class="save-btn" id="assignment-save-btn">Create Assignment</button>
@@ -347,7 +354,7 @@
             </div>
             <div class="class-info sheet courseinfo-sheet" id="class-info">
         <div class="class-info-header sheet-header courseinfo-header">
-            <div class="swipe-indicator courseinfo-grabber"></div>
+            <div class="swipe-indicator ui-swipe-sheet__handle courseinfo-grabber"></div>
             <div class="class-header">
                 <button id="class-close"></button>
                 <h2>Class Info</h2>

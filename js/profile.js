@@ -505,7 +505,7 @@ function getKindsForFeedMode(feedMode) {
 
 function cardTemplate(title, bodyMarkup, actionMarkup = "") {
   return `
-    <div class="profile-card card-surface">
+    <div class="profile-card card-surface ui-card">
       <div class="card-head">
         <h2>${escapeHtml(title)}</h2>
         ${actionMarkup}
@@ -530,7 +530,7 @@ function renderSignedInSkeleton() {
     if (!node) return;
 
     node.innerHTML = `
-      <div class="profile-card card-surface profile-skeleton-card" aria-hidden="true">
+      <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
         <div class="card-head">
           <h2 class="profile-skeleton-line profile-skeleton-title"></h2>
         </div>
@@ -554,7 +554,7 @@ function renderLoadError(error) {
     "Could not load profile",
     `
       <p class="profile-inline-error">We couldn't load your profile right now. Please try again.</p>
-      <button class="control-surface" id="profile-retry-button" type="button">Retry</button>
+      <button class="ui-btn ui-btn--secondary control-surface" id="profile-retry-button" type="button">Retry</button>
     `
   );
 
@@ -583,7 +583,7 @@ function settingRow(title, description, controlMarkup, className = "") {
 
 function toggleMarkup(id, checked) {
   return `
-    <button type="button" class="toggle" id="${escapeHtml(id)}" role="switch" aria-checked="${checked ? "true" : "false"}">
+    <button type="button" class="ui-selector toggle" id="${escapeHtml(id)}" role="switch" aria-checked="${checked ? "true" : "false"}">
       <span class="toggle-track"><span class="toggle-knob" aria-hidden="true"></span></span>
       <span class="toggle-state" aria-hidden="true">${checked ? "On" : "Off"}</span>
     </button>
@@ -595,7 +595,7 @@ function pickerButton(id, pickerKey, valueLabel) {
     <button
       type="button"
       id="${escapeHtml(id)}"
-      class="control-surface profile-picker-trigger"
+      class="ui-btn ui-btn--secondary control-surface profile-picker-trigger"
       data-picker="${escapeHtml(pickerKey)}"
       aria-haspopup="dialog"
     >
@@ -607,13 +607,13 @@ function pickerButton(id, pickerKey, valueLabel) {
 
 function navRow(id, action, label, icon, soon = false) {
   return `
-    <button type="button" class="nav-row" id="${escapeHtml(id)}" data-action="${escapeHtml(action)}">
+    <button type="button" class="ui-btn ui-btn--secondary nav-row" id="${escapeHtml(id)}" data-action="${escapeHtml(action)}">
       <span class="nav-row-left">
         <span class="nav-row-icon" aria-hidden="true">${escapeHtml(icon)}</span>
         <span class="nav-row-label">${escapeHtml(label)}</span>
       </span>
       <span class="nav-row-right">
-        ${soon ? '<span class="status-pill status-pill--soon">Soon</span>' : ""}
+        ${soon ? '<span class="ui-pill status-pill status-pill--soon">Soon</span>' : ""}
         <span class="nav-row-chevron" aria-hidden="true">›</span>
       </span>
     </button>
@@ -623,7 +623,7 @@ function navRow(id, action, label, icon, soon = false) {
 function renderHelpBody() {
   return `
     <div class="profile-nav-list">
-      <button class="control-surface" id="profile-open-about" type="button">About</button>
+      <button class="ui-btn ui-btn--secondary control-surface" id="profile-open-about" type="button">About</button>
     </div>
   `;
 }
@@ -645,9 +645,9 @@ function renderGuestView(route) {
         <p class="profile-body-copy">Browse courses without an account. Sign in to save your schedule.</p>
         ${promptText ? `<p class="profile-inline-notice">${escapeHtml(promptText)}</p>` : ""}
         <div class="profile-inline-actions">
-          <button class="control-surface" id="guest-browse-courses-btn" type="button">Browse Courses</button>
-          <button class="control-surface" id="guest-signin-btn" type="button">Sign In</button>
-          <button class="control-surface" id="guest-register-btn" type="button">Create Account</button>
+          <button class="ui-btn ui-btn--secondary control-surface" id="guest-browse-courses-btn" type="button">Browse Courses</button>
+          <button class="ui-btn ui-btn--secondary control-surface" id="guest-signin-btn" type="button">Sign In</button>
+          <button class="ui-btn ui-btn--secondary control-surface" id="guest-register-btn" type="button">Create Account</button>
         </div>
       `
     );
@@ -698,7 +698,7 @@ function renderCustomSelectMarkup(selectId, options, selectedValue, config = {})
   const optionRows = normalizedOptions
     .map((option) => {
       const isSelected = option.value === (selected?.value || "");
-      return `<div class="custom-select-option${isSelected ? " selected" : ""}" data-value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</div>`;
+      return `<div class="ui-select__option custom-select-option${isSelected ? " selected" : ""}" data-value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</div>`;
     })
     .join("");
 
@@ -710,13 +710,13 @@ function renderCustomSelectMarkup(selectId, options, selectedValue, config = {})
     .join("");
 
   return `
-    <div class="custom-select profile-custom-select${isDisabled ? " is-disabled" : ""}" data-target="${escapeHtml(selectId)}">
-      <div class="custom-select-trigger control-surface" tabindex="${isDisabled ? "-1" : "0"}" role="button" aria-haspopup="listbox" aria-expanded="false" aria-disabled="${isDisabled ? "true" : "false"}">
-        <span class="custom-select-value">${escapeHtml(selected?.label || "Select")}</span>
-        <div class="custom-select-arrow"></div>
+    <div class="ui-select custom-select profile-custom-select${isDisabled ? " is-disabled" : ""}" data-target="${escapeHtml(selectId)}">
+      <div class="ui-select__trigger custom-select-trigger control-surface" tabindex="${isDisabled ? "-1" : "0"}" role="button" aria-haspopup="listbox" aria-expanded="false" aria-disabled="${isDisabled ? "true" : "false"}">
+        <span class="ui-select__value custom-select-value">${escapeHtml(selected?.label || "Select")}</span>
+        <div class="ui-select__arrow custom-select-arrow"></div>
       </div>
-      <div class="custom-select-options" role="listbox">
-        <div class="custom-select-options-inner">
+      <div class="ui-select__menu custom-select-options" role="listbox">
+        <div class="ui-select__options-inner custom-select-options-inner">
           ${optionRows}
         </div>
       </div>
@@ -866,12 +866,12 @@ function renderSignedInView() {
           <div class="identity-meta">
             <div class="name">${escapeHtml(displayName)}</div>
             <div class="email">${escapeHtml(email)}</div>
-            <div class="status-pill status-pill--signed-in">Signed in</div>
+            <div class="ui-pill status-pill status-pill--signed-in">Signed in</div>
           </div>
         </div>
       `,
       `
-        <button class="profile-action-pill control-surface" id="profile-edit-button" aria-label="Edit profile" type="button">
+        <button class="ui-btn ui-btn--secondary profile-action-pill control-surface" id="profile-edit-button" aria-label="Edit profile" type="button">
           <span class="pill-icon pill-icon--edit" aria-hidden="true"></span>
           <span>Edit</span>
         </button>
@@ -898,9 +898,9 @@ function renderSignedInView() {
           "Your current program",
           `${
             hasProgram
-              ? `<span class="status-pill status-pill--value">${escapeHtml(programValue)}</span>`
-              : '<span class="status-pill status-pill--not-set">Not Set</span>'
-          }<button class="profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+              ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(programValue)}</span>`
+              : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
+          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
         ${settingRow(
@@ -908,9 +908,9 @@ function renderSignedInView() {
           "Current year",
           `${
             hasYear
-              ? `<span class="status-pill status-pill--value">Year ${escapeHtml(yearValue)}</span>`
-              : '<span class="status-pill status-pill--not-set">Not Set</span>'
-          }<button class="profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+              ? `<span class="ui-pill status-pill status-pill--value">Year ${escapeHtml(yearValue)}</span>`
+              : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
+          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
       `
@@ -966,8 +966,8 @@ function renderSignedInView() {
           "Calendar access",
           "Current integration status",
           `
-            <span class="status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
-            <button class="profile-action-pill profile-action-pill--integration control-surface" id="profile-manage-integrations" type="button">
+            <span class="ui-pill status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
+            <button class="ui-btn ui-btn--secondary profile-action-pill profile-action-pill--integration control-surface" id="profile-manage-integrations" type="button">
               <span class="pill-icon pill-icon--calendar-plus" aria-hidden="true"></span>
               <span>Manage</span>
             </button>
@@ -984,7 +984,7 @@ function renderSignedInView() {
       `
         <div class="profile-subblock">
           <h3 class="profile-subtitle">Utilities</h3>
-          <div class="setting-row-id">${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="control-surface" id="profile-clear-cache" type="button">Clear Cache</button>')}</div>
+          <div class="setting-row-id">${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-clear-cache" type="button">Clear Cache</button>')}</div>
         </div>
         <div class="profile-subblock" id="profile-help-subblock">
           <h3 class="profile-subtitle">App Version</h3>
@@ -993,7 +993,7 @@ function renderSignedInView() {
         <div class="danger-zone">
           <h3 class="profile-subtitle">Danger Zone</h3>
           <div class="danger-zone-row">
-            <button class="danger-action-btn" id="profile-delete-account" type="button">
+            <button class="ui-btn ui-btn--destructive danger-action-btn" id="profile-delete-account" type="button">
               <span class="pill-icon pill-icon--trash" aria-hidden="true"></span>
               <span>Delete Account</span>
             </button>
@@ -1011,7 +1011,7 @@ function renderSignedInView() {
     auth.innerHTML = cardTemplate(
       "Sign Out",
       `<div class="profile-subblock">
-          <div class="setting-row-id">${settingRow("Sign out", "End your session and return to the login screen", '<button class="control-surface" id="profile-signout" type="button">Sign Out</button>')}</div>
+          <div class="setting-row-id">${settingRow("Sign out", "End your session and return to the login screen", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-signout" type="button">Sign Out</button>')}</div>
        </div>`
     );
   }
@@ -1157,14 +1157,14 @@ function openModal({
   layer.className = "profile-modal-layer";
   layer.innerHTML = `
     <div class="profile-modal-backdrop"${closeOnBackdrop ? ' data-modal-close="true"' : ""}></div>
-    <div class="profile-modal card-surface profile-modal--${escapeHtml(resolvedMode)}${modalClassName ? ` ${escapeHtml(modalClassName)}` : ""}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
-      ${showSwipeIndicator ? '<div class="swipe-indicator" aria-hidden="true"></div>' : ""}
-      <div class="profile-modal-head">
+    <div class="profile-modal card-surface ui-card${enableSwipeSheet ? " ui-swipe-sheet" : ""} profile-modal--${escapeHtml(resolvedMode)}${modalClassName ? ` ${escapeHtml(modalClassName)}` : ""}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+      ${showSwipeIndicator ? '<div class="swipe-indicator ui-swipe-sheet__handle" aria-hidden="true"></div>' : ""}
+      <div class="profile-modal-head ui-swipe-sheet__header">
         <h3>${escapeHtml(title)}</h3>
-        <button type="button" class="control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
+        <button type="button" class="ui-btn ui-btn--icon control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
       </div>
-      <div class="profile-modal-body">${bodyMarkup}</div>
-      ${footerMarkup ? `<div class="profile-modal-footer">${footerMarkup}</div>` : ""}
+      <div class="profile-modal-body ui-swipe-sheet__body">${bodyMarkup}</div>
+      ${footerMarkup ? `<div class="profile-modal-footer ui-swipe-sheet__footer">${footerMarkup}</div>` : ""}
     </div>
   `;
 
@@ -1228,7 +1228,7 @@ function openChoicePicker({ title, description = "", options, selectedValue, onS
   const layer = openModal({
     title,
     bodyMarkup,
-    footerMarkup: `<button type="button" class="control-surface" data-modal-close="true">Cancel</button>`,
+    footerMarkup: `<button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>`,
     mode: "sheet",
     mobileMode: "sheet",
     modalClassName: "profile-modal--picker-sheet"
@@ -1274,15 +1274,15 @@ function openNestedChoicePicker({ title, description = "", options, selectedValu
   layer.className = "profile-modal-layer profile-modal-layer--nested";
   layer.innerHTML = `
     <div class="profile-modal-backdrop" data-modal-close="true"></div>
-    <div class="profile-modal card-surface profile-modal--sheet profile-modal--swipe profile-modal--picker-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
-      <div class="swipe-indicator" aria-hidden="true"></div>
-      <div class="profile-modal-head">
+    <div class="profile-modal card-surface ui-card ui-swipe-sheet profile-modal--sheet profile-modal--swipe profile-modal--picker-sheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+      <div class="swipe-indicator ui-swipe-sheet__handle" aria-hidden="true"></div>
+      <div class="profile-modal-head ui-swipe-sheet__header">
         <h3>${escapeHtml(title)}</h3>
-        <button type="button" class="control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
+        <button type="button" class="ui-btn ui-btn--icon control-surface icon-btn" data-modal-close="true" aria-label="Close"></button>
       </div>
-      <div class="profile-modal-body">${bodyMarkup}</div>
-      <div class="profile-modal-footer">
-        <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
+      <div class="profile-modal-body ui-swipe-sheet__body">${bodyMarkup}</div>
+      <div class="profile-modal-footer ui-swipe-sheet__footer">
+        <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
       </div>
     </div>
   `;
@@ -1409,11 +1409,11 @@ function getCalendarFeedRowsMarkup(integrationState) {
         <div class="calendar-integration-feed-card">
           <div class="calendar-integration-feed-head">
             <h4>${escapeHtml(getCalendarFeedLabel(feed.kind))}</h4>
-            <span class="status-pill status-pill--neutral">Active</span>
+            <span class="ui-pill status-pill status-pill--neutral">Active</span>
           </div>
           <div class="calendar-integration-feed-actions">
-            <a class="control-surface" href="${escapeHtml(links.googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
-            <button class="control-surface" type="button" data-action="copy-feed-url" data-url="${escapeHtml(links.httpsUrl)}">Copy Subscription URL</button>
+            <a class="ui-btn ui-btn--secondary control-surface" href="${escapeHtml(links.googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
+            <button class="ui-btn ui-btn--secondary control-surface" type="button" data-action="copy-feed-url" data-url="${escapeHtml(links.httpsUrl)}">Copy Subscription URL</button>
           </div>
         </div>
       `;
@@ -1455,7 +1455,7 @@ function openCalendarIntegrationsModal() {
         <button
           type="button"
           id="calendar-feed-mode-picker"
-          class="control-surface profile-picker-trigger profile-modal-picker-trigger"
+          class="ui-btn ui-btn--secondary control-surface profile-picker-trigger profile-modal-picker-trigger"
           aria-haspopup="dialog"
           ${local.busy ? "disabled" : ""}
         >
@@ -1477,15 +1477,15 @@ function openCalendarIntegrationsModal() {
         <label class="profile-modal-label" for="calendar-feed-mode-select">Feed mode</label>
         <div class="calendar-integration-mode-controls">
           ${feedModeControlMarkup}
-          <button class="control-surface" type="button" id="calendar-feed-mode-save"${disableAttr}>${escapeHtml(saveLabel)}</button>
+          <button class="ui-btn ui-btn--secondary control-surface" type="button" id="calendar-feed-mode-save"${disableAttr}>${escapeHtml(saveLabel)}</button>
         </div>
       </div>
       <div class="calendar-integration-feed-list">
         ${getCalendarFeedRowsMarkup(local.data)}
       </div>
       <div class="calendar-integration-security-row">
-        <button class="control-surface" type="button" id="calendar-rotate-links"${disableAttr}>Regenerate Links</button>
-        <button class="danger-action-btn" type="button" id="calendar-disconnect-links"${disableAttr}>Disconnect</button>
+        <button class="ui-btn ui-btn--secondary control-surface" type="button" id="calendar-rotate-links"${disableAttr}>Regenerate Links</button>
+        <button class="ui-btn ui-btn--destructive danger-action-btn" type="button" id="calendar-disconnect-links"${disableAttr}>Disconnect</button>
       </div>
     `;
     if (!useMobileFeedModePicker) {
@@ -1638,7 +1638,7 @@ function openAboutModal() {
         <div><strong>Build</strong></div><div>${escapeHtml(build)}</div>
       </div>
     `,
-    footerMarkup: `<button type="button" class="control-surface" data-modal-close="true">Close</button>`
+    footerMarkup: `<button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Close</button>`
   });
 }
 
@@ -1647,8 +1647,8 @@ function openClearCacheModal() {
     title: "Clear Cache",
     bodyMarkup: `<p>Clear locally stored app preferences and temporary cache?</p>`,
     footerMarkup: `
-      <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="control-surface" id="profile-confirm-clear-cache">Clear Cache</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" id="profile-confirm-clear-cache">Clear Cache</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"
@@ -1694,8 +1694,8 @@ function openDeleteAccountModal() {
       <p id="profile-delete-error" class="profile-inline-error"></p>
     `,
     footerMarkup: `
-      <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="danger-action-btn" id="profile-confirm-delete" disabled>Delete Account</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="button" class="ui-btn ui-btn--destructive danger-action-btn" id="profile-confirm-delete" disabled>Delete Account</button>
     `,
     mode: "fullscreen-mobile"
   });
@@ -1737,8 +1737,8 @@ function openSignOutModal() {
     title: "Sign Out?",
     bodyMarkup: `<p>You can sign in again at any time.</p>`,
     footerMarkup: `
-      <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="button" class="control-surface" id="profile-confirm-signout">Sign Out</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" id="profile-confirm-signout">Sign Out</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"
@@ -1763,8 +1763,8 @@ function openEditProfileModal() {
       </form>
     `,
     footerMarkup: `
-      <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="submit" class="control-surface" form="profile-edit-form" id="profile-edit-save">Save</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="submit" class="ui-btn ui-btn--secondary control-surface" form="profile-edit-form" id="profile-edit-save">Save</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"
@@ -1843,7 +1843,7 @@ function openProgramYearSetupModal() {
       <button
         type="button"
         id="profile-program-year-picker"
-        class="control-surface profile-picker-trigger profile-modal-picker-trigger"
+        class="ui-btn ui-btn--secondary control-surface profile-picker-trigger profile-modal-picker-trigger"
         aria-haspopup="dialog"
       >
         <span class="picker-value">${escapeHtml(selectedYearOption.label)}</span>
@@ -1869,8 +1869,8 @@ function openProgramYearSetupModal() {
       </form>
     `,
     footerMarkup: `
-      <button type="button" class="control-surface" data-modal-close="true">Cancel</button>
-      <button type="submit" class="control-surface" form="profile-program-year-form" id="profile-program-year-save">Save</button>
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="submit" class="ui-btn ui-btn--secondary control-surface" form="profile-program-year-form" id="profile-program-year-save">Save</button>
     `,
     mode: "dialog",
     mobileMode: "sheet"

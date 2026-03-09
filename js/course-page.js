@@ -597,7 +597,7 @@ function renderCoursePageSemesterOptions({
     targetSelect.appendChild(nativeOption);
 
     const customOption = document.createElement("div");
-    customOption.className = "custom-select-option";
+    customOption.className = "ui-select__option custom-select-option";
     customOption.dataset.value = value;
     customOption.textContent = semester.label;
     optionsContainer.appendChild(customOption);

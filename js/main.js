@@ -297,6 +297,14 @@ function darkenHexToRgba(hex, darkenFactor = 0.32, alpha = 0.9) {
     return `rgba(${darkRed}, ${darkGreen}, ${darkBlue}, ${alpha})`;
 }
 
+function getCourseCardBorderColor(hex) {
+    return darkenHexToRgba(hex, 0.2, 0.68);
+}
+
+function getCourseCardHoverBorderColor(hex) {
+    return darkenHexToRgba(hex, 0.28, 0.78);
+}
+
 // Global sorting state
 let currentSortMethod = null;
 const SORT_METHOD_LABELS = {
@@ -1352,8 +1360,8 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
 
         // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
-        const courseBorderColor = hexToRgba(courseColor, 0.38);
-        const courseHoverBorderColor = darkenHexToRgba(courseColor, 0.34, 0.88);
+        const courseBorderColor = getCourseCardBorderColor(courseColor);
+        const courseHoverBorderColor = getCourseCardHoverBorderColor(courseColor);
 
         // Escape the JSON string for safe HTML attribute embedding
         const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
@@ -3072,7 +3080,7 @@ async function populateSemesterDropdown() {
         semesters.forEach((semester) => {
             const value = `${semester.term}-${semester.year}`;
             const customOption = document.createElement('div');
-            customOption.className = 'custom-select-option' + (value === selectedSemesterValue ? ' selected' : '');
+            customOption.className = 'ui-select__option custom-select-option' + (value === selectedSemesterValue ? ' selected' : '');
             customOption.dataset.value = value;
             customOption.textContent = semester.label;
             optionsContainer.appendChild(customOption);
@@ -4022,8 +4030,8 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         }
 
         const suggestedCourseColor = getCourseColorByType(course.type);
-        const suggestedCourseBorderColor = hexToRgba(suggestedCourseColor, 0.38);
-        const suggestedCourseHoverBorderColor = darkenHexToRgba(suggestedCourseColor, 0.34, 0.88);
+        const suggestedCourseBorderColor = getCourseCardBorderColor(suggestedCourseColor);
+        const suggestedCourseHoverBorderColor = getCourseCardHoverBorderColor(suggestedCourseColor);
         const hasProfessorChanged = lastLoadedProfessorChanges.has(course.course_code);
         const creditsChip = getCreditsChipMarkup(course);
         const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);

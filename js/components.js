@@ -601,8 +601,16 @@ const homeDesktopHeaderState = {
 let homeMobileHeaderBehaviorCleanup = null;
 let homeMobileSearchModalCleanup = null;
 let homeDesktopToolbarScrollCleanup = null;
+let mobilePageHeaderBehaviorCleanup = null;
 let homeMobileModalLockCount = 0;
 let homeMobileModalScrollY = 0;
+const MOBILE_HEADER_SCROLL_THRESHOLD = 6;
+const MOBILE_HEADER_TOP_REVEAL_THRESHOLD = 8;
+const MOBILE_PAGE_TOOLBAR_SELECTOR = [
+  '.page-courses .courses-toolbar-shell',
+  '#assignments-main.page-assignments .assignments-toolbar-shell',
+  '#course-summary.calendar-page-modern .container-above.container-above-mobile'
+].join(', ');
 
 function isHomeMobileViewport() {
   return window.innerWidth <= 1023;
@@ -661,7 +669,7 @@ async function populateHomeSemesterDropdown() {
       const value = formatSemesterValue(semester.term, semester.year);
       if (!value) return;
       const option = document.createElement('div');
-      option.className = `custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
+      option.className = `ui-select__option custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
       option.dataset.value = value;
       option.textContent = semester.label || `${semester.term} ${semester.year}`;
       optionsContainer.appendChild(option);
@@ -1246,6 +1254,21 @@ function teardownHomeMobileStickyHeaderBehavior() {
   document.documentElement.style.removeProperty('--home-mobile-toolbar-height');
 }
 
+function teardownMobilePageStickyHeaderBehavior() {
+  if (typeof mobilePageHeaderBehaviorCleanup === 'function') {
+    mobilePageHeaderBehaviorCleanup();
+    mobilePageHeaderBehaviorCleanup = null;
+  }
+
+  document.body.classList.remove('mobile-page-header-sticky');
+  document.querySelector('.app-header')?.classList.remove('app-header--hidden');
+  document.querySelectorAll(MOBILE_PAGE_TOOLBAR_SELECTOR).forEach((toolbar) => {
+    toolbar.classList.remove('app-mobile-toolbar--hidden');
+  });
+  document.documentElement.style.removeProperty('--mobile-page-header-height');
+  document.documentElement.style.removeProperty('--mobile-page-toolbar-height');
+}
+
 function initializeHomeMobileStickyHeaderBehavior() {
   teardownHomeMobileStickyHeaderBehavior();
 
@@ -1282,14 +1305,12 @@ function initializeHomeMobileStickyHeaderBehavior() {
 
   let lastScrollY = getCurrentScrollY();
   let ticking = false;
-  const scrollThreshold = 6;
-  const topRevealThreshold = 8;
 
   const applyScrollState = () => {
     ticking = false;
     const currentScrollY = getCurrentScrollY();
 
-    if (currentScrollY <= topRevealThreshold) {
+    if (currentScrollY <= MOBILE_HEADER_TOP_REVEAL_THRESHOLD) {
       header.classList.remove('app-header--hidden');
       homeToolbar.classList.remove('home-toolbar--hidden');
       lastScrollY = currentScrollY;
@@ -1297,7 +1318,7 @@ function initializeHomeMobileStickyHeaderBehavior() {
     }
 
     const deltaY = currentScrollY - lastScrollY;
-    if (Math.abs(deltaY) <= scrollThreshold) return;
+    if (Math.abs(deltaY) <= MOBILE_HEADER_SCROLL_THRESHOLD) return;
 
     if (deltaY > 0) {
       header.classList.add('app-header--hidden');
@@ -1353,6 +1374,107 @@ function initializeHomeMobileStickyHeaderBehavior() {
   };
 }
 
+function initializeMobilePageStickyHeaderBehavior() {
+  teardownMobilePageStickyHeaderBehavior();
+
+  const header = document.querySelector('.app-header');
+  const appContent = document.getElementById('app-content');
+  const homeMain = document.getElementById('home-main');
+  const profileMain = document.getElementById('profile-main');
+  if (!header || homeMain || profileMain || document.body.classList.contains('course-page-mode')) return;
+
+  if (!isHomeMobileViewport()) {
+    header.classList.remove('app-header--hidden');
+    return;
+  }
+
+  const toolbars = Array.from(document.querySelectorAll(MOBILE_PAGE_TOOLBAR_SELECTOR))
+    .filter((toolbar) => {
+      if (!(toolbar instanceof HTMLElement)) return false;
+      const styles = window.getComputedStyle(toolbar);
+      return styles.display !== 'none' && toolbar.getBoundingClientRect().height > 0;
+    });
+
+  document.body.classList.add('mobile-page-header-sticky');
+
+  const setHeaderStackHeights = () => {
+    const headerHeight = Math.ceil(header.getBoundingClientRect().height || 0);
+    const toolbarHeight = Math.ceil(
+      toolbars.reduce((total, toolbar) => total + (toolbar.getBoundingClientRect().height || 0), 0)
+    );
+    document.documentElement.style.setProperty('--mobile-page-header-height', `${headerHeight}px`);
+    document.documentElement.style.setProperty('--mobile-page-toolbar-height', `${toolbarHeight}px`);
+  };
+
+  const setHiddenState = (hidden) => {
+    header.classList.toggle('app-header--hidden', hidden);
+    toolbars.forEach((toolbar) => {
+      toolbar.classList.toggle('app-mobile-toolbar--hidden', hidden);
+    });
+  };
+
+  const getCurrentScrollY = () => {
+    const windowScrollY = window.scrollY || window.pageYOffset || 0;
+    const rootScrollY = document.documentElement?.scrollTop || 0;
+    const bodyScrollY = document.body?.scrollTop || 0;
+    const docScrollY = document.scrollingElement?.scrollTop || 0;
+    const contentScrollY = appContent ? appContent.scrollTop : 0;
+    return Math.max(windowScrollY, rootScrollY, bodyScrollY, docScrollY, contentScrollY);
+  };
+
+  let lastScrollY = getCurrentScrollY();
+  let ticking = false;
+
+  const applyScrollState = () => {
+    ticking = false;
+    const currentScrollY = getCurrentScrollY();
+
+    if (currentScrollY <= MOBILE_HEADER_TOP_REVEAL_THRESHOLD) {
+      setHiddenState(false);
+      lastScrollY = currentScrollY;
+      return;
+    }
+
+    const deltaY = currentScrollY - lastScrollY;
+    if (Math.abs(deltaY) <= MOBILE_HEADER_SCROLL_THRESHOLD) return;
+
+    setHiddenState(deltaY > 0);
+    lastScrollY = currentScrollY;
+  };
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(applyScrollState);
+  };
+
+  const onResize = () => {
+    if (!isHomeMobileViewport() || document.getElementById('home-main') || document.getElementById('profile-main') || document.body.classList.contains('course-page-mode')) {
+      teardownMobilePageStickyHeaderBehavior();
+      return;
+    }
+
+    setHeaderStackHeights();
+    setHiddenState(false);
+  };
+
+  setHeaderStackHeights();
+  setHiddenState(false);
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  appContent?.addEventListener('scroll', onScroll, { passive: true });
+  document.addEventListener('scroll', onScroll, { passive: true, capture: true });
+  window.addEventListener('resize', onResize);
+
+  mobilePageHeaderBehaviorCleanup = () => {
+    window.removeEventListener('scroll', onScroll);
+    appContent?.removeEventListener('scroll', onScroll);
+    document.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', onResize);
+    setHiddenState(false);
+  };
+}
+
 async function initializeHomeDesktopHeader() {
   const homeMain = document.getElementById('home-main');
   const desktopHeader = homeMain?.querySelector('.home-container-above.container-above-desktop');
@@ -1399,6 +1521,20 @@ if (document.readyState === 'loading') {
 }
 
 document.addEventListener('pageLoaded', handleHomeDesktopHeaderSetup);
+
+const handleMobilePageHeaderSetup = () => {
+  setTimeout(() => {
+    initializeMobilePageStickyHeaderBehavior();
+  }, 30);
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', handleMobilePageHeaderSetup, { once: true });
+} else {
+  handleMobilePageHeaderSetup();
+}
+
+document.addEventListener('pageLoaded', handleMobilePageHeaderSetup);
 
 // Initialize session state - will be updated by components as needed
 window.globalSession = null;
@@ -1577,8 +1713,8 @@ class TotalCourses extends HTMLElement {
     this.innerHTML = `
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
-                <h2 class="total-text">Assignments Due</h2>
-                <h2 class="total-count">0</h2>
+                <h3 class="total-text">Assignments Due</h3>
+                <h3 class="total-count">0</h3>
                 <p class="total-upcoming">
                   <span class="upcoming-assignment-title" hidden></span>
                   <span class="no-upcoming-assignment-text">No upcoming assignment</span>
@@ -1770,8 +1906,8 @@ class TermBox extends HTMLElement {
       this.innerHTML = `
         <div class="total-courses">
           <div class="total-courses-container" id="#year-courses">
-            <h2 class="total-count" id="term-semester">Fall</h2>
-            <h2 class="total-text" id="term-year">2025</h2>
+            <h3 class="total-count" id="term-semester">Fall</h3>
+            <h3 class="total-text" id="term-year">2025</h3>
           </div>
         </div>
       `;
@@ -1780,11 +1916,11 @@ class TermBox extends HTMLElement {
       this.innerHTML = `
         <div class="total-courses">
           <div class="total-courses-container">
-            <h2 class="total-text" id="next-class-label">Next Class</h2>
+            <h3 class="total-text" id="next-class-label">Next Class</h3>
             <div class="home-next-class-title-wrap" id="next-class-title-wrap">
-              <h2 class="total-count" id="next-class-name">Loading...</h2>
+              <h3 class="total-count" id="next-class-name">Loading...</h3>
             </div>
-            <h2 class="total-text" id="next-class-time">Calculating...</h2>
+            <h3 class="total-text" id="next-class-time">Calculating...</h3>
           </div>
         </div>
       `;
@@ -2958,7 +3094,7 @@ class LatestCoursesPreview extends HTMLElement {
     this.innerHTML = `
       <div class="home-courses-preview home-quick-actions-panel">
         <div class="home-courses-preview-header">
-          <h2 class="home-courses-preview-title">Quick Actions</h2>
+          <h3 class="home-courses-preview-title">Quick Actions</h3>
         </div>
         <div class="home-quick-actions-stack">
           <button type="button" class="home-quick-action-btn" data-action="add-assignment">Add assignment</button>
@@ -3037,7 +3173,7 @@ class ReviewSuggestionWidget extends HTMLElement {
     this.innerHTML = `
       <div class="home-review-suggestion">
         <div class="home-review-suggestion-header">
-          <h2 class="home-review-suggestion-title">Suggestion</h2>
+          <h3 class="home-review-suggestion-title">Suggestion</h3>
           <button type="button" class="home-calendar-link home-review-suggestion-link">Write Review</button>
         </div>
         <p class="home-review-suggestion-text">Review a course you have registered for.</p>
@@ -3411,7 +3547,7 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-progress-card-content">
           <div class="home-progress-card-header">
-            <h2 class="home-progress-card-title">Progress</h2>
+            <h3 class="home-progress-card-title">Progress</h3>
           </div>
           <p class="home-planner-empty">Sign in to track your planning progress.</p>
         </div>
@@ -3428,7 +3564,7 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
     this.innerHTML = `
       <div class="home-progress-card-content">
         <div class="home-progress-card-header">
-          <h2 class="home-progress-card-title">Progress / Requirements</h2>
+          <h3 class="home-progress-card-title">Progress / Requirements</h3>
           <span class="home-progress-meta">${data?.courseCount || 0} courses</span>
         </div>
         <div class="home-progress-stat-grid">
@@ -3488,7 +3624,7 @@ class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Empty slots</h2>
+            <h3 class="home-planner-module-title">Empty slots</h3>
           </div>
           <p class="home-planner-empty success">Your week is fully planned.</p>
           <button type="button" class="home-module-link-btn" data-action="browse-courses">Browse courses anyway</button>
@@ -3500,7 +3636,7 @@ class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
-          <h2 class="home-planner-module-title">Empty slots</h2>
+          <h3 class="home-planner-module-title">Empty slots</h3>
         </div>
         <ul class="home-planner-list">
           ${slots.map((slot) => `
@@ -3567,7 +3703,7 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Saved for later</h2>
+            <h3 class="home-planner-module-title">Saved for later</h3>
           </div>
           <p class="home-planner-empty">Save courses to add later.</p>
           <button type="button" class="home-module-link-btn" data-action="browse-courses">Browse courses</button>
@@ -3579,7 +3715,7 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
-          <h2 class="home-planner-module-title">Saved for later</h2>
+          <h3 class="home-planner-module-title">Saved for later</h3>
         </div>
         <ul class="home-planner-list">
           ${this.savedEntries.map((course, index) => `
@@ -3663,7 +3799,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Due Soon</h2>
+            <h3 class="home-planner-module-title">Due Soon</h3>
           </div>
           <p class="home-planner-empty">Sign in to see upcoming deadlines.</p>
         </div>
@@ -3676,7 +3812,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h2 class="home-planner-module-title">Due Soon</h2>
+            <h3 class="home-planner-module-title">Due Soon</h3>
           </div>
           <p class="home-planner-empty">No deadlines in the next 7 days.</p>
           <button type="button" class="home-module-link-btn" data-action="open-assignments">Open assignments</button>
@@ -3688,7 +3824,7 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
-          <h2 class="home-planner-module-title">Due Soon</h2>
+          <h3 class="home-planner-module-title">Due Soon</h3>
           <span class="home-module-badge">${data.assignmentsDueSoon.length}</span>
         </div>
         <ul class="home-planner-list">

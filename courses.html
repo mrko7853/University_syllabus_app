@@ -22,21 +22,24 @@
 <body>
 
     <app-navigation></app-navigation>
-    <div class="app-header">
-        <div class="app-logo"></div>
+    <div class="app-header app-header--title-mode">
+        <div class="app-header-brand">
+            <div class="app-logo"></div>
+            <h1 class="app-mobile-page-title" aria-live="polite">Courses</h1>
+        </div>
         <div class="app-misc">
             <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
-    <div id="app-content">
+    <div id="app-content" class="ui-page">
         <div class="page-courses">
 
         <div class="filter-container hidden">
             <div class="filter-background">
-                <div class="filter-popup">
+                <div class="ui-swipe-sheet filter-popup">
                     <div class="filter-header">
-                        <div class="swipe-indicator"></div>
+                        <div class="swipe-indicator ui-swipe-sheet__handle"></div>
                         <div class="filter-buttons">
                             <button id="see-results-btn">See Results</button>
                             <button id="clear-all-btn">Clear All</button>
@@ -148,8 +151,8 @@
 
         <div class="search-container hidden">
             <div class="search-background">
-                <div class="search-modal">
-                    <div class="swipe-indicator"></div>
+                <div class="ui-swipe-sheet search-modal">
+                    <div class="swipe-indicator ui-swipe-sheet__handle"></div>
                     <h2>
                         <div></div>Search Courses
                     </h2>
@@ -172,12 +175,12 @@
                     <div class="courses-toolbar-row courses-toolbar-row-a">
                         <div id="filter-year-term" class="courses-toolbar-term">
                             <div class="filter-year-term-container">
-                                <div class="custom-select" data-target="semester-select">
-                                    <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                                        <span class="custom-select-value">Loading...</span>
-                                        <div class="custom-select-arrow"></div>
+                                <div class="ui-select custom-select" data-target="semester-select">
+                                    <div class="ui-select__trigger custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                        <span class="ui-select__value custom-select-value">Loading...</span>
+                                        <div class="ui-select__arrow custom-select-arrow"></div>
                                     </div>
-                                    <div class="custom-select-options">
+                                    <div class="ui-select__menu custom-select-options">
                                         <!-- Options populated dynamically from database -->
                                     </div>
                                 </div>
@@ -199,13 +202,13 @@
                         </div>
 
                         <div class="courses-toolbar-actions">
-                            <button type="button" class="search-btn control-surface control-surface--secondary"
+                            <button type="button" class="ui-btn ui-btn--icon search-btn control-surface control-surface--secondary"
                                 aria-label="Search courses" title="Search courses">
                                 <div class="search-btn-icon" aria-hidden="true"></div>
                                 <span class="search-btn-label">Search</span>
                             </button>
                             <div class="sort-wrapper">
-                                <button type="button" class="sort-btn control-surface control-surface--secondary"
+                                <button type="button" class="ui-btn ui-btn--secondary sort-btn control-surface control-surface--secondary"
                                     aria-label="Sort" title="Sort">
                                     <div class="sort-btn-icon" aria-hidden="true"></div>
                                     <span class="sort-btn-label" aria-live="polite">A-Z</span>
@@ -217,7 +220,7 @@
                                     <div class="sort-option" data-sort="gpa-f-high">Higher % of F</div>
                                 </div>
                             </div>
-                            <button type="button" class="filter-btn control-surface control-surface--secondary"
+                            <button type="button" class="ui-btn ui-btn--icon filter-btn control-surface control-surface--secondary"
                                 aria-label="Filters">
                                 <div class="filter-btn-icon" aria-hidden="true"></div>
                                 <span class="filter-btn-label">Filters</span>
@@ -230,7 +233,7 @@
                         <div class="course-active-filters" id="course-active-filters" hidden>
                             <div class="course-active-filter-chips" id="course-active-filter-chips"></div>
                             <button type="button" id="course-clear-active-filters"
-                                class="course-active-filters-clear control-surface control-surface--secondary">Clear</button>
+                                class="ui-btn ui-btn--secondary course-active-filters-clear control-surface control-surface--secondary">Clear</button>
                         </div>
                     </div>
                 </div>
@@ -240,7 +243,7 @@
         <main class="courses-page-main">
             <section id="syllabus-main">
 
-            <div class="main-content">
+            <div class="ui-page-content main-content">
 
                 <div class="main-container courses-section" id="course-main-div">
                     <div class="courses-section-header">
@@ -367,7 +370,7 @@
                 </div>
                 <div class="class-info sheet courseinfo-sheet" id="class-info">
                     <div class="class-info-header sheet-header courseinfo-header">
-                        <div class="swipe-indicator courseinfo-grabber"></div>
+                        <div class="swipe-indicator ui-swipe-sheet__handle courseinfo-grabber"></div>
                         <div class="class-header">
                             <button id="class-close">
                                 <div class="button-icon">

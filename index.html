@@ -19,25 +19,28 @@
 
     <app-navigation></app-navigation>
     <div class="app-header">
-        <div class="app-logo"></div>
+        <div class="app-header-brand">
+            <div class="app-logo"></div>
+            <h1 class="app-mobile-page-title" aria-live="polite"></h1>
+        </div>
         <div class="app-misc">
             <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
-    <div id="app-content">
+    <div id="app-content" class="ui-page">
         <section id="home-main">
 
                             <div class="container-above container-above-desktop home-container-above">
                     <div class="title-box">
                         <div id="filter-year-term">
                             <div class="filter-year-term-container">
-                                <div class="custom-select" data-target="semester-select">
-                                    <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
-                                        <span class="custom-select-value">Loading...</span>
-                                        <div class="custom-select-arrow"></div>
+                                <div class="ui-select custom-select" data-target="semester-select">
+                                    <div class="ui-select__trigger custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                        <span class="ui-select__value custom-select-value">Loading...</span>
+                                        <div class="ui-select__arrow custom-select-arrow"></div>
                                     </div>
-                                    <div class="custom-select-options"></div>
+                                    <div class="ui-select__menu custom-select-options"></div>
                                 </div>
                                 <select name="semester" id="semester-select" class="semester-select" style="display: none;"></select>
                             </div>
@@ -52,7 +55,7 @@
                             </div>
                             <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
                         </div>
-                        <button class="search-btn control-surface control-surface--secondary">
+                        <button class="ui-btn ui-btn--icon search-btn control-surface control-surface--secondary">
                             <div></div>
                         </button>
                     </div>
@@ -60,11 +63,11 @@
 
             <div class="search-container hidden home-search-container" id="home-search-container">
                 <div class="search-background">
-                    <div class="search-modal" id="home-search-modal">
-                        <div class="swipe-indicator"></div>
-                        <h2>
+                    <div class="ui-swipe-sheet search-modal" id="home-search-modal">
+                        <div class="swipe-indicator ui-swipe-sheet__handle"></div>
+                        <h3>
                             <div></div>Search Courses
-                        </h2>
+                        </h3>
                         <div class="search-input-container">
                             <input type="text" class="search-input" id="home-search-input"
                                 placeholder="Enter course title, professor name, or course code..." autocomplete="off">
@@ -78,7 +81,7 @@
                 </div>
             </div>
 
-            <div class="main-content home-main-content">
+            <div class="ui-page-content main-content home-main-content">
 
                 <div class="top-content home-top-content">
                     <div class="home-desktop-grid">
@@ -86,7 +89,7 @@
                             <div class="main-container home-widget-card" id="calendar-container">
                                 <div class="home-calendar-summary">
                                     <div class="home-calendar-summary-header">
-                                        <h2 class="home-calendar-summary-title">Schedule</h2>
+                                        <h3 class="home-calendar-summary-title">Schedule</h3>
                                         <a class="home-calendar-link" href="/calendar">Open Calendar</a>
                                     </div>
                                     <div class="home-calendar-legend" aria-label="Schedule legend">
@@ -140,7 +143,7 @@
                             <div class="main-container home-widget-card" id="guest-browse-container">
                                 <div class="total-courses">
                                     <div class="total-courses-container guest-card-content">
-                                        <h2 class="home-calendar-summary-title">Browse Courses</h2>
+                                        <h3 class="home-calendar-summary-title">Browse Courses</h3>
                                         <p class="total-upcoming guest-card-copy">Search by term, period, and review trends.</p>
                                         <a class="home-calendar-link guest-card-link" href="/courses">Browse Courses</a>
                                     </div>
@@ -150,7 +153,7 @@
                             <div class="main-container home-widget-card" id="guest-schedule-container">
                                 <div class="home-calendar-summary guest-calendar-summary">
                                     <div class="home-calendar-summary-header">
-                                        <h2 class="home-calendar-summary-title">Schedule</h2>
+                                        <h3 class="home-calendar-summary-title">Schedule</h3>
                                     </div>
 
                                     <div class="guest-schedule-grid" aria-hidden="true">
@@ -210,7 +213,7 @@
 
                             <div class="main-container home-widget-card" id="guest-unlocked-container">
                                 <div class="guest-unlocked-content">
-                                    <h2 class="home-calendar-summary-title">Unlocked with account</h2>
+                                    <h3 class="home-calendar-summary-title">Unlocked with account</h3>
                                     <p class="total-upcoming guest-card-copy">Save your courses, track assignments, and write reviews in one place.</p>
                                     <a class="home-calendar-link guest-card-link" href="/register">Create Account</a>
                                 </div>
@@ -225,14 +228,14 @@
 
             <div class="class-info sheet courseinfo-sheet" id="class-info">
                 <div class="class-info-header sheet-header courseinfo-header">
-                    <div class="swipe-indicator courseinfo-grabber"></div>
+                    <div class="swipe-indicator ui-swipe-sheet__handle courseinfo-grabber"></div>
                     <div class="class-header">
                         <button id="class-close">
                             <div class="button-icon">
                                 <div class="exit-icon"></div>
                             </div>
                         </button>
-                        <h2>Class Info</h2>
+                        <h3>Class Info</h3>
                     </div>
                 </div>
 

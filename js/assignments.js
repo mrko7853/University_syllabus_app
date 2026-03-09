@@ -1,7 +1,7 @@
 import { supabase } from "../supabase.js";
-import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName } from "./shared.js";
+import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName, openConfirmModal } from "./shared.js";
 import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from "./preferences.js";
-import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
+import { openSemesterMobileSheet, closeSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -29,7 +29,10 @@ class AssignmentsManager {
         this.activeAssignmentsFilterTrigger = null;
         this.assignmentActionsSheetState = null;
         this.calendarDaySheetState = null;
+        this.assignmentDueDateSheetState = null;
         this.courseNameDisplayMaxLength = 18;
+        this.courseNameDisplayMaxLengthMobile = 32;
+        this.courseNameDisplayMaxLengthDesktop = 18;
         this.coursePrefilter = this.readCoursePrefilterFromURL();
         this.quickFilter = 'all';
         this.searchQuery = '';
@@ -462,6 +465,8 @@ class AssignmentsManager {
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
+        closeSemesterMobileSheet({ immediate: true });
+        this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
         overlay.style.display = 'flex';
         document.body.classList.add('assignment-modal-open');
         if (titleInput) {
@@ -474,7 +479,23 @@ class AssignmentsManager {
 
         const coursesForSemester = this.getCoursesForSelectedSemester();
         const selectedCode = subjectTag?.dataset.code || '';
+        const subjectSelect = document.getElementById('assignment-modal-course-select');
         console.log('Populating dropdown with courses:', coursesForSemester);
+
+        if (subjectSelect) {
+            subjectSelect.innerHTML = `
+                <option value="">None</option>
+                ${coursesForSemester.map(course => `
+                    <option value="${this.escapeHtml(course.code || '')}" data-color="${this.escapeHtml(course.color || '')}">
+                        ${this.escapeHtml(course.title || course.code || '')}
+                    </option>
+                `).join('')}
+            `;
+            subjectSelect.value = selectedCode;
+            if (subjectSelect.value !== selectedCode) {
+                subjectSelect.value = '';
+            }
+        }
 
         subjectDropdown.innerHTML = `
             <div class="subject-option no-subject${!selectedCode ? ' selected' : ''}" data-code="" data-name="" data-color="">
@@ -497,39 +518,16 @@ class AssignmentsManager {
         subjectDropdown.querySelectorAll('.subject-option').forEach(option => {
             option.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const name = option.dataset.name;
-                const color = option.dataset.color;
-                const current = document.getElementById('subject-current');
-                const selector = document.getElementById('assignment-modal-subject');
-
-                if (subjectTag) {
-                    if (name) {
-                        subjectTag.textContent = this.truncateText(name, this.courseNameDisplayMaxLength);
-                        subjectTag.style.backgroundColor = '';
-                        subjectTag.classList.add('has-tag');
-                        subjectTag.dataset.code = option.dataset.code;
-                        subjectTag.dataset.color = color;
-                        subjectTag.dataset.year = option.dataset.year || '';
-                        subjectTag.dataset.term = option.dataset.term || '';
-                        subjectTag.dataset.fullName = name;
-                    } else {
-                        subjectTag.textContent = 'Select course';
-                        subjectTag.style.backgroundColor = '';
-                        subjectTag.classList.remove('has-tag');
-                        subjectTag.dataset.code = '';
-                        subjectTag.dataset.color = '';
-                        subjectTag.dataset.year = '';
-                        subjectTag.dataset.term = '';
-                        subjectTag.dataset.fullName = '';
-                    }
-                }
-
-                this.updateSubjectSelectorAppearance(subjectTag, selector);
-
-                subjectDropdown.querySelectorAll('.subject-option').forEach(opt => opt.classList.remove('selected'));
-                option.classList.add('selected');
-                if (selector) selector.classList.remove('open');
-                if (current) current.classList.remove('open');
+                this.applySubjectSelection({
+                    code: option.dataset.code || '',
+                    name: option.dataset.name || '',
+                    color: option.dataset.color || '',
+                    year: option.dataset.year || '',
+                    term: option.dataset.term || ''
+                }, {
+                    subjectTag,
+                    subjectDropdown
+                });
             });
         });
     }
@@ -565,7 +563,19 @@ class AssignmentsManager {
     }
 
     async deleteAssignment(id) {
-        if (!confirm('Are you sure you want to delete this assignment?')) {
+        const targetAssignment = this.assignments.find((assignment) => String(assignment?.id) === String(id));
+        const assignmentTitle = String(targetAssignment?.title || '').trim();
+        const shouldDelete = await openConfirmModal({
+            title: 'Delete Assignment',
+            message: assignmentTitle
+                ? `Are you sure you want to delete "${assignmentTitle}"? This action cannot be undone.`
+                : 'Are you sure you want to delete this assignment? This action cannot be undone.',
+            confirmLabel: 'Delete Assignment',
+            cancelLabel: 'Cancel',
+            destructive: true
+        });
+
+        if (!shouldDelete) {
             return false;
         }
 
@@ -805,9 +815,9 @@ class AssignmentsManager {
 
         const deleteBtn = document.getElementById('assignment-delete-btn');
         if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => {
+            deleteBtn.addEventListener('click', async () => {
                 if (this.currentAssignment) {
-                    this.deleteAssignment(this.currentAssignment.id);
+                    await this.deleteAssignment(this.currentAssignment.id);
                 }
             });
         }
@@ -815,6 +825,32 @@ class AssignmentsManager {
         const subjectCurrent = document.getElementById('subject-current');
         const subjectDropdown = document.getElementById('subject-dropdown');
         const subjectSelector = document.getElementById('assignment-modal-subject');
+        const subjectSelect = document.getElementById('assignment-modal-course-select');
+
+        if (subjectSelect && subjectSelect.dataset.listenerAttached !== 'true') {
+            subjectSelect.dataset.listenerAttached = 'true';
+            subjectSelect.addEventListener('change', () => {
+                const selectedCode = String(subjectSelect.value || '');
+                const coursesForSemester = this.getCoursesForSelectedSemester();
+                const selectedCourse = coursesForSemester.find((course) => String(course.code || '') === selectedCode);
+                this.applySubjectSelection(selectedCourse
+                    ? {
+                        code: selectedCourse.code || '',
+                        name: selectedCourse.title || selectedCourse.code || '',
+                        color: selectedCourse.color || '',
+                        year: selectedCourse.year || '',
+                        term: selectedCourse.term || ''
+                    }
+                    : {
+                        code: '',
+                        name: '',
+                        color: '',
+                        year: '',
+                        term: ''
+                    });
+            });
+        }
+
         if (subjectCurrent && subjectDropdown && subjectSelector) {
             // Clone the element to remove any existing event listeners
             const newSubjectCurrent = subjectCurrent.cloneNode(true);
@@ -823,6 +859,18 @@ class AssignmentsManager {
             newSubjectCurrent.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                const mobileSubjectSelect = document.getElementById('assignment-modal-course-select');
+                if (this.isMobileViewport() && mobileSubjectSelect) {
+                    this.closeModalSelectorPanels({ keep: 'mobile-select' });
+                    openSemesterMobileSheet({
+                        targetSelect: mobileSubjectSelect,
+                        force: true,
+                        title: 'Course',
+                        description: 'Select assignment course'
+                    });
+                    return;
+                }
+
                 const dropdown = document.getElementById('subject-dropdown');
                 const selector = document.getElementById('assignment-modal-subject');
                 if (!dropdown) return;
@@ -876,6 +924,11 @@ class AssignmentsManager {
             modalDueDateInput.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.isMobileViewport()) {
+                    this.closeModalSelectorPanels({ keep: 'date-sheet' });
+                    this.openAssignmentDueDateSheet(modalDueDateInput);
+                    return;
+                }
                 this.closeModalSelectorPanels({ keep: 'date' });
                 this.openDatePicker(modalDueDateInput, this.currentAssignment, { mode: 'modal' });
             });
@@ -969,7 +1022,7 @@ class AssignmentsManager {
             semesters.forEach((semester) => {
                 const value = `${semester.term}-${semester.year}`;
                 const customOption = document.createElement('div');
-                customOption.className = `custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
+                customOption.className = `ui-select__option custom-select-option${value === selectedSemesterValue ? ' selected' : ''}`;
                 customOption.dataset.value = value;
                 customOption.textContent = semester.label;
                 optionsContainer.appendChild(customOption);
@@ -1214,7 +1267,13 @@ class AssignmentsManager {
                     keepCustomSelect: customSelect
                 });
 
-                if (openSemesterMobileSheet({ targetSelect })) {
+                const shouldForceMobileSheet = targetSelectId === 'assignment-modal-status';
+                if (openSemesterMobileSheet({
+                    targetSelect,
+                    force: shouldForceMobileSheet,
+                    title: shouldForceMobileSheet ? 'Status' : undefined,
+                    description: shouldForceMobileSheet ? 'Select assignment status' : undefined
+                })) {
                     customSelect.classList.remove('open');
                     return;
                 }
@@ -1493,8 +1552,9 @@ class AssignmentsManager {
             const normalizedStatus = this.getCanonicalStatus(assignment.status);
             const statusInfo = this.getDisplayStatusInfo(assignment);
             const dueLabel = this.formatDueMetaLabel(this.getDueMeta(assignment));
+            const chipTextMaxLength = this.getCourseNameDisplayMaxLength();
             const courseTag = assignment.course_tag_name
-                ? `<span class="assignment-course-chip" style="background-color:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                ? `<span class="assignment-course-chip" style="background-color:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, chipTextMaxLength))}</span>`
                 : '<span class="assignment-course-chip assignment-course-chip--empty">No course</span>';
             const disableProgress = normalizedStatus === 'in_progress' ? 'disabled' : '';
             const disableComplete = normalizedStatus === 'completed' ? 'disabled' : '';
@@ -1651,7 +1711,7 @@ class AssignmentsManager {
             listNode.innerHTML = `
                 <div class="assignments-calendar-day-empty">
                     <p class="assignments-calendar-day-empty-copy">No assignments due this day.</p>
-                    <button type="button" class="assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
+                    <button type="button" class="ui-btn ui-btn--primary assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
                         Add Assignment
                     </button>
                 </div>
@@ -1671,8 +1731,9 @@ class AssignmentsManager {
         listNode.innerHTML = dayAssignments.map((assignment) => {
             const normalizedStatus = this.getCanonicalStatus(assignment.status);
             const statusInfo = this.getDisplayStatusInfo(assignment);
+            const chipTextMaxLength = this.getCourseNameDisplayMaxLength();
             const courseMarkup = assignment.course_tag_name
-                ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, chipTextMaxLength))}</span>`
                 : '<span class="assignments-calendar-day-course-chip assignments-calendar-day-course-chip--empty">No course</span>';
 
             return `
@@ -1856,7 +1917,7 @@ class AssignmentsManager {
         overlay.dataset.assignmentId = assignment?.id != null ? String(assignment.id) : '';
         overlay.dataset.assignmentMode = 'edit';
         if (saveBtn) saveBtn.disabled = false;
-        if (saveBtn) saveBtn.textContent = 'Save changes';
+        if (saveBtn) saveBtn.textContent = 'Save Changes';
 
         if (deleteBtn) deleteBtn.style.display = 'block';
 
@@ -1884,7 +1945,7 @@ class AssignmentsManager {
 
         if (subjectTag) {
             if (assignment.course_tag_name) {
-                subjectTag.textContent = this.truncateText(assignment.course_tag_name, this.courseNameDisplayMaxLength);
+                subjectTag.textContent = this.truncateText(assignment.course_tag_name, this.getCourseNameDisplayMaxLength());
                 subjectTag.style.backgroundColor = '';
                 subjectTag.classList.add('has-tag');
                 subjectTag.dataset.code = assignment.course_code || '';
@@ -1922,6 +1983,8 @@ class AssignmentsManager {
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
+        closeSemesterMobileSheet({ immediate: true });
+        this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
         overlay.style.display = 'flex';
         document.body.classList.add('assignment-modal-open');
     }
@@ -1936,6 +1999,8 @@ class AssignmentsManager {
             overlay.dataset.assignmentMode = '';
         }
         document.body.classList.remove('assignment-modal-open');
+        closeSemesterMobileSheet({ immediate: true });
+        this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
         this.closeDatePicker({ immediate: true });
         if (emojiPicker) {
             emojiPicker.classList.remove('open');
@@ -2375,6 +2440,344 @@ class AssignmentsManager {
         this.datePickerTarget = null;
     }
 
+    openAssignmentDueDateSheet(targetInput) {
+        if (!this.isMobileViewport() || !targetInput) return false;
+
+        this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
+
+        const normalizeDay = (date) => {
+            if (!date) return null;
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        };
+        const isSameDay = (a, b) => {
+            if (!a || !b) return false;
+            return a.getFullYear() === b.getFullYear()
+                && a.getMonth() === b.getMonth()
+                && a.getDate() === b.getDate();
+        };
+        const todayDate = normalizeDay(new Date());
+        const initialValueDate = this.parseDateFromInputValue(targetInput.value || '');
+        let selectedDate = normalizeDay(initialValueDate);
+        let viewDate = selectedDate
+            ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+            : new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
+
+        const layer = document.createElement('div');
+        layer.className = 'semester-mobile-sheet-layer assignment-due-date-sheet-layer';
+        layer.setAttribute('role', 'presentation');
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'semester-mobile-sheet-backdrop assignment-due-date-sheet-backdrop';
+
+        const sheet = document.createElement('div');
+        sheet.className = 'ui-swipe-sheet semester-mobile-sheet assignment-due-date-sheet';
+        sheet.dataset.swipeLockSelector = '.assignment-due-date-sheet-options';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-label', 'Due Date');
+
+        const indicator = document.createElement('div');
+        indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        const header = document.createElement('div');
+        header.className = 'semester-mobile-sheet-header assignment-due-date-sheet-header';
+
+        const heading = document.createElement('h2');
+        heading.textContent = 'Due Date';
+        header.appendChild(heading);
+
+        const subtitle = document.createElement('p');
+        subtitle.className = 'semester-mobile-sheet-description assignment-due-date-sheet-description';
+        subtitle.textContent = 'Select when this assignment is due';
+
+        const optionsWrap = document.createElement('div');
+        optionsWrap.className = 'semester-mobile-sheet-options assignment-due-date-sheet-options';
+
+        const calendarWrap = document.createElement('div');
+        calendarWrap.className = 'assignment-due-date-sheet-calendar';
+
+        const calendarHeader = document.createElement('div');
+        calendarHeader.className = 'assignment-due-date-sheet-calendar-header';
+
+        const prevButton = document.createElement('button');
+        prevButton.type = 'button';
+        prevButton.className = 'assignment-due-date-sheet-nav-btn assignment-due-date-sheet-nav-btn--prev';
+        prevButton.setAttribute('aria-label', 'Previous month');
+        prevButton.textContent = '';
+
+        const monthLabel = document.createElement('h3');
+        monthLabel.className = 'assignment-due-date-sheet-month';
+
+        const nextButton = document.createElement('button');
+        nextButton.type = 'button';
+        nextButton.className = 'assignment-due-date-sheet-nav-btn assignment-due-date-sheet-nav-btn--next';
+        nextButton.setAttribute('aria-label', 'Next month');
+        nextButton.textContent = '';
+
+        calendarHeader.appendChild(prevButton);
+        calendarHeader.appendChild(monthLabel);
+        calendarHeader.appendChild(nextButton);
+
+        const calendarGrid = document.createElement('div');
+        calendarGrid.className = 'assignment-due-date-sheet-grid';
+
+        const weekdays = document.createElement('div');
+        weekdays.className = 'date-picker-weekdays assignment-due-date-sheet-weekdays';
+        ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach((weekday) => {
+            const dayLabel = document.createElement('span');
+            dayLabel.textContent = weekday;
+            weekdays.appendChild(dayLabel);
+        });
+
+        const daysGrid = document.createElement('div');
+        daysGrid.className = 'date-picker-days assignment-due-date-sheet-days';
+
+        calendarGrid.appendChild(weekdays);
+        calendarGrid.appendChild(daysGrid);
+        calendarWrap.appendChild(calendarHeader);
+        calendarWrap.appendChild(calendarGrid);
+
+        const quickWrap = document.createElement('div');
+        quickWrap.className = 'assignment-due-date-sheet-quick-actions';
+
+        const todayButton = document.createElement('button');
+        todayButton.type = 'button';
+        todayButton.className = 'ui-btn ui-btn--secondary control-surface control-surface--secondary assignment-due-date-sheet-quick-btn';
+        todayButton.textContent = 'Today';
+
+        const clearButton = document.createElement('button');
+        clearButton.type = 'button';
+        clearButton.className = 'ui-btn ui-btn--secondary control-surface control-surface--secondary assignment-due-date-sheet-quick-btn';
+        clearButton.textContent = 'No Due Date';
+
+        quickWrap.appendChild(todayButton);
+        quickWrap.appendChild(clearButton);
+        optionsWrap.appendChild(calendarWrap);
+        optionsWrap.appendChild(quickWrap);
+
+        const footer = document.createElement('div');
+        footer.className = 'semester-mobile-sheet-footer assignment-due-date-sheet-footer';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'ui-btn ui-btn--secondary semester-mobile-sheet-cancel control-surface control-surface--secondary';
+        cancelButton.textContent = 'Cancel';
+        footer.appendChild(cancelButton);
+
+        sheet.appendChild(indicator);
+        sheet.appendChild(header);
+        sheet.appendChild(subtitle);
+        sheet.appendChild(optionsWrap);
+        sheet.appendChild(footer);
+        layer.appendChild(backdrop);
+        layer.appendChild(sheet);
+        (this.root || document.body).appendChild(layer);
+
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            this.closeAssignmentDueDateSheet();
+        };
+
+        const onResize = () => {
+            if (this.isMobileViewport()) return;
+            this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
+        };
+
+        const applySelectedDate = (value) => {
+            targetInput.value = value || '';
+            this.closeAssignmentDueDateSheet();
+        };
+
+        const renderCalendar = () => {
+            monthLabel.textContent = viewDate.toLocaleDateString('en-US', {
+                month: 'short',
+                year: 'numeric'
+            });
+
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startPadding = firstDay.getDay();
+            const totalDays = lastDay.getDate();
+            const remainingCells = (7 - ((startPadding + totalDays) % 7)) % 7;
+            const fragment = document.createDocumentFragment();
+
+            for (let i = 0; i < startPadding; i++) {
+                const prevMonthDay = new Date(year, month, -startPadding + i + 1);
+                const mutedButton = document.createElement('button');
+                mutedButton.type = 'button';
+                mutedButton.className = 'date-picker-day assignment-due-date-sheet-day other-month';
+                mutedButton.textContent = String(prevMonthDay.getDate());
+                mutedButton.disabled = true;
+                mutedButton.setAttribute('aria-hidden', 'true');
+                fragment.appendChild(mutedButton);
+            }
+
+            for (let day = 1; day <= totalDays; day++) {
+                const currentDate = new Date(year, month, day);
+                const dayButton = document.createElement('button');
+                dayButton.type = 'button';
+                dayButton.className = 'date-picker-day assignment-due-date-sheet-day';
+                dayButton.dataset.date = this.formatDateInputValue(currentDate);
+                dayButton.textContent = String(day);
+                if (isSameDay(currentDate, todayDate)) {
+                    dayButton.classList.add('today');
+                }
+                if (selectedDate && isSameDay(currentDate, selectedDate)) {
+                    dayButton.classList.add('selected');
+                }
+                dayButton.setAttribute('aria-label', currentDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                }));
+                dayButton.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    selectedDate = normalizeDay(currentDate);
+                    applySelectedDate(this.formatDateInputValue(selectedDate));
+                });
+                fragment.appendChild(dayButton);
+            }
+
+            for (let i = 1; i <= remainingCells; i++) {
+                const mutedButton = document.createElement('button');
+                mutedButton.type = 'button';
+                mutedButton.className = 'date-picker-day assignment-due-date-sheet-day other-month';
+                mutedButton.textContent = String(i);
+                mutedButton.disabled = true;
+                mutedButton.setAttribute('aria-hidden', 'true');
+                fragment.appendChild(mutedButton);
+            }
+
+            daysGrid.innerHTML = '';
+            daysGrid.appendChild(fragment);
+        };
+
+        prevButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+            renderCalendar();
+        });
+
+        nextButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+            renderCalendar();
+        });
+
+        todayButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            selectedDate = normalizeDay(new Date());
+            applySelectedDate(this.formatDateInputValue(selectedDate));
+        });
+
+        clearButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            selectedDate = null;
+            applySelectedDate('');
+        });
+
+        renderCalendar();
+
+        const hadModalOpenClass = document.body.classList.contains('modal-open');
+        this.assignmentDueDateSheetState = {
+            layer,
+            sheet,
+            triggerElement: targetInput,
+            onKeyDown,
+            onResize,
+            closeTimer: null,
+            hadModalOpenClass
+        };
+
+        layer.addEventListener('click', (event) => {
+            if (event.target === backdrop || event.target === cancelButton) {
+                event.preventDefault();
+                this.closeAssignmentDueDateSheet();
+            }
+        });
+
+        document.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('resize', onResize);
+        document.body.classList.add('modal-open');
+
+        if (typeof window.addSwipeToCloseSimple === 'function') {
+            window.addSwipeToCloseSimple(sheet, backdrop, () => {
+                this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
+            });
+        }
+
+        window.requestAnimationFrame(() => {
+            layer.classList.add('show');
+            sheet.classList.add('show');
+        });
+
+        window.setTimeout(() => {
+            const focusTarget = daysGrid.querySelector('.assignment-due-date-sheet-day.selected')
+                || daysGrid.querySelector('.assignment-due-date-sheet-day.today')
+                || prevButton;
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusTarget.focus({ preventScroll: true });
+            }
+        }, 20);
+
+        return true;
+    }
+
+    closeAssignmentDueDateSheet(options = {}) {
+        const { immediate = false, restoreFocus = true } = options;
+        const state = this.assignmentDueDateSheetState;
+        if (!state) return;
+
+        const {
+            layer,
+            sheet,
+            triggerElement,
+            onKeyDown,
+            onResize,
+            hadModalOpenClass
+        } = state;
+
+        if (state.closeTimer) {
+            window.clearTimeout(state.closeTimer);
+            state.closeTimer = null;
+        }
+
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('resize', onResize);
+        if (!hadModalOpenClass) {
+            document.body.classList.remove('modal-open');
+        }
+
+        if (immediate) {
+            layer.remove();
+            this.assignmentDueDateSheetState = null;
+            if (restoreFocus && triggerElement && typeof triggerElement.focus === 'function') {
+                triggerElement.focus({ preventScroll: true });
+            }
+            return;
+        }
+
+        layer.classList.remove('show');
+        sheet.classList.remove('show', 'swiping');
+        state.closeTimer = window.setTimeout(() => {
+            layer.remove();
+            if (this.assignmentDueDateSheetState === state) {
+                this.assignmentDueDateSheetState = null;
+            }
+        }, 320);
+
+        if (restoreFocus && triggerElement && typeof triggerElement.focus === 'function') {
+            window.setTimeout(() => {
+                triggerElement.focus({ preventScroll: true });
+            }, 20);
+        }
+    }
+
     closeSubjectSelector() {
         const selector = document.getElementById('assignment-modal-subject');
         const current = document.getElementById('subject-current');
@@ -2416,12 +2819,20 @@ class AssignmentsManager {
     closeModalSelectorPanels(options = {}) {
         const { keep = null, keepCustomSelect = null } = options;
 
+        if (keep !== 'date-sheet') {
+            this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
+        }
+
         if (keep !== 'date') {
             this.closeDatePicker();
         }
 
         if (keep !== 'subject') {
             this.closeSubjectSelector();
+        }
+
+        if (keep !== 'mobile-select') {
+            closeSemesterMobileSheet({ immediate: true });
         }
 
         if (keep !== 'emoji') {
@@ -2784,7 +3195,7 @@ class AssignmentsManager {
     renderHeaderSummary(visibleCount) {
         const summary = document.getElementById('assignments-results-summary');
         if (!summary) return;
-        const countLabel = visibleCount === 1 ? '1 item' : `${visibleCount} items`;
+        const countLabel = visibleCount === 1 ? '1 assignment' : `${visibleCount} assignments`;
         summary.textContent = `Showing ${countLabel}`;
     }
 
@@ -2819,7 +3230,7 @@ class AssignmentsManager {
             emptyNode.innerHTML = `
                 <h3>No assignments yet</h3>
                 <p>Start building your planner by creating your first assignment.</p>
-                <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
             `;
             return;
         }
@@ -2829,8 +3240,8 @@ class AssignmentsManager {
                 <h3>No search results</h3>
                 <p>No assignments match "${this.escapeHtml(this.searchQuery)}".</p>
                 <div class="empty-state-actions">
-                    <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="clear-search">Clear Search</button>
-                    <button type="button" class="empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                    <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="clear-search">Clear Search</button>
+                    <button type="button" class="ui-btn ui-btn--secondary empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
                 </div>
             `;
             return;
@@ -2840,8 +3251,8 @@ class AssignmentsManager {
             <h3>No results for this filter</h3>
             <p>Try a different filter or reset to the default list.</p>
             <div class="empty-state-actions">
-                <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="show-all">Show All</button>
-                <button type="button" class="empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="show-all">Show All</button>
+                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
             </div>
         `;
     }
@@ -3233,14 +3644,14 @@ class AssignmentsManager {
         backdrop.className = 'semester-mobile-sheet-backdrop assignments-calendar-day-sheet-backdrop';
 
         const sheet = document.createElement('div');
-        sheet.className = 'semester-mobile-sheet assignments-calendar-day-sheet';
+        sheet.className = 'ui-swipe-sheet semester-mobile-sheet assignments-calendar-day-sheet';
         sheet.dataset.swipeLockSelector = '.assignments-calendar-day-sheet-body';
         sheet.setAttribute('role', 'dialog');
         sheet.setAttribute('aria-modal', 'true');
         sheet.setAttribute('aria-label', 'Assignments by day');
 
         const indicator = document.createElement('div');
-        indicator.className = 'swipe-indicator';
+        indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
         indicator.setAttribute('aria-hidden', 'true');
 
         const header = document.createElement('div');
@@ -3263,7 +3674,7 @@ class AssignmentsManager {
             body.innerHTML = `
                 <div class="assignments-calendar-day-empty">
                     <p class="assignments-calendar-day-empty-copy">No assignments due this day.</p>
-                    <button type="button" class="assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
+                    <button type="button" class="ui-btn ui-btn--primary assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
                         Add Assignment
                     </button>
                 </div>
@@ -3271,8 +3682,9 @@ class AssignmentsManager {
         } else {
             body.innerHTML = dayAssignments.map((assignment) => {
                 const statusInfo = this.getDisplayStatusInfo(assignment);
+                const chipTextMaxLength = this.getCourseNameDisplayMaxLength();
                 const courseMarkup = assignment.course_tag_name
-                    ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                    ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, chipTextMaxLength))}</span>`
                     : '<span class="assignments-calendar-day-course-chip assignments-calendar-day-course-chip--empty">No course</span>';
 
                 return `
@@ -3292,7 +3704,7 @@ class AssignmentsManager {
 
         const cancelButton = document.createElement('button');
         cancelButton.type = 'button';
-        cancelButton.className = 'semester-mobile-sheet-cancel control-surface control-surface--secondary';
+        cancelButton.className = 'ui-btn ui-btn--secondary semester-mobile-sheet-cancel control-surface control-surface--secondary';
         cancelButton.textContent = 'Cancel';
         footer.appendChild(cancelButton);
 
@@ -3429,14 +3841,14 @@ class AssignmentsManager {
         backdrop.className = 'semester-mobile-sheet-backdrop assignment-actions-sheet-backdrop';
 
         const sheet = document.createElement('div');
-        sheet.className = 'semester-mobile-sheet assignment-actions-sheet';
+        sheet.className = 'ui-swipe-sheet semester-mobile-sheet assignment-actions-sheet';
         sheet.dataset.swipeLockSelector = '.assignment-actions-sheet-options';
         sheet.setAttribute('role', 'dialog');
         sheet.setAttribute('aria-modal', 'true');
         sheet.setAttribute('aria-label', 'Assignment actions');
 
         const indicator = document.createElement('div');
-        indicator.className = 'swipe-indicator';
+        indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
         indicator.setAttribute('aria-hidden', 'true');
 
         const actionsWrap = document.createElement('div');
@@ -3478,7 +3890,7 @@ class AssignmentsManager {
 
         const cancelButton = document.createElement('button');
         cancelButton.type = 'button';
-        cancelButton.className = 'semester-mobile-sheet-cancel control-surface control-surface--secondary';
+        cancelButton.className = 'ui-btn ui-btn--secondary semester-mobile-sheet-cancel control-surface control-surface--secondary';
         cancelButton.textContent = 'Cancel';
 
         footer.appendChild(cancelButton);
@@ -3686,6 +4098,60 @@ class AssignmentsManager {
         }
     }
 
+    applySubjectSelection(selection = {}, refs = {}) {
+        const code = String(selection.code || '');
+        const name = String(selection.name || '');
+        const color = String(selection.color || '');
+        const year = String(selection.year || '');
+        const term = String(selection.term || '');
+
+        const subjectTag = refs.subjectTag || document.getElementById('subject-tag');
+        const subjectSelector = refs.subjectSelector || document.getElementById('assignment-modal-subject');
+        const subjectCurrent = refs.subjectCurrent || document.getElementById('subject-current');
+        const subjectDropdown = refs.subjectDropdown || document.getElementById('subject-dropdown');
+        const subjectSelect = refs.subjectSelect || document.getElementById('assignment-modal-course-select');
+
+        if (subjectTag) {
+            if (code && name) {
+                subjectTag.textContent = this.truncateText(name, this.getCourseNameDisplayMaxLength());
+                subjectTag.style.backgroundColor = '';
+                subjectTag.classList.add('has-tag');
+                subjectTag.dataset.code = code;
+                subjectTag.dataset.color = color;
+                subjectTag.dataset.year = year;
+                subjectTag.dataset.term = term;
+                subjectTag.dataset.fullName = name;
+            } else {
+                subjectTag.textContent = 'Select course';
+                subjectTag.style.backgroundColor = '';
+                subjectTag.classList.remove('has-tag');
+                subjectTag.dataset.code = '';
+                subjectTag.dataset.color = '';
+                subjectTag.dataset.year = '';
+                subjectTag.dataset.term = '';
+                subjectTag.dataset.fullName = '';
+            }
+        }
+
+        if (subjectSelect) {
+            subjectSelect.value = code;
+            if (subjectSelect.value !== code) {
+                subjectSelect.value = '';
+            }
+        }
+
+        if (subjectDropdown) {
+            subjectDropdown.querySelectorAll('.subject-option').forEach((option) => {
+                const optionCode = String(option.dataset.code || '');
+                option.classList.toggle('selected', optionCode === code);
+            });
+        }
+
+        if (subjectSelector) subjectSelector.classList.remove('open');
+        if (subjectCurrent) subjectCurrent.classList.remove('open');
+        this.updateSubjectSelectorAppearance(subjectTag, subjectSelector);
+    }
+
     updateSubjectSelectorAppearance(subjectTag = null, subjectSelector = null) {
         const tag = subjectTag || document.getElementById('subject-tag');
         const selector = subjectSelector || document.getElementById('assignment-modal-subject');
@@ -3708,6 +4174,16 @@ class AssignmentsManager {
     truncateText(text, maxLength) {
         if (!text) return '';
         return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+
+    getCourseNameDisplayMaxLength() {
+        if (!this.isMobileViewport()) {
+            return this.courseNameDisplayMaxLengthDesktop;
+        }
+
+        const viewportWidth = Math.max(window.innerWidth || 0, 320);
+        const responsiveLength = Math.floor(viewportWidth / 16);
+        return Math.max(18, Math.min(this.courseNameDisplayMaxLengthMobile, responsiveLength));
     }
 }
 

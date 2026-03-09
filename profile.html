@@ -9,16 +9,19 @@
 
 <body>
     <app-navigation></app-navigation>
-    <div class="app-header">
-        <div class="app-logo"></div>
+    <div class="app-header app-header--title-mode">
+        <div class="app-header-brand">
+            <div class="app-logo"></div>
+            <h1 class="app-mobile-page-title" aria-live="polite">Profile</h1>
+        </div>
         <div class="app-misc">
             <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
         </div>
     </div>
 
-    <div id="app-content">
+    <div id="app-content" class="ui-page">
         <main id="profile-main" class="page profile-page">
-            <div class="page-inner">
+            <div class="page-inner ui-page-content">
                 <section class="profile-section" id="profile-identity"></section>
                 <section class="profile-section" id="profile-academic"></section>
                 <section class="profile-section" id="profile-preferences"></section>

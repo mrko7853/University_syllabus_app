@@ -78,6 +78,10 @@ class SimpleRouter {
       this.loadPage(getCurrentAppPath())
     })
 
+    window.addEventListener('resize', () => {
+      this.updateMobileHeaderTitle(this.currentPath)
+    })
+
     // Handle navigation clicks
     document.addEventListener('click', (e) => {
       const link = e.target.closest('a[href]')
@@ -175,6 +179,34 @@ class SimpleRouter {
 
   isProfileRoute(path) {
     return path === '/profile' || path === '/settings' || path === '/help'
+  }
+
+  getMobileHeaderRouteTitle(path) {
+    if (path === '/courses' || path === '/dashboard') return 'Courses'
+    if (path === '/calendar') return 'Calendar'
+    if (path === '/assignments') return 'Assignments'
+    if (path === '/profile' || path === '/settings' || path === '/help') return 'Profile'
+    return ''
+  }
+
+  updateMobileHeaderTitle(path = this.currentPath) {
+    const appHeader = document.querySelector('.app-header')
+    if (!appHeader) return
+
+    const titleNode = appHeader.querySelector('.app-mobile-page-title')
+    if (!titleNode) return
+
+    const basePath = this.extractBasePath(path || getCurrentAppPath())
+    const title = this.getMobileHeaderRouteTitle(basePath)
+    const shouldUseTitle = this.isMobileViewport() && Boolean(title)
+
+    if (shouldUseTitle) {
+      titleNode.textContent = title
+      appHeader.classList.add('app-header--title-mode')
+    } else {
+      titleNode.textContent = ''
+      appHeader.classList.remove('app-header--title-mode')
+    }
   }
 
   shouldRedirectGuestProfileRoute(path, isAuthenticated) {
@@ -322,8 +354,8 @@ class SimpleRouter {
 
     appMisc.innerHTML = `
       <div class="mobile-guest-auth-actions">
-        <button type="button" class="control-surface mobile-guest-auth-btn" data-route="/login">Log In</button>
-        <button type="button" class="control-surface mobile-guest-auth-btn" data-route="/register">Sign Up</button>
+        <button type="button" class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn" data-route="/login">Log In</button>
+        <button type="button" class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn" data-route="/register">Sign Up</button>
       </div>
     `
   }
@@ -422,11 +454,15 @@ class SimpleRouter {
     document.body.classList.remove('home-mobile-header-sticky')
     document.body.classList.remove('home-modal-open')
     document.body.classList.remove('profile-page-header-sticky')
+    document.body.classList.remove('mobile-page-header-sticky')
     document.querySelector('.app-header')?.classList.remove('app-header--hidden')
     document.querySelector('#home-main .home-container-above.container-above-desktop')?.classList.remove('home-toolbar--hidden')
+    document.querySelectorAll('.app-mobile-toolbar--hidden').forEach((toolbar) => toolbar.classList.remove('app-mobile-toolbar--hidden'))
     document.documentElement.style.removeProperty('--home-mobile-header-height')
     document.documentElement.style.removeProperty('--home-mobile-toolbar-height')
     document.documentElement.style.removeProperty('--profile-mobile-header-height')
+    document.documentElement.style.removeProperty('--mobile-page-header-height')
+    document.documentElement.style.removeProperty('--mobile-page-toolbar-height')
 
     // Clear event listeners that might interfere
     const oldSelects = document.querySelectorAll('#year-select, #term-select')
@@ -530,6 +566,7 @@ class SimpleRouter {
       const [, courseCode, year, term] = courseMatch
       console.log('Course URL detected:', { courseCode, year, term })
       this.currentPath = path
+      this.updateMobileHeaderTitle(path)
 
       try {
         this.cleanupCurrentPage()
@@ -633,6 +670,8 @@ class SimpleRouter {
       return
     }
 
+    this.updateMobileHeaderTitle(basePath)
+
     try {
       // If protected route and user not authenticated, show locked message
       if (isProtectedRoute && !isAuthenticated) {
@@ -735,6 +774,7 @@ class SimpleRouter {
 
       // Update active navigation
       this.updateActiveNav(path)
+      this.updateMobileHeaderTitle(path)
 
       // Toggle guest vs authenticated home layout early to avoid signed-in widget flashes
       this.handleGuestDashboard(isAuthenticated, path)
@@ -1713,10 +1753,15 @@ class SimpleRouter {
 
       .router-loading-progress {
         height: 100%;
-        background: linear-gradient(90deg, #ff0000 0%, #ff6b35 50%, #f7931e 100%);
+        background: linear-gradient(
+          90deg,
+          #bdaac6 0%,
+          #d4c4e0 45%,
+          #9f84b8 100%
+        );
         width: 0%;
         transition: width 0.3s ease;
-        box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+        box-shadow: 0 0 10px rgba(157, 126, 174, 0.38);
       }
 
       .router-loading-bar.complete .router-loading-progress {
@@ -2544,12 +2589,22 @@ class SimpleRouter {
 
       #global-search-input {
         width: 100%;
-        padding: 0.75rem;
+        min-height: 52px;
+        height: 52px;
+        padding: 14px 16px;
+        line-height: 1.25;
         border: 2px solid #e0e0e0;
         border-radius: 8px;
-        font-size: 1rem;
-        transition: border-color 0.2s ease;
+        font-size: 16px;
+        font-family: var(--font-ui, system-ui, -apple-system, Segoe UI, Roboto, sans-serif);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
         box-sizing: border-box;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+
+      #global-search-input::placeholder {
+        line-height: 1.25;
       }
 
       #global-search-input:focus {
@@ -2742,6 +2797,19 @@ class SimpleRouter {
           min-height: 0;
           display: flex;
           flex-direction: column;
+        }
+
+        #global-search-input {
+          min-height: 52px;
+          height: 52px;
+          padding-top: 14px;
+          padding-bottom: 14px;
+          line-height: 1.25;
+          font-size: 16px;
+        }
+
+        #global-search-input::placeholder {
+          line-height: 1.25;
         }
 
         .global-search-autocomplete {
