@@ -33,7 +33,7 @@ const japaneseNameMapping = {
     '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
-    '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
+    '河村': 'Kawamura', '河島': 'Kawashima', '河': 'Kawa', '村': 'Mura', '島': 'Shima',
     '陳': 'Chin',
     '今西': 'Imanishi', '西': 'Nishi', '今': 'Ima',
     '石井': 'Ishii', '石': 'Ishi', '井': 'Ii',
@@ -51,6 +51,10 @@ const japaneseNameMapping = {
     '松本': 'Matsumoto', '松': 'Matsu',
     '井上': 'Inoue', '上': 'Ue',
     '木村': 'Kimura',
+    '二村': 'Nimura', '二': 'Ni',
+    '原田': 'Harada', '原': 'Hara',
+    '槇殿': 'Makidono', '槇': 'Maki', '殿': 'Dono',
+    '西村': 'Nishimura',
     '林': 'Hayashi',
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
@@ -58,6 +62,7 @@ const japaneseNameMapping = {
 
     // Common given names
     '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
+    '太郎': 'Taro',
     '匡': 'Tadashi',
     '喜彦': 'Yoshihiko', '彦': 'Hiko', '喜': 'Yoshi',
     '皓程': 'Koutei', '程': 'Tei', '皓': 'Kou',
@@ -69,6 +74,10 @@ const japaneseNameMapping = {
     '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
     '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
     '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
+    '桂子': 'Keiko', '桂': 'Kei',
+    '伸子': 'Nobuko', '伸': 'Nobu',
+    '伴子': 'Tomoko', '伴': 'Tomo',
+    '勉': 'Tsutomu',
 
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
     'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
@@ -82,8 +91,32 @@ const japaneseNameMapping = {
     'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
     'イシイ': 'Ishii', 'コニシ': 'Konishi', 'イズミ': 'Izumi',
     'タナカ': 'Tanaka', 'サトウ': 'Satou', 'ヤマダ': 'Yamada',
-    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe'
+    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe',
+    'ケルシー': 'Kelsey', 'オリバー': 'Oliver'
 };
+
+const japaneseFullNameMapping = {
+    '二村 太郎': 'Nimura Taro',
+    '今西 ケルシー オリバー': 'Imanishi Kelsey Oliver',
+    '仲間 壮彦': 'Nakama Takehiko',
+    '八木 匡': 'Yagi Tadashi',
+    '原田 勉': 'Harada Tsutomu',
+    '和泉 真澄': 'Izumi Masumi',
+    '和田 喜彦': 'Wada Yoshihiko',
+    '小西 尚実': 'Konishi Naomi',
+    '張 皓程': 'Chou Koutei',
+    '槇殿 伴子': 'Makidono Tomoko',
+    '河島 伸子': 'Kawashima Nobuko',
+    '河村 晴久': 'Kawamura Haruhisa',
+    '石井 弘明': 'Ishii Hiroaki',
+    '西村 幸宏': 'Nishimura Yukihiro',
+    '趙 亮': 'Chou Ryou',
+    '鈴木 桂子': 'Suzuki Keiko',
+    '陳 依君': 'Chin Ikun',
+    '髙橋 旬子': 'Takahashi Junko'
+};
+
+const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
 
 // Helper function to refresh calendar component
 function refreshCalendarComponent() {
@@ -111,61 +144,64 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
+    const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim();
+    if (!normalizedInput) return name;
 
     // Check cache first
-    if (romanizedProfessorCache.has(name)) {
-        return romanizedProfessorCache.get(name);
+    if (romanizedProfessorCache.has(normalizedInput)) {
+        return romanizedProfessorCache.get(normalizedInput);
     }
 
     // Check if the name contains Japanese characters
-    const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
+    const hasJapanese = JAPANESE_CHAR_REGEX.test(normalizedInput);
 
     if (!hasJapanese) {
         // Capitalize non-Japanese names properly
-        const capitalized = name.toUpperCase();
-        romanizedProfessorCache.set(name, capitalized);
+        const capitalized = normalizedInput.toUpperCase();
+        romanizedProfessorCache.set(normalizedInput, capitalized);
         return capitalized;
     }
 
-    let romanized = name;
+    let romanized = normalizedInput;
 
     try {
+        const exactNameMatch = japaneseFullNameMapping[normalizedInput];
+        if (exactNameMatch) {
+            romanized = exactNameMatch;
+        } else {
         // Split the name and process each part
-        let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
+        let parts = normalizedInput.split(/\s+/);
         let romanizedParts = [];
 
         for (let part of parts) {
             let romanizedPart = part;
 
-            // First, try WanaKana for Hiragana/Katakana conversion
-            const wanaKanaResult = wanakana.toRomaji(part);
-
-            // If WanaKana converted it (no more Japanese characters), use that
-            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
-                romanizedPart = wanaKanaResult;
+            // Try exact mapping first
+            if (japaneseNameMapping[part]) {
+                romanizedPart = japaneseNameMapping[part];
             } else {
-                // Still has Kanji, try our custom mapping
-
-                // Try exact match first
-                if (japaneseNameMapping[part]) {
-                    romanizedPart = japaneseNameMapping[part];
+                // Try WanaKana for Hiragana/Katakana conversion
+                const wanaKanaResult = wanakana.toRomaji(part);
+                if (!JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
+                    romanizedPart = wanaKanaResult;
                 } else {
-                    // Try character by character mapping
+                    // Character-by-character mapping, but avoid partial mixed results.
                     let characterMapped = '';
+                    let fullyMapped = true;
                     for (let char of part) {
                         if (japaneseNameMapping[char]) {
                             characterMapped += japaneseNameMapping[char];
                         } else {
-                            // Try WanaKana on individual character
                             const charRomaji = wanakana.toRomaji(char);
-                            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(charRomaji)) {
+                            if (!JAPANESE_CHAR_REGEX.test(charRomaji)) {
                                 characterMapped += charRomaji;
                             } else {
-                                characterMapped += char;
+                                fullyMapped = false;
+                                break;
                             }
                         }
                     }
-                    romanizedPart = characterMapped;
+                    romanizedPart = fullyMapped && characterMapped ? characterMapped : part;
                 }
             }
 
@@ -173,6 +209,7 @@ function romanizeProfessorName(name) {
         }
 
         romanized = romanizedParts.join(' ');
+        }
 
         // Clean up and capitalize properly
         romanized = romanized.replace(/\s+/g, ' ').trim();
@@ -185,7 +222,7 @@ function romanizeProfessorName(name) {
     }
 
     // Cache the result
-    romanizedProfessorCache.set(name, romanized);
+    romanizedProfessorCache.set(normalizedInput, romanized);
     return romanized;
 }
 
@@ -921,13 +958,36 @@ function correctEvaluationLabelTypos(label) {
         });
     });
 
-    return normalized.replace(/\s+/g, ' ').trim();
+    return normalized
+        .replace(/[:：]+\s*$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function titleCaseEvaluationLabel(label) {
     const normalized = String(label || '').replace(/\s+/g, ' ').trim();
     if (!normalized) return '';
-    return normalized.replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+    return normalized
+        .toLowerCase()
+        .replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+}
+
+function normalizeAssessmentDescriptionText(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    const normalized = raw
+        .replace(/_+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/([A-Za-z])(\d)/g, '$1 $2')
+        .replace(/(\d)([A-Za-z])/g, '$1 $2')
+        .replace(/([,;:!?])(?=\S)/g, '$1 ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/[\s.!?;:：]+$/g, '')
+        .trim();
+
+    return normalized ? `${normalized}.` : '';
 }
 
 function normalizeEvaluationComponents(course) {
@@ -940,7 +1000,7 @@ function normalizeEvaluationComponents(course) {
 
             const weightValue = Number(component?.weight);
             const hasWeight = Number.isFinite(weightValue);
-            const notes = String(component?.notes || '').replace(/\s+/g, ' ').trim();
+            const notes = normalizeAssessmentDescriptionText(component?.notes);
 
             return {
                 name,
@@ -1103,11 +1163,13 @@ function getAssessmentPreviewTagItems(course, maxTags = 6) {
         addTag(canonicalEvaluationTagFromName(fullLabel), fullLabel);
     });
 
-    getCourseEvaluationTags(course, maxTags).forEach((tag) => {
-        const fullLabel = correctEvaluationLabelTypos(tag);
-        const shortLabel = canonicalEvaluationTagFromName(fullLabel) || normalizeEvaluationLabelPrefix(fullLabel);
-        addTag(shortLabel, fullLabel || shortLabel);
-    });
+    if (!orderedTags.length) {
+        getCourseEvaluationTags(course, maxTags).forEach((tag) => {
+            const fullLabel = correctEvaluationLabelTypos(tag);
+            const shortLabel = canonicalEvaluationTagFromName(fullLabel) || normalizeEvaluationLabelPrefix(fullLabel);
+            addTag(shortLabel, fullLabel || shortLabel);
+        });
+    }
 
     return orderedTags.slice(0, maxTags);
 }
@@ -1280,7 +1342,9 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         let displayTimeSlot = rawTimeSlot;
-        if (specialMatch) {
+        if (/(集中講義|集中)/.test(rawTimeSlot)) {
+            displayTimeSlot = "Intensive";
+        } else if (specialMatch) {
             displayTimeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
         } else if (match) {
             displayTimeSlot = `${days[match[1]]} ${times[match[2]]}`;
@@ -1503,7 +1567,9 @@ function convertTimeSlotToContainerFormat(timeSlot) {
     const match = timeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
     const specialMatch = timeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
-    if (specialMatch) {
+    if (/(集中講義|集中)/.test(timeSlot)) {
+        return "Intensive";
+    } else if (specialMatch) {
         return "Mon 13:10 - 14:40"; // Just return the first occurrence for filter matching
     } else if (match) {
         return `${days[match[1]]} ${times[match[2]]}`;
@@ -3947,7 +4013,9 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
-        if (specialMatch) {
+        if (/(集中講義|集中)/.test(rawTimeSlot)) {
+            timeSlot = "Intensive";
+        } else if (specialMatch) {
             timeSlot = "Mon 13:10 - 14:40<br>Thu 13:10 - 14:40";
         } else if (match) {
             timeSlot = `${days[match[1]]} ${times[match[2]]}`;

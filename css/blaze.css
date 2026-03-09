@@ -129,7 +129,7 @@ app-navigation {
     width: 85px;
     background-color: white;
     border-right: 1px solid #E3E2E2;
-    z-index: 1200;
+    z-index: 2001;
 }
 
 nav {
@@ -1063,7 +1063,7 @@ course-calendar::after {
 .home-calendar-summary {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 14px;
     height: auto;
     min-height: 0;
     overflow: hidden;
@@ -1184,7 +1184,7 @@ home-due-soon-widget {
     margin: 0;
     font-family: var(--secondary-font), sans-serif;
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .home-planner-kpi-grid {
@@ -1282,21 +1282,22 @@ home-due-soon-widget {
 .home-planner-module {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
 }
 
 .home-planner-module-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 14px;
 }
 
 .home-planner-module-title {
     margin: 0;
     font-family: var(--secondary-font), sans-serif;
-    font-size: 18px;
+    font-size: var(--h3);
     font-weight: 500;
+    color: #1f1727;
 }
 
 .home-module-badge {
@@ -1467,7 +1468,7 @@ home-due-soon-widget {
 .home-progress-card-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .home-progress-card-header {
@@ -1482,6 +1483,7 @@ home-due-soon-widget {
     font-family: var(--secondary-font), sans-serif;
     font-size: 20px;
     font-weight: 500;
+    color: #1f1727;
 }
 
 .home-progress-meta {
@@ -1628,6 +1630,7 @@ home-due-soon-widget {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
+    color: #1f1727;
 }
 
 .home-calendar-widget {
@@ -1644,7 +1647,7 @@ latest-courses-preview {
 .home-courses-preview {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 14px;
     cursor: pointer;
 }
 
@@ -1670,6 +1673,7 @@ latest-courses-preview {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
+    color: #1f1727;
 }
 
 .home-courses-preview-subtitle {
@@ -1706,7 +1710,7 @@ latest-courses-preview {
     gap: 4px;
     color: inherit;
     text-decoration: none;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1716,6 +1720,12 @@ latest-courses-preview {
     .home-calendar-link:hover {
         background: rgba(255, 255, 255, 0.85);
         border-color: rgba(0, 0, 0, 0.10);
+    }
+
+    a.home-calendar-link:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 }
 
@@ -1777,7 +1787,7 @@ latest-courses-preview {
 .home-review-suggestion {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 14px;
     cursor: default;
 }
 
@@ -1799,6 +1809,7 @@ latest-courses-preview {
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
     font-weight: 500;
+    color: #1f1727;
 }
 
 .home-review-suggestion-text {
@@ -2166,6 +2177,14 @@ course-calendar #calendar-main td:last-child {
     border-right: none;
 }
 
+course-calendar #calendar-main tr:first-child th:last-child {
+    border-top-right-radius: 18px;
+}
+
+course-calendar #calendar-main tr:last-child td:last-child {
+    border-bottom-right-radius: 18px;
+}
+
 course-calendar #calendar-main th:first-child,
 course-calendar #calendar-main td:first-child {
     border-right: 1px solid rgba(189, 170, 198, 0.35);
@@ -2200,6 +2219,7 @@ course-calendar .period-index {
     height: 100%;
     overflow: hidden;
     box-sizing: border-box;
+    transition: background-color .16s ease;
 }
 
 .course-cell-main.course-cell-empty {
@@ -2229,6 +2249,15 @@ course-calendar .period-index {
     .course-cell-main.course-cell-empty:hover {
         background: rgba(255, 255, 255, 0.45);
     }
+
+    .home-calendar-widget .course-cell-main:not(.course-cell-empty) {
+        cursor: pointer;
+    }
+
+    .home-calendar-widget .course-cell-main:not(.course-cell-empty):hover {
+        background: rgba(255, 255, 255, 0.45);
+        border-radius: 8px;
+    }
 }
 
 .course-cell-box {
@@ -2249,6 +2278,13 @@ course-calendar .period-index {
 
 .course-cell-box:hover {
     transform: scale(1.3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .home-calendar-widget .course-cell-box:hover,
+    .home-calendar-widget .course-cell-main:hover .course-cell-box {
+        transform: none;
+    }
 }
 
 
@@ -2375,6 +2411,14 @@ calendar-page #calendar-main td:last-child {
     border-right: none;
 }
 
+calendar-page #calendar-main tr:first-child th:last-child {
+    border-top-right-radius: 18px;
+}
+
+calendar-page #calendar-main tr:last-child td:last-child {
+    border-bottom-right-radius: 18px;
+}
+
 calendar-page #calendar-main th:first-child,
 calendar-page #calendar-main td:first-child {
     border-right: none;
@@ -2476,7 +2520,7 @@ calendar-page #calendar-main td.calendar-first {}
     left: 0;
     width: 100%;
     height: 100vh;
-    z-index: 1000;
+    z-index: 2100;
 }
 
 .search-container {
@@ -2495,7 +2539,7 @@ calendar-page #calendar-main td.calendar-first {}
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 1001;
+    z-index: 2101;
     background: rgba(0, 0, 0, 0.5);
     transition: opacity 0.22s ease;
     will-change: opacity;
@@ -2529,7 +2573,7 @@ calendar-page #calendar-main td.calendar-first {}
     width: 400px;
     height: 100%;
     padding: 0 !important;
-    z-index: 1002;
+    z-index: 2102;
     overflow: hidden;
     border-bottom-left-radius: 20px;
     border-top-left-radius: 20px;
@@ -3157,7 +3201,9 @@ calendar-page #calendar-main td.calendar-first {}
 #clear-all-btn,
 #see-results-btn,
 #calendar-filter-clear-all,
-#calendar-filter-see-results {
+#calendar-filter-see-results,
+#assignments-clear-advanced-filters,
+#assignments-filter-see-results {
     flex: 1;
     min-height: 50px;
     height: 50px;
@@ -3177,21 +3223,24 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 #see-results-btn,
-#calendar-filter-see-results {
+#calendar-filter-see-results,
+#assignments-filter-see-results {
     background: #e3d5e9;
     border-color: rgba(166, 138, 188, 0.42);
 }
 
 @media (hover: hover) and (pointer: fine) {
     #clear-all-btn:hover,
-    #calendar-filter-clear-all:hover {
+    #calendar-filter-clear-all:hover,
+    #assignments-clear-advanced-filters:hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 
     #see-results-btn:hover,
-    #calendar-filter-see-results:hover {
+    #calendar-filter-see-results:hover,
+    #assignments-filter-see-results:hover {
         background: #dbcae4;
         border-color: rgba(146, 115, 173, 0.48);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
@@ -3199,7 +3248,8 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 #clear-all-btn:active,
-#calendar-filter-clear-all:active {
+#calendar-filter-clear-all:active,
+#assignments-clear-advanced-filters:active {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
@@ -3207,7 +3257,8 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 #see-results-btn:active,
-#calendar-filter-see-results:active {
+#calendar-filter-see-results:active,
+#assignments-filter-see-results:active {
     background: #d2bfdd;
     border-color: rgba(129, 96, 159, 0.5);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
@@ -3217,7 +3268,9 @@ calendar-page #calendar-main td.calendar-first {}
 #clear-all-btn:focus-visible,
 #see-results-btn:focus-visible,
 #calendar-filter-clear-all:focus-visible,
-#calendar-filter-see-results:focus-visible {
+#calendar-filter-see-results:focus-visible,
+#assignments-clear-advanced-filters:focus-visible,
+#assignments-filter-see-results:focus-visible {
     outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
 }
@@ -3391,8 +3444,8 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 .emoji-picker-random {
-    width: 28px;
-    height: 28px;
+    width: 31px;
+    height: 31px;
     border: 1px solid var(--control-border);
     background: var(--control-bg);
     font-size: 16px;
@@ -3429,7 +3482,7 @@ calendar-page #calendar-main td.calendar-first {}
 }
 
 .emoji-picker-section {
-    padding: 0 15px;
+    padding: 0;
     display: none;
 }
 
@@ -3441,7 +3494,7 @@ calendar-page #calendar-main td.calendar-first {}
 .emoji-picker-section-title {
     font-size: 11px;
     color: #999;
-    margin: 8px 0 6px 0;
+    margin: 8px 15px 6px 15px;
     font-family: var(--secondary-font), sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -3456,6 +3509,8 @@ calendar-page #calendar-main td.calendar-first {}
     overflow-x: hidden;
     scrollbar-gutter: stable;
     padding-bottom: 4px;
+    padding-left: 15px;
+    padding-right: 15px;
 }
 
 .emoji-picker-grid button {
@@ -3469,7 +3524,7 @@ calendar-page #calendar-main td.calendar-first {}
     cursor: pointer;
     border-radius: 50px;
     color: #333;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    box-shadow: unset;
     filter: none !important;
     padding: 0;
     display: inline-flex;
@@ -3498,7 +3553,7 @@ calendar-page #calendar-main td.calendar-first {}
     font-size: 12px;
     color: #999;
     font-family: var(--secondary-font), sans-serif;
-    padding: 8px 0 4px 0;
+    padding: 8px 15px 4px 15px;
 }
 
 .emoji-picker-footer {
@@ -3511,7 +3566,14 @@ calendar-page #calendar-main td.calendar-first {}
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.emoji-picker-footer::-webkit-scrollbar {
+    height: 0;
+    display: none;
 }
 
 .emoji-category-btn {
@@ -3589,7 +3651,7 @@ calendar-page #calendar-main td.calendar-first {}
     background: var(--control-bg);
     color: #333;
     border-radius: 20px;
-    padding: 0 0 12px 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -3706,6 +3768,24 @@ calendar-page #calendar-main td.calendar-first {}
     color: inherit;
 }
 
+#home-main .home-container-above .search-pill-autocomplete {
+    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+#home-main .home-container-above .search-pill-autocomplete .search-pill-autocomplete-inner {
+    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+#home-main .home-container-above .search-pill-autocomplete .search-autocomplete-item .item-title {
+    font-family: var(--secondary-font), sans-serif;
+}
+
 /* Hide search button on desktop, show search pill */
 .container-above-desktop .search-btn {
     display: none;
@@ -3779,7 +3859,8 @@ calendar-page #calendar-main td.calendar-first {}
 .sort-option {
     padding: 10px 20px;
     cursor: pointer;
-    font-size: var(--p);
+    font-size: 13px;
+    font-weight: 600;
     font-family: var(--secondary-font), sans-serif;
     transition: background-color 0.2s ease;
 }
@@ -4084,6 +4165,10 @@ calendar-page #calendar-main td.calendar-first {}
     align-items: center;
     border-radius: 30px;
     padding: 0 40px;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .gpa-container {
@@ -6054,7 +6139,7 @@ td p {
 .class-info .class-content,
 .class-info .class-content * {
     font-family: var(--font-ui);
-    color: #0f172a;
+    color: #1f1727;
 }
 
 .class-info .class-content h2,
@@ -6066,9 +6151,9 @@ td p {
 
 .class-info .class-content h2 {
     margin: 0;
-    font-weight: 600 !important;
+    font-weight: 650 !important;
     line-height: 1.12;
-    color: #000;
+    color: #1a1421;
 }
 
 .class-info .class-subtitle,
@@ -6508,7 +6593,7 @@ td p {
 .class-info .term-label,
 .class-info .gpa-container h3,
 .class-info .gpa-bar-graph h3 {
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .class-info .class-content p,
@@ -7128,6 +7213,20 @@ td p {
     letter-spacing: 0;
 }
 
+.class-info .class-subtitle-assignments .course-assignments-title {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.class-info .class-subtitle-assignments .course-assignments-total {
+    margin: 0;
+    color: #172033bd;
+    font-weight: 500;
+    font-size: 14px;
+}
+
 .class-info .view-all-assignments-btn {
     display: inline-flex;
     align-items: center;
@@ -7443,8 +7542,8 @@ td p {
 
 .class-info #class-assignments .class-subtitle-assignments .subtitle-opacity {
     font-size: 18px;
-    font-weight: 600;
-    color: #0f172a;
+    font-weight: 500;
+    color: #1f1727;
 }
 
 .class-info #class-assignments .course-assignments-list {
@@ -9283,16 +9382,16 @@ td p {
 
 .submit-review,
 .update-review {
-    border-color: rgba(0, 123, 255, 0.35);
-    background: #007bff;
-    color: white;
+    border-color: rgba(58, 141, 84, 0.34);
+    background: linear-gradient(180deg, #9aefb8 0%, #86e4a6 100%);
+    color: #072213;
 }
 
 .submit-review:hover,
 .update-review:hover {
-    background: #0056b3;
-    border-color: rgba(0, 86, 179, 0.45);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), var(--control-shadow-hover);
+    background: linear-gradient(180deg, #8eebb0 0%, #79dda0 100%);
+    border-color: rgba(58, 141, 84, 0.44);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--control-shadow-hover);
 }
 
 .delete-review {
@@ -10083,6 +10182,12 @@ body.modal-open {
     overflow: hidden;
 }
 
+body.modal-open app-navigation,
+body.modal-open .app-header {
+    z-index: 900 !important;
+    pointer-events: none !important;
+}
+
 @media (max-width: 1023px) {
     .conflict-container .conflict-backdrop,
     .conflict-container .search-background {
@@ -10590,7 +10695,7 @@ calendar-page .mobile-day-buttons {
 }
 
 .nav-btn#assignments-btn.active .nav-icon {
-    filter: brightness(0) saturate(100%) invert(75%) sepia(10%) saturate(500%) hue-rotate(240deg);
+    filter: brightness(0) saturate(100%);
 }
 
 .assignment-calendar-icon {
@@ -11313,125 +11418,236 @@ calendar-page .mobile-day-buttons {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1001;
+    background: rgba(15, 23, 42, 0.42);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    z-index: 20020;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
+body.assignment-modal-open {
+    overflow: hidden !important;
+}
+
+body.assignment-modal-open app-navigation,
+body.assignment-modal-open .app-header {
+    z-index: 900 !important;
+}
+
 .assignment-modal {
-    background: white;
-    border-radius: 20px;
+    background: #fff;
+    border-radius: 24px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
     width: 90%;
-    max-width: 700px;
-    max-height: 85vh;
-    overflow-y: auto;
+    max-width: 760px;
+    max-height: min(86vh, 860px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     overflow-x: hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
 }
 
 .assignment-modal-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: 20px 30px;
-    gap: 15px;
-    border-bottom: 1px solid #eee;
+    gap: 14px;
+    padding: 18px 22px 16px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.assignment-modal-header-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.assignment-modal-icon-wrap {
+    flex: 0 0 auto;
+}
+
+.assignment-modal .emoji-selector {
+    position: relative;
+}
+
+.assignment-modal .emoji-trigger {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), var(--control-shadow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.assignment-modal-title-wrap {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-right: 10px;
 }
 
 .assignment-modal-title {
-    flex-grow: 1;
+    width: 100%;
     border: none;
-    font-size: var(--h2);
-    font-family: var(--primary-font), serif;
-    font-weight: 700;
-    color: #000;
-    opacity: 1;
+    background: transparent;
+    font-size: clamp(30px, 2.2vw, 36px);
+    font-family: var(--font-ui);
+    font-weight: 620;
+    color: #111827;
+    line-height: 1.06;
     outline: none;
-    padding: 5px 0;
-    text-decoration: underline;
-    text-decoration-thickness: 3px;
-    text-decoration-style: dashed;
-    text-underline-offset: 6px;
-    transition: all 0.2s ease;
+    margin: 0;
+    padding: 10px 5px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    box-sizing: border-box;
 }
 
 .assignment-modal-title:focus {
-    text-decoration-style: double;
-    transition: all 0.2s ease;
+    background: rgba(248, 245, 255, 0.78);
+    box-shadow: 0 0 0 2px rgba(189, 170, 198, 0.3);
+}
+
+.assignment-modal-title::placeholder {
+    color: rgba(17, 24, 39, 0.48);
     opacity: 1;
 }
 
-.assignment-modal-title:placeholder-shown {
-    opacity: 0.4;
+.assignment-modal-subtitle {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 560;
+    line-height: 1.3;
+    color: rgba(15, 23, 42, 0.64);
+    padding-left: 5px;
 }
 
-.assignment-modal-title:placeholder-shown:focus {
-    opacity: 1 !important;
+.assignment-modal-subtitle[hidden] {
+    display: none !important;
 }
 
 .assignment-modal-close {
-
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
 }
 
-.assignment-modal-close:hover {
+.assignment-modal-close .button-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
+.assignment-modal-close .exit-icon {
+    width: 18px;
+    height: 18px;
+    background-size: 18px 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .assignment-modal-close:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+}
+
+.assignment-modal-close:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+.assignment-modal-close:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
 }
 
 .assignment-modal-meta {
     display: grid;
-    grid-template-columns: 0.5fr 1fr;
-    gap: 20px;
-    padding: 20px 30px;
-    background: #f8f5ff;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+    padding: 14px 22px 16px;
+    background: rgba(248, 245, 255, 0.82);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 }
 
-.meta-item {
+.assignment-modal .meta-item {
     display: flex;
     flex-direction: column;
+    gap: 6px;
+    min-width: 0;
 }
 
-.meta-label {
+.assignment-modal .meta-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
     font-weight: 600;
-    padding: 0px 0px 10px 0px;
-    text-align: left;
-    vertical-align: middle;
-    font-size: 13px;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    font-family: var(--secondary-font), sans-serif;
+    color: rgba(15, 23, 42, 0.66);
+    letter-spacing: 0.2px;
+    text-transform: none;
+    font-family: var(--font-ui);
 }
 
 .assignment-modal-meta .meta-label .col-icon {
     display: inline-block;
-    vertical-align: sub;
     width: 16px;
     height: 16px;
-    margin-right: 6px;
-    opacity: 0.7;
+    margin-right: 0;
+    opacity: 0.62;
+    flex-shrink: 0;
 }
 
-.meta-value {
+.assignment-modal .meta-value {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    width: fit-content;
-    height: 50px;
-    min-width: 180px;
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    min-height: 46px;
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius-pill);
-    font-weight: 400;
-    color: black;
+    font-weight: 620;
+    color: #1d2435;
     background-color: var(--control-bg);
     box-sizing: border-box;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     touch-action: manipulation;
-    padding: 10px 20px;
-    font-size: var(--p);
-    font-family: var(--secondary-font), sans-serif;
+    padding: 0 14px;
+    font-size: 14px;
+    font-family: var(--font-ui);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
     filter: none;
     cursor: pointer;
@@ -11439,23 +11655,23 @@ calendar-page .mobile-day-buttons {
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .meta-value:hover {
+    .assignment-modal .meta-value:hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 }
 
-.meta-value:focus {
+.assignment-modal .meta-value:focus {
     outline: none;
 }
 
-.meta-value:focus-visible {
+.assignment-modal .meta-value:focus-visible {
     outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
 }
 
-.meta-value.date-picker-trigger.date-picker-open {
+.assignment-modal .meta-value.date-picker-trigger.date-picker-open {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
@@ -11469,7 +11685,7 @@ calendar-page .mobile-day-buttons {
 .assignment-modal-meta .status-selector {
     position: relative;
     display: inline-block;
-    width: fit-content;
+    width: 100%;
     touch-action: manipulation;
     --status-tag-bg: #e9ecef;
     --status-tag-color: #6c757d;
@@ -11479,22 +11695,22 @@ calendar-page .mobile-day-buttons {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    width: fit-content;
-    height: 50px;
-    min-width: 180px;
+    width: 100%;
+    height: 46px;
+    min-width: 0;
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius-pill);
-    font-weight: 400;
-    color: black;
+    font-weight: 520;
+    color: #1d2435;
     background-color: var(--control-bg);
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     touch-action: manipulation;
-    padding: 10px 20px;
-    font-size: var(--p);
-    font-family: var(--secondary-font), sans-serif;
+    padding: 0 14px;
+    font-size: 14px;
+    font-family: var(--font-ui);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
     filter: none;
     transform: translateY(0);
@@ -11507,25 +11723,29 @@ calendar-page .mobile-day-buttons {
     transform: translateY(var(--control-press-translate));
 }
 
-@media (hover: hover) and (pointer: fine) {
-    .assignment-modal-meta .status-selector .custom-select-trigger:hover {
-        border-color: var(--control-border-hover);
-        background-color: var(--control-bg-hover);
-        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
-    }
+.assignment-modal-meta .status-selector .custom-select-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border-radius: 0;
+    font-size: 14px;
+    font-family: var(--font-ui);
+    font-weight: 620;
+    line-height: 1;
+    color: var(--status-tag-color);
+    background-color: transparent;
+    white-space: nowrap;
 }
 
-.assignment-modal-meta .status-selector .custom-select-value {
-    display: inline-block;
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-size: 12px;
-    font-family: var(--secondary-font), sans-serif;
-    font-weight: 500;
-    line-height: 1.2;
-    color: var(--status-tag-color);
-    background-color: var(--status-tag-bg);
-    white-space: nowrap;
+.assignment-modal-meta .status-selector .custom-select-value::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--status-tag-bg);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
+    flex: 0 0 10px;
 }
 
 .assignment-modal-meta .status-selector .custom-select-trigger:focus {
@@ -11555,22 +11775,23 @@ calendar-page .mobile-day-buttons {
 
 .assignment-modal-meta .status-selector .custom-select-options {
     position: absolute;
-    top: 133%;
+    top: calc(100% + 8px);
     left: 0;
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
+    min-width: 0;
     border: 1px solid var(--control-border);
     background-color: var(--control-bg);
     transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
     box-shadow: var(--control-shadow-hover);
-    border-radius: 20px;
-    max-height: 200px;
+    border-radius: 14px;
+    max-height: 230px;
     overflow-y: auto;
     overflow-x: hidden;
     z-index: 1050;
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px);
+    pointer-events: none;
 }
 
 .assignment-modal-meta .status-selector .custom-select-options::after {
@@ -11578,7 +11799,7 @@ calendar-page .mobile-day-buttons {
     position: absolute;
     inset: 0;
     box-shadow: inset 0 1px 0 var(--control-highlight);
-    border-radius: 20px;
+    border-radius: 14px;
     pointer-events: none;
     z-index: 10;
 }
@@ -11587,38 +11808,56 @@ calendar-page .mobile-day-buttons {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+    pointer-events: auto;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option {
-    padding: 8px 12px;
+    padding: 8px 10px;
     cursor: pointer;
     transition: background-color .2s;
     color: #2b2b2b;
     position: relative;
     z-index: 1;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 560;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option .option-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
     pointer-events: none;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    font-size: 12px;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    color: #2b3345;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option:first-child {
-    border-radius: 20px 20px 0 0;
+    border-radius: 14px 14px 0 0;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option:last-child {
-    border-radius: 0 0 20px 20px;
+    border-radius: 0 0 14px 14px;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option:only-child {
-    border-radius: 20px;
+    border-radius: 14px;
 }
 
 .assignment-modal-meta .status-selector .custom-select-option[data-value="not_started"] {
     background-color: transparent;
 }
 
-.assignment-modal-meta .status-selector .custom-select-option[data-value="ongoing"] {
+.assignment-modal-meta .status-selector .custom-select-option[data-value="in_progress"] {
     background-color: transparent;
 }
 
@@ -11631,7 +11870,7 @@ calendar-page .mobile-day-buttons {
     color: #6c757d;
 }
 
-.assignment-modal-meta .status-selector .custom-select-option[data-value="ongoing"] .option-tag {
+.assignment-modal-meta .status-selector .custom-select-option[data-value="in_progress"] .option-tag {
     background-color: #fff3cd;
     color: #856404;
 }
@@ -11642,7 +11881,7 @@ calendar-page .mobile-day-buttons {
 }
 
 .assignment-modal-meta .status-selector .custom-select-option:hover {
-    background-color: #f8f5ff;
+    background-color: rgba(237, 239, 245, 0.92);
 }
 
 .assignment-modal-meta .status-selector .custom-select-option.selected {
@@ -11650,42 +11889,43 @@ calendar-page .mobile-day-buttons {
 }
 
 /* Subject selector dropdown */
-.subject-selector {
+.assignment-modal .subject-selector {
     position: relative;
     display: inline-block;
-    width: fit-content;
+    width: 100%;
     --subject-selector-bg: white;
     --subject-tag-bg: transparent;
     --subject-tag-color: #000;
 }
 
-.subject-current {
+.assignment-modal .subject-current {
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    width: fit-content;
-    height: 50px;
-    min-width: 180px;
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    min-height: 46px;
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius-pill);
-    font-weight: 400;
-    color: black;
+    font-weight: 520;
+    color: #1d2435;
     background-color: var(--control-bg);
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     touch-action: manipulation;
-    padding: 10px 20px;
-    font-size: var(--p);
-    font-family: var(--secondary-font), sans-serif;
+    padding: 0 14px;
+    font-size: 14px;
+    font-family: var(--font-ui);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
     filter: none;
     transform: translateY(0);
 }
 
-.subject-current.open,
-.subject-selector.open .subject-current {
+.assignment-modal .subject-current.open,
+.assignment-modal .subject-selector.open .subject-current {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
@@ -11694,47 +11934,47 @@ calendar-page .mobile-day-buttons {
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .subject-current:hover {
+    .assignment-modal .subject-current:hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 }
 
-.subject-current:focus {
+.assignment-modal .subject-current:focus {
     outline: none;
 }
 
-.subject-current:focus-visible {
+.assignment-modal .subject-current:focus-visible {
     outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
 }
 
-.subject-tag {
+.assignment-modal .subject-tag {
     display: inline-block;
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-size: 12px;
-    font-family: var(--secondary-font), sans-serif;
-    font-weight: 500;
-    line-height: 1.2;
-    color: var(--subject-tag-color);
-    background-color: var(--subject-tag-bg);
-    white-space: nowrap;
-}
-
-.subject-tag.has-tag {
-    color: var(--subject-tag-color);
-}
-
-.subject-tag:not(.has-tag) {
     padding: 0;
     border-radius: 0;
+    font-size: 14px;
+    font-family: var(--font-ui);
+    font-weight: 620;
+    line-height: 1;
+    color: var(--subject-tag-color);
     background-color: transparent;
-    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
-.subject-arrow {
+.assignment-modal .subject-tag.has-tag {
+    color: #1d2435;
+}
+
+.assignment-modal .subject-tag:not(.has-tag) {
+    color: rgba(29, 36, 53, 0.58);
+}
+
+.assignment-modal .subject-arrow {
     width: 16px;
     height: 16px;
     background-image: url(/assets/arrow.svg);
@@ -11749,23 +11989,23 @@ calendar-page .mobile-day-buttons {
     flex-shrink: 0;
 }
 
-.subject-current.open .subject-arrow,
-.subject-selector.open .subject-arrow {
+.assignment-modal .subject-current.open .subject-arrow,
+.assignment-modal .subject-selector.open .subject-arrow {
     transform: rotate(180deg);
 }
 
-.subject-dropdown {
+.assignment-modal .subject-dropdown {
     position: absolute;
-    top: 133%;
+    top: calc(100% + 8px);
     left: 0;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
     border: 1px solid var(--control-border);
     background-color: var(--control-bg);
     transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
     box-shadow: var(--control-shadow-hover);
-    border-radius: 20px;
-    max-height: min(50vh, 360px);
+    border-radius: 14px;
+    max-height: min(50vh, 320px);
     overflow-y: auto;
     overflow-x: hidden;
     z-index: 1050;
@@ -11775,92 +12015,94 @@ calendar-page .mobile-day-buttons {
     pointer-events: none;
 }
 
-.subject-dropdown::after {
+.assignment-modal .subject-dropdown::after {
     content: '';
     position: absolute;
     inset: 0;
     box-shadow: inset 0 1px 0 var(--control-highlight);
-    border-radius: 20px;
+    border-radius: 14px;
     pointer-events: none;
     z-index: 2;
 }
 
-.subject-selector.open .subject-dropdown {
+.assignment-modal .subject-selector.open .subject-dropdown {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
     pointer-events: auto;
 }
 
-.subject-option {
-    padding: 10px 20px;
+.assignment-modal .subject-option {
+    padding: 8px 10px;
     cursor: pointer;
     transition: background-color .2s;
-    font-size: var(--p);
-    font-family: 'Libre Bodoni', sans-serif;
-    font-weight: 100;
-    color: black;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    font-weight: 560;
+    color: #1d2435;
     position: relative;
     z-index: 1;
 }
 
-#subject-current .subject-option::after {
-    content: none;
-    position: absolute;
-    inset: 0;
-    box-shadow: 0 -2px 6px #0a254059 inset;
-    border-radius: 20px;
-    pointer-events: none;
-    z-index: 10;
+.assignment-modal .subject-option:first-child {
+    border-radius: 14px 14px 0 0;
 }
 
-.subject-option:first-child {
-    border-radius: 20px 20px 0 0;
+.assignment-modal .subject-option:last-child {
+    border-radius: 0 0 14px 14px;
 }
 
-.subject-option:last-child {
-    border-radius: 0 0 20px 20px;
+.assignment-modal .subject-option:only-child {
+    border-radius: 14px;
 }
 
-.subject-option:only-child {
-    border-radius: 20px;
+.assignment-modal .subject-option:hover {
+    background-color: rgba(237, 239, 245, 0.92);
 }
 
-.subject-option:hover {
-    background-color: #f8f5ff;
-}
-
-.subject-option.selected {
+.assignment-modal .subject-option.selected {
     background-color: var(--control-bg-active);
 }
 
-.option-tag {
-    display: inline-block;
-    padding: 5px 12px;
-    border-radius: 15px;
+.assignment-modal .subject-option .option-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 4px 9px;
+    border-radius: 999px;
     font-size: 12px;
-    font-family: var(--secondary-font), sans-serif;
-    font-weight: 500;
-    color: #333;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    color: #2b3345;
+    line-height: 1;
+    border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 /* Modal body */
 .assignment-modal-body {
-    padding: 25px 30px;
+    padding: 16px 22px 18px;
+    background: #fff;
+    overflow-y: auto;
+}
+
+.instructions-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .section-title {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-family: var(--secondary-font), sans-serif;
+    color: rgba(15, 23, 42, 0.66);
+    text-transform: none;
+    letter-spacing: 0.2px;
+    font-family: var(--font-ui);
     margin: 0;
-    padding-bottom: 10px;
+    padding: 0;
 }
 
 .section-title .col-icon {
@@ -11873,16 +12115,17 @@ calendar-page .mobile-day-buttons {
 
 .instructions-editor {
     width: 100%;
-    min-height: 200px;
-    padding: 15px;
+    min-height: 120px;
+    height: 120px;
+    padding: 12px 14px;
     border: 1px solid rgba(189, 170, 198, .3);
-    border-radius: 8px;
-    font-family: var(--secondary-font), sans-serif;
+    border-radius: 14px;
+    font-family: var(--font-ui);
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.45;
     resize: vertical;
     box-sizing: border-box;
-    background: #f8f5ff;
+    background: rgba(248, 245, 255, 0.86);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(16, 24, 40, 0.06);
     transition: border-color 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
 }
@@ -11895,7 +12138,7 @@ calendar-page .mobile-day-buttons {
     outline: none;
     border-color: #BDAAC6;
     background-color: #fff;
-    box-shadow: 0 0 0 4px rgba(189, 170, 198, 0.18), 0 10px 24px rgba(157, 126, 174, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 3px rgba(189, 170, 198, 0.16), 0 6px 16px rgba(157, 126, 174, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .instructions-editor:focus-visible {
@@ -11918,77 +12161,113 @@ calendar-page .mobile-day-buttons {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-    isolation: isolate;
-    padding: 20px 30px;
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    box-shadow: 0 -2px 6px #0a254059 inset;
-    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, .25));
+    padding: 12px 22px 16px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.97);
 }
 
-.assignment-modal-footer::before,
-.assignment-modal-footer::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: -1;
-}
-
-.delete-btn,
-.save-btn {
+.assignment-modal-footer-left,
+.assignment-modal-footer-right {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: fit-content;
-    min-width: 120px;
-    height: 60px;
-    padding: 10px 22px;
-    border: 1px solid var(--control-border);
-    border-radius: var(--control-radius-pill);
-    box-sizing: border-box;
-    font-family: var(--secondary-font), sans-serif;
-    font-size: var(--p);
-    line-height: 1;
-    cursor: pointer;
-    z-index: auto;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
-    filter: none;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.12s ease;
-    position: relative;
-    z-index: 1;
-    transform: translateY(0);
+    gap: 8px;
 }
 
-.delete-btn {
-    background: #ED7F81;
-    color: #000000 !important;
-    font-weight: 400;
-}
-
-.save-btn {
-    background: #E3D5E9;
-    color: #000000 !important;
-    font-weight: 400;
+.assignment-modal-footer-right {
     margin-left: auto;
 }
 
+.assignment-modal-footer .assignment-modal-delete,
+.assignment-modal-footer .cancel-btn,
+.assignment-modal-footer .save-btn {
+    min-height: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+}
+
+.assignment-modal-footer .assignment-modal-delete {
+    width: auto;
+    min-height: 38px;
+    height: 38px;
+    padding: 0 14px;
+    border-color: rgba(185, 28, 28, 0.35);
+    background: rgba(254, 226, 226, 0.6);
+    color: #991b1b;
+    font-size: 13px;
+}
+
+.assignment-modal-footer .cancel-btn {
+    width: auto;
+    background: var(--control-bg);
+    color: #1b2435;
+}
+
+.assignment-modal-footer .save-btn {
+    --control-border: rgba(122, 102, 143, 0.42);
+    --control-border-hover: rgba(113, 91, 135, 0.56);
+    --control-bg: #d9c5e8;
+    --control-bg-hover: #d1bbe2;
+    --control-bg-active: #c8b0da;
+    --control-highlight: rgba(255, 255, 255, 0.84);
+    min-width: 160px;
+    width: auto;
+    border-color: var(--control-border);
+    background-color: var(--control-bg);
+    color: #1b2435;
+}
+
 @media (hover: hover) and (pointer: fine) {
-    .delete-btn:hover,
-    .save-btn:hover {
+    .assignment-modal-footer .assignment-modal-delete:hover,
+    .assignment-modal-footer .cancel-btn:hover,
+    .assignment-modal-footer .save-btn:hover {
         border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+
+    .assignment-modal-footer .assignment-modal-delete:hover {
+        border-color: rgba(185, 28, 28, 0.46);
+        background: rgba(254, 226, 226, 0.84);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76), 0 4px 10px rgba(127, 29, 29, 0.1);
+    }
+
+    .assignment-modal-footer .save-btn:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 }
 
-.delete-btn:active,
-.save-btn:active {
+.assignment-modal-footer .assignment-modal-delete:active,
+.assignment-modal-footer .cancel-btn:active,
+.assignment-modal-footer .save-btn:active {
     border-color: var(--control-border-hover);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
     transform: translateY(var(--control-press-translate));
+}
+
+.assignment-modal-footer .save-btn:active {
+    background-color: var(--control-bg-active);
+}
+
+.assignment-modal-footer .assignment-modal-delete:focus-visible,
+.assignment-modal-footer .cancel-btn:focus-visible,
+.assignment-modal-footer .save-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
 }
 
 /* ===== DATE PICKER POPUP ===== */
@@ -12001,7 +12280,7 @@ calendar-page .mobile-day-buttons {
     border-radius: 20px;
     box-shadow: var(--control-shadow-hover);
     filter: none;
-    z-index: 1002;
+    z-index: 20030;
     width: 280px;
     overflow: hidden;
     opacity: 0;
@@ -12286,7 +12565,7 @@ calendar-page .mobile-day-buttons {
 
     .assignment-modal-meta {
         padding: 15px 20px;
-        flex-direction: column;
+        grid-template-columns: 1fr;
     }
 
     .assignment-modal-body {
@@ -12295,6 +12574,16 @@ calendar-page .mobile-day-buttons {
 
     .assignment-modal-footer {
         padding: 15px 20px;
+        flex-wrap: wrap;
+    }
+
+    .assignment-modal-footer-left,
+    .assignment-modal-footer-right {
+        width: 100%;
+    }
+
+    .assignment-modal-footer-right {
+        justify-content: flex-end;
     }
 }
 
@@ -12962,7 +13251,7 @@ body.course-page-mode {
     #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper {
         gap: 0;
         box-sizing: border-box;
-        padding: 15px;
+        padding: 0px;
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-container-main {
@@ -13186,10 +13475,10 @@ calendar-page .calendar-mobile-view {
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-container-main {
-        border-radius: 34px;
-        background: #eee6f2;
+        border-radius: 0px;
+        background: #fff;
         border: none;
-        padding: 14px;
+        padding: 0px;
         box-sizing: border-box;
     }
 
@@ -13487,10 +13776,136 @@ calendar-page .calendar-mobile-view {
         padding: 16px 26px;
     }
 
-    #home-main .home-container-above {
-        z-index: 2000;
-        display: flex;
+    #home-main .home-container-above.container-above-desktop {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0;
+        padding: 16px 26px 16px;
+        background: rgba(255, 255, 255, 0.96);
+        border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        display: grid;
+        grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
         margin: 0 !important;
+    }
+
+    #home-main .home-container-above.container-above-desktop.is-scrolled {
+        border-bottom-color: rgba(10, 37, 64, 0.12);
+        box-shadow: 0 6px 14px rgba(10, 37, 64, 0.06);
+    }
+
+    #home-main .home-container-above.container-above-desktop::before {
+        content: none !important;
+        display: none !important;
+    }
+
+    #home-main .home-container-above.container-above-desktop .title-box {
+        width: 100%;
+        max-width: none;
+        min-width: 186px;
+    }
+
+    #home-main .home-container-above.container-above-desktop #filter-year-term,
+    #home-main .home-container-above.container-above-desktop #filter-year-term .filter-year-term-container,
+    #home-main .home-container-above.container-above-desktop #filter-year-term .custom-select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    #home-main .home-container-above.container-above-desktop #filter-year-term .custom-select-trigger.control-surface {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        min-height: 48px;
+        border-radius: 999px;
+        padding: 0 14px;
+    }
+
+    #home-main .home-container-above.container-above-desktop .buttons-box {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-width: 0;
+        justify-content: flex-start;
+        gap: 8px;
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill-container {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill {
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        min-height: 48px;
+        box-sizing: border-box;
+        border-radius: 999px;
+        padding: 0 14px;
+        border: 1px solid var(--control-border);
+        background-color: var(--control-bg);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+        transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+        transform: translateY(0);
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 10px;
+        background-size: 20px;
+        align-self: center;
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill-input {
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        #home-main .home-container-above.container-above-desktop .search-pill:hover,
+        #home-main .home-container-above.container-above-desktop #filter-year-term .custom-select-trigger.control-surface:hover {
+            border-color: var(--control-border-hover);
+            background-color: var(--control-bg-hover);
+            box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+        }
+
+        #home-main .home-container-above.container-above-desktop #filter-year-term .custom-select.open .custom-select-trigger.control-surface:hover {
+            border-color: var(--control-border-hover);
+            background-color: var(--control-bg-active);
+            box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+            transform: translateY(var(--control-press-translate));
+        }
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill:active,
+    #home-main .home-container-above.container-above-desktop #filter-year-term .custom-select-trigger.control-surface:active {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-active);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+        transform: translateY(var(--control-press-translate));
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-pill:focus-within {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-active);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+        transform: translateY(var(--control-press-translate));
+        outline: 2px solid var(--control-focus-ring);
+        outline-offset: 2px;
+    }
+
+    #home-main .home-container-above.container-above-desktop .search-btn.control-surface {
+        display: none !important;
     }
 
     #home-main .home-top-content {
@@ -13577,6 +13992,16 @@ calendar-page .calendar-mobile-view {
     #home-main #home-courses-preview-container,
     #home-main #home-review-suggestion-container {
         padding: 20px !important;
+    }
+
+    #home-main .home-widget-card {
+        padding-right: 0px !important;
+    }
+
+    .home-calendar-summary,
+    .home-planner-module,
+    .home-progress-card-content {
+        padding-right: 20px;
     }
 
     #home-main .home-top-content #home-courses-preview-container,
@@ -13842,7 +14267,7 @@ calendar-page .calendar-mobile-view {
     .page-courses #course-main-div {
         width: 100% !important;
         max-width: none !important;
-        margin: 0 0 15px 0 !important;
+        margin: 0 !important;
         box-sizing: border-box;
     }
 }
@@ -14044,7 +14469,7 @@ calendar-page .calendar-mobile-view {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
     --course-list-desktop-row-gap: 16px;
-    --course-list-desktop-card-min-height: 400px;
+    --course-list-desktop-card-min-height: 330px;
     --course-meta-badge-bg: rgba(255, 255, 255, 0.74);
     --course-meta-badge-border: rgba(255, 255, 255, 0.82);
     --course-meta-badge-text: rgba(18, 27, 43, 0.9);
@@ -14164,9 +14589,9 @@ calendar-page .calendar-mobile-view {
     margin: 0;
     font-family: var(--secondary-font), sans-serif;
     font-size: var(--h3);
-    font-weight: 600;
-    line-height: 1.28;
-    color: #0f1726;
+    font-weight: 650;
+    line-height: 1.25;
+    color: #1a1421;
     overflow: visible;
     display: block;
 }
@@ -14605,7 +15030,7 @@ calendar-page .calendar-mobile-view {
 
     #course-list .class-container,
     #course-list .skeleton-class-container {
-        padding: 24px 22px;
+        padding: 20px;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -14616,13 +15041,13 @@ calendar-page .calendar-mobile-view {
     }
 
     #course-list .course-info-rows {
-        gap: 30px;
+        gap: 20px;
     }
 
     #course-list .course-footer-row,
     #course-list .skeleton-chip-row {
         margin-top: auto;
-        padding-top: 18px;
+        padding-top: 30px;
     }
 
     #course-list .skeleton-section-line {
@@ -14708,7 +15133,8 @@ calendar-page .calendar-mobile-view {
     }
 
     #course-list #course-title {
-        font-size: var(--small-h2-desktop);
+        font-size: 18px;
+        font-weight: 500;
         margin: 0 !important;
     }
 
@@ -14732,7 +15158,7 @@ calendar-page .calendar-mobile-view {
     #course-list #course-professor,
     #course-list #course-time {
         font-family: var(--secondary-font), sans-serif;
-        font-weight: 450;
+        font-weight: 400;
         margin: 0 !important;
         font-size: 16px !important;
     }
@@ -14746,7 +15172,7 @@ calendar-page .calendar-mobile-view {
     #course-list .course-assessment-inline {
         align-items: flex-start;
         font-family: var(--secondary-font), sans-serif;
-        font-weight: 450;
+        font-weight: 400;
         font-size: 16px !important;
     }
 
@@ -14820,7 +15246,7 @@ calendar-page .calendar-mobile-view {
     grid-column: 1 / -1;
     border-radius: 16px;
     border: 1px dashed rgba(120, 98, 144, 0.4);
-    background: rgba(255, 255, 255, 0.72);
+    background: #ffffffb3;
     padding: 26px 18px;
     text-align: center;
     font-family: var(--font-ui);
@@ -16896,7 +17322,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .semester-mobile-sheet-layer {
     position: fixed;
     inset: 0;
-    z-index: 12000;
+    z-index: 23000;
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -16920,10 +17346,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     position: relative;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    padding: 8px 0 calc(20px + var(--safe-area-bottom));
 }
 
 .semester-mobile-sheet-header {
-    padding: 2px 4px 10px;
+    flex: 0 0 auto;
+    padding: 2px 20px 10px;
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -16936,8 +17365,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .semester-mobile-sheet-description {
+    flex: 0 0 auto;
     margin: 0;
-    padding: 18px 4px 10px;
+    padding: 18px 20px 10px;
     font-family: var(--font-ui);
     font-size: 15px;
     color: #000;
@@ -16946,8 +17376,14 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .semester-mobile-sheet-options {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
     gap: 12px;
-    padding: 12px 0 18px;
+    padding: 12px 20px 18px;
 }
 
 .semester-mobile-sheet-option {
@@ -16987,8 +17423,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .semester-mobile-sheet-footer {
+    flex: 0 0 auto;
     border-top: 1px solid rgba(15, 23, 42, 0.08);
-    padding-top: 18px;
+    padding: 18px 20px 0;
 }
 
 .semester-mobile-sheet-cancel {
@@ -17171,7 +17608,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern #calendar-filter-popover {
-    z-index: 1200;
+    z-index: 2100;
 }
 
 #course-summary.calendar-page-modern #calendar-filter-popover.hidden {
@@ -17246,9 +17683,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container {
     background: #e3d5e9;
-    border-radius: 28px;
+    border-radius: var(--radius-card);
     border: 1px solid rgba(0, 0, 0, 0.06);
-    padding: 14px;
+    padding: 0px;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-page-wrapper,
@@ -17259,7 +17696,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page .calendar-grid-scroll {
     max-height: min(72vh, 760px);
     overflow: auto;
-    border-radius: 22px;
+    border-radius: 15px;
     background: transparent;
 }
 
@@ -17268,6 +17705,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     border-collapse: separate;
     border-spacing: 0;
     table-layout: fixed;
+    padding: 20px;
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main th,
@@ -17297,8 +17735,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     gap: 2px;
     font-family: var(--font-ui);
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 650;
     color: #2a1f35;
+    line-height: 1;
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main thead th.highlight-day p {
@@ -17306,26 +17745,27 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main thead th.highlight-day p::after {
-    content: "Today";
+    content: "TODAY";
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 15px;
-    padding: 0 5px;
+    min-height: 20px;
+    padding: 2px 8px;
     border-radius: 999px;
-    border: 1px solid rgba(124, 92, 168, 0.24);
-    background: rgba(255, 255, 255, 0.92);
-    color: #4a3a5b;
+    border: 1px solid rgba(78, 160, 111, 0.38);
+    background: rgba(193, 234, 207, 0.42);
+    color: #255f3a;
     font-family: var(--font-ui);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     line-height: 1;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main thead th.highlight-day {
     background: rgba(255, 255, 255, 0.42);
-    box-shadow: inset 0 2px 0 rgba(124, 92, 168, 0.42);
+    box-shadow: none;
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main th:first-child,
@@ -17354,6 +17794,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     background: #ffffff5e;
 }
 
+#course-summary.calendar-page-modern calendar-page #calendar-main tbody tr td.calendar-slot-cell.highlight-current-time {
+    background: #fff !important;
+}
+
 #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell:not(.highlight-current-day):not(.highlight-current-time) {
     background: transparent;
 }
@@ -17368,7 +17812,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time {
-    box-shadow: inset 0 4px 0 #7c5ca86b, 0 0 10px #7c5ca81f;
+    background-color: #fff;
+    box-shadow: none;
     z-index: 1;
 }
 
@@ -17376,49 +17821,62 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     margin: 0;
     padding: 12px 8px;
     text-align: left;
-    font-family: var(--font-ui);
-    font-weight: 700;
-    font-size: 13px;
-    line-height: 1.25;
-}
-
-#course-summary.calendar-page-modern calendar-page .time-full small {
-    font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    opacity: 0.56;
-}
-
-#course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-time-cell {
-    border-bottom: 1px solid rgba(136, 116, 155, 0.28);
-}
-
-#course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-time-cell.highlight-current-period .time-full small {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: 2px;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    font-weight: 650;
+    color: #1f1726;
+    line-height: 1.15;
 }
 
-#course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-time-cell.highlight-current-period .time-full small::before {
-    content: "● Now";
+#course-summary.calendar-page-modern calendar-page .time-full-range {
+    display: inline-flex;
+    align-items: center;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-now-chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 6px;
-    padding: 4px 6px 4px;
+    min-height: 24px;
+    padding: 4px 8px;
     border-radius: 999px;
     border: 1px solid rgba(78, 160, 111, 0.38);
     background: rgba(193, 234, 207, 0.42);
     color: #255f3a;
     font-family: var(--font-ui);
     font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    line-height: 1.1;
-    text-transform: none;
-    opacity: 1;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+#course-summary.calendar-page-modern calendar-page .time-full .calendar-now-chip {
+    display: none;
+    margin-top: 6px;
+}
+
+#course-summary.calendar-page-modern calendar-page .time-full small {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 650;
+    text-transform: capitalize;
+    opacity: 0.56;
+    color: #382c44b8;
+    line-height: 1.15;
+}
+
+#course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-time-cell {
+    border-bottom: 1px solid rgba(136, 116, 155, 0.28);
+}
+
+#course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-time-cell.highlight-current-period .time-full .calendar-now-chip {
+    display: inline-flex;
 }
 
 #course-summary.calendar-page-modern calendar-page .time-short {
@@ -17429,7 +17887,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     position: absolute;
     inset: 8px;
     border-radius: 14px;
-    box-shadow: 0 8px 18px rgba(16, 24, 40, 0.14);
+    border: 1px solid var(--control-border);
+    box-shadow: none;
     padding: 10px 10px 9px;
     box-sizing: border-box;
     text-align: left;
@@ -17441,6 +17900,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     z-index: 5;
     width: unset;
     height: unset;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-course-title {
@@ -17449,36 +17909,60 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 650;
     line-height: 1.2;
 }
 
-#course-summary.calendar-page-modern calendar-page .calendar-course-subtitle {
+#course-summary.calendar-page-modern calendar-page .calendar-course-time {
     margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    font-size: 10px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
     line-height: 1.2;
-    opacity: 0.76;
+    color: rgba(23, 32, 51, 0.82);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-course-professor {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: rgba(23, 32, 51, 0.78);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-course-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: auto;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-course-badge {
-    align-self: flex-start;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     border-radius: 999px;
-    border: 1px solid var(--course-meta-badge-border);
+    min-height: 26px;
+    padding: 0 9px;
+    border: 1px solid var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
     background: #ffffff70;
-    color: rgba(23, 32, 51, 0.74);
-    font-family: var(--font-ui);
-    font-size: 10px;
+    color: var(--course-meta-badge-text, rgba(18, 27, 43, 0.9));
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 11px;
     font-weight: 500;
     line-height: 1;
-    padding: 4px 8px;
+    white-space: nowrap;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-course-registered-badge {
+    background: rgba(224, 252, 232, 0.78);
+    border-color: rgba(170, 227, 188, 0.92);
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 10px;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-course-count {
@@ -17501,8 +17985,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 @media (hover: hover) and (pointer: fine) {
     #course-summary.calendar-page-modern calendar-page .calendar-course-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 10px 22px rgba(16, 24, 40, 0.2);
+        border-color: rgba(120, 89, 151, 0.42);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 24px rgba(18, 27, 43, 0.16), 0 0 0 1px var(--course-card-border-hover, rgba(61, 60, 90, 0.45));
     }
 }
 
@@ -17558,8 +18043,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page #calendar-main td.highlight-current-time .calendar-empty-slot-btn:hover {
     border-style: solid;
     border-color: rgba(124, 92, 168, 0.24);
-    background: rgba(255, 255, 255, 0.36);
-    opacity: 0.6;
+    background: #fff;
+    opacity: 1;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -17915,6 +18400,2704 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 }
 
+/* Assignments planner redesign */
+#assignments-main.page-assignments {
+    --assignments-sidebar-width: 85px;
+    --assignments-page-padding-x: 26px;
+    --assignments-page-padding-top: 16px;
+    --assignments-page-padding-bottom: 24px;
+    --assignments-panel-bg: #E3D5E9;
+    --assignments-pill-height: 48px;
+    --assignments-pill-radius: 999px;
+    min-height: calc(100vh - 60px);
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+    display: block;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-shell {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: calc(100% - var(--assignments-sidebar-width));
+    margin-left: var(--assignments-sidebar-width);
+    padding: var(--assignments-page-padding-top) var(--assignments-page-padding-x);
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid rgba(10, 37, 64, 0.08);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-shell.is-scrolled {
+    border-bottom-color: rgba(10, 37, 64, 0.12);
+    box-shadow: 0 6px 14px rgba(10, 37, 64, 0.06);
+}
+
+#assignments-main.page-assignments .assignments-toolbar {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    display: block;
+}
+
+#assignments-main.page-assignments .assignments-toolbar .courses-sticky-inner {
+    width: 100%;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-row-a {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-term {
+    min-width: 186px;
+}
+
+#assignments-main.page-assignments #filter-year-term .custom-select {
+    width: 100%;
+}
+
+#assignments-main.page-assignments #filter-year-term .custom-select-trigger.control-surface {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--assignments-pill-height);
+    height: var(--assignments-pill-height);
+    padding: 0 14px;
+    border-radius: var(--assignments-pill-radius);
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search {
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill-container {
+    width: 100%;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-btn.control-surface {
+    display: none;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill {
+    width: 100%;
+    min-width: 0;
+    height: var(--assignments-pill-height);
+    border-radius: var(--assignments-pill-radius);
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    background-color: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    box-sizing: border-box;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill-input {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill-icon {
+    width: 20px;
+    height: 20px;
+    background-size: 20px;
+    margin-right: 10px;
+    align-self: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignments-toolbar-search .search-pill:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+#assignments-main.page-assignments .assignments-toolbar-search .search-pill:focus-within {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignments-toolbar-actions .sort-btn.control-surface,
+#assignments-main.page-assignments .assignments-toolbar-actions .filter-btn.control-surface,
+#assignments-main.page-assignments .assignments-new-btn.control-surface {
+    width: auto;
+    min-width: 0;
+    min-height: var(--assignments-pill-height);
+    height: var(--assignments-pill-height);
+    border-radius: var(--assignments-pill-radius);
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    background-color: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 620;
+    color: #1d2435;
+    filter: none;
+}
+
+#assignments-main.page-assignments .search-btn-icon,
+#assignments-main.page-assignments .sort-btn-icon,
+#assignments-main.page-assignments .filter-btn-icon {
+    width: 20px;
+    height: 20px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 20px;
+    filter: brightness(0) saturate(100%);
+    flex: 0 0 auto;
+}
+
+#assignments-main.page-assignments .search-btn-icon {
+    background-image: url('/assets/search.svg');
+}
+
+#assignments-main.page-assignments .sort-btn-icon {
+    background-image: url('/assets/sort.svg');
+}
+
+#assignments-main.page-assignments .filter-btn-icon {
+    background-image: url('/assets/filter.svg');
+}
+
+#assignments-main.page-assignments .assignments-new-btn.control-surface {
+    --control-border: rgba(122, 102, 143, 0.42);
+    --control-border-hover: rgba(113, 91, 135, 0.56);
+    --control-bg: #d9c5e8;
+    --control-bg-hover: #d1bbe2;
+    --control-bg-active: #c8b0da;
+    --control-highlight: rgba(255, 255, 255, 0.84);
+    color: #1b2435;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignments-new-btn.control-surface:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+}
+
+#assignments-main.page-assignments .assignments-new-btn.control-surface:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+#assignments-main.page-assignments .assignments-new-btn.control-surface:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .assignments-new-btn .assignment-add-icon {
+    filter: brightness(0) saturate(100%);
+}
+
+#assignments-main.page-assignments .sort-wrapper {
+    position: relative;
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown.sort-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 210px;
+    background: var(--control-bg);
+    border: 1px solid var(--control-border);
+    border-radius: 20px;
+    box-shadow: var(--control-shadow-hover);
+    padding: 0;
+    z-index: 1000;
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option {
+    padding: 10px 20px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+}
+
+#assignments-main.page-assignments #assignments-sort-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#assignments-main.page-assignments #assignments-sort-label[data-sort="due_date_asc"]::after,
+#assignments-main.page-assignments #assignments-sort-label[data-sort="due_date_desc"]::after {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 14px 14px;
+}
+
+#assignments-main.page-assignments #assignments-sort-label[data-sort="due_date_asc"]::after {
+    background-image: url('/assets/arrow-up.svg');
+}
+
+#assignments-main.page-assignments #assignments-sort-label[data-sort="due_date_desc"]::after {
+    background-image: url('/assets/arrow-down.svg');
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_asc"],
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_desc"] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_asc"]::after,
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_desc"]::after {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 14px 14px;
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_asc"]::after {
+    background-image: url('/assets/arrow-up.svg');
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option[data-sort="due_date_desc"]::after {
+    background-image: url('/assets/arrow-down.svg');
+}
+
+#assignments-main.page-assignments .assignments-toolbar-actions .sort-wrapper.open .sort-btn.control-surface {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+#assignments-main.page-assignments #assignments-sort-dropdown .sort-option.selected {
+    background: var(--control-bg-active);
+}
+
+#assignments-main.page-assignments .assignments-filter-wrapper {
+    position: relative;
+}
+
+#assignments-main.page-assignments .assignment-filter-count-chip {
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #3f2f4c;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+#assignments-main.page-assignments .assignment-filter-count-chip[hidden] {
+    display: none !important;
+}
+
+#assignments-main.page-assignments #assignments-filter-popover {
+    z-index: 2100;
+}
+
+#assignments-main.page-assignments #assignments-filter-popover.hidden {
+    display: none !important;
+}
+
+#assignments-main.page-assignments #assignments-filter-popover .filter-background {
+    z-index: 2002;
+}
+
+#assignments-main.page-assignments #assignments-filter-popover .calendar-filter-popup {
+    z-index: 2003;
+}
+
+#assignments-main.page-assignments .calendar-toolbar-center.assignments-toolbar-segmented {
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--assignments-pill-height);
+    min-height: var(--assignments-pill-height);
+    padding: 4px;
+    box-sizing: border-box;
+    border-radius: var(--assignments-pill-radius);
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+}
+
+#assignments-main.page-assignments .assignments-view-segment.calendar-view-btn {
+    border: 0;
+    min-width: auto;
+    width: auto;
+    height: calc(var(--assignments-pill-height) - 8px) !important;
+    min-height: calc(var(--assignments-pill-height) - 8px);
+    border-radius: var(--assignments-pill-radius);
+    background: transparent;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 620;
+    color: #1d2435;
+    padding: 0 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+#assignments-main.page-assignments .assignments-view-segment.calendar-view-btn.active,
+#assignments-main.page-assignments .assignments-view-segment.calendar-view-btn.is-active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+}
+
+#assignments-main.page-assignments .assignments-page-main {
+    width: calc(100% - var(--assignments-sidebar-width));
+    max-width: none;
+    margin-left: var(--assignments-sidebar-width);
+    margin-right: 0;
+    padding: 0 var(--assignments-page-padding-x) var(--assignments-page-padding-bottom);
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignments-container {
+    width: 100%;
+    margin: 16px 0 0;
+    max-width: none;
+    box-sizing: border-box;
+    padding: 0px;
+    border-radius: var(--radius-card);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: var(--assignments-panel-bg);
+    box-shadow: 0 6px 18px #0a25401a;
+}
+
+#assignments-main.page-assignments .assignments-module-header {
+    margin-bottom: 14px;
+    padding-top: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "title new"
+        "subtitle new";
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 8px;
+}
+
+#assignments-main.page-assignments .assignments-module-title {
+    grid-area: title;
+    margin: 0;
+    line-height: 1;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    font-weight: 500;
+    color: #1f1727;
+}
+
+#assignments-main.page-assignments .assignments-module-subtitle {
+    grid-area: subtitle;
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: rgba(23, 32, 51, 0.74);
+}
+
+#assignments-main.page-assignments .assignments-module-header .assignments-new-btn.control-surface {
+    grid-area: new;
+    justify-self: end;
+    align-self: start;
+    min-height: 52px;
+    height: 52px;
+    padding: 0 20px;
+    border-radius: 999px;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
+#assignments-main.page-assignments .assignments-module-header .assignments-new-btn .assignment-add-icon {
+    width: 20px;
+    height: 20px;
+    background-size: 20px 20px;
+    flex: 0 0 20px;
+}
+
+#assignments-main.page-assignments .assignment-quick-filters {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 14px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+#assignments-main.page-assignments .assignment-quick-filters::-webkit-scrollbar {
+    display: none;
+}
+
+#assignments-main.page-assignments .assignment-quick-filter {
+    width: auto;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(124, 108, 150, 0.3);
+    background: #f3ecf7d1;
+    color: #2f2940;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 560;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#assignments-main.page-assignments .assignment-quick-filter.active {
+    background: var(--control-bg-active);
+    border-color: var(--control-border-hover);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+}
+
+#assignments-main.page-assignments .assignment-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 0px;
+    margin-bottom: 14px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+#assignments-main.page-assignments .assignment-summary-card {
+    width: auto;
+    border: 1px solid rgba(104, 84, 132, 0.2);
+    background: #f3ecf7d1;
+    border-radius: 16px;
+    min-height: 65px;
+    text-align: left;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+#assignments-main.page-assignments .assignment-summary-card.active {
+    border-color: rgba(80, 55, 112, 0.46);
+    background: #fff;
+    box-shadow: 0 8px 16px rgba(10, 37, 64, 0.08);
+}
+
+#assignments-main.page-assignments .assignment-summary-card-label {
+    display: block;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 610;
+    color: rgba(22, 24, 35, 0.72);
+}
+
+#assignments-main.page-assignments .assignment-summary-card-count {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--font-ui);
+    font-size: 22px;
+    font-weight: 680;
+    color: #1d2435;
+}
+
+#assignments-main.page-assignments.is-calendar-view .assignment-quick-filters,
+#assignments-main.page-assignments.is-calendar-view .assignment-summary-cards {
+    display: none;
+}
+
+#assignments-main.page-assignments .assignments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 20px;
+}
+
+#assignments-main.page-assignments .assignments-list[hidden] {
+    display: none !important;
+}
+
+#assignments-main.page-assignments .assignment-row-card {
+    width: 100%;
+    border-radius: 16px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffffb3;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 4px 12px rgba(50, 50, 93, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+    box-sizing: border-box;
+    position: relative;
+    z-index: 0;
+}
+
+#assignments-main.page-assignments .assignment-row-card.assignment-row-card--overflow-open {
+    z-index: 30;
+}
+
+#assignments-main.page-assignments .assignment-row-card:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignment-row-card:hover {
+        border-color: var(--control-border-hover);
+        background-color: rgba(255, 255, 255, 0.92);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), var(--control-shadow-hover);
+    }
+}
+
+#assignments-main.page-assignments .assignment-row-card:active:not(.assignment-row-card--overflow-open):not(.assignment-row-card--no-press) {
+    transform: translateY(var(--control-press-translate));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), var(--control-press-shadow);
+}
+
+#assignments-main.page-assignments .assignment-row-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#assignments-main.page-assignments .assignment-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+#assignments-main.page-assignments .assignment-row-copy {
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignment-row-title {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#assignments-main.page-assignments .assignment-row-meta {
+    margin: 4px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignment-row-due {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(15, 23, 42, 0.62);
+    white-space: nowrap;
+}
+
+#assignments-main.page-assignments .assignment-row-meta-separator {
+    opacity: 0.4;
+}
+
+#assignments-main.page-assignments .assignment-course-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 1px 2px rgba(15, 23, 42, 0.06);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 620;
+    color: #1f2a3d;
+    line-height: 1;
+    white-space: nowrap;
+    max-width: min(300px, 42vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#assignments-main.page-assignments .assignment-course-chip--empty {
+    background: rgba(235, 236, 240, 0.76);
+    color: rgba(36, 43, 57, 0.65);
+}
+
+#assignments-main.page-assignments .assignment-row-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+#assignments-main.page-assignments .status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    min-width: 112px;
+}
+
+#assignments-main.page-assignments .status-not-started {
+    background: #e9ecef;
+    color: #6c757d;
+    border-color: rgba(108, 117, 125, 0.2);
+}
+
+#assignments-main.page-assignments .status-in-progress,
+#assignments-main.page-assignments .status-ongoing {
+    background: rgba(254, 243, 199, 0.9);
+    color: #7c5a00;
+    border-color: rgba(146, 111, 0, 0.14);
+}
+
+#assignments-main.page-assignments .status-completed {
+    background: rgba(204, 241, 216, 0.9);
+    color: #14532d;
+    border-color: rgba(20, 83, 45, 0.14);
+}
+
+#assignments-main.page-assignments .status-overdue {
+    background: rgba(254, 226, 226, 0.92);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.18);
+}
+
+#assignments-main.page-assignments .assignment-row-open-affordance {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: rgba(255, 255, 255, 0.88);
+    color: rgba(15, 23, 42, 0.78);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    opacity: 0;
+    max-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+    transform: translateX(4px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, max-width 0.18s ease, padding 0.18s ease, transform 0.18s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignment-row-card:hover .assignment-row-open-affordance,
+    #assignments-main.page-assignments .assignment-row-card:focus-within .assignment-row-open-affordance {
+        opacity: 1;
+        max-width: 64px;
+        padding-left: 10px;
+        padding-right: 10px;
+        transform: translateX(0);
+    }
+}
+
+#assignments-main.page-assignments .assignment-row-overflow {
+    position: relative;
+}
+
+#assignments-main.page-assignments .assignment-overflow-trigger {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+#assignments-main.page-assignments .assignment-overflow-trigger::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    background: center / 18px 18px no-repeat url('/assets/dots-horizontal.svg');
+    filter: brightness(0) saturate(100%) opacity(0.84);
+    display: block;
+}
+
+#assignments-main.page-assignments .assignment-overflow-menu {
+    position: absolute;
+    top: auto;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 220px;
+    border-radius: 18px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    padding: 8px;
+    z-index: 70;
+}
+
+#assignments-main.page-assignments .assignment-overflow-menu[hidden] {
+    display: none !important;
+}
+
+#assignments-main.page-assignments .assignment-overflow-item {
+    width: 100%;
+    min-height: 35px;
+    height: 35px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    text-align: left;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    color: #172033;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+}
+
+#assignments-main.page-assignments .assignment-overflow-item::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 16px 16px;
+    filter: brightness(0) saturate(100%) opacity(0.72);
+}
+
+#assignments-main.page-assignments .assignment-overflow-item[data-row-action="open"]::before {
+    background-image: url('/assets/assignment.svg');
+}
+
+#assignments-main.page-assignments .assignment-overflow-item[data-row-action="edit"]::before {
+    background-image: url('/assets/edit.svg');
+}
+
+#assignments-main.page-assignments .assignment-overflow-item[data-row-action="mark-in-progress"]::before {
+    background-image: url('/assets/assignment-status.svg');
+}
+
+#assignments-main.page-assignments .assignment-overflow-item[data-row-action="mark-completed"]::before {
+    background-image: url('/assets/done.svg');
+}
+
+#assignments-main.page-assignments .assignment-overflow-item[data-row-action="delete"]::before {
+    background-image: url('/assets/trash.svg');
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignment-overflow-item:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), 0 3px 9px rgba(50, 50, 93, 0.1);
+    }
+}
+
+#assignments-main.page-assignments .assignment-overflow-item:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+#assignments-main.page-assignments .assignment-overflow-item:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .assignment-overflow-item:disabled {
+    opacity: 0.45;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+}
+
+#assignments-main.page-assignments .assignment-overflow-item.assignment-overflow-item--danger {
+    color: #991b1b;
+}
+
+#assignments-main.page-assignments .assignment-overflow-item.assignment-overflow-item--danger::before {
+    filter: brightness(0) saturate(100%) invert(19%) sepia(81%) saturate(2790%) hue-rotate(355deg) brightness(97%) contrast(94%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignment-overflow-item.assignment-overflow-item--danger:hover {
+        border-color: rgba(185, 28, 28, 0.3);
+        background: rgba(254, 226, 226, 0.86);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64), 0 3px 9px rgba(127, 29, 29, 0.08);
+    }
+}
+
+@media (min-width: 1024px) {
+    #assignments-main.page-assignments .assignment-overflow-menu {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        min-width: 0;
+        width: max-content;
+        max-width: min(calc(100vw - 56px), 980px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        flex-direction: column;
+    }
+
+    #assignments-main.page-assignments .assignment-overflow-menu::-webkit-scrollbar {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignment-overflow-item {
+        flex: 0 0 auto;
+        width: auto;
+        min-height: 35px;
+        height: 35px;
+        justify-content: flex-start;
+        white-space: nowrap;
+        line-height: 1;
+    }
+
+    #assignments-main.page-assignments .assignment-overflow-item::before {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 20px;
+        background-size: 20px 20px;
+    }
+}
+
+.assignment-actions-sheet-layer {
+    z-index: 23500;
+}
+
+.assignment-actions-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 8px 0 calc(18px + var(--safe-area-bottom));
+}
+
+.assignment-actions-sheet-options {
+    gap: 12px;
+}
+
+.assignment-actions-sheet-item.semester-mobile-sheet-option {
+    justify-content: flex-start;
+    gap: 12px;
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.assignment-actions-sheet-item-icon {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 22px 22px;
+    filter: brightness(0) saturate(100%) opacity(0.78);
+}
+
+.assignment-actions-sheet-item-label {
+    text-align: left;
+}
+
+.assignment-actions-sheet-item[data-row-action="open"] .assignment-actions-sheet-item-icon {
+    background-image: url('/assets/assignment.svg');
+}
+
+.assignment-actions-sheet-item[data-row-action="edit"] .assignment-actions-sheet-item-icon {
+    background-image: url('/assets/edit.svg');
+}
+
+.assignment-actions-sheet-item[data-row-action="mark-in-progress"] .assignment-actions-sheet-item-icon {
+    background-image: url('/assets/assignment-status.svg');
+}
+
+.assignment-actions-sheet-item[data-row-action="mark-completed"] .assignment-actions-sheet-item-icon {
+    background-image: url('/assets/done.svg');
+}
+
+.assignment-actions-sheet-item[data-row-action="delete"] .assignment-actions-sheet-item-icon {
+    background-image: url('/assets/trash.svg');
+}
+
+.assignment-actions-sheet-item.assignment-actions-sheet-item--danger {
+    color: #991b1b !important;
+}
+
+.assignment-actions-sheet-item.assignment-actions-sheet-item--danger .assignment-actions-sheet-item-icon {
+    filter: brightness(0) saturate(100%) invert(19%) sepia(81%) saturate(2790%) hue-rotate(355deg) brightness(97%) contrast(94%);
+}
+
+.assignment-actions-sheet-item:disabled {
+    opacity: 0.5;
+}
+
+.assignment-actions-sheet-footer {
+    padding-top: 14px;
+}
+
+.assignments-calendar-day-sheet-layer {
+    z-index: 23510;
+}
+
+.assignments-calendar-day-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 8px 0 calc(18px + var(--safe-area-bottom));
+}
+
+.assignments-calendar-day-sheet-body {
+    gap: 10px;
+}
+
+.assignments-calendar-day-sheet-footer {
+    padding-top: 14px;
+}
+
+@media (min-width: 1024px) {
+    .assignment-actions-sheet-layer,
+    .assignments-calendar-day-sheet-layer {
+        display: none !important;
+    }
+}
+
+#assignments-main.page-assignments .calendar-view-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    border: 1px solid rgba(15, 23, 42, .08);
+    background: #ffffffb3;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 8px 18px rgba(42, 27, 63, 0.08);
+    margin: 20px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+#assignments-main.page-assignments .calendar-view-container::after {
+    content: none;
+}
+
+#assignments-main.page-assignments .assignments-calendar-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 320px);
+    gap: 14px;
+    align-items: start;
+}
+
+#assignments-main.page-assignments .calendar-nav {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 0 0px 14px;
+    border-bottom: 1px solid rgba(113, 91, 135, 0.12);
+    background: transparent;
+}
+
+#assignments-main.page-assignments .calendar-month-title {
+    margin: 0;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 1;
+    color: #1f1727;
+    letter-spacing: -0.2px;
+}
+
+#assignments-main.page-assignments .calendar-nav-btn,
+#assignments-main.page-assignments .calendar-today-btn {
+    border: 1px solid var(--control-border);
+    background-color: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+}
+
+#assignments-main.page-assignments .calendar-nav-btn#calendar-prev-month,
+#assignments-main.page-assignments .calendar-nav-btn#calendar-next-month {
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+}
+
+#assignments-main.page-assignments .calendar-nav-btn#calendar-prev-month {
+    background-image: url('/assets/chevron-left.svg');
+}
+
+#assignments-main.page-assignments .calendar-nav-btn#calendar-next-month {
+    background-image: url('/assets/chevron-right.svg');
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .calendar-nav-btn:hover,
+    #assignments-main.page-assignments .calendar-today-btn:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+}
+
+#assignments-main.page-assignments .calendar-nav-btn:active,
+#assignments-main.page-assignments .calendar-today-btn:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+#assignments-main.page-assignments .calendar-nav-btn:focus-visible,
+#assignments-main.page-assignments .calendar-today-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .calendar-grid {
+    width: 100%;
+    background: #ffffffbd;
+    border: 1px solid rgba(113, 91, 135, .14);
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+#assignments-main.page-assignments .calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    border-bottom: 1px solid rgba(113, 91, 135, 0.12);
+    background: rgba(249, 246, 252, 0.85);
+}
+
+#assignments-main.page-assignments .calendar-day-header {
+    padding: 10px 8px;
+    text-align: center;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: rgba(33, 23, 42, 0.6);
+}
+
+#assignments-main.page-assignments .calendar-body {
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
+
+#assignments-main.page-assignments .calendar-week {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    min-height: 100px;
+    border-bottom: 1px solid rgba(113, 91, 135, 0.1);
+}
+
+#assignments-main.page-assignments .calendar-week:last-child {
+    border-bottom: none;
+}
+
+#assignments-main.page-assignments .calendar-cell {
+    padding: 8px;
+    min-height: 100px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    background: transparent;
+    cursor: pointer;
+}
+
+#assignments-main.page-assignments .calendar-cell:last-child {
+    border-right: none;
+}
+
+#assignments-main.page-assignments .calendar-cell:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: -2px;
+    position: relative;
+    z-index: 2;
+}
+
+#assignments-main.page-assignments .calendar-cell.empty {
+    cursor: default;
+    background: rgba(250, 248, 253, 0.54);
+}
+
+#assignments-main.page-assignments .calendar-cell.empty:focus-visible {
+    outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .calendar-cell:not(.empty):hover {
+        background: rgba(246, 241, 252, 0.7);
+    }
+}
+
+#assignments-main.page-assignments .calendar-cell.today .day-number {
+    border-color: rgba(141, 114, 173, 0.42);
+    background: rgba(189, 170, 198, 0.18);
+    color: #5a476f;
+}
+
+#assignments-main.page-assignments .calendar-cell.calendar-cell--selected {
+    background: rgba(245, 239, 252, 0.96);
+    border-color: rgba(132, 106, 162, 0.22);
+    box-shadow: inset 0 0 0 1px rgba(132, 106, 162, 0.12);
+}
+
+#assignments-main.page-assignments .calendar-cell.calendar-cell--selected .day-number {
+    border-color: transparent;
+    background: #bdaac6;
+    color: #fff;
+    box-shadow: 0 -2px 4px rgba(10, 37, 64, 0.2) inset;
+}
+
+#assignments-main.page-assignments .calendar-cell.today .day-number::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #8b6dac;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+#assignments-main.page-assignments .calendar-cell.calendar-cell--selected.today .day-number::after {
+    background: #efe5f7;
+    box-shadow: 0 0 0 2px rgba(61, 43, 78, 0.62);
+}
+
+#assignments-main.page-assignments .day-number {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    margin-bottom: 8px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    color: #3b2f4f;
+}
+
+#assignments-main.page-assignments .day-assignments {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .calendar-assignment {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    align-self: flex-start;
+    box-sizing: border-box;
+    min-height: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 620;
+    line-height: 1;
+    text-align: left;
+    cursor: pointer;
+    color: #1f2a3d;
+    background: var(--calendar-course-hint, #eef2f7);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 1px 2px rgba(15, 23, 42, 0.05);
+    transform: none;
+    transition: border-color 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+#assignments-main.page-assignments .calendar-assignment-label {
+    display: block;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#assignments-main.page-assignments .calendar-assignment::after {
+    content: "";
+    display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    flex: 0 0 6px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.62);
+}
+
+#assignments-main.page-assignments .calendar-assignment:hover {
+    transform: none;
+    filter: brightness(0.98);
+}
+
+#assignments-main.page-assignments .calendar-assignment:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 1px;
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--overdue {
+    border-color: rgba(220, 38, 38, 0.3);
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--overdue::after {
+    display: inline-block;
+    background: #e11d48;
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--due-today {
+    border-color: rgba(122, 102, 143, 0.34);
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--due-today::after {
+    display: inline-block;
+    background: #8b5cf6;
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--completed {
+    border-color: rgba(20, 83, 45, 0.2);
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--completed::after {
+    display: inline-block;
+    background: #16a34a;
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--in-progress {
+    border-color: rgba(146, 111, 0, 0.22);
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--in-progress::after {
+    display: inline-block;
+    background: #eab308;
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--not-started {
+    border-color: rgba(108, 117, 125, 0.26);
+}
+
+#assignments-main.page-assignments .calendar-assignment.calendar-assignment--not-started::after {
+    display: inline-block;
+    background: #94a3b8;
+}
+
+#assignments-main.page-assignments .calendar-more-btn {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    align-self: flex-start;
+    min-height: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px dashed rgba(113, 91, 135, 0.3);
+    background: rgba(247, 243, 251, 0.85);
+    color: rgba(45, 33, 57, 0.8);
+    padding: 0 8px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 620;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+}
+
+#assignments-main.page-assignments .calendar-more-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 1px;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-detail {
+    position: sticky;
+    align-self: start;
+    border: 1px solid rgba(113, 91, 135, .14);
+    border-radius: 16px;
+    background: #ffffffbd;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 6px 14px rgba(42, 27, 63, 0.08);
+    padding: 0px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 140px);
+    margin: 0 !important;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-detail-header {
+    padding: 10px 10px 8px;
+    margin: 0;
+    border-bottom: 1px solid rgba(113, 91, 135, 0.12);
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-detail-title {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.1;
+    color: #1f1727;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 10px 10px;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 64px;
+    height: auto;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 6px rgba(15, 23, 42, 0.05);
+    padding: 10px 12px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    text-align: left;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row-main {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row-title {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row-meta {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-course-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    min-height: 30px;
+    max-width: min(300px, 100%);
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: var(--day-course-chip-bg, rgba(232, 224, 238, 0.9));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 1px 2px rgba(15, 23, 42, 0.06);
+    color: #1f2a3d;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 620;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-course-chip--empty {
+    background: rgba(235, 236, 240, 0.82);
+    color: rgba(36, 43, 57, 0.68);
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row .status-badge {
+    min-height: 30px;
+    min-width: 0;
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #assignments-main.page-assignments .assignments-calendar-day-row:hover {
+        border-color: var(--control-border-hover);
+        background-color: rgba(255, 255, 255, 0.96);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), var(--control-shadow-hover);
+    }
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row:active {
+    transform: translateY(var(--control-press-translate));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), var(--control-press-shadow);
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-row:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-empty {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 64px;
+    border-radius: 14px;
+    border: 1px dashed rgba(113, 91, 135, 0.28);
+    background: #ffffffb3;
+    padding: 10px 12px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-empty-copy {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    color: #22192cd6;
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-new-btn.control-surface {
+    width: auto;
+    min-width: 0;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-family: var(--secondary-font), sans-serif;
+    font-weight: 500;
+    --control-border: rgba(122, 102, 143, 0.42);
+    --control-border-hover: rgba(113, 91, 135, 0.56);
+    --control-bg: #d9c5e8;
+    --control-bg-hover: #d1bbe2;
+    --control-bg-active: #c8b0da;
+    --control-highlight: rgba(255, 255, 255, 0.84);
+}
+
+#assignments-main.page-assignments .assignments-calendar-day-new-btn.control-surface:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+#assignments-main.page-assignments .assignments-empty {
+    padding: 26px 18px;
+    border: 1px dashed rgba(120, 98, 144, 0.4);
+    border-radius: 16px;
+    background: #ffffffb3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0;
+    margin-left: 20px;
+    margin-right: 20px;
+    margin-bottom: 20px;
+    font-family: var(--font-ui);
+    color: rgba(34, 25, 44, 0.84);
+}
+
+#assignments-main.page-assignments .assignments-empty[hidden] {
+    display: none !important;
+}
+
+#assignments-main.page-assignments .assignments-empty .empty-icon {
+    display: none;
+}
+
+#assignments-main.page-assignments .assignments-empty h3 {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.3;
+    color: inherit;
+}
+
+#assignments-main.page-assignments .assignments-empty p {
+    margin: 10px 0 0;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.35;
+    color: inherit;
+    opacity: 0.9;
+}
+
+#assignments-main.page-assignments .empty-state-actions {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+#assignments-main.page-assignments .empty-state-cta {
+    width: auto;
+    min-width: 140px;
+    min-height: 42px;
+    height: 42px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    border-radius: 999px;
+    padding: 0 16px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+    color: #1b2435;
+    cursor: pointer;
+}
+
+#assignments-main.page-assignments .empty-state-cta--secondary {
+    border-color: rgba(122, 102, 143, 0.24);
+}
+
+@media (max-width: 1023px) {
+    #assignments-main.page-assignments {
+        --assignments-sidebar-width: 0px;
+        --assignments-page-padding-x: 15px;
+        --assignments-page-padding-top: 10px;
+        --assignments-page-padding-bottom: 16px;
+        --assignments-pill-height: 42px;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-shell,
+    #assignments-main.page-assignments .assignments-page-main {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-shell {
+        padding: calc(var(--assignments-page-padding-top) + var(--safe-area-top)) var(--assignments-page-padding-x) var(--assignments-page-padding-top);
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-row-a {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas: "term segmented search";
+        gap: 8px;
+        align-items: center;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-term {
+        grid-area: term;
+        min-width: 0;
+    }
+
+    #assignments-main.page-assignments .calendar-toolbar-center.assignments-toolbar-segmented {
+        grid-area: segmented;
+        justify-self: end;
+        align-self: center;
+        height: 50px;
+        min-height: 50px;
+        padding: 4px;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-search {
+        grid-area: search;
+        min-width: 0;
+        justify-self: end;
+        align-self: center;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-search .search-pill-container {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-search .search-btn.control-surface {
+        width: 50px;
+        min-width: 50px;
+        height: 50px;
+        min-height: 50px;
+        padding: 0;
+        display: inline-flex;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-search .search-btn-label {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-actions {
+        grid-area: actions;
+        display: none !important;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-actions .filter-btn.control-surface {
+        width: 50px;
+        min-width: 50px;
+        height: 50px;
+        min-height: 50px;
+        padding: 0;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-actions .sort-wrapper {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-actions .sort-btn-label,
+    #assignments-main.page-assignments .assignments-toolbar-actions .filter-btn-label {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-toolbar-actions .filter-btn .assignment-filter-count-chip {
+        position: absolute;
+        top: 0;
+        right: 0;
+        transform: translate(30%, -30%);
+    }
+
+    #assignments-main.page-assignments .assignments-view-segment.calendar-view-btn {
+        min-width: 0;
+        height: 42px !important;
+        min-height: 42px;
+        padding: 0 12px;
+    }
+
+    #assignments-main.page-assignments #filter-year-term .custom-select-trigger.control-surface {
+        height: 50px;
+        min-height: 50px;
+    }
+
+    #assignments-main.page-assignments .assignments-page-main {
+        padding: 0 var(--assignments-page-padding-x) var(--assignments-page-padding-bottom);
+    }
+
+    #assignments-main.page-assignments .assignments-container {
+        margin-top: 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+    }
+
+    #assignments-main.page-assignments .assignments-list {
+        padding-left: 0px;
+        padding-right: 0px;
+        padding-bottom: 0px;
+    }
+
+    #assignments-main.page-assignments .assignment-row-right {
+        margin-left: 0px;
+    }
+
+    #assignments-main.page-assignments .assignment-summary-cards {
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+
+    #assignments-main.page-assignments .assignments-module-header {
+        padding-top: 0px;
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+
+    #assignments-main.page-assignments .assignment-quick-filters {
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+
+    #assignments-main.page-assignments .assignments-module-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "title new"
+            "subtitle new";
+        column-gap: 10px;
+        row-gap: 6px;
+        align-items: center;
+    }
+
+    #assignments-main.page-assignments .assignments-module-header .assignments-new-btn.control-surface {
+        justify-self: end;
+        align-self: center;
+        min-height: var(--assignments-pill-height);
+        height: var(--assignments-pill-height);
+        padding: 0 14px;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 620;
+    }
+
+    #assignments-main.page-assignments .assignments-module-header .assignments-new-btn .assignment-add-icon {
+        width: 18px;
+        height: 18px;
+        background-size: 18px 18px;
+        flex: 0 0 18px;
+    }
+
+    #assignments-main.page-assignments .assignment-summary-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #assignments-main.page-assignments .assignment-row-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    #assignments-main.page-assignments .assignment-row-copy {
+        flex: 1 1 auto;
+        width: 100%;
+    }
+
+    #assignments-main.page-assignments .assignment-row-meta {
+        flex-wrap: nowrap;
+        gap: 6px;
+    }
+
+    #assignments-main.page-assignments .assignment-row-due,
+    #assignments-main.page-assignments .assignment-row-meta-separator {
+        flex: 0 0 auto;
+    }
+
+    #assignments-main.page-assignments .assignment-course-chip {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: none;
+        justify-content: flex-start;
+    }
+
+    #assignments-main.page-assignments .assignment-row-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    #assignments-main.page-assignments .assignment-row-open-affordance {
+        opacity: 1;
+        max-width: 78px;
+        padding: 0 10px;
+        transform: none;
+    }
+
+    #assignments-main.page-assignments .calendar-view-container {
+        padding: 10px;
+        border-radius: 18px;
+        gap: 10px;
+        margin-top: 14px;
+        margin-left: 0px;
+        margin-right: 0px;
+        margin-bottom: 0px;
+    }
+
+    #assignments-main.page-assignments .calendar-nav,
+    #assignments-main.page-assignments .calendar-grid {
+        min-width: 0;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-layout {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    #assignments-main.page-assignments .calendar-nav {
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        gap: 6px;
+        padding: 0 0 8px;
+    }
+
+    #assignments-main.page-assignments .calendar-month-title {
+        font-size: 20px;
+    }
+
+    #assignments-main.page-assignments .calendar-nav-btn {
+        width: 34px;
+        height: 34px;
+        min-height: 34px;
+    }
+
+    #assignments-main.page-assignments .calendar-today-btn {
+        min-height: 34px;
+        height: 34px;
+        padding: 0 10px;
+        font-size: 12px;
+    }
+
+    #assignments-main.page-assignments .calendar-day-header {
+        padding: 8px 4px;
+        font-size: 11px;
+    }
+
+    #assignments-main.page-assignments .calendar-week {
+        min-height: 92px;
+    }
+
+    #assignments-main.page-assignments .calendar-cell {
+        min-height: 92px;
+        padding: 6px;
+    }
+
+    #assignments-main.page-assignments .day-number {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        margin-bottom: 6px;
+    }
+
+    #assignments-main.page-assignments .calendar-assignment {
+        min-height: 22px;
+        height: 22px;
+        font-size: 10px;
+        min-width: 22px;
+        padding: 0 8px;
+        justify-content: center;
+        gap: 0;
+    }
+
+    #assignments-main.page-assignments .calendar-assignment-label {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .calendar-more-btn {
+        min-height: 22px;
+        height: 22px;
+        font-size: 10px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-detail-title {
+        font-size: 18px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-detail {
+        display: none;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-detail-body {
+        overflow: visible;
+        padding: 0 10px 10px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-row {
+        min-height: 58px;
+        padding: 9px 10px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-row-title {
+        font-size: 13px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-row .status-badge {
+        min-height: 28px;
+        font-size: 11px;
+        padding: 0 10px;
+    }
+
+    #assignments-main.page-assignments .assignments-calendar-day-empty {
+        min-height: 58px;
+        padding: 12px;
+    }
+
+    #assignments-main.page-assignments .assignment-modal-overlay {
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 0;
+    }
+
+    #assignments-main.page-assignments .assignment-modal {
+        width: 100%;
+        max-width: none;
+        max-height: 100vh;
+        height: 100vh;
+        border-radius: 0;
+    }
+}
+
+/* ============================================
+   CALENDAR DAY AGENDA (Unified Desktop + Mobile)
+   ============================================ */
+#course-summary.calendar-page-modern calendar-page .calendar-day-view {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-header {
+    display: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-header-title {
+    margin: 0;
+    font-family: var(--font-title);
+    font-size: 24px;
+    line-height: 1.05;
+    color: #1f1727;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 20px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100% !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0 12px !important;
+    border-radius: 999px !important;
+    border: 1px solid rgba(143, 127, 162, 0.28);
+    background: #ffffffbd !important;
+    box-shadow: none !important;
+    color: #21172a !important;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 650;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tab-label {
+    line-height: 1;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tab-today-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 20px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(78, 160, 111, .38);
+    background: #c1eacf6b;
+    color: #255f3a;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tab-today-chip[hidden] {
+    display: none !important;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-tab-btn.is-active {
+    border-color: rgba(120, 89, 151, 0.5);
+    background: var(--lavender-strong, #dcd0ea) !important;
+    box-shadow: 0 3px 12px rgba(44, 26, 61, 0.13);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    padding-top: 0px !important;
+    will-change: transform, opacity;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-agenda.is-day-switching-forward {
+    animation: calendar-day-agenda-slide-forward 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-agenda.is-day-switching-backward {
+    animation: calendar-day-agenda-slide-backward 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes calendar-day-agenda-slide-forward {
+    from {
+        opacity: 0.42;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes calendar-day-agenda-slide-backward {
+    from {
+        opacity: 0.42;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-agenda.is-day-switching-forward,
+    #course-summary.calendar-page-modern calendar-page .calendar-day-agenda.is-day-switching-backward {
+        animation: none;
+    }
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    border-radius: 18px;
+    border: 1px solid rgba(136, 116, 155, 0.24);
+    background: #ffffffb3;
+    padding: 12px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: box-shadow 0.24s ease, border-color 0.24s ease, background-color 0.24s ease, transform 0.2s ease;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.cannot-expand {
+    cursor: default;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row:focus-visible {
+    outline: 2px solid rgba(116, 78, 150, 0.75);
+    outline-offset: 2px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-expanded {
+    border-color: rgba(120, 89, 151, 0.46);
+    box-shadow: 0 8px 22px rgba(26, 16, 36, 0.12);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-left {
+    min-width: 0;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-label {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 650;
+    color: rgba(56, 44, 68, 0.72);
+    line-height: 1.15;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-time {
+    margin: 4px 0 0;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    font-weight: 650;
+    color: #1f1726;
+    line-height: 1.15;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-now-chip {
+    margin-top: 8px;
+    align-self: flex-start;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-right {
+    min-width: 0;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-preview {
+    position: relative;
+    border-radius: 14px;
+    border: 1px solid rgba(120, 120, 160, 0.2);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 10px 12px;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    will-change: min-height, max-height, padding, border-color, box-shadow;
+    transition: box-shadow 0.26s ease, border-color 0.26s ease, padding 0.26s ease, min-height 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s ease;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied .calendar-day-period-preview {
+    border: 1px solid var(--control-border);
+    box-shadow: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-preview.is-empty-preview {
+    border-color: rgba(136, 116, 155, 0.26);
+    border-style: dashed;
+    background: #bfaad233;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-preview.is-empty-preview[role="button"] {
+    cursor: pointer;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-preview-title {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.25;
+    color: #1a1421;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-preview-professor,
+#course-summary.calendar-page-modern calendar-page .calendar-day-preview-meta {
+    margin: 4px 0 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.25;
+    color: rgba(41, 31, 53, 0.84);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-preview-count {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    color: #261938;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-preview-extra {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-top: 0;
+    transform: translateY(-4px);
+    will-change: max-height, opacity, margin-top, transform;
+    transition: max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-top 0.22s ease, transform 0.22s ease;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-expanded .calendar-day-preview-extra {
+    max-height: 480px;
+    opacity: 1;
+    margin-top: 0px;
+    transform: translateY(0);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-expanded .calendar-day-period-preview {
+    border-color: rgba(120, 89, 151, 0.34);
+    box-shadow: none;
+    padding-bottom: 12px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-period-preview {
+    border-color: var(--control-border);
+    box-shadow: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-expanded-title {
+    margin: 0;
+    font-family: var(--font-title);
+    font-size: 23px;
+    line-height: 1.05;
+    color: #1a1320;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-expanded-professor,
+#course-summary.calendar-page-modern calendar-page .calendar-day-expanded-meta {
+    margin: 8px 0 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.3;
+    color: rgba(33, 24, 44, 0.86);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-expanded-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-meta-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    margin-top: 8px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-meta-chip-row::-webkit-scrollbar {
+    display: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--course-meta-badge-text, rgba(18, 27, 43, 0.9));
+    background: #ffffff70;
+    border: 1px solid var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
+    font-family: var(--secondary-font), sans-serif;
+    font-weight: 500;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-meta-chip-status-registered {
+    background: rgba(224, 252, 232, 0.78);
+    border-color: rgba(170, 227, 188, 0.92);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-desktop {
+    display: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-mobile {
+    display: inline-flex;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: rgba(255, 255, 255, 0.86);
+    color: rgba(15, 23, 42, 0.72);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    opacity: 1;
+    max-width: none;
+    transform: none;
+    pointer-events: none;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: center / 16px no-repeat url(/assets/chevron-right.svg);
+    filter: brightness(0) saturate(100%);
+    opacity: 0.4;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    transition: color 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+@media (min-width: 1024px) {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-period-preview {
+        padding-right: 220px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-expanded-meta-row {
+        justify-content: flex-start;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-mobile {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied .calendar-day-assignment-action-desktop {
+        display: inline-flex;
+        position: absolute !important;
+        top: 50%;
+        bottom: auto;
+        left: auto !important;
+        right: 20px !important;
+        --calendar-day-action-shift: 8px;
+        margin-left: 0 !important;
+        justify-content: flex-end;
+        width: max-content;
+        height: max-content;
+        z-index: 3;
+        opacity: 0;
+        transform: translate3d(var(--calendar-day-action-shift), -50%, 0);
+        pointer-events: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-assignment-action-desktop {
+        --calendar-day-action-shift: 0px;
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-saved-chip {
+    flex-shrink: 0;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-find-action {
+    margin-top: 0;
+    margin-left: auto;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    text-align: left;
+    min-height: 78px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-left {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-empty-main .calendar-day-preview-title {
+    margin: 0;
+}
+
+#course-summary.calendar-page-modern calendar-page button.calendar-day-empty-saved-chip {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 0;
+    max-width: max-content;
+    height: 26px;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
+    background: #ffffff70;
+    color: var(--course-meta-badge-text, rgba(18, 27, 43, 0.9));
+    font-family: var(--secondary-font), sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    box-shadow: none;
+    transform: none;
+    cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #course-summary.calendar-page-modern calendar-page button.calendar-day-empty-saved-chip:hover {
+        border-color: var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
+        background: #ffffff70;
+        box-shadow: none;
+        transform: none;
+    }
+}
+
+#course-summary.calendar-page-modern calendar-page button.calendar-day-empty-saved-chip:active {
+    box-shadow: none;
+    transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded:hover .calendar-day-assignment-action-chevron,
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-empty:hover .calendar-day-empty-find-action .calendar-day-assignment-action-chevron {
+        opacity: 0.62;
+        transform: translateX(1px);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-empty:hover .calendar-day-period-preview.is-empty-preview {
+        border-style: solid;
+    }
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-suggestions-heading {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 650;
+    color: rgba(43, 32, 56, 0.86);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-suggestions-list {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-day-suggestion-item {
+    border-radius: 10px;
+    border: 1px solid rgba(136, 116, 155, 0.2);
+    background: rgba(255, 255, 255, 0.8);
+    padding: 8px 10px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: #2f2440;
+    box-shadow: none !important;
+}
+
+#course-summary.calendar-page-modern calendar-page button.calendar-day-suggestion-item-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    line-height: inherit;
+    cursor: pointer;
+    box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied:hover .calendar-day-period-preview {
+        border-color: rgba(120, 89, 151, 0.42);
+        box-shadow: 0 12px 24px rgba(18, 27, 43, 0.16), 0 0 0 1px var(--course-card-border-hover, rgba(61, 60, 90, 0.45));
+        transform: translateY(-2px);
+    }
+}
+
+@media (max-width: 1023px) {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-view {
+        border-radius: 20px;
+        padding: 0px;
+        gap: 10px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-header-title {
+        font-size: 20px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-tab-today-chip {
+        display: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 15px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-left {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 6px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-label,
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-time {
+        margin: 0;
+        font-size: 13px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-label::after {
+        content: "·";
+        margin-left: 6px;
+        color: rgba(56, 44, 68, 0.7);
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-now-chip {
+        flex-basis: 100%;
+        margin-top: 4px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-expanded-title {
+        font-size: 19px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-expanded-meta-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-period-preview {
+        padding-right: 12px;
+        min-height: 110px;
+        justify-content: space-between;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied.is-expanded .calendar-day-meta-chip-row {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-desktop {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-assignment-action-mobile {
+        display: inline-flex;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-period-row.is-occupied .calendar-day-assignment-action-mobile {
+        position: static;
+        top: auto;
+        right: auto;
+        margin: 4px auto 0;
+        margin-left: auto;
+        margin-right: auto;
+        align-self: center;
+        transform: none;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-meta-chip-row {
+        margin-top: 8px;
+    }
+}
+
 @media (min-width: 1150px) {
     #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell {
         height: 200px !important;
@@ -17954,7 +21137,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #course-summary.calendar-page-modern #calendar-main-div.main-container.calendar-container {
-        padding: 10px;
+        padding: 0px;
         border-radius: 18px;
     }
 
@@ -18002,13 +21185,41 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         font-size: 11px;
     }
 
-    #course-summary.calendar-page-modern calendar-page .calendar-course-subtitle {
+    #course-summary.calendar-page-modern calendar-page .calendar-day-agenda {
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-bottom: 15px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-day-tabs {
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-top: 10px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-mobile-view {
+        gap: 10px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-course-time,
+    #course-summary.calendar-page-modern calendar-page .calendar-course-professor {
         font-size: 10px;
     }
 
+    #course-summary.calendar-page-modern calendar-page .calendar-course-badge-row {
+        gap: 6px;
+    }
+
     #course-summary.calendar-page-modern calendar-page .calendar-course-badge {
+        min-height: 22px;
+        padding: 0 7px;
+        font-size: 10px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-course-registered-badge {
+        min-height: 20px;
+        padding: 0 6px;
         font-size: 9px;
-        padding: 3px 6px;
     }
 
     .calendar-slot-popover {
@@ -18026,9 +21237,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #course-summary.calendar-page-modern .calendar-filter-trigger::before {
     content: "";
-    width: 16px;
-    height: 16px;
-    flex: 0 0 16px;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
     background: center / contain no-repeat url("../assets/filter.svg");
 }
 
@@ -18076,7 +21287,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page .calendar-mobile-view {
     width: 100%;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
     min-width: 0;
 }
 
@@ -18344,15 +21555,16 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-view {
     width: 100%;
-    border-radius: 20px;
-    background: #f4eef8;
-    border: 1px solid rgba(136, 116, 155, 0.2);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
     height: 100%;
     max-height: none;
     overflow: visible;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-scroll {
+    width: 100%;
     height: 100%;
     max-height: none;
     overflow: visible;
@@ -18361,48 +21573,59 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page .calendar-list-content {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 12px;
+    gap: 16px;
+    padding: 20px;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-day-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-left: 0px;
+    gap: 10px;
+    margin-left: 0;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-day-heading {
     margin: 0;
     font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 700;
-    color: #2a1f35;
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.15;
+    color: #1f1726;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-day-items {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-item {
+    --calendar-list-item-bg: rgba(255, 255, 255, 0.92);
     width: 100% !important;
     height: auto !important;
-    min-height: 64px;
+    min-height: 72px;
     border-radius: 14px;
-    border: 1px solid rgba(120, 120, 160, 0.2);
+    border: 1px solid var(--control-border);
     box-shadow: none;
-    background: rgba(255, 255, 255, 0.86);
-    padding: 12px;
+    background: var(--calendar-list-item-bg);
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: 8px;
     text-align: left;
-    color: #171225 !important;
+    color: #1a1421 !important;
     font-family: var(--font-ui);
-    z-index: 100;
+    z-index: 10;
+    transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #course-summary.calendar-page-modern calendar-page .calendar-list-item:hover {
+        transform: translateY(-2px);
+        border-color: rgba(120, 89, 151, 0.42);
+        box-shadow: 0 12px 24px rgba(18, 27, 43, 0.16), 0 0 0 1px var(--course-card-border-hover, rgba(61, 60, 90, 0.45));
+    }
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-item-title {
@@ -18415,8 +21638,16 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 #course-summary.calendar-page-modern calendar-page .calendar-list-item-meta {
     margin: 0;
     font-size: 12px;
-    opacity: 0.78;
-    line-height: 1.3;
+    font-weight: 500;
+    line-height: 1.25;
+    color: rgba(41, 31, 53, 0.84);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-list-item-professor {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.25;
+    color: rgba(41, 31, 53, 0.84);
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-item-badges {
@@ -18427,36 +21658,43 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-type-badge,
+#course-summary.calendar-page-modern calendar-page .calendar-list-credits-badge,
 #course-summary.calendar-page-modern calendar-page .calendar-list-registered-badge {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     border-radius: 999px;
-    min-height: 24px;
-    padding: 0 10px;
+    min-height: 26px;
+    padding: 0 9px;
+    font-family: var(--secondary-font), sans-serif;
     font-size: 11px;
-    font-weight: 650;
-    color: #251b31;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--course-meta-badge-text, rgba(18, 27, 43, 0.9));
+    background: #ffffff70;
+    border: 1px solid var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
+    white-space: nowrap;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-type-badge {
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-color: var(--course-meta-badge-border, rgba(255, 255, 255, 0.82));
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-registered-badge {
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(120, 120, 160, 0.2);
+    background: rgba(224, 252, 232, 0.78);
+    border-color: rgba(170, 227, 188, 0.92);
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-list-empty-state {
     border-radius: 14px;
-    border: 1px dashed rgba(120, 98, 144, 0.4);
-    background: rgba(255, 255, 255, 0.7);
-    padding: 24px 14px;
+    border: 1px dashed rgba(136, 116, 155, 0.26);
+    background: #ffffffb3;
+    padding: 20px 14px;
     text-align: center;
     font-family: var(--font-ui);
     font-size: 14px;
-    color: rgba(34, 25, 44, 0.84);
+    font-weight: 500;
+    color: rgba(45, 33, 57, 0.86);
 }
 
 @media (min-width: 1024px) {
@@ -18544,12 +21782,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-list-content {
-        padding: 10px;
+        gap: 12px;
+        padding: 15px;
+    }
+
+    #course-summary.calendar-page-modern calendar-page .calendar-list-day-heading {
+        font-size: 16px;
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-list-item {
-        min-height: 56px;
-        padding: 11px;
+        min-height: 64px;
+        padding: 10px;
     }
 }
 /* ===== COURSE INFO / REVIEWS REDESIGN (shared sheet + page content) ===== */
@@ -19150,8 +22393,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     text-transform: none;
     letter-spacing: 0;
     font-size: 14px;
-    font-weight: 600;
-    color: #0f172a;
+    font-weight: 450;
+    color: #1f1727;
+    opacity: 80%;
 }
 
 .course-detail-helper {
@@ -19167,7 +22411,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     text-align: left;
     font-size: 14px;
     font-weight: 500;
-    color: rgba(15, 23, 42, 0.86);
+    color: #0f172a;
 }
 
 .course-info-inline-warning {
@@ -19269,19 +22513,21 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .course-info-reviews-header h3 {
     margin: 0;
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 500;
     font-family: var(--font-ui);
+    line-height: 1.2;
 }
 
 .course-info-reviews-title {
     display: grid;
     gap: 4px;
     min-width: 0;
+    align-content: space-between;
 }
 
 .course-info-reviews-title .total-reviews {
     margin: 0;
-    color: rgba(15, 23, 42, 0.62);
+    color: #172033bd;
     font-weight: 500;
 }
 
@@ -19502,8 +22748,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .course-review-empty {
-    text-align: center;
-    padding: 18px 14px;
+    text-align: left;
+    padding: 16px 18px;
     margin: 0 !important;
     border-radius: 16px;
     border: 1px solid rgba(15, 23, 42, .14);
@@ -20601,7 +23847,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet .modal-body {
-        padding: 16px 4px 8px;
+        padding: 15px 0px 15px 0px;
     }
 
     .modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet .modal-footer-sticky {
@@ -20618,6 +23864,23 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
     .ds-card {
         margin: 0 !important;
+    }
+
+    .review-modal-host.modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .review-modal-host.modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet .modal-header {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .review-modal-host.modal.modal--mobile-swipe .modal-dialog.mobile-swipe-sheet .modal-footer-sticky {
+        margin-left: 0;
+        margin-right: 0;
+        padding-left: 15px;
+        padding-right: 15px;
     }
 
     .review-modal-host .modal-header-actions {
@@ -20639,6 +23902,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .review-modal-host .difficulty-scale-input,
     .review-modal-host .review-rating-value--difficulty {
         width: 100%;
+        box-sizing: border-box;
     }
 
     .review-modal-host .difficulty-segment-input {
@@ -20817,9 +24081,13 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         align-items: center;
     }
 
-    .class-info #class-assignments .class-subtitle-assignments .subtitle-opacity {
+    .class-info #class-assignments .class-subtitle-assignments .course-assignments-title {
         flex: 1 1 auto;
         min-width: 0;
+    }
+
+    .class-info #class-assignments .class-subtitle-assignments .subtitle-opacity {
+        flex: 0 0 auto;
     }
 
     .class-info #class-assignments .add-assignment-link {
@@ -21210,6 +24478,12 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .review-modal-host .review-rating-input .star-rating-input {
         min-width: 0;
         max-width: 100%;
+    }
+
+    .review-modal-host .review-form-grid {
+        padding-left: 15px;
+        padding-right: 15px;
+        padding-bottom: 15px;
     }
 
     .review-modal-host .review-rating-input .star-rating-input {
@@ -21816,7 +25090,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     --courses-page-padding-x: 26px;
     --courses-page-padding-top: 16px;
     --courses-page-padding-bottom: 24px;
-    --courses-section-padding-x: 26px;
+    --courses-section-padding-x: 20px;
     --courses-section-padding-top: 32px;
     --courses-section-padding-bottom: 26px;
     --courses-toolbar-to-section-gap: 16px;
@@ -21950,6 +25224,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     width: 100%;
     min-width: 0;
     height: var(--courses-pill-height);
+    box-sizing: border-box;
     border-radius: var(--courses-pill-radius);
     padding: 0 14px;
     border: 1px solid var(--control-border);
@@ -22041,6 +25316,14 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     overflow: visible;
 }
 
+.page-courses .sort-wrapper.open .sort-btn,
+.page-courses .courses-toolbar-actions .sort-wrapper.open .sort-btn.control-surface {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
 .page-courses .courses-toolbar-actions .search-btn.control-surface {
     display: none;
 }
@@ -22112,7 +25395,20 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .page-courses .courses-section-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     padding: 0 0 14px;
+}
+
+.page-courses .courses-section-title {
+    margin: 0;
+    line-height: 1;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    font-weight: 500;
+    color: #1f1727;
 }
 
 .page-courses #course-results-summary.course-main-paragraph {
@@ -22120,7 +25416,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     display: block;
     font-size: 15px !important;
     font-family: var(--font-ui);
-    font-weight: 620;
+    font-weight: 500;
     line-height: 1.25;
     color: rgba(23, 32, 51, 0.74);
 }
@@ -22162,6 +25458,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .page-courses .course-active-filters-clear.control-surface {
+    width: auto;
     height: 30px;
     min-height: 30px;
     padding: 0 12px;
@@ -22178,9 +25475,9 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     padding: var(--courses-section-padding-x) var(--courses-section-padding-x) var(--courses-section-padding-x);
     padding-inline: var(--courses-section-padding-x);
     border-radius: var(--radius-card);
-    border: 1px solid rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, .06);
     background: var(--courses-panel-bg);
-    box-shadow: 0 10px 24px rgba(10, 37, 64, 0.06);
+    box-shadow: 0 6px 18px #0a25401a;
     filter: none;
     min-width: 0;
 }
@@ -22188,7 +25485,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 .page-courses #course-list.course-grid {
     margin-top: 0 !important;
     width: 100%;
-    gap: 16px;
+    gap: 14px;
 }
 
 .page-courses #course-list .course-assessment-primary {
@@ -22226,6 +25523,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         width: 100%;
         margin-left: 0;
         margin-right: 0;
+        padding-top: 15px !important;
+        padding-bottom: 15px !important;
     }
 
     .page-courses .courses-toolbar-shell {
@@ -22531,7 +25830,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         --calendar-toolbar-sidebar-width: 0px;
         --calendar-toolbar-padding-x: 15px;
         --calendar-toolbar-padding-y: 10px;
-        --calendar-toolbar-pill-height: 42px;
+        --calendar-toolbar-pill-height: 50px;
     }
 
     #course-summary.calendar-page-modern .container-above.container-above-mobile {
@@ -22542,7 +25841,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     #course-summary.calendar-page-modern .calendar-toolbar-shell {
-        grid-template-columns: minmax(128px, 1fr) auto auto;
+        grid-template-columns: minmax(128px, 1fr) auto;
         gap: 8px;
     }
 
@@ -22566,6 +25865,10 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         padding: 0 10px;
     }
 
+    #course-summary.calendar-page-modern #calendar-filter-trigger-mobile {
+        display: none !important;
+    }
+
     #course-summary.calendar-page-modern .calendar-filter-trigger {
         width: 42px !important;
         min-width: 42px;
@@ -22585,8 +25888,8 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         max-width: none !important;
         margin-left: 0;
         margin-right: 0;
-        margin-top: 14px;
-        padding: 0px 24px var(--calendar-toolbar-padding-x);
+        margin-top: 16px;
+        padding: 0px var(--calendar-toolbar-padding-x) 24px;
         box-sizing: border-box;
     }
 

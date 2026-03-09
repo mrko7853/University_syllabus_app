@@ -1,4 +1,5 @@
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSearchForSlot } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSearchForSlot, formatProfessorDisplayName } from "./shared.js";
+import { readSavedCourses } from "./saved-courses.js";
 import { supabase } from "../supabase.js";
 
 const CALENDAR_VIEW_STORAGE_KEY = "ila_calendar_view_mode";
@@ -56,7 +57,6 @@ class CalendarPageComponent extends HTMLElement {
     this.filterState = {
       typeFilters: new Set(),
       showRegistered: true,
-      showSaved: false,
       showEmptySlots: true
     };
     this.busySlots = new Set();
@@ -72,6 +72,7 @@ class CalendarPageComponent extends HTMLElement {
     this.touchStartX = 0;
     this.touchStartY = 0;
     this.touchInProgress = false;
+    this.daySwitchAnimationTimer = null;
 
     this.activeFocusTrapCleanup = null;
     this.activeSlot = null;
@@ -103,7 +104,11 @@ class CalendarPageComponent extends HTMLElement {
                   ${this.periodDefinitions.map((periodDef) => `
                     <tr data-period="${periodDef.number}">
                       <td id="calendar-period-${periodDef.number}" class="calendar-time-cell" data-period="${periodDef.number}">
-                        <p class="time-full"><small>${periodDef.label}</small><br>${periodDef.timeRange}</p>
+                        <p class="time-full">
+                          <small>${periodDef.label}</small>
+                          <span class="time-full-range">${periodDef.timeRange}</span>
+                          <span class="calendar-now-chip" aria-hidden="true">● NOW</span>
+                        </p>
                         <p class="time-short">${periodDef.number}h</p>
                       </td>
                       ${this.dayOrder.map((dayCode) => `<td class="calendar-slot-cell" data-day="${dayCode}" data-period="${periodDef.number}"></td>`).join("")}
@@ -114,11 +119,12 @@ class CalendarPageComponent extends HTMLElement {
             </div>
           </div>
 
-          <div class="calendar-mobile-view" style="display: none;" aria-label="Mobile schedule">
-            <div class="calendar-mobile-day-tabs" role="tablist" aria-label="Weekday selector"></div>
-            <div class="calendar-mobile-viewport">
-              <div class="calendar-mobile-track"></div>
+          <div class="calendar-mobile-view calendar-day-view" style="display: none;" aria-label="Day agenda">
+            <div class="calendar-day-header">
+              <p class="calendar-day-header-title" data-role="day-title">Monday</p>
             </div>
+            <div class="calendar-day-tabs" data-role="day-tabs" role="tablist" aria-label="Weekday selector"></div>
+            <div class="calendar-day-agenda" data-role="day-agenda"></div>
           </div>
 
           <div class="calendar-list-view" style="display: none;" aria-label="Registered courses list">
@@ -160,8 +166,9 @@ class CalendarPageComponent extends HTMLElement {
     this.calendarWrapper = this.querySelector(".calendar-wrapper");
     this.calendarGridScroll = this.querySelector("#calendar-grid-scroll");
     this.mobileView = this.querySelector(".calendar-mobile-view");
-    this.mobileDayTabs = this.querySelector(".calendar-mobile-day-tabs");
-    this.mobileTrack = this.querySelector(".calendar-mobile-track");
+    this.dayHeaderTitle = this.querySelector("[data-role='day-title']");
+    this.mobileDayTabs = this.querySelector("[data-role='day-tabs']");
+    this.dayAgenda = this.querySelector("[data-role='day-agenda']");
     this.listView = this.querySelector(".calendar-list-view");
     this.listContent = this.querySelector(".calendar-list-content");
 
@@ -180,6 +187,7 @@ class CalendarPageComponent extends HTMLElement {
     this.boundCalendarPointerMove = this.handleCalendarPointerMove.bind(this);
     this.boundCalendarPointerLeave = this.handleCalendarPointerLeave.bind(this);
     this.boundMobileClickHandler = this.handleMobileViewClick.bind(this);
+    this.boundMobileKeydownHandler = this.handleMobileViewKeydown.bind(this);
     this.boundListViewClickHandler = this.handleListViewClick.bind(this);
     this.boundTouchStartHandler = this.handleTouchStart.bind(this);
     this.boundTouchMoveHandler = this.handleTouchMove.bind(this);
@@ -200,10 +208,11 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.addEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.addEventListener("mouseleave", this.boundCalendarPointerLeave);
 
-    this.mobileView.addEventListener("click", this.boundMobileClickHandler);
-    this.mobileView.addEventListener("touchstart", this.boundTouchStartHandler, { passive: true });
-    this.mobileView.addEventListener("touchmove", this.boundTouchMoveHandler, { passive: true });
-    this.mobileView.addEventListener("touchend", this.boundTouchEndHandler, { passive: true });
+    this.mobileView?.addEventListener("click", this.boundMobileClickHandler);
+    this.mobileView?.addEventListener("keydown", this.boundMobileKeydownHandler);
+    this.mobileView?.addEventListener("touchstart", this.boundTouchStartHandler, { passive: true });
+    this.mobileView?.addEventListener("touchmove", this.boundTouchMoveHandler, { passive: true });
+    this.mobileView?.addEventListener("touchend", this.boundTouchEndHandler, { passive: true });
     this.listView?.addEventListener("click", this.boundListViewClickHandler);
     this.addEventListener("click", this.boundRootActionClick);
     this.mountSlotPopoverToBody();
@@ -224,10 +233,11 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.removeEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.removeEventListener("mouseleave", this.boundCalendarPointerLeave);
 
-    this.mobileView.removeEventListener("click", this.boundMobileClickHandler);
-    this.mobileView.removeEventListener("touchstart", this.boundTouchStartHandler);
-    this.mobileView.removeEventListener("touchmove", this.boundTouchMoveHandler);
-    this.mobileView.removeEventListener("touchend", this.boundTouchEndHandler);
+    this.mobileView?.removeEventListener("click", this.boundMobileClickHandler);
+    this.mobileView?.removeEventListener("keydown", this.boundMobileKeydownHandler);
+    this.mobileView?.removeEventListener("touchstart", this.boundTouchStartHandler);
+    this.mobileView?.removeEventListener("touchmove", this.boundTouchMoveHandler);
+    this.mobileView?.removeEventListener("touchend", this.boundTouchEndHandler);
     this.listView?.removeEventListener("click", this.boundListViewClickHandler);
     this.removeEventListener("click", this.boundRootActionClick);
     this.slotPopover?.removeEventListener("click", this.boundSlotPopoverActionClick);
@@ -242,6 +252,10 @@ class CalendarPageComponent extends HTMLElement {
     this.closeSlotActionMenus(false);
     this.hideTooltip();
     this.clearFocusTrap();
+    if (this.daySwitchAnimationTimer) {
+      clearTimeout(this.daySwitchAnimationTimer);
+      this.daySwitchAnimationTimer = null;
+    }
   }
 
   handlePageLoaded() {
@@ -393,9 +407,9 @@ class CalendarPageComponent extends HTMLElement {
     }
 
     this.ensureExpandedPeriodForDay(this.dayOrder[this.selectedMobileDayIndex]);
-    this.updateMobileTrackPosition(false);
     this.updateMobileDayButtons();
-    this.applyMobileExpandedState();
+    this.renderMobileSchedule({ animate: false });
+    this.updateDayHeaderState();
   }
 
   setupSearchButtons() {
@@ -519,7 +533,6 @@ class CalendarPageComponent extends HTMLElement {
     const typeAcademicSkills = document.getElementById("calendar-type-academic-skills");
     const typeSeminarHonor = document.getElementById("calendar-type-seminar-honor");
     const showRegistered = document.getElementById("calendar-show-registered");
-    const showSaved = document.getElementById("calendar-show-saved");
     const showEmpty = document.getElementById("calendar-show-empty");
 
     this.filterPopoverElement = filterPopover || null;
@@ -602,7 +615,7 @@ class CalendarPageComponent extends HTMLElement {
       this.applyActiveFiltersAndRender();
     };
 
-    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showSaved, showEmpty].forEach((checkbox) => {
+    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showEmpty].forEach((checkbox) => {
       if (!checkbox) return;
       checkbox.addEventListener("change", onFilterChange);
       this.toolbarCleanupFns.push(() => checkbox.removeEventListener("change", onFilterChange));
@@ -684,7 +697,6 @@ class CalendarPageComponent extends HTMLElement {
     let count = this.filterState?.typeFilters?.size || 0;
 
     if (this.filterState?.showRegistered === false) count += 1;
-    if (this.filterState?.showSaved === true) count += 1;
     if (this.filterState?.showEmptySlots === false) count += 1;
 
     return count;
@@ -755,7 +767,6 @@ class CalendarPageComponent extends HTMLElement {
 
     this.filterState.typeFilters = selected;
     this.filterState.showRegistered = document.getElementById("calendar-show-registered")?.checked !== false;
-    this.filterState.showSaved = document.getElementById("calendar-show-saved")?.checked === true;
     this.filterState.showEmptySlots = document.getElementById("calendar-show-empty")?.checked !== false;
     this.updateFilterTriggerCount();
   }
@@ -775,11 +786,9 @@ class CalendarPageComponent extends HTMLElement {
     });
 
     const showRegistered = document.getElementById("calendar-show-registered");
-    const showSaved = document.getElementById("calendar-show-saved");
     const showEmpty = document.getElementById("calendar-show-empty");
 
     if (showRegistered) showRegistered.checked = true;
-    if (showSaved) showSaved.checked = false;
     if (showEmpty) showEmpty.checked = true;
 
     this.syncFilterStateFromControls();
@@ -1132,103 +1141,81 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   buildMobileViewSkeleton() {
-    if (!this.mobileDayTabs || !this.mobileTrack) return;
+    if (!this.mobileDayTabs) return;
 
     this.mobileDayTabs.innerHTML = "";
-    this.mobileTrack.innerHTML = "";
-
     this.dayOrder.forEach((dayCode, dayIndex) => {
       const tabButton = document.createElement("button");
       tabButton.type = "button";
-      tabButton.className = "calendar-mobile-day-tab";
+      tabButton.className = "calendar-day-tab-btn";
       tabButton.dataset.action = "select-day";
       tabButton.dataset.dayIndex = String(dayIndex);
       tabButton.dataset.dayCode = dayCode;
       tabButton.setAttribute("role", "tab");
       tabButton.setAttribute("aria-label", this.dayLongNames[dayCode]);
-      tabButton.textContent = this.dayShortButtons[dayCode];
+
+      const label = document.createElement("span");
+      label.className = "calendar-day-tab-label";
+      label.textContent = this.dayShortButtons[dayCode];
+
+      const todayChip = document.createElement("span");
+      todayChip.className = "calendar-day-tab-today-chip";
+      todayChip.textContent = "TODAY";
+      todayChip.hidden = true;
+      todayChip.setAttribute("aria-hidden", "true");
+
+      tabButton.appendChild(label);
+      tabButton.appendChild(todayChip);
       this.mobileDayTabs.appendChild(tabButton);
-
-      const dayPage = document.createElement("section");
-      dayPage.className = "calendar-mobile-day-page";
-      dayPage.dataset.dayCode = dayCode;
-
-      const dayShell = document.createElement("div");
-      dayShell.className = "calendar-mobile-day-shell";
-
-      this.periodDefinitions.forEach((periodDef) => {
-        const periodArticle = document.createElement("article");
-        periodArticle.className = "calendar-mobile-period";
-        periodArticle.dataset.dayCode = dayCode;
-        periodArticle.dataset.periodNumber = String(periodDef.number);
-
-        const toggleButton = document.createElement("button");
-        toggleButton.type = "button";
-        toggleButton.className = "calendar-mobile-period-toggle";
-        toggleButton.dataset.action = "toggle-period";
-        toggleButton.dataset.dayCode = dayCode;
-        toggleButton.dataset.periodNumber = String(periodDef.number);
-        toggleButton.setAttribute("aria-expanded", "false");
-
-        const periodMeta = document.createElement("div");
-        periodMeta.className = "calendar-mobile-period-meta";
-
-        const periodLabel = document.createElement("p");
-        periodLabel.className = "calendar-mobile-period-label";
-        periodLabel.textContent = periodDef.label;
-
-        const periodTime = document.createElement("p");
-        periodTime.className = "calendar-mobile-period-time";
-        periodTime.textContent = periodDef.timeRange;
-
-        periodMeta.appendChild(periodLabel);
-        periodMeta.appendChild(periodTime);
-
-        const compact = document.createElement("div");
-        compact.className = "calendar-mobile-period-compact";
-        compact.dataset.role = "compact";
-
-        toggleButton.appendChild(periodMeta);
-        toggleButton.appendChild(compact);
-
-        const detailPanel = document.createElement("div");
-        detailPanel.className = "calendar-mobile-period-panel";
-        detailPanel.dataset.role = "panel";
-
-        periodArticle.appendChild(toggleButton);
-        periodArticle.appendChild(detailPanel);
-        dayShell.appendChild(periodArticle);
-      });
-
-      dayPage.appendChild(dayShell);
-      this.mobileTrack.appendChild(dayPage);
     });
 
     this.updateMobileDayButtons();
+    this.updateDayHeaderState();
   }
 
   updateMobileDayButtons() {
     if (!this.mobileDayTabs) return;
 
-    const buttons = this.mobileDayTabs.querySelectorAll(".calendar-mobile-day-tab");
+    const currentDayCode = this.getCurrentDayCode();
+    const buttons = this.mobileDayTabs.querySelectorAll(".calendar-day-tab-btn");
     buttons.forEach((button, index) => {
       const isActive = index === this.selectedMobileDayIndex;
+      const isToday = button.dataset.dayCode === currentDayCode;
+      const todayChip = button.querySelector(".calendar-day-tab-today-chip");
+
       button.classList.toggle("is-active", isActive);
+      button.classList.toggle("is-today", isToday);
       button.setAttribute("aria-selected", isActive ? "true" : "false");
       button.setAttribute("tabindex", isActive ? "0" : "-1");
+      button.setAttribute("aria-label", `${this.dayLongNames[button.dataset.dayCode] || button.dataset.dayCode}${isToday ? " (Today)" : ""}`);
+
+      if (todayChip) {
+        todayChip.hidden = !isToday;
+      }
     });
   }
 
   updateMobileTrackPosition(animate = true) {
-    if (!this.mobileTrack) return;
+    void animate;
+  }
 
-    this.mobileTrack.classList.toggle("without-animation", !animate);
-    this.mobileTrack.style.transform = `translateX(-${this.selectedMobileDayIndex * 100}%)`;
+  getCurrentDayCode() {
+    const dayMap = {
+      Monday: "Mon",
+      Tuesday: "Tue",
+      Wednesday: "Wed",
+      Thursday: "Thu",
+      Friday: "Fri"
+    };
+    return dayMap[this.getCurrentDayName()] || null;
+  }
 
-    if (!animate) {
-      requestAnimationFrame(() => {
-        if (this.mobileTrack) this.mobileTrack.classList.remove("without-animation");
-      });
+  updateDayHeaderState() {
+    const dayCode = this.dayOrder[this.selectedMobileDayIndex] || this.dayOrder[0];
+    const dayLabel = this.dayLongNames[dayCode] || dayCode;
+
+    if (this.dayHeaderTitle) {
+      this.dayHeaderTitle.textContent = dayLabel;
     }
   }
 
@@ -1278,48 +1265,86 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   handleMobileViewClick(event) {
-    const courseCard = event.target.closest("[data-course-key]");
-    if (courseCard) {
-      const courseKey = courseCard.dataset.courseKey;
-      const course = this.mobileCourseLookup.get(courseKey);
-      if (course) openCourseInfoMenu(course);
-      return;
-    }
-
-    const actionButton = event.target.closest("[data-action='mobile-slot-find'], [data-action='mobile-slot-manage']");
+    const actionButton = event.target.closest("[data-action]");
     if (actionButton) {
-      const dayCode = actionButton.dataset.dayCode;
-      const periodNumber = parseInt(actionButton.dataset.periodNumber, 10);
-      if (dayCode && Number.isFinite(periodNumber)) {
-        this.openSlotActionMenu({ day: dayCode, period: periodNumber }, actionButton);
-      }
-      return;
-    }
-
-    const dayButton = event.target.closest("[data-action='select-day']");
-    if (dayButton) {
-      const dayIndex = parseInt(dayButton.dataset.dayIndex, 10);
-      if (Number.isFinite(dayIndex)) this.selectMobileDayByIndex(dayIndex, true);
-      return;
-    }
-
-    const toggleButton = event.target.closest("[data-action='toggle-period']");
-    if (toggleButton) {
-      const dayCode = toggleButton.dataset.dayCode;
-      const periodNumber = parseInt(toggleButton.dataset.periodNumber, 10);
-      const hasCoursesState = toggleButton.dataset.hasCourses;
-      const hasCourses = hasCoursesState === "true";
-
-      if (!dayCode || !Number.isFinite(periodNumber)) return;
-      if (hasCoursesState === "hidden") return;
-
-      if (!hasCourses) {
-        this.openSlotActionMenu({ day: dayCode, period: periodNumber }, toggleButton);
+      const action = actionButton.dataset.action;
+      if (action === "select-day") {
+        const dayIndex = parseInt(actionButton.dataset.dayIndex, 10);
+        if (Number.isFinite(dayIndex)) this.selectMobileDayByIndex(dayIndex, true);
         return;
       }
+      if (action === "day-course-view") {
+        const courseKey = actionButton.dataset.courseKey;
+        const course = this.mobileCourseLookup.get(courseKey);
+        if (course) openCourseInfoMenu(course);
+        return;
+      }
+      if (action === "day-saved-course-open") {
+        const courseKey = actionButton.dataset.courseKey;
+        const course = this.mobileCourseLookup.get(courseKey);
+        if (course) openCourseInfoMenu(course);
+        return;
+      }
+      if (action === "day-empty-toggle") {
+        const dayCode = actionButton.dataset.dayCode;
+        const periodNumber = parseInt(actionButton.dataset.periodNumber, 10);
+        if (!dayCode || !Number.isFinite(periodNumber)) return;
+        this.toggleMobilePeriod(dayCode, periodNumber);
+        return;
+      }
+      if (action === "day-slot-find") {
+        const dayCode = actionButton.dataset.dayCode;
+        const periodNumber = parseInt(actionButton.dataset.periodNumber, 10);
+        if (!dayCode || !Number.isFinite(periodNumber)) return;
 
-      this.toggleMobilePeriod(dayCode, periodNumber);
+        const typeFilters = this.getActiveTypeFilters();
+        openCourseSearchForSlot({
+          day: dayCode,
+          period: periodNumber,
+          term: this.displayedTerm,
+          year: this.displayedYear,
+          typeFilters: typeFilters.length > 0 ? typeFilters : undefined,
+          source: "calendar-day-empty"
+        });
+        return;
+      }
     }
+
+    const row = event.target.closest(".calendar-day-period-row");
+    if (!row || !this.mobileView?.contains(row)) return;
+
+    const dayCode = row.dataset.dayCode;
+    const periodNumber = parseInt(row.dataset.periodNumber, 10);
+    if (!dayCode || !Number.isFinite(periodNumber)) return;
+    const canExpand = row.dataset.canExpand === "true";
+
+    const clickedPreviewCard = event.target.closest(".calendar-day-period-preview");
+    if (clickedPreviewCard && row.classList.contains("is-occupied") && row.classList.contains("is-expanded")) {
+      const slotCourses = this.getCoursesForSlot(dayCode, periodNumber);
+      const primaryCourse = Array.isArray(slotCourses) ? slotCourses[0] : null;
+      if (primaryCourse) {
+        openCourseInfoMenu(primaryCourse);
+        return;
+      }
+    }
+
+    if (!canExpand) return;
+    this.toggleMobilePeriod(dayCode, periodNumber);
+  }
+
+  handleMobileViewKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest(".calendar-day-period-row");
+    if (!row || event.target !== row) return;
+
+    const dayCode = row.dataset.dayCode;
+    const periodNumber = parseInt(row.dataset.periodNumber, 10);
+    if (!dayCode || !Number.isFinite(periodNumber)) return;
+    const canExpand = row.dataset.canExpand === "true";
+    if (!canExpand) return;
+
+    event.preventDefault();
+    this.toggleMobilePeriod(dayCode, periodNumber);
   }
 
   handleListViewClick(event) {
@@ -1335,15 +1360,18 @@ class CalendarPageComponent extends HTMLElement {
 
   selectMobileDayByIndex(dayIndex, animate = true) {
     const boundedIndex = Math.max(0, Math.min(this.dayOrder.length - 1, dayIndex));
-    if (boundedIndex === this.selectedMobileDayIndex && animate) return;
+    if (boundedIndex === this.selectedMobileDayIndex) return;
+
+    const previousIndex = this.selectedMobileDayIndex;
+    const direction = boundedIndex > previousIndex ? "forward" : "backward";
 
     this.selectedMobileDayIndex = boundedIndex;
     const dayCode = this.dayOrder[this.selectedMobileDayIndex];
 
     this.ensureExpandedPeriodForDay(dayCode);
     this.updateMobileDayButtons();
-    this.updateMobileTrackPosition(animate);
-    this.applyMobileExpandedState();
+    this.updateDayHeaderState();
+    this.renderMobileSchedule({ animate, direction });
   }
 
   selectMobileDayByName(dayName, animate = false) {
@@ -1397,16 +1425,36 @@ class CalendarPageComponent extends HTMLElement {
     return currentPeriod ? currentPeriod.number : null;
   }
 
+  getDefaultExpandedPeriodForDay(dayCode) {
+    if (!dayCode) return null;
+    const todayCode = this.getCurrentDayCode();
+    if (!todayCode || dayCode !== todayCode) return null;
+    return this.getSuggestedExpandedPeriod();
+  }
+
   ensureExpandedPeriodForDay(dayCode) {
     if (!dayCode) return;
 
     if (!Object.prototype.hasOwnProperty.call(this.expandedMobilePeriodByDay, dayCode)) {
-      this.expandedMobilePeriodByDay[dayCode] = this.getSuggestedExpandedPeriod();
+      this.expandedMobilePeriodByDay[dayCode] = this.getDefaultExpandedPeriodForDay(dayCode);
     }
+  }
+
+  canExpandDayPeriod(dayCode, periodNumber) {
+    if (!dayCode || !Number.isFinite(periodNumber)) return false;
+
+    const slotCourses = this.getCoursesForSlot(dayCode, periodNumber);
+    if (Array.isArray(slotCourses) && slotCourses.length > 0) return true;
+
+    if (this.isSlotBusy(dayCode, periodNumber)) return true;
+
+    const savedSuggestions = this.getSavedSuggestionsForSlot(dayCode, periodNumber, 1);
+    return Array.isArray(savedSuggestions) && savedSuggestions.length > 0;
   }
 
   toggleMobilePeriod(dayCode, periodNumber) {
     if (!dayCode || !Number.isFinite(periodNumber)) return;
+    if (!this.canExpandDayPeriod(dayCode, periodNumber)) return;
 
     const currentlyExpanded = this.expandedMobilePeriodByDay[dayCode];
     if (currentlyExpanded === periodNumber) {
@@ -1419,24 +1467,22 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   applyMobileExpandedState() {
-    if (!this.mobileTrack) return;
+    if (!this.dayAgenda) return;
 
-    const dayPages = this.mobileTrack.querySelectorAll(".calendar-mobile-day-page");
-    dayPages.forEach((dayPage) => {
-      const dayCode = dayPage.dataset.dayCode;
-      const expandedPeriod = dayCode ? this.expandedMobilePeriodByDay[dayCode] : null;
-
-      const periodRows = dayPage.querySelectorAll(".calendar-mobile-period");
-      periodRows.forEach((row) => {
-        const periodNumber = parseInt(row.dataset.periodNumber, 10);
-        const isExpanded = Number.isFinite(periodNumber) && expandedPeriod === periodNumber;
-        row.classList.toggle("is-expanded", isExpanded);
-
-        const toggleButton = row.querySelector(".calendar-mobile-period-toggle");
-        if (toggleButton) {
-          toggleButton.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-        }
-      });
+    const dayCode = this.dayOrder[this.selectedMobileDayIndex];
+    const expandedPeriod = dayCode ? this.expandedMobilePeriodByDay[dayCode] : null;
+    const periodRows = this.dayAgenda.querySelectorAll(".calendar-day-period-row");
+    periodRows.forEach((row) => {
+      const periodNumber = parseInt(row.dataset.periodNumber, 10);
+      const canExpand = row.dataset.canExpand === "true";
+      const allowRowToggle = row.dataset.allowToggle === "true";
+      const isExpanded = Number.isFinite(periodNumber) && canExpand && expandedPeriod === periodNumber;
+      row.classList.toggle("is-expanded", isExpanded);
+      if (allowRowToggle && canExpand) {
+        row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      } else {
+        row.removeAttribute("aria-expanded");
+      }
     });
   }
 
@@ -1709,116 +1755,355 @@ class CalendarPageComponent extends HTMLElement {
     this.closeSlotActionMenus(false);
   }
 
-  renderMobileSchedule() {
-    if (!this.mobileTrack) return;
+  getSavedSuggestionsForSlot(dayCode, periodNumber, limit = 3) {
+    const normalizedDay = String(dayCode || "").trim();
+    const normalizedPeriod = Number(periodNumber);
+    if (!normalizedDay || !Number.isFinite(normalizedPeriod)) return [];
+
+    const selectedYear = Number.parseInt(this.displayedYear, 10);
+    const selectedTerm = this.normalizeTermValue(this.displayedTerm);
+    const savedItems = readSavedCourses(Number.POSITIVE_INFINITY);
+
+    return (Array.isArray(savedItems) ? savedItems : [])
+      .filter((item) => {
+        if (String(item?.day || "").trim() !== normalizedDay) return false;
+        if (Number(item?.period) !== normalizedPeriod) return false;
+
+        const itemYear = Number.parseInt(item?.year, 10);
+        const itemTerm = this.normalizeTermValue(item?.term);
+        const matchesYear = Number.isFinite(itemYear) ? itemYear === selectedYear : true;
+        const matchesTerm = itemTerm ? itemTerm === selectedTerm : true;
+        return matchesYear && matchesTerm;
+      })
+      .slice(0, limit);
+  }
+
+  getCourseCreditsLabel(course) {
+    const raw = course?.credits;
+    if (raw === null || raw === undefined || raw === "") return null;
+
+    const matched = String(raw).match(/(\d+(\.\d+)?)/);
+    if (!matched) return String(raw);
+
+    const parsed = Number.parseFloat(matched[1]);
+    if (!Number.isFinite(parsed)) return String(raw);
+
+    const formatted = Number.isInteger(parsed) ? parsed.toFixed(0) : parsed.toFixed(1).replace(/\.0$/, "");
+    return `${formatted} ${parsed === 1 ? "Credit" : "Credits"}`;
+  }
+
+  createDayPeriodRow({ dayCode, periodDef, isExpanded, isToday, courses, matchingSuggestions, canExpand }) {
+    const hasCourses = Array.isArray(courses) && courses.length > 0;
+    const primaryCourse = hasCourses ? courses[0] : null;
+    const isBusy = !hasCourses && this.isSlotBusy(dayCode, periodDef.number);
+    const savedSuggestionCount = Array.isArray(matchingSuggestions) ? matchingSuggestions.length : 0;
+    const isCurrentPeriod = isToday && this.getSuggestedExpandedPeriod() === periodDef.number;
+
+    const row = document.createElement("article");
+    row.className = "calendar-day-period-row";
+    row.dataset.dayCode = dayCode;
+    row.dataset.periodNumber = String(periodDef.number);
+    const allowRowToggle = hasCourses || isBusy || savedSuggestionCount > 0;
+    row.setAttribute("tabindex", allowRowToggle && canExpand ? "0" : "-1");
+    row.setAttribute("role", allowRowToggle && canExpand ? "button" : "group");
+    if (allowRowToggle && canExpand) {
+      row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+    } else {
+      row.removeAttribute("aria-expanded");
+    }
+    row.classList.toggle("is-occupied", hasCourses);
+    row.classList.toggle("is-empty", !hasCourses);
+    row.classList.toggle("is-expanded", isExpanded);
+    row.classList.toggle("is-today", isToday);
+    row.classList.toggle("is-current-period", isCurrentPeriod);
+    row.classList.toggle("can-expand", !!canExpand);
+    row.classList.toggle("cannot-expand", !canExpand);
+    row.dataset.canExpand = canExpand ? "true" : "false";
+    row.dataset.allowToggle = allowRowToggle ? "true" : "false";
+
+    const left = document.createElement("div");
+    left.className = "calendar-day-period-left";
+
+    const periodLabel = document.createElement("p");
+    periodLabel.className = "calendar-day-period-label";
+    periodLabel.textContent = `Period ${periodDef.number}`;
+
+    const periodTime = document.createElement("p");
+    periodTime.className = "calendar-day-period-time";
+    periodTime.textContent = periodDef.timeRange;
+
+    left.appendChild(periodLabel);
+    left.appendChild(periodTime);
+
+    if (isCurrentPeriod) {
+      const nowChip = document.createElement("span");
+      nowChip.className = "calendar-now-chip calendar-day-now-chip";
+      nowChip.textContent = "● NOW";
+      nowChip.setAttribute("aria-label", "Now");
+      left.appendChild(nowChip);
+    }
+
+    const right = document.createElement("div");
+    right.className = "calendar-day-period-right";
+
+    const previewCard = document.createElement("div");
+    previewCard.className = "calendar-day-period-preview";
+    const previewMain = document.createElement("div");
+    previewMain.className = "calendar-day-preview-main";
+    const previewExtra = document.createElement("div");
+    previewExtra.className = "calendar-day-preview-extra";
+
+    if (hasCourses && primaryCourse) {
+      const previewTitle = document.createElement("p");
+      previewTitle.className = "calendar-day-preview-title";
+      previewTitle.textContent = this.getDetailedTitle(primaryCourse);
+
+      const previewProfessor = document.createElement("p");
+      previewProfessor.className = "calendar-day-preview-professor";
+      previewProfessor.textContent = formatProfessorDisplayName(primaryCourse.professor);
+
+      previewCard.style.backgroundColor = this.getCalendarCourseColor(primaryCourse.type);
+      previewMain.appendChild(previewTitle);
+      previewMain.appendChild(previewProfessor);
+
+      if (courses.length > 1) {
+        const overflow = document.createElement("span");
+        overflow.className = "calendar-day-preview-count";
+        overflow.textContent = `+${courses.length - 1}`;
+        previewCard.appendChild(overflow);
+      }
+
+      const courseKey = `${dayCode}-${periodDef.number}-${primaryCourse.course_code || "course"}-day-primary`;
+      this.mobileCourseLookup.set(courseKey, primaryCourse);
+
+      const metaRow = document.createElement("div");
+      metaRow.className = "calendar-day-expanded-meta-row";
+
+      const metaChipRow = document.createElement("div");
+      metaChipRow.className = "calendar-day-meta-chip-row";
+
+      const typeChip = document.createElement("span");
+      typeChip.className = "calendar-day-meta-chip calendar-day-meta-chip-type";
+      typeChip.textContent = this.getLegendLabelForCourse(primaryCourse?.type) || String(primaryCourse?.type || "Course");
+
+      const creditsLabel = this.getCourseCreditsLabel(primaryCourse);
+      const creditsChip = document.createElement("span");
+      creditsChip.className = "calendar-day-meta-chip calendar-day-meta-chip-credits";
+      creditsChip.textContent = creditsLabel || "Credits TBA";
+
+      const registeredChip = document.createElement("span");
+      registeredChip.className = "calendar-day-meta-chip calendar-day-meta-chip-status calendar-day-meta-chip-status-registered";
+      registeredChip.textContent = "Registered";
+
+      metaChipRow.appendChild(typeChip);
+      metaChipRow.appendChild(creditsChip);
+      metaChipRow.appendChild(registeredChip);
+
+      const createViewCourseAction = (variantClass) => {
+        const action = document.createElement("span");
+        action.className = `assignment-item-right calendar-day-assignment-action ${variantClass}`;
+        action.dataset.action = "day-course-view";
+        action.dataset.courseKey = courseKey;
+        action.setAttribute("role", "button");
+        action.setAttribute("aria-label", "View course");
+
+        const label = document.createElement("span");
+        label.className = "assignment-item-hover-action calendar-day-assignment-action-label";
+        label.textContent = "View course";
+        label.setAttribute("aria-hidden", "true");
+
+        const chevron = document.createElement("span");
+        chevron.className = "assignment-item-chevron calendar-day-assignment-action-chevron";
+        chevron.setAttribute("aria-hidden", "true");
+
+        action.appendChild(label);
+        action.appendChild(chevron);
+        return action;
+      };
+
+      const inlineAction = createViewCourseAction("calendar-day-assignment-action-mobile");
+      const desktopAction = createViewCourseAction("calendar-day-assignment-action-desktop");
+      metaRow.appendChild(metaChipRow);
+      metaRow.appendChild(inlineAction);
+      previewExtra.appendChild(metaRow);
+      previewCard.appendChild(desktopAction);
+
+      if (courses.length > 1) {
+        const moreClassesHeading = document.createElement("p");
+        moreClassesHeading.className = "calendar-day-suggestions-heading";
+        moreClassesHeading.textContent = "Also in this slot";
+
+        const moreClassesList = document.createElement("ul");
+        moreClassesList.className = "calendar-day-suggestions-list";
+        courses.slice(1).forEach((course) => {
+          const item = document.createElement("li");
+          item.className = "calendar-day-suggestion-item";
+          item.textContent = this.getDetailedTitle(course);
+          moreClassesList.appendChild(item);
+        });
+
+        previewExtra.appendChild(moreClassesHeading);
+        previewExtra.appendChild(moreClassesList);
+      }
+    } else {
+      const previewTitle = document.createElement("p");
+      previewTitle.className = "calendar-day-preview-title";
+      previewTitle.textContent = isBusy ? "Busy slot" : "Empty slot";
+
+      const previewMeta = document.createElement("p");
+      previewMeta.className = "calendar-day-preview-meta";
+      previewMeta.textContent = isBusy ? "Marked as busy" : "";
+
+      previewCard.classList.add("is-empty-preview");
+      previewMain.appendChild(previewTitle);
+      if (isBusy) {
+        previewMain.appendChild(previewMeta);
+      } else {
+        previewMain.classList.add("calendar-day-empty-main");
+        if (savedSuggestionCount === 0) {
+          previewCard.dataset.action = "day-slot-find";
+          previewCard.dataset.dayCode = dayCode;
+          previewCard.dataset.periodNumber = String(periodDef.number);
+          previewCard.setAttribute("role", "button");
+          previewCard.setAttribute("aria-label", `Find course for period ${periodDef.number}`);
+        }
+
+        const headerRow = document.createElement("div");
+        headerRow.className = "calendar-day-empty-header";
+        const leftStack = document.createElement("div");
+        leftStack.className = "calendar-day-empty-left";
+        leftStack.appendChild(previewTitle);
+
+        previewMain.replaceChildren(headerRow);
+
+        if (savedSuggestionCount > 0) {
+          const savedChip = document.createElement("button");
+          savedChip.type = "button";
+          savedChip.className = "calendar-day-meta-chip calendar-day-empty-saved-chip";
+          savedChip.dataset.action = "day-empty-toggle";
+          savedChip.dataset.dayCode = dayCode;
+          savedChip.dataset.periodNumber = String(periodDef.number);
+          savedChip.setAttribute("aria-label", `Show ${savedSuggestionCount} saved course${savedSuggestionCount === 1 ? "" : "s"}`);
+          savedChip.textContent = `${savedSuggestionCount} saved course${savedSuggestionCount === 1 ? "" : "s"}`;
+          leftStack.appendChild(savedChip);
+        }
+        headerRow.appendChild(leftStack);
+
+        const findInline = document.createElement("span");
+        findInline.className = "assignment-item-right calendar-day-assignment-action calendar-day-empty-find-action";
+        findInline.dataset.action = "day-slot-find";
+        findInline.dataset.dayCode = dayCode;
+        findInline.dataset.periodNumber = String(periodDef.number);
+        findInline.setAttribute("role", "button");
+        findInline.setAttribute("aria-label", "Find course");
+
+        const findLabel = document.createElement("span");
+        findLabel.className = "assignment-item-hover-action calendar-day-assignment-action-label";
+        findLabel.textContent = "Find course";
+        findLabel.setAttribute("aria-hidden", "true");
+
+        const findChevron = document.createElement("span");
+        findChevron.className = "assignment-item-chevron calendar-day-assignment-action-chevron";
+        findChevron.setAttribute("aria-hidden", "true");
+
+        findInline.appendChild(findLabel);
+        findInline.appendChild(findChevron);
+        headerRow.appendChild(findInline);
+      }
+
+      if (Array.isArray(matchingSuggestions) && matchingSuggestions.length > 0) {
+        const suggestionHeader = document.createElement("p");
+        suggestionHeader.className = "calendar-day-suggestions-heading";
+        suggestionHeader.textContent = "Saved courses matching this slot";
+
+        const suggestionList = document.createElement("ul");
+        suggestionList.className = "calendar-day-suggestions-list";
+        matchingSuggestions.forEach((item, index) => {
+          const savedKey = `${dayCode}-${periodDef.number}-saved-${index}`;
+          this.mobileCourseLookup.set(savedKey, item);
+
+          const listItem = document.createElement("li");
+          listItem.className = "calendar-day-suggestion-item";
+          listItem.style.backgroundColor = this.getCalendarCourseColor(item?.type);
+
+          const entry = document.createElement("button");
+          entry.type = "button";
+          entry.className = "calendar-day-suggestion-item-btn";
+          entry.dataset.action = "day-saved-course-open";
+          entry.dataset.courseKey = savedKey;
+          entry.setAttribute("aria-label", `Open ${String(item?.title || item?.code || "saved course")}`);
+          entry.textContent = String(item?.title || item?.code || "Saved course");
+
+          listItem.appendChild(entry);
+          suggestionList.appendChild(listItem);
+        });
+
+        previewExtra.appendChild(suggestionHeader);
+        previewExtra.appendChild(suggestionList);
+      }
+    }
+
+    previewCard.appendChild(previewMain);
+    previewCard.appendChild(previewExtra);
+    right.appendChild(previewCard);
+    row.appendChild(left);
+    row.appendChild(right);
+    return row;
+  }
+
+  applyDayAgendaSwipeAnimation(direction) {
+    if (!this.dayAgenda) return;
+    if (direction !== "forward" && direction !== "backward") return;
+
+    this.dayAgenda.classList.remove("is-day-switching-forward", "is-day-switching-backward");
+    void this.dayAgenda.offsetWidth;
+    this.dayAgenda.classList.add(direction === "forward" ? "is-day-switching-forward" : "is-day-switching-backward");
+
+    if (this.daySwitchAnimationTimer) {
+      clearTimeout(this.daySwitchAnimationTimer);
+    }
+    this.daySwitchAnimationTimer = setTimeout(() => {
+      this.dayAgenda?.classList.remove("is-day-switching-forward", "is-day-switching-backward");
+      this.daySwitchAnimationTimer = null;
+    }, 260);
+  }
+
+  renderMobileSchedule({ animate = false, direction = null } = {}) {
+    if (!this.dayAgenda) return;
 
     this.mobileCourseLookup.clear();
+    this.dayAgenda.innerHTML = "";
 
-    this.dayOrder.forEach((dayCode) => {
-      const dayPage = this.mobileTrack.querySelector(`.calendar-mobile-day-page[data-day-code='${dayCode}']`);
-      if (!dayPage) return;
+    const dayCode = this.dayOrder[this.selectedMobileDayIndex] || this.dayOrder[0];
+    if (!dayCode) return;
 
-      this.periodDefinitions.forEach((periodDef) => {
-        const periodRow = dayPage.querySelector(`.calendar-mobile-period[data-period-number='${periodDef.number}']`);
-        if (!periodRow) return;
+    const isToday = dayCode === this.getCurrentDayCode();
+    const expandedPeriod = this.expandedMobilePeriodByDay[dayCode];
+    const fragment = document.createDocumentFragment();
 
-        const compactContainer = periodRow.querySelector(".calendar-mobile-period-compact");
-        const panelContainer = periodRow.querySelector(".calendar-mobile-period-panel");
-        const toggleButton = periodRow.querySelector(".calendar-mobile-period-toggle");
-
-        if (!compactContainer || !panelContainer || !toggleButton) return;
-
-        compactContainer.innerHTML = "";
-        panelContainer.innerHTML = "";
-
-        const courses = this.getCoursesForSlot(dayCode, periodDef.number);
-
-        if (courses.length > 0) {
-          toggleButton.dataset.hasCourses = "true";
-
-          const primaryCourse = courses[0];
-          const compactPill = document.createElement("div");
-          compactPill.className = "calendar-mobile-course-pill";
-          compactPill.style.backgroundColor = this.getCalendarCourseColor(primaryCourse.type);
-          compactPill.textContent = this.getCompactTitle(primaryCourse);
-          compactContainer.appendChild(compactPill);
-
-          if (courses.length > 1) {
-            const overflowBadge = document.createElement("span");
-            overflowBadge.className = "calendar-mobile-course-count";
-            overflowBadge.textContent = `+${courses.length - 1}`;
-            compactContainer.appendChild(overflowBadge);
-          }
-
-          courses.forEach((course, courseIndex) => {
-            const courseKey = `${dayCode}-${periodDef.number}-${course.course_code}-${courseIndex}`;
-            this.mobileCourseLookup.set(courseKey, course);
-
-            const card = document.createElement("button");
-            card.type = "button";
-            card.className = "calendar-mobile-course-card";
-            card.dataset.courseKey = courseKey;
-            card.style.backgroundColor = this.getCalendarCourseColor(course.type);
-
-            const title = document.createElement("div");
-            title.className = "calendar-mobile-course-title";
-            title.textContent = this.getDetailedTitle(course);
-
-            const professor = document.createElement("div");
-            professor.className = "calendar-mobile-course-professor";
-            professor.textContent = course.professor ? `Professor ${course.professor}` : "Professor TBA";
-
-            card.appendChild(title);
-            card.appendChild(professor);
-            panelContainer.appendChild(card);
-          });
-        } else {
-          const isBusy = this.isSlotBusy(dayCode, periodDef.number);
-          if (isBusy) {
-            toggleButton.dataset.hasCourses = "false";
-            const busyChip = document.createElement("div");
-            busyChip.className = "calendar-mobile-empty-chip";
-            busyChip.textContent = "Busy";
-            compactContainer.appendChild(busyChip);
-
-            const manageBtn = document.createElement("button");
-            manageBtn.type = "button";
-            manageBtn.className = "calendar-mobile-empty-action";
-            manageBtn.dataset.action = "mobile-slot-manage";
-            manageBtn.dataset.dayCode = dayCode;
-            manageBtn.dataset.periodNumber = String(periodDef.number);
-            manageBtn.textContent = "Manage busy slot";
-            panelContainer.appendChild(manageBtn);
-          } else {
-            toggleButton.dataset.hasCourses = this.filterState.showEmptySlots ? "false" : "hidden";
-            const emptyChip = document.createElement("div");
-            emptyChip.className = "calendar-mobile-empty-chip";
-            emptyChip.textContent = this.filterState.showEmptySlots ? "Empty" : "Hidden";
-            compactContainer.appendChild(emptyChip);
-
-            if (this.filterState.showEmptySlots) {
-              const actionBtn = document.createElement("button");
-              actionBtn.type = "button";
-              actionBtn.className = "calendar-mobile-empty-action";
-              actionBtn.dataset.action = "mobile-slot-find";
-              actionBtn.dataset.dayCode = dayCode;
-              actionBtn.dataset.periodNumber = String(periodDef.number);
-              actionBtn.textContent = "Find courses for this slot";
-              panelContainer.appendChild(actionBtn);
-            } else {
-              const emptyState = document.createElement("div");
-              emptyState.className = "calendar-mobile-empty";
-              emptyState.textContent = "No class scheduled";
-              panelContainer.appendChild(emptyState);
-            }
-          }
-        }
+    this.periodDefinitions.forEach((periodDef) => {
+      const slotCourses = this.getCoursesForSlot(dayCode, periodDef.number);
+      const suggestions = slotCourses.length === 0
+        ? this.getSavedSuggestionsForSlot(dayCode, periodDef.number)
+        : [];
+      const canExpand = slotCourses.length > 0 || this.isSlotBusy(dayCode, periodDef.number) || suggestions.length > 0;
+      const row = this.createDayPeriodRow({
+        dayCode,
+        periodDef,
+        isExpanded: canExpand && expandedPeriod === periodDef.number,
+        isToday,
+        courses: slotCourses,
+        matchingSuggestions: suggestions,
+        canExpand
       });
+      fragment.appendChild(row);
     });
 
-    this.updateMobileDayButtons();
-    this.updateMobileTrackPosition(false);
+    this.dayAgenda.appendChild(fragment);
     this.applyMobileExpandedState();
+    if (animate) {
+      this.applyDayAgendaSwipeAnimation(direction);
+    }
   }
 
   renderListSchedule() {
@@ -1858,6 +2143,8 @@ class CalendarPageComponent extends HTMLElement {
           row.type = "button";
           row.className = "calendar-list-item";
           row.dataset.courseKey = courseKey;
+          const courseColor = this.getCalendarCourseColor(course.type);
+          row.style.setProperty("--calendar-list-item-bg", courseColor);
 
           const title = document.createElement("p");
           title.className = "calendar-list-item-title";
@@ -1867,22 +2154,32 @@ class CalendarPageComponent extends HTMLElement {
           meta.className = "calendar-list-item-meta";
           meta.textContent = `${this.dayLongNames[dayCode]} • Period ${periodDef.number} • ${periodDef.timeRange}`;
 
+          const professor = document.createElement("p");
+          professor.className = "calendar-list-item-professor";
+          professor.textContent = formatProfessorDisplayName(course.professor);
+
           const badges = document.createElement("div");
           badges.className = "calendar-list-item-badges";
 
           const typeBadge = document.createElement("span");
           typeBadge.className = "calendar-list-type-badge";
-          typeBadge.style.backgroundColor = this.getCalendarCourseColor(course.type);
           typeBadge.textContent = this.getLegendLabelForCourse(course.type) || String(course.type || "Course");
+
+          const creditsLabel = this.getCourseCreditsLabel(course);
+          const creditsBadge = document.createElement("span");
+          creditsBadge.className = "calendar-list-credits-badge";
+          creditsBadge.textContent = creditsLabel || "Credits TBA";
 
           const registeredBadge = document.createElement("span");
           registeredBadge.className = "calendar-list-registered-badge";
           registeredBadge.textContent = "Registered";
 
           badges.appendChild(typeBadge);
+          badges.appendChild(creditsBadge);
           badges.appendChild(registeredBadge);
           row.appendChild(title);
           row.appendChild(meta);
+          row.appendChild(professor);
           row.appendChild(badges);
           list.appendChild(row);
         });
@@ -2352,17 +2649,27 @@ class CalendarPageComponent extends HTMLElement {
           title.className = "calendar-course-title";
           title.textContent = this.getDetailedTitle(primaryCourse);
 
-          const subtitle = document.createElement("p");
-          subtitle.className = "calendar-course-subtitle";
-          subtitle.textContent = primaryCourse.location || this.getLegendLabelForCourse(primaryCourse.type) || "Scheduled";
+          const timeText = document.createElement("p");
+          timeText.className = "calendar-course-time";
+          timeText.textContent = periodDef.timeRange;
 
-          const badge = document.createElement("span");
-          badge.className = "calendar-course-badge";
-          badge.textContent = "Registered";
+          const professorText = document.createElement("p");
+          professorText.className = "calendar-course-professor";
+          professorText.textContent = formatProfessorDisplayName(primaryCourse.professor);
+
+          const badges = document.createElement("div");
+          badges.className = "calendar-course-badge-row";
+
+          const registeredBadge = document.createElement("span");
+          registeredBadge.className = "calendar-course-badge calendar-course-registered-badge";
+          registeredBadge.textContent = "Registered";
+
+          badges.appendChild(registeredBadge);
 
           courseButton.appendChild(title);
-          courseButton.appendChild(subtitle);
-          courseButton.appendChild(badge);
+          courseButton.appendChild(timeText);
+          courseButton.appendChild(professorText);
+          courseButton.appendChild(badges);
 
           if (slotCourses.length > 1) {
             const multiBadge = document.createElement("span");
@@ -2529,7 +2836,8 @@ class CalendarPageComponent extends HTMLElement {
     const schedule = this.parseCourseSchedule(course);
     const slotLabel = schedule ? this.getSlotSubtitle(schedule.dayEN, schedule.period) : String(course.time_slot || "");
     const credits = course.credits ? `${course.credits} credits` : "Credits TBA";
-    const professor = course.professor || "Professor TBA";
+    const professorName = formatProfessorDisplayName(course.professor);
+    const professor = `Professor ${professorName}`;
 
     tooltip.innerHTML = `
       <div class="calendar-course-tooltip-title">${this.escapeHtml(this.getDetailedTitle(course))}</div>

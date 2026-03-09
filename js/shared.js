@@ -1,6 +1,7 @@
 import { supabase } from "../supabase.js";
 import * as wanakana from 'wanakana';
 import { getCurrentAppPath, stripBase, toAppUrl, withBase } from './path-utils.js';
+import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 import { isCourseSaved, readSavedCourses, syncSavedCoursesForUser, toggleSavedCourse } from './saved-courses.js';
 
 // Course type to color mapping
@@ -165,7 +166,7 @@ const japaneseNameMapping = {
     '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
-    '河村': 'Kawamura', '村': 'Mura', '河': 'Kawa',
+    '河村': 'Kawamura', '河島': 'Kawashima', '河': 'Kawa', '村': 'Mura', '島': 'Shima',
     '陳': 'Chin',
     '今西': 'Imanishi', '西': 'Nishi', '今': 'Ima',
     '石井': 'Ishii', '石': 'Ishi', '井': 'Ii',
@@ -183,6 +184,10 @@ const japaneseNameMapping = {
     '松本': 'Matsumoto', '松': 'Matsu',
     '井上': 'Inoue', '上': 'Ue',
     '木村': 'Kimura',
+    '二村': 'Nimura', '二': 'Ni',
+    '原田': 'Harada', '原': 'Hara',
+    '槇殿': 'Makidono', '槇': 'Maki', '殿': 'Dono',
+    '西村': 'Nishimura',
     '林': 'Hayashi',
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
@@ -190,6 +195,7 @@ const japaneseNameMapping = {
 
     // Common given names
     '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
+    '太郎': 'Taro',
     '匡': 'Tadashi',
     '喜彦': 'Yoshihiko', '彦': 'Hiko', '喜': 'Yoshi',
     '皓程': 'Koutei', '程': 'Tei', '皓': 'Kou',
@@ -201,6 +207,10 @@ const japaneseNameMapping = {
     '真澄': 'Masumi', '真': 'Masa', '澄': 'Sumi',
     '弘明': 'Hiroaki', '弘': 'Hiro', '明': 'Aki',
     '幸宏': 'Yukihiro', '幸': 'Yuki', '宏': 'Hiro',
+    '桂子': 'Keiko', '桂': 'Kei',
+    '伸子': 'Nobuko', '伸': 'Nobu',
+    '伴子': 'Tomoko', '伴': 'Tomo',
+    '勉': 'Tsutomu',
 
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
     'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
@@ -214,8 +224,32 @@ const japaneseNameMapping = {
     'ナカマ': 'Nakama', 'カワムラ': 'Kawamura', 'イマニシ': 'Imanishi',
     'イシイ': 'Ishii', 'コニシ': 'Konishi', 'イズミ': 'Izumi',
     'タナカ': 'Tanaka', 'サトウ': 'Satou', 'ヤマダ': 'Yamada',
-    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe'
+    'スズキ': 'Suzuki', 'イトウ': 'Itou', 'ワタナベ': 'Watanabe',
+    'ケルシー': 'Kelsey', 'オリバー': 'Oliver'
 };
+
+const japaneseFullNameMapping = {
+    '二村 太郎': 'Nimura Taro',
+    '今西 ケルシー オリバー': 'Imanishi Kelsey Oliver',
+    '仲間 壮彦': 'Nakama Takehiko',
+    '八木 匡': 'Yagi Tadashi',
+    '原田 勉': 'Harada Tsutomu',
+    '和泉 真澄': 'Izumi Masumi',
+    '和田 喜彦': 'Wada Yoshihiko',
+    '小西 尚実': 'Konishi Naomi',
+    '張 皓程': 'Chou Koutei',
+    '槇殿 伴子': 'Makidono Tomoko',
+    '河島 伸子': 'Kawashima Nobuko',
+    '河村 晴久': 'Kawamura Haruhisa',
+    '石井 弘明': 'Ishii Hiroaki',
+    '西村 幸宏': 'Nishimura Yukihiro',
+    '趙 亮': 'Chou Ryou',
+    '鈴木 桂子': 'Suzuki Keiko',
+    '陳 依君': 'Chin Ikun',
+    '髙橋 旬子': 'Takahashi Junko'
+};
+
+const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
 
 // Cache for romanized professor names
 const romanizedProfessorCache = new Map();
@@ -226,61 +260,64 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
+    const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim();
+    if (!normalizedInput) return name;
 
     // Check cache first
-    if (romanizedProfessorCache.has(name)) {
-        return romanizedProfessorCache.get(name);
+    if (romanizedProfessorCache.has(normalizedInput)) {
+        return romanizedProfessorCache.get(normalizedInput);
     }
 
     // Check if the name contains Japanese characters
-    const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(name);
+    const hasJapanese = JAPANESE_CHAR_REGEX.test(normalizedInput);
 
     if (!hasJapanese) {
         // Capitalize non-Japanese names properly
-        const capitalized = name.toUpperCase();
-        romanizedProfessorCache.set(name, capitalized);
+        const capitalized = normalizedInput.toUpperCase();
+        romanizedProfessorCache.set(normalizedInput, capitalized);
         return capitalized;
     }
 
-    let romanized = name;
+    let romanized = normalizedInput;
 
     try {
+        const exactNameMatch = japaneseFullNameMapping[normalizedInput];
+        if (exactNameMatch) {
+            romanized = exactNameMatch;
+        } else {
         // Split the name and process each part
-        let parts = name.split(/[\s　]+/); // Split on regular and full-width spaces
+        let parts = normalizedInput.split(/\s+/);
         let romanizedParts = [];
 
         for (let part of parts) {
             let romanizedPart = part;
 
-            // First, try WanaKana for Hiragana/Katakana conversion
-            const wanaKanaResult = wanakana.toRomaji(part);
-
-            // If WanaKana converted it (no more Japanese characters), use that
-            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(wanaKanaResult)) {
-                romanizedPart = wanaKanaResult;
+            // Try exact mapping first
+            if (japaneseNameMapping[part]) {
+                romanizedPart = japaneseNameMapping[part];
             } else {
-                // Still has Kanji, try our custom mapping
-
-                // Try exact match first
-                if (japaneseNameMapping[part]) {
-                    romanizedPart = japaneseNameMapping[part];
+                // Try WanaKana for Hiragana/Katakana conversion
+                const wanaKanaResult = wanakana.toRomaji(part);
+                if (!JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
+                    romanizedPart = wanaKanaResult;
                 } else {
-                    // Try character by character mapping
+                    // Character-by-character mapping, but avoid partial mixed results.
                     let characterMapped = '';
+                    let fullyMapped = true;
                     for (let char of part) {
                         if (japaneseNameMapping[char]) {
                             characterMapped += japaneseNameMapping[char];
                         } else {
-                            // Try WanaKana on individual character
                             const charRomaji = wanakana.toRomaji(char);
-                            if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(charRomaji)) {
+                            if (!JAPANESE_CHAR_REGEX.test(charRomaji)) {
                                 characterMapped += charRomaji;
                             } else {
-                                characterMapped += char;
+                                fullyMapped = false;
+                                break;
                             }
                         }
                     }
-                    romanizedPart = characterMapped;
+                    romanizedPart = fullyMapped && characterMapped ? characterMapped : part;
                 }
             }
 
@@ -288,6 +325,7 @@ function romanizeProfessorName(name) {
         }
 
         romanized = romanizedParts.join(' ');
+        }
 
         // Clean up and capitalize properly
         romanized = romanized.replace(/\s+/g, ' ').trim();
@@ -300,13 +338,29 @@ function romanizeProfessorName(name) {
     }
 
     // Cache the result
-    romanizedProfessorCache.set(name, romanized);
+    romanizedProfessorCache.set(normalizedInput, romanized);
     return romanized;
 }
 
 // Synchronous function to get romanized professor name from cache
 function getRomanizedProfessorName(name) {
     return romanizedProfessorCache.get(name) || romanizeProfessorName(name);
+}
+
+export function formatProfessorDisplayName(name) {
+    const raw = String(getRomanizedProfessorName(name) || '').trim();
+    if (!raw) return 'TBA';
+
+    const upper = raw.toUpperCase();
+    if (upper === 'TBA' || upper === 'N/A') return upper;
+
+    const lettersOnly = raw.replace(/[^A-Za-z]/g, '');
+    const looksAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
+    if (!looksAllCaps) return raw;
+
+    return raw
+        .toLowerCase()
+        .replace(/\b([a-z])/g, (match) => match.toUpperCase());
 }
 
 // Helper function to normalize course titles
@@ -361,6 +415,7 @@ function formatCourseTermYearLabel(course) {
 function formatCourseTimeCompactLabel(rawTimeSlot) {
     const raw = String(rawTimeSlot || '').trim();
     if (!raw) return 'TBA';
+    if (/(集中講義|集中)/.test(raw)) return 'Intensive';
     const jp = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
     if (jp) {
         const dayMap = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri', 土: 'Sat', 日: 'Sun' };
@@ -436,13 +491,36 @@ function correctEvaluationLabelTypos(label) {
         });
     });
 
-    return normalized.replace(/\s+/g, ' ').trim();
+    return normalized
+        .replace(/[:：]+\s*$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function titleCaseEvaluationLabel(label) {
     const normalized = String(label || '').replace(/\s+/g, ' ').trim();
     if (!normalized) return '';
-    return normalized.replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+    return normalized
+        .toLowerCase()
+        .replace(/(^|[\s\-_/])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
+}
+
+function normalizeAssessmentDescriptionText(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    const normalized = raw
+        .replace(/_+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/([A-Za-z])(\d)/g, '$1 $2')
+        .replace(/(\d)([A-Za-z])/g, '$1 $2')
+        .replace(/([,;:!?])(?=\S)/g, '$1 ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/[\s.!?;:：]+$/g, '')
+        .trim();
+
+    return normalized ? `${normalized}.` : '';
 }
 
 function normalizeEvaluationLabelPrefix(name) {
@@ -485,7 +563,7 @@ function normalizeCourseEvaluationComponents(course) {
             if (!name) return null;
             const weightValue = Number(component?.weight);
             const hasWeight = Number.isFinite(weightValue);
-            const notes = String(component?.notes || '').replace(/\s+/g, ' ').trim();
+            const notes = normalizeAssessmentDescriptionText(component?.notes);
             return {
                 name,
                 weight: hasWeight ? weightValue : null,
@@ -1233,12 +1311,15 @@ function CourseInfoContent(model, options = {}) {
                 <div class="course-assessment-breakdown-list">
                     ${evaluationComponents.map((component) => {
                         const weightText = formatEvaluationWeight(component.weight);
-                        const detailsText = String(component.notes || '').trim();
+                        const detailsText = normalizeAssessmentDescriptionText(component.notes);
+                        const displayLabel = normalizeEvaluationLabelPrefix(component.displayLabel || component.name)
+                            || String(component.displayLabel || component.name || 'Component').replace(/[:：]+\s*$/g, '').trim()
+                            || 'Component';
                         return `
                             <details class="course-assessment-breakdown-accordion">
                                 <summary class="course-assessment-breakdown-summary">
                                     <div class="course-assessment-breakdown-main">
-                                        <span class="course-assessment-breakdown-name">${escapeHtml(component.displayLabel || component.name || 'Component')}</span>
+                                        <span class="course-assessment-breakdown-name">${escapeHtml(displayLabel)}</span>
                                         <span class="course-assessment-breakdown-weight">${escapeHtml(weightText || '—')}</span>
                                     </div>
                                     <span class="course-assessment-breakdown-chevron" aria-hidden="true"></span>
@@ -2604,6 +2685,9 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     // Function to properly format time slots from Japanese to English
     function formatTimeSlot(timeSlot) {
         if (!timeSlot) return 'TBA';
+        const raw = String(timeSlot).trim();
+        if (!raw) return 'TBA';
+        if (/(集中講義|集中)/.test(raw)) return 'Intensive';
 
         // Japanese day mappings
         const dayMap = {
@@ -2625,38 +2709,58 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             "5": "16:40 - 18:10"
         };
 
-        // Try to match Japanese format: (月曜日1講時) or variants
-        let match = timeSlot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
-        if (match) {
-            const dayChar = match[1];
-            const period = match[2];
-            const dayName = dayMap[dayChar];
-            const timeRange = timeMap[period];
+        const normalizedDayMap = {
+            Mon: "Monday",
+            Tue: "Tuesday",
+            Wed: "Wednesday",
+            Thu: "Thursday",
+            Fri: "Friday",
+            Sat: "Saturday",
+            Sun: "Sunday",
+            Monday: "Monday",
+            Tuesday: "Tuesday",
+            Wednesday: "Wednesday",
+            Thursday: "Thursday",
+            Friday: "Friday",
+            Saturday: "Saturday",
+            Sunday: "Sunday"
+        };
 
-            if (dayName && timeRange) {
-                return `${dayName} ${timeRange}`;
-            }
-        }
+        const collected = [];
+        const seen = new Set();
+        const addSlot = (dayName, timeRange) => {
+            const normalizedDay = String(dayName || "").trim();
+            const normalizedRange = String(timeRange || "").replace(/\s*[–—-]\s*/g, " - ").trim();
+            if (!normalizedDay) return;
+            const entry = normalizedRange ? `${normalizedDay} ${normalizedRange}` : normalizedDay;
+            const key = entry.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            collected.push(entry);
+        };
 
-        // Try to match English format that's already converted: "Mon 10:45 - 12:15" etc
-        const englishMatch = timeSlot.match(/(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2}\s*-\s*\d{2}:\d{2})/);
-        if (englishMatch) {
-            const dayAbbr = englishMatch[1];
-            const timeRange = englishMatch[2];
-            const fullDayMap = {
-                "Mon": "Monday",
-                "Tue": "Tuesday",
-                "Wed": "Wednesday",
-                "Thu": "Thursday",
-                "Fri": "Friday",
-                "Sat": "Saturday",
-                "Sun": "Sunday"
-            };
-            return `${fullDayMap[dayAbbr]} ${timeRange}`;
+        // Collect Japanese slots: 月曜日3講時・木曜日3講時, (月1講時), etc.
+        const japaneseSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g)];
+        japaneseSlots.forEach((slot) => {
+            const dayName = dayMap[slot[1]] || slot[1];
+            const timeRange = timeMap[slot[2]] || "";
+            addSlot(dayName, timeRange);
+        });
+
+        // Collect English slots: Mon 13:10 - 14:40 / Thursday 13:10 - 14:40, etc.
+        const englishSlots = [...raw.matchAll(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})/gi)];
+        englishSlots.forEach((slot) => {
+            const dayToken = slot[1];
+            const normalizedDay = normalizedDayMap[dayToken] || normalizedDayMap[dayToken.charAt(0).toUpperCase() + dayToken.slice(1).toLowerCase()] || dayToken;
+            addSlot(normalizedDay, `${slot[2]} - ${slot[3]}`);
+        });
+
+        if (collected.length > 0) {
+            return collected.join(" / ");
         }
 
         // If it's already in a good format or unrecognized, return as-is
-        return timeSlot;
+        return raw;
     }
 
     const classInfo = document.getElementById("class-info");
@@ -3057,7 +3161,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         ],
         evaluation: evaluationMeta,
         detailRows: [
-            { label: 'Professor', value: getRomanizedProfessorName(course.professor) || 'TBA' },
+            { label: 'Professor', value: formatProfessorDisplayName(course.professor) },
             { label: 'Course Code', value: courseCodeValue },
             { label: 'Course Type', value: courseType },
             ...(course.credits ? [{ label: 'Credits', value: formatCourseCreditsLabel(course.credits) }] : []),
@@ -3205,6 +3309,24 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
     // Show GPA only if we have valid data AND professor hasn't changed
     if (hasValidGpaData && !hasProfessorChanged) {
+        const clampGpaPercent = (value) => {
+            const parsed = Number.parseFloat(value);
+            if (!Number.isFinite(parsed)) return 0;
+            return Math.max(0, Math.min(100, parsed));
+        };
+        const formatGpaPercent = (value) => {
+            const clamped = clampGpaPercent(value);
+            return Number.isInteger(clamped)
+                ? String(clamped)
+                : clamped.toFixed(1).replace(/\.0$/, '');
+        };
+
+        const gpaAValue = formatGpaPercent(course.gpa_a_percent);
+        const gpaBValue = formatGpaPercent(course.gpa_b_percent);
+        const gpaCValue = formatGpaPercent(course.gpa_c_percent);
+        const gpaDValue = formatGpaPercent(course.gpa_d_percent);
+        const gpaFValue = formatGpaPercent(course.gpa_f_percent);
+
         classGPA.style.display = 'block';
         const useDsCardGpa = true;
         classGPA.classList.toggle('ds-card', useDsCardGpa);
@@ -3213,11 +3335,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 ? '<div class="ds-card-header"><h3>Grade Distribution</h3></div>'
                 : '<p class="class-subtitle">Grade Distribution</p>'}
             <div class="class-info-container gpa-layout">
-                <div class="gpa-container"><h3>A</h3><div class="gpa-bar-graph" style="background: ${gpaA}; width: ${course.gpa_a_percent}%;"><h3>${course.gpa_a_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>B</h3><div class="gpa-bar-graph" style="background: ${gpaB}; width: ${course.gpa_b_percent}%;"><h3>${course.gpa_b_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>C</h3><div class="gpa-bar-graph" style="background: ${gpaC}; width: ${course.gpa_c_percent}%;"><h3>${course.gpa_c_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>D</h3><div class="gpa-bar-graph" style="background: ${gpaD}; width: ${course.gpa_d_percent}%;"><h3>${course.gpa_d_percent}%</h3></div></div>
-                <div class="gpa-container"><h3>F</h3><div class="gpa-bar-graph" style="background: ${gpaF}; width: ${course.gpa_f_percent}%;"><h3>${course.gpa_f_percent}%</h3></div></div>
+                <div class="gpa-container"><h3>A</h3><div class="gpa-bar-graph" style="background: ${gpaA}; width: ${gpaAValue}%;"><h3>${gpaAValue}%</h3></div></div>
+                <div class="gpa-container"><h3>B</h3><div class="gpa-bar-graph" style="background: ${gpaB}; width: ${gpaBValue}%;"><h3>${gpaBValue}%</h3></div></div>
+                <div class="gpa-container"><h3>C</h3><div class="gpa-bar-graph" style="background: ${gpaC}; width: ${gpaCValue}%;"><h3>${gpaCValue}%</h3></div></div>
+                <div class="gpa-container"><h3>D</h3><div class="gpa-bar-graph" style="background: ${gpaD}; width: ${gpaDValue}%;"><h3>${gpaDValue}%</h3></div></div>
+                <div class="gpa-container"><h3>F</h3><div class="gpa-bar-graph" style="background: ${gpaF}; width: ${gpaFValue}%;"><h3>${gpaFValue}%</h3></div></div>
             </div>
         `;
     } else {
@@ -4141,6 +4263,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             window.location.href = url || buildCourseAssignmentsPageURL();
         };
 
+        const formatCourseAssignmentCountLabel = (count) => {
+            const numericCount = Number.isFinite(Number(count)) ? Math.max(0, Math.floor(Number(count))) : 0;
+            return `${numericCount} assignment${numericCount === 1 ? '' : 's'}`;
+        };
+
         const renderAssignmentsEmptyState = (message, options = {}) => {
             classAssignments.classList.remove('course-assignments-guest-mode');
             setGuestAssignmentsModalOverlay(false);
@@ -4149,11 +4276,17 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             const linkIcon = options.linkIcon || null;
             const linkId = options.linkId || 'add-assignment-link';
             const targetHref = options.targetHref || buildCourseAssignmentsPageURL();
+            const assignmentCount = Number.isFinite(Number(options.assignmentCount))
+                ? Math.max(0, Math.floor(Number(options.assignmentCount)))
+                : 0;
 
             classAssignments.style.display = 'block';
             classAssignments.innerHTML = `
                 <div class="class-subtitle-assignments">
-                    <p class="subtitle-opacity">Your Assignments</p>
+                    <div class="course-assignments-title">
+                        <p class="subtitle-opacity">Your Assignments</p>
+                        <p class="course-assignments-total">${formatCourseAssignmentCountLabel(assignmentCount)}</p>
+                    </div>
                     ${showLink ? `
                         <a href="${targetHref}" class="add-assignment-link${linkIcon ? ' add-assignment-link--icon' : ''}" id="${linkId}">
                             ${linkIcon === 'plus' ? '<span class="add-assignment-link-icon" aria-hidden="true"></span>' : ''}
@@ -4184,7 +4317,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             classAssignments.style.display = 'block';
             classAssignments.innerHTML = `
                 <div class="class-subtitle-assignments class-subtitle-assignments--guest">
-                    <p class="subtitle-opacity">Your Assignments</p>
+                    <div class="course-assignments-title">
+                        <p class="subtitle-opacity">Your Assignments</p>
+                        <p class="course-assignments-total">${formatCourseAssignmentCountLabel(0)}</p>
+                    </div>
                 </div>
                 <div class="course-assignments-list course-assignments-list--guest">
                     <div class="course-assignment-item course-assignment-item--preview" aria-hidden="true">
@@ -4406,7 +4542,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                             setGuestAssignmentsModalOverlay(false);
                             classAssignments.innerHTML = `
                                 <div class="class-subtitle-assignments">
-                                    <p class="subtitle-opacity">Your Assignments</p>
+                                    <div class="course-assignments-title">
+                                        <p class="subtitle-opacity">Your Assignments</p>
+                                        <p class="course-assignments-total">${formatCourseAssignmentCountLabel(matchingAssignments.length)}</p>
+                                    </div>
                                     <a href="${buildCourseAssignmentsPageURL()}" class="view-all-assignments-btn" id="view-all-assignments-link">
                                         <div class="button-icon">
                                             <p>${viewAllLabel}</p>
@@ -5591,6 +5730,17 @@ function attachReviewModalFormEnhancements(root, { isEdit = false, initialQualit
             trigger.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                const isYearSelect = /course-year/i.test(nativeSelect.id || '');
+                const openedMobileSheet = openSemesterMobileSheet({
+                    targetSelect: nativeSelect,
+                    force: true,
+                    title: isYearSelect ? 'Select year' : 'Select term',
+                    description: ''
+                });
+                if (openedMobileSheet) {
+                    closeAllReviewCustomSelects();
+                    return;
+                }
                 const willOpen = !wrapper.classList.contains('open');
                 closeAllReviewCustomSelects(wrapper);
                 wrapper.classList.toggle('open', willOpen);
@@ -7071,7 +7221,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     };
 
     const toDisplayProfessor = (courseEntry) => {
-        const normalized = getRomanizedProfessorName(courseEntry?.professor || 'TBA');
+        const normalized = formatProfessorDisplayName(courseEntry?.professor || 'TBA');
         return toDisplayText(normalized || 'TBA', 'TBA');
     };
 
@@ -8112,6 +8262,7 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     let dragging = false;
     let axisLocked = false;
     let cancelled = false;
+    let lockedToInnerScroll = false;
     let closing = false;
     let settleTimer = null;
     let closeTimer = null;
@@ -8120,12 +8271,20 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
     const closeDistance = () => Math.min(230, Math.max(96, window.innerHeight * 0.16));
 
     function getScrollableElement() {
-        return modal.querySelector('.filter-content') ||
+        return modal.querySelector('.semester-mobile-sheet-options') ||
+            modal.querySelector('.filter-content') ||
             modal.querySelector('.profile-modal-body') ||
             modal.querySelector('.modal-body') ||
             modal.querySelector('.conflict-content') ||
             modal.querySelector('.class-content-wrapper') ||
             modal;
+    }
+
+    function isInsideSwipeLockTarget(target) {
+        const lockSelector = String(modal.dataset.swipeLockSelector || '').trim();
+        if (!lockSelector) return false;
+        if (!(target instanceof Element)) return false;
+        return !!target.closest(lockSelector);
     }
 
     function clearTimers() {
@@ -8180,6 +8339,14 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         const point = getTouchPoint(event);
         if (!point) return;
 
+        if (isInsideSwipeLockTarget(event.target)) {
+            lockedToInnerScroll = true;
+            dragging = false;
+            axisLocked = false;
+            cancelled = true;
+            return;
+        }
+
         startX = point.clientX;
         startY = point.clientY;
         currentY = startY;
@@ -8187,13 +8354,14 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         dragging = false;
         axisLocked = false;
         cancelled = false;
+        lockedToInnerScroll = false;
         clearTimers();
         modal.style.transition = '';
         background.style.transition = '';
     }
 
     function handleTouchMove(event) {
-        if (!isMobileSheet() || closing || cancelled) return;
+        if (!isMobileSheet() || closing || cancelled || lockedToInnerScroll) return;
 
         const point = getTouchPoint(event);
         if (!point) return;
@@ -8243,6 +8411,7 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
             dragging = false;
             axisLocked = false;
             cancelled = false;
+            lockedToInnerScroll = false;
             return;
         }
 
@@ -8260,6 +8429,7 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         dragging = false;
         axisLocked = false;
         cancelled = false;
+        lockedToInnerScroll = false;
     }
 
     function handleTouchCancel() {
@@ -8272,6 +8442,7 @@ function addSwipeToCloseSimple(modal, background, closeCallback) {
         dragging = false;
         axisLocked = false;
         cancelled = false;
+        lockedToInnerScroll = false;
     }
 
     modal.addEventListener('touchstart', handleTouchStart, { passive: false });

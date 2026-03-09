@@ -2355,27 +2355,58 @@ class SimpleRouter {
 
   romanizeProfessorName(name) {
     if (!name) return ''
+    const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim()
+    if (!normalizedInput) return ''
 
-    // Basic romanization mapping (extend as needed)
-    const romanizationMap = {
-      'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
-      'か': 'ka', 'き': 'ki', 'く': 'ku', 'け': 'ke', 'こ': 'ko',
-      'さ': 'sa', 'し': 'shi', 'す': 'su', 'せ': 'se', 'そ': 'so',
-      'た': 'ta', 'ち': 'chi', 'つ': 'tsu', 'て': 'te', 'と': 'to',
-      'な': 'na', 'に': 'ni', 'ぬ': 'nu', 'ね': 'ne', 'の': 'no',
-      'は': 'ha', 'ひ': 'hi', 'ふ': 'fu', 'へ': 'he', 'ほ': 'ho',
-      'ま': 'ma', 'み': 'mi', 'む': 'mu', 'め': 'me', 'も': 'mo',
-      'や': 'ya', 'ゆ': 'yu', 'よ': 'yo',
-      'ら': 'ra', 'り': 'ri', 'る': 'ru', 'れ': 're', 'ろ': 'ro',
-      'わ': 'wa', 'ゐ': 'wi', 'ゑ': 'we', 'を': 'wo', 'ん': 'n'
+    const fullNameMap = {
+      '二村 太郎': 'Nimura Taro',
+      '今西 ケルシー オリバー': 'Imanishi Kelsey Oliver',
+      '仲間 壮彦': 'Nakama Takehiko',
+      '八木 匡': 'Yagi Tadashi',
+      '原田 勉': 'Harada Tsutomu',
+      '和泉 真澄': 'Izumi Masumi',
+      '和田 喜彦': 'Wada Yoshihiko',
+      '小西 尚実': 'Konishi Naomi',
+      '張 皓程': 'Chou Koutei',
+      '槇殿 伴子': 'Makidono Tomoko',
+      '河島 伸子': 'Kawashima Nobuko',
+      '河村 晴久': 'Kawamura Haruhisa',
+      '石井 弘明': 'Ishii Hiroaki',
+      '西村 幸宏': 'Nishimura Yukihiro',
+      '趙 亮': 'Chou Ryou',
+      '鈴木 桂子': 'Suzuki Keiko',
+      '陳 依君': 'Chin Ikun',
+      '髙橋 旬子': 'Takahashi Junko'
+    }
+    if (fullNameMap[normalizedInput]) return fullNameMap[normalizedInput]
+
+    const nameMap = {
+      '髙橋': 'Takahashi', '高橋': 'Takahashi', '八木': 'Yagi', '和田': 'Wada',
+      '張': 'Chou', '趙': 'Chou', '仲間': 'Nakama', '河村': 'Kawamura', '河島': 'Kawashima',
+      '陳': 'Chin', '今西': 'Imanishi', '石井': 'Ishii', '小西': 'Konishi', '和泉': 'Izumi',
+      '二村': 'Nimura', '原田': 'Harada', '槇殿': 'Makidono', '西村': 'Nishimura', '鈴木': 'Suzuki',
+      '旬子': 'Junko', '太郎': 'Taro', '匡': 'Tadashi', '喜彦': 'Yoshihiko', '皓程': 'Koutei',
+      '亮': 'Ryou', '壮彦': 'Takehiko', '晴久': 'Haruhisa', '依君': 'Ikun', '尚実': 'Naomi',
+      '真澄': 'Masumi', '弘明': 'Hiroaki', '幸宏': 'Yukihiro', '桂子': 'Keiko', '伸子': 'Nobuko',
+      '伴子': 'Tomoko', '勉': 'Tsutomu', 'ケルシー': 'Kelsey', 'オリバー': 'Oliver',
+      '河': 'Kawa', '村': 'Mura', '島': 'Shima', '伸': 'Nobu', '子': 'Ko'
     }
 
-    let romanized = name
-    for (const [hiragana, romaji] of Object.entries(romanizationMap)) {
-      romanized = romanized.replace(new RegExp(hiragana, 'g'), romaji)
+    if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(normalizedInput)) {
+      return normalizedInput
     }
 
-    return romanized
+    const parts = normalizedInput.split(/\s+/).map((part) => {
+      if (nameMap[part]) return nameMap[part]
+      let mapped = ''
+      for (const char of part) {
+        if (!nameMap[char]) return part
+        mapped += nameMap[char]
+      }
+      return mapped || part
+    })
+
+    return parts.join(' ')
   }
 
   calculateCourseRelevance(query, course) {

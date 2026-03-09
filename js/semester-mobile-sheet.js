@@ -39,7 +39,14 @@ function removeActiveSheetNode() {
 export function closeSemesterMobileSheet({ immediate = false } = {}) {
   if (!activeSheetState) return;
 
-  const { layer, sheet, onKeyDown, onResize, closeTimer } = activeSheetState;
+  const {
+    layer,
+    sheet,
+    onKeyDown,
+    onResize,
+    closeTimer,
+    hadModalOpenClass = false
+  } = activeSheetState;
   if (closeTimer) {
     window.clearTimeout(closeTimer);
     activeSheetState.closeTimer = null;
@@ -48,7 +55,9 @@ export function closeSemesterMobileSheet({ immediate = false } = {}) {
   document.removeEventListener('keydown', onKeyDown, true);
   window.removeEventListener('resize', onResize);
   document.body.classList.remove('semester-mobile-sheet-open');
-  document.body.classList.remove('modal-open');
+  if (!hadModalOpenClass) {
+    document.body.classList.remove('modal-open');
+  }
 
   if (immediate) {
     removeActiveSheetNode();
@@ -66,16 +75,17 @@ export function closeSemesterMobileSheet({ immediate = false } = {}) {
   }, SHEET_CLOSE_ANIMATION_MS);
 }
 
-export function shouldOpenSemesterMobileSheet(targetSelect) {
-  return isMobileViewport() && isSemesterTargetSelect(targetSelect);
+export function shouldOpenSemesterMobileSheet(targetSelect, { force = false } = {}) {
+  return isMobileViewport() && (force || isSemesterTargetSelect(targetSelect));
 }
 
 export function openSemesterMobileSheet({
   targetSelect,
   title = 'Current Term',
-  description = 'Used for courses, schedule, and assignments'
+  description = 'Used for courses, schedule, and assignments',
+  force = false
 } = {}) {
-  if (!shouldOpenSemesterMobileSheet(targetSelect)) return false;
+  if (!shouldOpenSemesterMobileSheet(targetSelect, { force })) return false;
 
   const options = getSelectOptions(targetSelect);
   if (!options.length) return false;
@@ -93,6 +103,7 @@ export function openSemesterMobileSheet({
 
   const sheet = document.createElement('div');
   sheet.className = 'semester-mobile-sheet';
+  sheet.dataset.swipeLockSelector = '.semester-mobile-sheet-options';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-modal', 'true');
   sheet.setAttribute('aria-label', title);
@@ -109,9 +120,13 @@ export function openSemesterMobileSheet({
 
   header.appendChild(heading);
 
-  const subtitle = document.createElement('p');
-  subtitle.className = 'semester-mobile-sheet-description';
-  subtitle.textContent = description;
+  const subtitleText = String(description || '').trim();
+  let subtitle = null;
+  if (subtitleText) {
+    subtitle = document.createElement('p');
+    subtitle.className = 'semester-mobile-sheet-description';
+    subtitle.textContent = subtitleText;
+  }
 
   const optionsWrap = document.createElement('div');
   optionsWrap.className = 'semester-mobile-sheet-options';
@@ -151,7 +166,9 @@ export function openSemesterMobileSheet({
 
   sheet.appendChild(indicator);
   sheet.appendChild(header);
-  sheet.appendChild(subtitle);
+  if (subtitle) {
+    sheet.appendChild(subtitle);
+  }
   sheet.appendChild(optionsWrap);
   sheet.appendChild(footer);
   layer.appendChild(backdrop);
@@ -176,7 +193,8 @@ export function openSemesterMobileSheet({
     sheet,
     onKeyDown,
     onResize,
-    closeTimer: null
+    closeTimer: null,
+    hadModalOpenClass: document.body.classList.contains('modal-open')
   };
 
   const selectOption = (value) => {

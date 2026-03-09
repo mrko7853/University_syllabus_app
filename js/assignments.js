@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType } from "./shared.js";
+import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName } from "./shared.js";
 import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from "./preferences.js";
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
@@ -16,6 +16,7 @@ class AssignmentsManager {
         this.currentView = 'all-assignments';
         this.previousView = null;
         this.calendarDate = new Date();
+        this.selectedCalendarDate = null;
         this.datePickerTarget = null;
         this.datePickerDate = new Date();
         this.isInitialized = false;
@@ -23,11 +24,64 @@ class AssignmentsManager {
         this.isNewAssignment = false;
         this.eventListenersSetup = false;
         this.isSaving = false;
-        this.courseNameDisplayMaxLength = 22;
+        this.filterCloseTimer = null;
+        this.assignmentsFilterSwipeBound = false;
+        this.activeAssignmentsFilterTrigger = null;
+        this.assignmentActionsSheetState = null;
+        this.calendarDaySheetState = null;
+        this.courseNameDisplayMaxLength = 18;
         this.coursePrefilter = this.readCoursePrefilterFromURL();
+        this.quickFilter = 'all';
+        this.searchQuery = '';
+        this.sortKey = 'due_date_asc';
+        this.advancedFilters = {
+            has_due_date: false,
+            no_due_date: false,
+            with_course: false,
+            without_course: false
+        };
+        this.sortOptions = {
+            due_date_asc: 'Due date',
+            due_date_desc: 'Due date',
+            title_az: 'Title A-Z'
+        };
+        this.statusConfig = {
+            not_started: {
+                key: 'not_started',
+                label: 'Not Started',
+                className: 'status-not-started',
+                colors: { background: '#e9ecef', text: '#6c757d' }
+            },
+            in_progress: {
+                key: 'in_progress',
+                label: 'In Progress',
+                className: 'status-in-progress',
+                colors: { background: '#fff3cd', text: '#856404' }
+            },
+            completed: {
+                key: 'completed',
+                label: 'Completed',
+                className: 'status-completed',
+                colors: { background: '#d4edda', text: '#155724' }
+            },
+            overdue: {
+                key: 'overdue',
+                label: 'Overdue',
+                className: 'status-overdue',
+                colors: { background: '#fee2e2', text: '#b91c1c' }
+            }
+        };
+        this.statusAliases = {
+            not_started: 'not_started',
+            in_progress: 'in_progress',
+            ongoing: 'in_progress',
+            completed: 'completed'
+        };
         this.emojiRecentStorageKey = 'assignments_recent_emojis_v1';
         this.emojiRecentLimit = 24;
         this.emojiActiveCategory = 'people';
+        this.toolbarScrollBound = false;
+        this.toolbarScrollRafId = 0;
         this.emojiCategoryDefinitions = [
             { id: 'recent', label: 'Recent', icon: '🕒', keywords: 'recent history clock' },
             { id: 'people', label: 'People', icon: '😀', keywords: 'face smile people emotion' },
@@ -322,7 +376,7 @@ class AssignmentsManager {
 
             if (error) throw error;
 
-            this.assignments = data || [];
+            this.assignments = (data || []).map((assignment) => this.normalizeAssignmentRecord(assignment));
             console.log('Loaded assignments:', this.assignments.length);
         } catch (error) {
             console.error('Error loading assignments:', error);
@@ -330,7 +384,7 @@ class AssignmentsManager {
         }
     }
 
-    async openNewAssignmentModal() {
+    async openNewAssignmentModal(options = {}) {
         if (!this.currentUser) {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
@@ -362,14 +416,17 @@ class AssignmentsManager {
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
         const saveBtn = document.getElementById('assignment-save-btn');
+        const subtitleNode = document.getElementById('assignment-modal-subtitle');
 
         if (!overlay) return;
         overlay.dataset.assignmentId = '';
         overlay.dataset.assignmentMode = 'new';
         if (saveBtn) saveBtn.disabled = false;
+        if (saveBtn) saveBtn.textContent = 'Create Assignment';
 
         if (titleInput) titleInput.value = '';
-        if (dueDateInput) dueDateInput.value = this.formatDateInputValue(new Date());
+        const prefillDate = options?.dueDate ? this.getDateOnly(options.dueDate) : null;
+        if (dueDateInput) dueDateInput.value = this.formatDateInputValue(prefillDate || new Date());
         if (statusSelect) {
             statusSelect.value = 'not_started';
             statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
@@ -382,6 +439,10 @@ class AssignmentsManager {
         }
 
         if (deleteBtn) deleteBtn.style.display = 'none';
+        if (subtitleNode) {
+            subtitleNode.textContent = 'New assignment';
+            subtitleNode.hidden = false;
+        }
 
         if (subjectTag) {
             subjectTag.textContent = 'Select course';
@@ -402,6 +463,10 @@ class AssignmentsManager {
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
         overlay.style.display = 'flex';
+        document.body.classList.add('assignment-modal-open');
+        if (titleInput) {
+            window.requestAnimationFrame(() => titleInput.focus());
+        }
     }
 
     populateSubjectDropdown(subjectDropdown, subjectTag) {
@@ -471,9 +536,13 @@ class AssignmentsManager {
 
     async updateAssignment(id, updates) {
         try {
+            const payload = { ...updates, updated_at: new Date().toISOString() };
+            if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+                payload.status = this.getDatabaseStatus(payload.status);
+            }
             const { data, error } = await supabase
                 .from('assignments')
-                .update({ ...updates, updated_at: new Date().toISOString() })
+                .update(payload)
                 .eq('id', id)
                 .eq('user_id', this.currentUser.id)
                 .select()
@@ -483,7 +552,7 @@ class AssignmentsManager {
 
             const index = this.assignments.findIndex(a => a.id === id);
             if (index !== -1) {
-                this.assignments[index] = data;
+                this.assignments[index] = this.normalizeAssignmentRecord(data);
             }
 
             this.renderAssignments();
@@ -533,7 +602,7 @@ class AssignmentsManager {
         window._assignmentsListenersRoot = this.root;
         console.log('Setting up event listeners...');
 
-        document.querySelectorAll('.tab-btn[data-view]').forEach(btn => {
+        document.querySelectorAll('.assignments-view-segment[data-view]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const view = e.currentTarget.dataset.view;
                 this.switchView(view);
@@ -549,14 +618,33 @@ class AssignmentsManager {
             });
         }
 
-        const quickAddRow = document.getElementById('quick-add-row');
-        if (quickAddRow) {
-            quickAddRow.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.openNewAssignmentModal();
+        document.querySelectorAll('.assignment-quick-filter').forEach((button) => {
+            button.addEventListener('click', () => {
+                this.setQuickFilter(button.dataset.filter || 'all');
             });
-        }
+        });
+
+        document.querySelectorAll('.assignment-summary-card[data-filter]').forEach((card) => {
+            card.addEventListener('click', () => {
+                this.setQuickFilter(card.dataset.filter || 'all');
+            });
+        });
+
+        ['search-pill-input', 'search-input'].forEach((id) => {
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.addEventListener('input', (event) => {
+                const value = event.target.value || '';
+                this.searchQuery = value.trim();
+                this.syncSearchInputs(value, id);
+                this.renderAssignments();
+            });
+        });
+
+        this.setupSortControls();
+        this.setupFilterControls();
+        this.setupAssignmentsListInteractions();
+        this.setupToolbarScrollState();
 
         const modalClose = document.getElementById('assignment-modal-close');
         const modalOverlay = document.getElementById('assignment-modal-overlay');
@@ -577,6 +665,15 @@ class AssignmentsManager {
                 e.preventDefault();
                 e.stopPropagation();
                 this.saveCurrentAssignment();
+            });
+        }
+
+        const cancelBtn = document.getElementById('assignment-modal-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.closeAssignmentModal();
             });
         }
 
@@ -641,6 +738,7 @@ class AssignmentsManager {
                 if (isOpen) {
                     hideEmojiPickerPopup();
                 } else {
+                    this.closeModalSelectorPanels({ keep: 'emoji' });
                     showEmojiPickerPopup();
                 }
             });
@@ -725,14 +823,12 @@ class AssignmentsManager {
             newSubjectCurrent.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                document.querySelectorAll('.custom-select').forEach(customSelect => {
-                    customSelect.classList.remove('open');
-                });
                 const dropdown = document.getElementById('subject-dropdown');
                 const selector = document.getElementById('assignment-modal-subject');
                 if (!dropdown) return;
                 if (!selector) return;
                 const shouldOpen = !selector.classList.contains('open');
+                this.closeModalSelectorPanels({ keep: shouldOpen ? 'subject' : null });
                 selector.classList.toggle('open', shouldOpen);
                 newSubjectCurrent.classList.toggle('open', shouldOpen);
             });
@@ -771,7 +867,7 @@ class AssignmentsManager {
         if (todayBtn) {
             todayBtn.addEventListener('click', () => {
                 this.calendarDate = new Date();
-                this.renderCalendarView();
+                this.renderCalendarView({ resetSelection: true });
             });
         }
 
@@ -780,6 +876,7 @@ class AssignmentsManager {
             modalDueDateInput.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                this.closeModalSelectorPanels({ keep: 'date' });
                 this.openDatePicker(modalDueDateInput, this.currentAssignment, { mode: 'modal' });
             });
         }
@@ -787,12 +884,45 @@ class AssignmentsManager {
         this.setupDatePicker();
     }
 
+    setupToolbarScrollState() {
+        if (this.toolbarScrollBound) return;
+        this.toolbarScrollBound = true;
+
+        const toolbarShell = this.root?.querySelector('.assignments-toolbar-shell');
+        if (!toolbarShell) return;
+
+        const appContent = document.getElementById('app-content');
+        const getScrollTop = () => {
+            const windowScrollY = window.scrollY || window.pageYOffset || 0;
+            const rootScrollY = document.documentElement?.scrollTop || 0;
+            const bodyScrollY = document.body?.scrollTop || 0;
+            const contentScrollY = appContent ? appContent.scrollTop : 0;
+            return Math.max(windowScrollY, rootScrollY, bodyScrollY, contentScrollY);
+        };
+
+        const applyScrollState = () => {
+            this.toolbarScrollRafId = 0;
+            toolbarShell.classList.toggle('is-scrolled', getScrollTop() > 0);
+        };
+
+        const requestApply = () => {
+            if (this.toolbarScrollRafId) return;
+            this.toolbarScrollRafId = window.requestAnimationFrame(applyScrollState);
+        };
+
+        window.addEventListener('scroll', requestApply, { passive: true });
+        appContent?.addEventListener('scroll', requestApply, { passive: true });
+        document.addEventListener('scroll', requestApply, { passive: true, capture: true });
+        window.addEventListener('resize', requestApply);
+        requestApply();
+    }
+
     async setupContainerAbove() {
         await this.populateSemesterDropdown();
         this.initializeCustomSelects();
         this.setupSearchModal();
-        await this.loadSearchCourses();
-        this.setupSearchAutocomplete();
+        this.updateSortControlLabel();
+        this.updateAdvancedFilterCountChip();
     }
 
     async populateSemesterDropdown() {
@@ -889,8 +1019,6 @@ class AssignmentsManager {
                     });
                 });
 
-                await this.loadSearchCourses();
-                this.refreshAutocompleteResults();
                 this.renderAssignments();
                 const subjectDropdown = document.getElementById('subject-dropdown');
                 const subjectTag = document.getElementById('subject-tag');
@@ -970,9 +1098,10 @@ class AssignmentsManager {
         const normalizedQuery = trimmed.toLowerCase();
         const suggestions = (this.searchCourses || []).filter(course => {
             const title = (course.title || '').toLowerCase();
-            const professor = (course.professor || '').toLowerCase();
+            const professorRaw = (course.professor || '').toLowerCase();
+            const professorRomaji = (formatProfessorDisplayName(course.professor || '') || '').toLowerCase();
             const code = (course.course_code || '').toLowerCase();
-            return title.includes(normalizedQuery) || professor.includes(normalizedQuery) || code.includes(normalizedQuery);
+            return title.includes(normalizedQuery) || professorRaw.includes(normalizedQuery) || professorRomaji.includes(normalizedQuery) || code.includes(normalizedQuery);
         }).slice(0, 6);
 
         if (suggestions.length === 0) {
@@ -983,7 +1112,7 @@ class AssignmentsManager {
 
         autocompleteContainer.innerHTML = suggestions.map(course => {
             const title = this.escapeHtml(course.title || '');
-            const professor = this.escapeHtml(course.professor || '');
+            const professor = this.escapeHtml(formatProfessorDisplayName(course.professor || ''));
             const code = this.escapeHtml(course.course_code || '');
             return `
                 <div class="search-autocomplete-item" data-title="${title}">
@@ -1079,16 +1208,17 @@ class AssignmentsManager {
 
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
+                const shouldOpen = !customSelect.classList.contains('open');
+                this.closeModalSelectorPanels({
+                    keep: shouldOpen ? 'custom' : null,
+                    keepCustomSelect: customSelect
+                });
 
                 if (openSemesterMobileSheet({ targetSelect })) {
                     customSelect.classList.remove('open');
                     return;
                 }
-
-                document.querySelectorAll('.custom-select').forEach(other => {
-                    if (other !== customSelect) other.classList.remove('open');
-                });
-                customSelect.classList.toggle('open');
+                customSelect.classList.toggle('open', shouldOpen);
             });
 
             options.addEventListener('click', (event) => {
@@ -1240,19 +1370,27 @@ class AssignmentsManager {
             if (popup && !popup.contains(e.target) &&
                 !e.target.classList.contains('due-date-cell') &&
                 !e.target.classList.contains('date-picker-trigger')) {
-                this.hideDatePickerPopup(popup);
-                this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
-                this.datePickerTarget = null;
+                this.closeDatePicker();
             }
         });
     }
 
     switchView(view) {
         const normalizedView = view === 'by-due-date' ? 'by-due-date' : 'all-assignments';
+        const previousView = this.currentView;
         this.currentView = normalizedView;
+        if (normalizedView !== 'by-due-date') {
+            this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+        }
+        if (this.root) {
+            this.root.classList.toggle('is-calendar-view', normalizedView === 'by-due-date');
+        }
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.view === normalizedView);
+        document.querySelectorAll('.assignments-view-segment[data-view]').forEach(btn => {
+            const isCurrent = btn.dataset.view === normalizedView;
+            btn.classList.toggle('active', isCurrent);
+            btn.classList.toggle('is-active', isCurrent);
+            btn.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
         });
 
         const allView = document.getElementById('all-assignments-view');
@@ -1262,7 +1400,7 @@ class AssignmentsManager {
         if (calendarView) calendarView.style.display = normalizedView === 'by-due-date' ? 'block' : 'none';
 
         if (normalizedView === 'by-due-date') {
-            this.renderCalendarView();
+            this.renderCalendarView({ resetSelection: previousView !== 'by-due-date' });
         } else {
             this.renderTableView();
         }
@@ -1322,102 +1460,248 @@ class AssignmentsManager {
     }
 
     renderTableView() {
-        const tbody = document.getElementById('assignments-tbody');
+        const listContainer = document.getElementById('assignments-list');
         const emptyState = document.getElementById('assignments-empty');
-        const tableWrapper = document.querySelector('.assignments-table-wrapper');
+        if (!listContainer || !emptyState) return;
 
-        if (!tbody) return;
+        const pipeline = this.getListPipeline();
+        this.renderHeaderSummary(pipeline.sorted.length);
+        this.renderQuickFilterState();
+        this.renderSummaryCards(pipeline.summaryCounts);
+        this.closeAllOverflowMenus();
 
-        const assignmentsToShow = this.getAssignmentsForSelectedSemester();
+        let emptyType = null;
+        if (pipeline.base.length === 0) {
+            emptyType = 'none';
+        } else if (this.searchQuery && pipeline.searched.length === 0) {
+            emptyType = 'search';
+        } else if (pipeline.quickFiltered.length === 0) {
+            emptyType = this.quickFilter === 'all' ? 'filtered' : 'filter';
+        }
 
-        if (assignmentsToShow.length === 0) {
-            if (tableWrapper) tableWrapper.style.display = 'none';
-            if (emptyState) emptyState.style.display = 'flex';
+        if (emptyType) {
+            listContainer.innerHTML = '';
+            listContainer.hidden = true;
+            emptyState.hidden = false;
+            this.renderEmptyState(emptyType, emptyState);
             return;
         }
 
-        if (tableWrapper) tableWrapper.style.display = 'block';
-        if (emptyState) emptyState.style.display = 'none';
-
-        tbody.innerHTML = assignmentsToShow.map(assignment => {
-            const dueDateStr = assignment.due_date
-                ? new Date(assignment.due_date).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                })
-                : '';
-
-            const statusClass = `status-${assignment.status.replace('_', '-')}`;
-            const statusText = this.getStatusText(assignment.status);
-
-            const displayCourseTagName = this.truncateText(assignment.course_tag_name, this.courseNameDisplayMaxLength);
-            const tagHtml = assignment.course_tag_name
-                ? `<span class="course-tag" style="background-color: ${assignment.course_tag_color}">${this.escapeHtml(displayCourseTagName)}</span>`
-                : '<span class="no-tag">-</span>';
+        listContainer.hidden = false;
+        emptyState.hidden = true;
+        listContainer.innerHTML = pipeline.sorted.map((assignment) => {
+            const normalizedStatus = this.getCanonicalStatus(assignment.status);
+            const statusInfo = this.getDisplayStatusInfo(assignment);
+            const dueLabel = this.formatDueMetaLabel(this.getDueMeta(assignment));
+            const courseTag = assignment.course_tag_name
+                ? `<span class="assignment-course-chip" style="background-color:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                : '<span class="assignment-course-chip assignment-course-chip--empty">No course</span>';
+            const disableProgress = normalizedStatus === 'in_progress' ? 'disabled' : '';
+            const disableComplete = normalizedStatus === 'completed' ? 'disabled' : '';
 
             return `
-                <tr class="assignment-row" data-id="${assignment.id}">
-                    <td class="col-title">
-                        <span class="assignment-icon">${assignment.assignment_icon || ''}</span>
-                        <span class="assignment-title">${this.escapeHtml(assignment.title)}</span>
-                    </td>
-                    <td class="col-due-date due-date-cell" data-id="${assignment.id}">
-                        ${dueDateStr || '<span class="no-date">Set date</span>'}
-                    </td>
-                    <td class="col-subject">
-                        ${tagHtml}
-                    </td>
-                    <td class="col-status">
-                        <span class="status-badge ${statusClass}">${statusText}</span>
-                    </td>
-                    <td class="col-actions">
-                        <button class="action-btn delete-row-btn" data-id="${assignment.id}" title="Delete"><div class="assignment-delete-icon assignment-icons"></div></button>
-                    </td>
-                </tr>
+                <article class="assignment-row-card" data-assignment-id="${assignment.id}" tabindex="0">
+                    <div class="assignment-row-left">
+                        <span class="assignment-row-icon">${this.escapeHtml(assignment.assignment_icon || '📄')}</span>
+                        <div class="assignment-row-copy">
+                            <h3 class="assignment-row-title">${this.escapeHtml(assignment.title || 'Untitled Assignment')}</h3>
+                            <p class="assignment-row-meta">
+                                <span class="assignment-row-due">${this.escapeHtml(dueLabel)}</span>
+                                <span class="assignment-row-meta-separator" aria-hidden="true">•</span>
+                                ${courseTag}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="assignment-row-right">
+                        <span class="status-badge ${statusInfo.className}">${statusInfo.label}</span>
+                        <div class="assignment-row-overflow">
+                            <button class="assignment-overflow-trigger" type="button" aria-label="More actions" aria-expanded="false" data-row-action="toggle-overflow"></button>
+                            <div class="assignment-overflow-menu" hidden>
+                                <button type="button" class="assignment-overflow-item" data-row-action="open">Open</button>
+                                <button type="button" class="assignment-overflow-item" data-row-action="edit">Edit</button>
+                                <button type="button" class="assignment-overflow-item" data-row-action="mark-in-progress" ${disableProgress}>Mark in progress</button>
+                                <button type="button" class="assignment-overflow-item" data-row-action="mark-completed" ${disableComplete}>Mark completed</button>
+                                <button type="button" class="assignment-overflow-item assignment-overflow-item--danger" data-row-action="delete">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            `;
+        }).join('');
+    }
+
+    getCalendarDateKey(value) {
+        const date = this.getDateOnly(value);
+        return date ? this.formatDateInputValue(date) : '';
+    }
+
+    parseCalendarDateKey(key) {
+        return this.parseDateFromInputValue(key || '');
+    }
+
+    getCalendarChipLimit() {
+        return window.matchMedia('(max-width: 1023px)').matches ? 1 : 2;
+    }
+
+    getCalendarAssignmentsByDate(assignments) {
+        const assignmentsByDate = {};
+        assignments.forEach((assignment) => {
+            const dueDate = this.getDateOnly(assignment?.due_date);
+            if (!dueDate) return;
+            const dateKey = this.getCalendarDateKey(dueDate);
+            if (!dateKey) return;
+            if (!assignmentsByDate[dateKey]) assignmentsByDate[dateKey] = [];
+            assignmentsByDate[dateKey].push(assignment);
+        });
+
+        Object.values(assignmentsByDate).forEach((dayAssignments) => {
+            dayAssignments.sort((a, b) => {
+                const dueA = a?.due_date ? new Date(a.due_date) : null;
+                const dueB = b?.due_date ? new Date(b.due_date) : null;
+                const timeA = Number.isFinite(dueA?.getTime?.()) ? dueA.getTime() : Number.POSITIVE_INFINITY;
+                const timeB = Number.isFinite(dueB?.getTime?.()) ? dueB.getTime() : Number.POSITIVE_INFINITY;
+                if (timeA !== timeB) return timeA - timeB;
+                return String(a?.title || '').localeCompare(String(b?.title || ''));
+            });
+        });
+
+        return assignmentsByDate;
+    }
+
+    getCalendarUrgencyClass(assignment) {
+        const status = this.getCanonicalStatus(assignment?.status);
+        if (status === 'completed') return 'calendar-assignment--completed';
+
+        const dueDate = this.getDateOnly(assignment?.due_date);
+        const today = this.getTodayDate();
+        let daysUntilDue = null;
+
+        if (dueDate) {
+            const MS_PER_DAY = 24 * 60 * 60 * 1000;
+            daysUntilDue = Math.round((dueDate.getTime() - today.getTime()) / MS_PER_DAY);
+            if (daysUntilDue < 0) return 'calendar-assignment--overdue';
+        }
+
+        if (status === 'in_progress') return 'calendar-assignment--in-progress';
+        if (daysUntilDue === 0) return 'calendar-assignment--due-today';
+        return 'calendar-assignment--not-started';
+    }
+
+    resolveCalendarSelectedDateKey({ year, month, totalDays, assignmentsByDate, resetSelection = false }) {
+        const isInVisibleMonth = (date) =>
+            !!date &&
+            date.getFullYear() === year &&
+            date.getMonth() === month &&
+            date.getDate() >= 1 &&
+            date.getDate() <= totalDays;
+
+        if (!resetSelection && this.selectedCalendarDate) {
+            const selectedDate = this.parseCalendarDateKey(this.selectedCalendarDate);
+            if (isInVisibleMonth(selectedDate)) {
+                return this.getCalendarDateKey(selectedDate);
+            }
+
+            if (selectedDate && selectedDate.getDate() <= totalDays) {
+                const sameDayInNewMonth = new Date(year, month, selectedDate.getDate());
+                if (isInVisibleMonth(sameDayInNewMonth)) {
+                    return this.getCalendarDateKey(sameDayInNewMonth);
+                }
+            }
+        }
+
+        const today = this.getTodayDate();
+        if (isInVisibleMonth(today)) {
+            return this.getCalendarDateKey(today);
+        }
+
+        const firstAssignmentDate = Object.keys(assignmentsByDate)
+            .map((key) => this.parseCalendarDateKey(key))
+            .filter((date) => isInVisibleMonth(date))
+            .sort((a, b) => a.getTime() - b.getTime())[0];
+
+        if (firstAssignmentDate) {
+            return this.getCalendarDateKey(firstAssignmentDate);
+        }
+
+        return this.getCalendarDateKey(new Date(year, month, 1));
+    }
+
+    renderCalendarDayDetail(selectedDateKey, assignmentsByDate) {
+        const labelNode = document.getElementById('assignments-calendar-day-label');
+        const listNode = document.getElementById('assignments-calendar-day-list');
+        if (!labelNode || !listNode) return;
+
+        const selectedDate = this.parseCalendarDateKey(selectedDateKey);
+        if (!selectedDate) {
+            labelNode.textContent = 'Selected date';
+            listNode.innerHTML = '';
+            return;
+        }
+
+        labelNode.textContent = selectedDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+
+        const dayAssignments = assignmentsByDate[selectedDateKey] || [];
+
+        if (dayAssignments.length === 0) {
+            listNode.innerHTML = `
+                <div class="assignments-calendar-day-empty">
+                    <p class="assignments-calendar-day-empty-copy">No assignments due this day.</p>
+                    <button type="button" class="assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
+                        Add Assignment
+                    </button>
+                </div>
+            `;
+
+            const newBtn = listNode.querySelector('[data-day-detail-action="new-assignment"]');
+            if (newBtn) {
+                newBtn.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await this.openNewAssignmentModal({ dueDate: selectedDate });
+                });
+            }
+            return;
+        }
+
+        listNode.innerHTML = dayAssignments.map((assignment) => {
+            const normalizedStatus = this.getCanonicalStatus(assignment.status);
+            const statusInfo = this.getDisplayStatusInfo(assignment);
+            const courseMarkup = assignment.course_tag_name
+                ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                : '<span class="assignments-calendar-day-course-chip assignments-calendar-day-course-chip--empty">No course</span>';
+
+            return `
+                <button type="button" class="assignments-calendar-day-row" data-assignment-id="${assignment.id}">
+                    <div class="assignments-calendar-day-row-main">
+                        <h4 class="assignments-calendar-day-row-title">${this.escapeHtml(assignment.title || 'Untitled Assignment')}</h4>
+                        <div class="assignments-calendar-day-row-meta">${courseMarkup}</div>
+                    </div>
+                    <span class="status-badge ${statusInfo.className}">${statusInfo.label}</span>
+                </button>
             `;
         }).join('');
 
-        tbody.querySelectorAll('.assignment-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                if (e.target.classList.contains('delete-row-btn') ||
-                    e.target.closest('.delete-row-btn') ||
-                    e.target.classList.contains('due-date-cell')) {
-                    return;
-                }
-                const id = row.dataset.id;
-                const assignment = assignmentsToShow.find(a => a.id === id) || this.assignments.find(a => a.id === id);
-                if (assignment) {
-                    this.openAssignmentModal(assignment);
-                }
-            });
-        });
-
-        tbody.querySelectorAll('.delete-row-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.id;
-                this.deleteAssignment(id);
-            });
-        });
-
-        tbody.querySelectorAll('.due-date-cell').forEach(cell => {
-            cell.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = cell.dataset.id;
-                const assignment = assignmentsToShow.find(a => a.id === id) || this.assignments.find(a => a.id === id);
-                if (assignment) {
-                    this.openDatePicker(cell, assignment);
-                }
+        listNode.querySelectorAll('.assignments-calendar-day-row[data-assignment-id]').forEach((row) => {
+            row.addEventListener('click', async (event) => {
+                event.preventDefault();
+                const assignmentId = row.dataset.assignmentId;
+                if (!assignmentId) return;
+                await this.openAssignmentById(assignmentId);
             });
         });
     }
 
-    renderCalendarView() {
+    renderCalendarView(options = {}) {
+        const { resetSelection = false } = options;
         const calendarBody = document.getElementById('calendar-body');
         const monthTitle = document.getElementById('calendar-month-title');
-
         if (!calendarBody) return;
+        this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
 
         const year = this.calendarDate.getFullYear();
         const month = this.calendarDate.getMonth();
@@ -1433,71 +1717,118 @@ class AssignmentsManager {
         const lastDay = new Date(year, month + 1, 0);
         const startPadding = firstDay.getDay();
         const totalDays = lastDay.getDate();
+        const totalCells = startPadding + totalDays;
+        const totalWeeks = Math.ceil(totalCells / 7);
+        const todayKey = this.getCalendarDateKey(this.getTodayDate());
+        const chipLimit = this.getCalendarChipLimit();
 
-        const assignmentsByDate = {};
-        const assignmentsToShow = this.getAssignmentsForSelectedSemester();
-        assignmentsToShow.forEach(assignment => {
-            if (assignment.due_date) {
-                const dateKey = new Date(assignment.due_date).toDateString();
-                if (!assignmentsByDate[dateKey]) {
-                    assignmentsByDate[dateKey] = [];
-                }
-                assignmentsByDate[dateKey].push(assignment);
-            }
+        const pipeline = this.getListPipeline();
+        const assignmentsToShow = pipeline.sorted;
+        const assignmentsByDate = this.getCalendarAssignmentsByDate(assignmentsToShow);
+        const selectedDateKey = this.resolveCalendarSelectedDateKey({
+            year,
+            month,
+            totalDays,
+            assignmentsByDate,
+            resetSelection
         });
+        this.selectedCalendarDate = selectedDateKey;
 
         let html = '';
         let dayCount = 1;
-        const today = new Date().toDateString();
-
-        const totalCells = startPadding + totalDays;
-        const totalWeeks = Math.ceil(totalCells / 7);
-
         for (let week = 0; week < totalWeeks; week++) {
             html += '<div class="calendar-week">';
             for (let day = 0; day < 7; day++) {
                 const cellIndex = week * 7 + day;
 
                 if (cellIndex < startPadding || dayCount > totalDays) {
-                    html += '<div class="calendar-cell empty"></div>';
-                } else {
-                    const currentDate = new Date(year, month, dayCount);
-                    const dateKey = currentDate.toDateString();
-                    const isToday = dateKey === today;
-                    const dayAssignments = assignmentsByDate[dateKey] || [];
-
-                    html += `
-                        <div class="calendar-cell ${isToday ? 'today' : ''}">
-                            <div class="day-number">${dayCount}</div>
-                            <div class="day-assignments">
-                                ${dayAssignments.slice(0, 3).map(a => `
-                                    <div class="calendar-assignment" 
-                                         style="background-color: ${a.course_tag_color || '#e0e0e0'}"
-                                         data-id="${a.id}"
-                                         title="${this.escapeHtml(a.title)}">
-                                        ${this.truncateText(a.title, 15)}
-                                    </div>
-                                `).join('')}
-                                ${dayAssignments.length > 3 ? `<div class="more-assignments">+${dayAssignments.length - 3} more</div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                    dayCount++;
+                    html += '<div class="calendar-cell empty" aria-hidden="true"></div>';
+                    continue;
                 }
+
+                const currentDate = new Date(year, month, dayCount);
+                const dateKey = this.getCalendarDateKey(currentDate);
+                const isToday = dateKey === todayKey;
+                const isSelected = dateKey === selectedDateKey;
+                const dayAssignments = assignmentsByDate[dateKey] || [];
+                const visibleAssignments = dayAssignments.slice(0, chipLimit);
+                const hiddenCount = Math.max(0, dayAssignments.length - visibleAssignments.length);
+                const dateLabel = currentDate.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+
+                html += `
+                    <div class="calendar-cell${isToday ? ' today' : ''}${isSelected ? ' calendar-cell--selected' : ''}" tabindex="0" role="button" data-date-key="${dateKey}" aria-label="${this.escapeHtml(dateLabel)}">
+                        <div class="day-number">${dayCount}</div>
+                        <div class="day-assignments">
+                            ${visibleAssignments.map((assignment) => {
+                                const urgencyClass = this.getCalendarUrgencyClass(assignment);
+                                const courseHint = assignment.course_tag_color || '';
+                                const courseStyle = courseHint ? ` style="--calendar-course-hint:${courseHint}"` : '';
+                                return `
+                                    <button type="button" class="calendar-assignment ${urgencyClass}" data-id="${assignment.id}"${courseStyle}>
+                                        <span class="calendar-assignment-label">${this.escapeHtml(assignment.title || 'Untitled Assignment')}</span>
+                                    </button>
+                                `;
+                            }).join('')}
+                            ${hiddenCount > 0 ? `<button type="button" class="calendar-more-btn" data-date-key="${dateKey}">+${hiddenCount} more</button>` : ''}
+                        </div>
+                    </div>
+                `;
+                dayCount++;
             }
             html += '</div>';
         }
 
         calendarBody.innerHTML = html;
+        this.renderHeaderSummary(assignmentsToShow.length);
+        if (!this.isMobileViewport()) {
+            this.renderCalendarDayDetail(selectedDateKey, assignmentsByDate);
+        }
 
-        calendarBody.querySelectorAll('.calendar-assignment').forEach(el => {
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = el.dataset.id;
-                const assignment = this.assignments.find(a => a.id === id);
-                if (assignment) {
-                    this.openAssignmentModal(assignment);
-                }
+        const selectCalendarDate = (dateKey) => {
+            if (!dateKey) return;
+            this.selectedCalendarDate = dateKey;
+            this.renderCalendarView();
+            if (this.isMobileViewport()) {
+                this.openCalendarDayDetailSheet(dateKey);
+            }
+        };
+
+        calendarBody.querySelectorAll('.calendar-cell[data-date-key]').forEach((cell) => {
+            cell.addEventListener('click', (event) => {
+                if (event.target.closest('.calendar-assignment, .calendar-more-btn')) return;
+                const dateKey = cell.dataset.dateKey;
+                selectCalendarDate(dateKey);
+            });
+
+            cell.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                const dateKey = cell.dataset.dateKey;
+                selectCalendarDate(dateKey);
+            });
+        });
+
+        calendarBody.querySelectorAll('.calendar-more-btn[data-date-key]').forEach((moreButton) => {
+            moreButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const dateKey = moreButton.dataset.dateKey;
+                selectCalendarDate(dateKey);
+            });
+        });
+
+        calendarBody.querySelectorAll('.calendar-assignment[data-id]').forEach((chip) => {
+            chip.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const assignmentId = chip.dataset.id;
+                if (!assignmentId) return;
+                this.openAssignmentById(assignmentId);
             });
         });
     }
@@ -1519,11 +1850,13 @@ class AssignmentsManager {
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
         const saveBtn = document.getElementById('assignment-save-btn');
+        const subtitleNode = document.getElementById('assignment-modal-subtitle');
 
         if (!overlay) return;
         overlay.dataset.assignmentId = assignment?.id != null ? String(assignment.id) : '';
         overlay.dataset.assignmentMode = 'edit';
         if (saveBtn) saveBtn.disabled = false;
+        if (saveBtn) saveBtn.textContent = 'Save changes';
 
         if (deleteBtn) deleteBtn.style.display = 'block';
 
@@ -1534,7 +1867,7 @@ class AssignmentsManager {
             dueDateInput.value = '';
         }
         if (statusSelect) {
-            statusSelect.value = assignment.status || 'not_started';
+            statusSelect.value = this.getCanonicalStatus(assignment.status);
             statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
             this.updateStatusSelectorAppearance(statusSelect.value);
         }
@@ -1571,6 +1904,17 @@ class AssignmentsManager {
             }
         }
 
+        if (subtitleNode) {
+            const subtitle = String(assignment?.course_tag_name || '').trim();
+            if (subtitle) {
+                subtitleNode.textContent = subtitle;
+                subtitleNode.hidden = false;
+            } else {
+                subtitleNode.textContent = '';
+                subtitleNode.hidden = true;
+            }
+        }
+
         this.updateSubjectSelectorAppearance(subjectTag, subjectSelector);
 
         if (subjectSelector) subjectSelector.classList.remove('open');
@@ -1579,23 +1923,20 @@ class AssignmentsManager {
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
 
         overlay.style.display = 'flex';
+        document.body.classList.add('assignment-modal-open');
     }
 
     closeAssignmentModal() {
         const overlay = document.getElementById('assignment-modal-overlay');
         const saveBtn = document.getElementById('assignment-save-btn');
-        const datePickerPopup = document.getElementById('date-picker-popup');
         const emojiPicker = document.getElementById('assignment-emoji-picker');
         if (overlay) {
             overlay.style.display = 'none';
             overlay.dataset.assignmentId = '';
             overlay.dataset.assignmentMode = '';
         }
-        if (datePickerPopup) {
-            this.hideDatePickerPopup(datePickerPopup, { immediate: true });
-        }
-        this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
-        this.datePickerTarget = null;
+        document.body.classList.remove('assignment-modal-open');
+        this.closeDatePicker({ immediate: true });
         if (emojiPicker) {
             emojiPicker.classList.remove('open');
             emojiPicker.style.display = 'none';
@@ -1898,7 +2239,7 @@ class AssignmentsManager {
             const assignmentData = {
                 title: titleInput?.value?.trim() || 'Untitled Assignment',
                 due_date: normalizedDueDate ? normalizedDueDate.toISOString() : null,
-                status: statusSelect?.value || 'not_started',
+                status: this.getDatabaseStatus(statusSelect?.value || 'not_started'),
                 instructions: instructionsTextarea?.value || '',
                 course_code: courseCode || null,
                 course_tag_name: courseName || null,
@@ -1928,7 +2269,7 @@ class AssignmentsManager {
 
                 if (error) throw error;
 
-                this.assignments.push(data);
+                this.assignments.push(this.normalizeAssignmentRecord(data));
                 this.renderAssignments();
                 console.log('Created new assignment:', data);
             } else {
@@ -2022,6 +2363,75 @@ class AssignmentsManager {
 
         popup.addEventListener('transitionend', finishHide, { once: true });
         window.setTimeout(finishHide, 240);
+    }
+
+    closeDatePicker(options = {}) {
+        const { immediate = false } = options;
+        const popup = document.getElementById('date-picker-popup');
+        if (popup) {
+            this.hideDatePickerPopup(popup, { immediate });
+        }
+        this.setDatePickerTriggerState(this.datePickerTarget?.element, false);
+        this.datePickerTarget = null;
+    }
+
+    closeSubjectSelector() {
+        const selector = document.getElementById('assignment-modal-subject');
+        const current = document.getElementById('subject-current');
+        if (selector) selector.classList.remove('open');
+        if (current) current.classList.remove('open');
+    }
+
+    closeEmojiPicker(options = {}) {
+        const { immediate = false } = options;
+        const picker = document.getElementById('assignment-emoji-picker');
+        if (!picker) return;
+
+        if (immediate) {
+            picker.classList.remove('open');
+            picker.style.display = 'none';
+            picker.dataset.hideToken = '';
+            return;
+        }
+
+        if (picker.style.display === 'none' || picker.style.display === '') {
+            return;
+        }
+
+        const hideToken = `${Date.now()}`;
+        picker.dataset.hideToken = hideToken;
+        picker.classList.remove('open');
+
+        const finishHide = () => {
+            if (picker.dataset.hideToken !== hideToken) return;
+            if (!picker.classList.contains('open')) {
+                picker.style.display = 'none';
+            }
+        };
+
+        picker.addEventListener('transitionend', finishHide, { once: true });
+        window.setTimeout(finishHide, 240);
+    }
+
+    closeModalSelectorPanels(options = {}) {
+        const { keep = null, keepCustomSelect = null } = options;
+
+        if (keep !== 'date') {
+            this.closeDatePicker();
+        }
+
+        if (keep !== 'subject') {
+            this.closeSubjectSelector();
+        }
+
+        if (keep !== 'emoji') {
+            this.closeEmojiPicker();
+        }
+
+        document.querySelectorAll('.custom-select.open').forEach((customSelect) => {
+            if (keep === 'custom' && keepCustomSelect && customSelect === keepCustomSelect) return;
+            customSelect.classList.remove('open');
+        });
     }
 
     openDatePicker(targetElement, assignment, options = {}) {
@@ -2166,22 +2576,43 @@ class AssignmentsManager {
         this.datePickerTarget = null;
     }
 
-    getStatusText(status) {
-        const statusMap = {
-            'not_started': 'Not Started',
-            'ongoing': 'In Progress',
-            'completed': 'Completed'
+    normalizeAssignmentRecord(assignment) {
+        if (!assignment || typeof assignment !== 'object') return assignment;
+        return {
+            ...assignment,
+            status: this.getCanonicalStatus(assignment.status)
         };
-        return statusMap[status] || status;
+    }
+
+    getCanonicalStatus(status) {
+        const normalized = String(status || '').trim().toLowerCase();
+        return this.statusAliases[normalized] || 'not_started';
+    }
+
+    getDatabaseStatus(status) {
+        const canonical = this.getCanonicalStatus(status);
+        if (canonical === 'in_progress') return 'ongoing';
+        return canonical;
+    }
+
+    getStatusDefinition(status) {
+        const canonical = this.getCanonicalStatus(status);
+        return this.statusConfig[canonical] || this.statusConfig.not_started;
+    }
+
+    getDisplayStatusInfo(assignment) {
+        if (this.getDueMeta(assignment).isOverdue) {
+            return this.statusConfig.overdue;
+        }
+        return this.getStatusDefinition(assignment?.status);
+    }
+
+    getStatusText(status) {
+        return this.getStatusDefinition(status).label;
     }
 
     getStatusColors(status) {
-        const statusColors = {
-            'not_started': { background: '#e9ecef', text: '#6c757d' },
-            'ongoing': { background: '#fff3cd', text: '#856404' },
-            'completed': { background: '#d4edda', text: '#155724' }
-        };
-        return statusColors[status] || { background: 'white', text: 'black' };
+        return this.getStatusDefinition(status).colors;
     }
 
     updateStatusSelectorAppearance(status, statusSelector = null) {
@@ -2191,6 +2622,1068 @@ class AssignmentsManager {
         const colors = this.getStatusColors(status);
         selector.style.setProperty('--status-tag-bg', colors.background);
         selector.style.setProperty('--status-tag-color', colors.text);
+    }
+
+    getDateOnly(value) {
+        if (!value) return null;
+        const parsed = new Date(value);
+        if (!Number.isFinite(parsed.getTime())) return null;
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+
+    getTodayDate() {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    getDueMeta(assignment) {
+        const dueDate = this.getDateOnly(assignment?.due_date);
+        if (!dueDate) {
+            return {
+                dueDate: null,
+                daysUntilDue: null,
+                isDueToday: false,
+                isDueSoon: false,
+                isOverdue: false
+            };
+        }
+
+        const today = this.getTodayDate();
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const daysUntilDue = Math.round((dueDate.getTime() - today.getTime()) / MS_PER_DAY);
+        const status = this.getCanonicalStatus(assignment?.status);
+        const isCompleted = status === 'completed';
+
+        return {
+            dueDate,
+            daysUntilDue,
+            isDueToday: daysUntilDue === 0 && !isCompleted,
+            isDueSoon: daysUntilDue >= 1 && daysUntilDue <= 7 && !isCompleted,
+            isOverdue: daysUntilDue < 0 && !isCompleted
+        };
+    }
+
+    formatDueMetaLabel(meta) {
+        if (!meta?.dueDate) return 'No due date';
+        return `Due ${meta.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+    setQuickFilter(filter) {
+        const allowed = new Set(['all', 'due_today', 'due_soon', 'in_progress', 'completed', 'overdue']);
+        const nextFilter = allowed.has(filter) ? filter : 'all';
+        this.quickFilter = nextFilter;
+        this.renderAssignments();
+    }
+
+    syncSearchInputs(value, sourceId = '') {
+        ['search-pill-input', 'search-input'].forEach((id) => {
+            if (id === sourceId) return;
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.value = value;
+        });
+    }
+
+    clearSearchQuery() {
+        this.searchQuery = '';
+        this.syncSearchInputs('', '');
+    }
+
+    applySearch(assignments) {
+        if (!this.searchQuery) return assignments;
+        const q = this.searchQuery.toLowerCase();
+        return assignments.filter((assignment) => {
+            const title = String(assignment?.title || '').toLowerCase();
+            const instructions = String(assignment?.instructions || '').toLowerCase();
+            const courseName = String(assignment?.course_tag_name || '').toLowerCase();
+            const courseCode = String(assignment?.course_code || '').toLowerCase();
+            return title.includes(q) || instructions.includes(q) || courseName.includes(q) || courseCode.includes(q);
+        });
+    }
+
+    applyAdvancedFilters(assignments) {
+        const activeFilters = Object.entries(this.advancedFilters || {}).filter(([, enabled]) => enabled);
+        if (!activeFilters.length) return assignments;
+
+        return assignments.filter((assignment) => {
+            const hasDueDate = !!this.getDateOnly(assignment?.due_date);
+            const hasCourse = !!String(assignment?.course_tag_name || assignment?.course_code || '').trim();
+
+            if (this.advancedFilters.has_due_date && !hasDueDate) return false;
+            if (this.advancedFilters.no_due_date && hasDueDate) return false;
+            if (this.advancedFilters.with_course && !hasCourse) return false;
+            if (this.advancedFilters.without_course && hasCourse) return false;
+            return true;
+        });
+    }
+
+    applyQuickFilter(assignments) {
+        const active = this.quickFilter || 'all';
+        if (active === 'all') return assignments;
+
+        return assignments.filter((assignment) => {
+            const status = this.getCanonicalStatus(assignment.status);
+            const dueMeta = this.getDueMeta(assignment);
+
+            if (active === 'due_today') return dueMeta.isDueToday;
+            if (active === 'due_soon') return dueMeta.isDueSoon;
+            if (active === 'in_progress') return status === 'in_progress';
+            if (active === 'completed') return status === 'completed';
+            if (active === 'overdue') return dueMeta.isOverdue;
+            return true;
+        });
+    }
+
+    sortAssignments(assignments) {
+        const sorted = [...assignments];
+        sorted.sort((a, b) => {
+            const dueA = this.getDateOnly(a?.due_date);
+            const dueB = this.getDateOnly(b?.due_date);
+            const titleA = String(a?.title || '');
+            const titleB = String(b?.title || '');
+
+            if (this.sortKey === 'title_az') {
+                return titleA.localeCompare(titleB);
+            }
+
+            if (!dueA && !dueB) {
+                return titleA.localeCompare(titleB);
+            }
+            if (!dueA) return 1;
+            if (!dueB) return -1;
+
+            const diff = dueA.getTime() - dueB.getTime();
+            if (diff === 0) {
+                return titleA.localeCompare(titleB);
+            }
+            if (this.sortKey === 'due_date_desc') {
+                return diff * -1;
+            }
+            return diff;
+        });
+        return sorted;
+    }
+
+    getListPipeline() {
+        const base = this.getAssignmentsForSelectedSemester().map((assignment) => this.normalizeAssignmentRecord(assignment));
+        const searched = this.applySearch(base);
+        const advancedFiltered = this.applyAdvancedFilters(searched);
+        const quickFiltered = this.applyQuickFilter(advancedFiltered);
+        const sorted = this.sortAssignments(quickFiltered);
+
+        const summaryCounts = {
+            due_soon: advancedFiltered.filter((assignment) => this.getDueMeta(assignment).isDueSoon).length,
+            in_progress: advancedFiltered.filter((assignment) => this.getCanonicalStatus(assignment.status) === 'in_progress').length,
+            completed: advancedFiltered.filter((assignment) => this.getCanonicalStatus(assignment.status) === 'completed').length,
+            overdue: advancedFiltered.filter((assignment) => this.getDueMeta(assignment).isOverdue).length
+        };
+
+        return { base, searched, advancedFiltered, quickFiltered, sorted, summaryCounts };
+    }
+
+    renderHeaderSummary(visibleCount) {
+        const summary = document.getElementById('assignments-results-summary');
+        if (!summary) return;
+        const countLabel = visibleCount === 1 ? '1 item' : `${visibleCount} items`;
+        summary.textContent = `Showing ${countLabel}`;
+    }
+
+    renderQuickFilterState() {
+        document.querySelectorAll('.assignment-quick-filter[data-filter]').forEach((chip) => {
+            chip.classList.toggle('active', (chip.dataset.filter || 'all') === (this.quickFilter || 'all'));
+        });
+    }
+
+    renderSummaryCards(summaryCounts) {
+        const map = {
+            due_soon: summaryCounts.due_soon,
+            in_progress: summaryCounts.in_progress,
+            completed: summaryCounts.completed,
+            overdue: summaryCounts.overdue
+        };
+
+        document.querySelectorAll('.assignment-summary-card[data-filter]').forEach((card) => {
+            const filter = card.dataset.filter || '';
+            const countNode = card.querySelector('.assignment-summary-card-count');
+            if (countNode && Object.prototype.hasOwnProperty.call(map, filter)) {
+                countNode.textContent = String(map[filter]);
+            }
+            card.classList.toggle('active', filter === (this.quickFilter || 'all'));
+        });
+    }
+
+    renderEmptyState(type, emptyNode) {
+        if (!emptyNode) return;
+
+        if (type === 'none') {
+            emptyNode.innerHTML = `
+                <h3>No assignments yet</h3>
+                <p>Start building your planner by creating your first assignment.</p>
+                <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+            `;
+            return;
+        }
+
+        if (type === 'search') {
+            emptyNode.innerHTML = `
+                <h3>No search results</h3>
+                <p>No assignments match "${this.escapeHtml(this.searchQuery)}".</p>
+                <div class="empty-state-actions">
+                    <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="clear-search">Clear Search</button>
+                    <button type="button" class="empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                </div>
+            `;
+            return;
+        }
+
+        emptyNode.innerHTML = `
+            <h3>No results for this filter</h3>
+            <p>Try a different filter or reset to the default list.</p>
+            <div class="empty-state-actions">
+                <button type="button" class="empty-state-cta control-surface control-surface--secondary" data-empty-action="show-all">Show All</button>
+                <button type="button" class="empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+            </div>
+        `;
+    }
+
+    openAssignmentsFilterPopover(triggerElement = null) {
+        const popover = document.getElementById('assignments-filter-popover');
+        const background = document.getElementById('assignments-filter-background');
+        const panel = document.getElementById('assignments-filter-panel');
+        const filterBtn = document.getElementById('assignments-filter-btn');
+        if (!popover || !filterBtn) return;
+
+        if (!popover.classList.contains('hidden')) {
+            this.closeAssignmentsFilterPopover();
+            return;
+        }
+
+        if (this.filterCloseTimer) {
+            clearTimeout(this.filterCloseTimer);
+            this.filterCloseTimer = null;
+        }
+
+        popover.classList.remove('hidden');
+        popover.style.transition = '';
+        popover.style.opacity = '';
+        popover.style.transform = '';
+        filterBtn.setAttribute('aria-expanded', 'true');
+
+        const isMobile = window.innerWidth <= 1023;
+        if (isMobile) {
+            if (background) {
+                background.style.transition = 'opacity 220ms ease';
+                background.style.opacity = '0';
+            }
+
+            if (panel) {
+                panel.classList.remove('swiping');
+                panel.style.removeProperty('--modal-translate-y');
+                panel.style.transition = '';
+                panel.style.opacity = '';
+                panel.classList.add('show');
+            }
+
+            document.body.classList.add('modal-open');
+
+            requestAnimationFrame(() => {
+                if (background) background.style.opacity = '1';
+            });
+        } else {
+            popover.style.opacity = '0';
+            popover.style.transform = 'translateY(-10px)';
+            popover.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+
+            if (background) {
+                background.style.transition = 'opacity 220ms ease';
+                background.style.opacity = '0';
+            }
+
+            document.body.classList.add('modal-open');
+
+            requestAnimationFrame(() => {
+                popover.style.opacity = '1';
+                popover.style.transform = 'translateY(0)';
+                if (background) background.style.opacity = '1';
+            });
+        }
+
+        if (!this.assignmentsFilterSwipeBound && typeof window.addSwipeToCloseSimple === 'function' && panel && background) {
+            this.assignmentsFilterSwipeBound = true;
+            window.addSwipeToCloseSimple(panel, background, () => this.closeAssignmentsFilterPopover(false));
+        }
+
+        this.activeAssignmentsFilterTrigger = triggerElement || filterBtn;
+        const focusTarget = popover.querySelector('input, button');
+        if (focusTarget) setTimeout(() => focusTarget.focus(), 0);
+    }
+
+    closeAssignmentsFilterPopover(restoreFocus = true, immediate = false) {
+        const popover = document.getElementById('assignments-filter-popover');
+        const background = document.getElementById('assignments-filter-background');
+        const panel = document.getElementById('assignments-filter-panel');
+        const filterBtn = document.getElementById('assignments-filter-btn');
+        if (!popover || !filterBtn) return;
+
+        if (this.filterCloseTimer) {
+            clearTimeout(this.filterCloseTimer);
+            this.filterCloseTimer = null;
+        }
+
+        if (popover.classList.contains('hidden') && !immediate) {
+            filterBtn.setAttribute('aria-expanded', 'false');
+            return;
+        }
+
+        const isMobile = window.innerWidth <= 1023;
+        if (immediate) {
+            if (panel) {
+                panel.classList.remove('show', 'swiping');
+                panel.style.removeProperty('--modal-translate-y');
+                panel.style.transition = '';
+                panel.style.opacity = '';
+            }
+            popover.classList.add('hidden');
+            popover.style.transition = '';
+            popover.style.opacity = '';
+            popover.style.transform = '';
+            if (background) {
+                background.style.transition = '';
+                background.style.opacity = '';
+            }
+            document.body.classList.remove('modal-open');
+        } else if (isMobile) {
+            if (panel) {
+                panel.classList.remove('show', 'swiping');
+                panel.style.removeProperty('--modal-translate-y');
+                panel.style.transition = '';
+                panel.style.opacity = '';
+            }
+            if (background) {
+                background.style.transition = 'opacity 220ms ease';
+                background.style.opacity = '0';
+            }
+            this.filterCloseTimer = setTimeout(() => {
+                popover.classList.add('hidden');
+                popover.style.transition = '';
+                popover.style.opacity = '';
+                popover.style.transform = '';
+                if (background) {
+                    background.style.transition = '';
+                    background.style.opacity = '';
+                }
+                document.body.classList.remove('modal-open');
+                this.filterCloseTimer = null;
+            }, 320);
+        } else {
+            popover.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            popover.style.opacity = '0';
+            popover.style.transform = 'translateY(-10px)';
+
+            if (background) {
+                background.style.transition = 'opacity 220ms ease';
+                background.style.opacity = '0';
+            }
+
+            this.filterCloseTimer = setTimeout(() => {
+                popover.classList.add('hidden');
+                popover.style.transition = '';
+                popover.style.opacity = '';
+                popover.style.transform = '';
+                if (background) {
+                    background.style.transition = '';
+                    background.style.opacity = '';
+                }
+                document.body.classList.remove('modal-open');
+                this.filterCloseTimer = null;
+            }, 300);
+        }
+
+        filterBtn.setAttribute('aria-expanded', 'false');
+        if (restoreFocus && this.activeAssignmentsFilterTrigger) {
+            this.activeAssignmentsFilterTrigger.focus();
+        }
+        this.activeAssignmentsFilterTrigger = null;
+    }
+
+    setupSortControls() {
+        if (this.sortControlsBound) return;
+        this.sortControlsBound = true;
+
+        const sortBtn = document.getElementById('assignments-sort-btn');
+        const sortDropdown = document.getElementById('assignments-sort-dropdown');
+        const sortWrapper = sortBtn?.closest('.sort-wrapper');
+        if (!sortBtn || !sortDropdown || !sortWrapper) return;
+
+        sortBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const isOpen = sortWrapper.classList.contains('open');
+            this.closeAllOverflowMenus();
+            this.closeAssignmentsFilterPopover(false);
+            sortWrapper.classList.toggle('open', !isOpen);
+        });
+
+        sortDropdown.querySelectorAll('.sort-option[data-sort]').forEach((option) => {
+            option.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.sortKey = option.dataset.sort || 'due_date_asc';
+                sortWrapper.classList.remove('open');
+                this.updateSortControlLabel();
+                this.renderAssignments();
+            });
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('#assignments-sort-btn') && !event.target.closest('#assignments-sort-dropdown') && !event.target.closest('.sort-wrapper')) {
+                sortWrapper.classList.remove('open');
+            }
+        });
+    }
+
+    updateSortControlLabel() {
+        const labelNode = document.getElementById('assignments-sort-label');
+        if (!labelNode) return;
+        labelNode.textContent = this.sortOptions[this.sortKey] || this.sortOptions.due_date_asc;
+        labelNode.dataset.sort = this.sortKey;
+
+        const sortDropdown = document.getElementById('assignments-sort-dropdown');
+        if (!sortDropdown) return;
+        sortDropdown.querySelectorAll('.sort-option[data-sort]').forEach((option) => {
+            option.classList.toggle('selected', option.dataset.sort === this.sortKey);
+        });
+    }
+
+    setupFilterControls() {
+        if (this.filterControlsBound) return;
+        this.filterControlsBound = true;
+
+        const filterBtn = document.getElementById('assignments-filter-btn');
+        const popover = document.getElementById('assignments-filter-popover');
+        const filterPanel = document.getElementById('assignments-filter-panel');
+        const filterBackground = document.getElementById('assignments-filter-background');
+        if (!filterBtn || !popover || !filterPanel || !filterBackground) return;
+
+        filterBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const isOpen = !popover.classList.contains('hidden');
+            this.closeAllOverflowMenus();
+            document.querySelectorAll('.sort-wrapper.open').forEach((wrapper) => wrapper.classList.remove('open'));
+            if (isOpen) {
+                this.closeAssignmentsFilterPopover();
+            } else {
+                this.openAssignmentsFilterPopover(filterBtn);
+            }
+        });
+
+        filterPanel.querySelectorAll('input[data-advanced-filter]').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                const filterKey = checkbox.dataset.advancedFilter;
+                if (!filterKey || !Object.prototype.hasOwnProperty.call(this.advancedFilters, filterKey)) return;
+                this.advancedFilters[filterKey] = checkbox.checked;
+                this.updateAdvancedFilterCountChip();
+                this.renderAssignments();
+            });
+        });
+
+        const clearBtn = document.getElementById('assignments-clear-advanced-filters');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                Object.keys(this.advancedFilters).forEach((key) => {
+                    this.advancedFilters[key] = false;
+                });
+                filterPanel.querySelectorAll('input[data-advanced-filter]').forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+                this.updateAdvancedFilterCountChip();
+                this.renderAssignments();
+            });
+        }
+
+        const seeResultsBtn = document.getElementById('assignments-filter-see-results');
+        if (seeResultsBtn) {
+            seeResultsBtn.addEventListener('click', () => {
+                this.closeAssignmentsFilterPopover();
+            });
+        }
+
+        filterBackground.addEventListener('click', (event) => {
+            if (event.target === filterBackground) {
+                this.closeAssignmentsFilterPopover();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                this.closeAssignmentsFilterPopover(false);
+            }
+        });
+    }
+
+    updateAdvancedFilterCountChip() {
+        const chip = document.getElementById('assignment-filter-count-chip');
+        if (!chip) return;
+        const activeCount = Object.values(this.advancedFilters).filter(Boolean).length;
+        if (activeCount === 0) {
+            chip.hidden = true;
+            chip.textContent = '';
+            return;
+        }
+        chip.hidden = false;
+        chip.textContent = String(activeCount);
+    }
+
+    setupAssignmentsListInteractions() {
+        if (this.listInteractionsBound) return;
+        this.listInteractionsBound = true;
+
+        const listContainer = document.getElementById('assignments-list');
+        const emptyState = document.getElementById('assignments-empty');
+        if (!listContainer || !emptyState) return;
+
+        const clearRowPressSuppression = () => {
+            listContainer
+                .querySelectorAll('.assignment-row-card.assignment-row-card--no-press')
+                .forEach((rowEl) => rowEl.classList.remove('assignment-row-card--no-press'));
+        };
+
+        listContainer.addEventListener('pointerdown', (event) => {
+            const overflowRegion = event.target.closest('.assignment-row-overflow');
+            if (!overflowRegion) return;
+            const row = overflowRegion.closest('.assignment-row-card[data-assignment-id]');
+            if (!row) return;
+            row.classList.add('assignment-row-card--no-press');
+        });
+
+        listContainer.addEventListener('pointerup', clearRowPressSuppression);
+        listContainer.addEventListener('pointercancel', clearRowPressSuppression);
+        document.addEventListener('pointerup', clearRowPressSuppression, true);
+
+        listContainer.addEventListener('click', async (event) => {
+            const row = event.target.closest('.assignment-row-card[data-assignment-id]');
+            if (!row) return;
+            const id = row.dataset.assignmentId;
+            const actionButton = event.target.closest('[data-row-action]');
+            if (actionButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                await this.handleRowAction(actionButton.dataset.rowAction, id, row, actionButton);
+                row.classList.remove('assignment-row-card--no-press');
+                return;
+            }
+            await this.openAssignmentById(id);
+        });
+
+        listContainer.addEventListener('keydown', async (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const row = event.target.closest('.assignment-row-card[data-assignment-id]');
+            if (!row) return;
+            if (event.target.closest('button')) return;
+            event.preventDefault();
+            await this.openAssignmentById(row.dataset.assignmentId);
+        });
+
+        emptyState.addEventListener('click', async (event) => {
+            const actionButton = event.target.closest('[data-empty-action]');
+            if (!actionButton) return;
+            const action = actionButton.dataset.emptyAction;
+            if (action === 'new-assignment') {
+                await this.openNewAssignmentModal();
+                return;
+            }
+            if (action === 'clear-search') {
+                this.clearSearchQuery();
+                this.renderAssignments();
+                return;
+            }
+            if (action === 'show-all') {
+                this.setQuickFilter('all');
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.assignment-row-overflow')) {
+                this.closeAllOverflowMenus();
+            }
+        });
+    }
+
+    isMobileViewport() {
+        return window.innerWidth <= 1023;
+    }
+
+    openCalendarDayDetailSheet(selectedDateKey) {
+        if (!this.isMobileViewport()) return false;
+        const selectedDate = this.parseCalendarDateKey(selectedDateKey);
+        if (!selectedDate) return false;
+
+        const pipeline = this.getListPipeline();
+        const assignmentsByDate = this.getCalendarAssignmentsByDate(pipeline.sorted);
+        const dayAssignments = assignmentsByDate[selectedDateKey] || [];
+
+        this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+
+        const layer = document.createElement('div');
+        layer.className = 'semester-mobile-sheet-layer assignments-calendar-day-sheet-layer';
+        layer.setAttribute('role', 'presentation');
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'semester-mobile-sheet-backdrop assignments-calendar-day-sheet-backdrop';
+
+        const sheet = document.createElement('div');
+        sheet.className = 'semester-mobile-sheet assignments-calendar-day-sheet';
+        sheet.dataset.swipeLockSelector = '.assignments-calendar-day-sheet-body';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-label', 'Assignments by day');
+
+        const indicator = document.createElement('div');
+        indicator.className = 'swipe-indicator';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        const header = document.createElement('div');
+        header.className = 'semester-mobile-sheet-header assignments-calendar-day-sheet-header';
+
+        const heading = document.createElement('h2');
+        heading.className = 'assignments-calendar-day-sheet-title';
+        heading.textContent = selectedDate.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+        header.appendChild(heading);
+
+        const body = document.createElement('div');
+        body.className = 'semester-mobile-sheet-options assignments-calendar-day-sheet-body';
+
+        if (dayAssignments.length === 0) {
+            body.innerHTML = `
+                <div class="assignments-calendar-day-empty">
+                    <p class="assignments-calendar-day-empty-copy">No assignments due this day.</p>
+                    <button type="button" class="assignments-calendar-day-new-btn control-surface control-surface--primary" data-day-detail-action="new-assignment">
+                        Add Assignment
+                    </button>
+                </div>
+            `;
+        } else {
+            body.innerHTML = dayAssignments.map((assignment) => {
+                const statusInfo = this.getDisplayStatusInfo(assignment);
+                const courseMarkup = assignment.course_tag_name
+                    ? `<span class="assignments-calendar-day-course-chip" style="--day-course-chip-bg:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, 18))}</span>`
+                    : '<span class="assignments-calendar-day-course-chip assignments-calendar-day-course-chip--empty">No course</span>';
+
+                return `
+                    <button type="button" class="assignments-calendar-day-row" data-assignment-id="${assignment.id}">
+                        <div class="assignments-calendar-day-row-main">
+                            <h4 class="assignments-calendar-day-row-title">${this.escapeHtml(assignment.title || 'Untitled Assignment')}</h4>
+                            <div class="assignments-calendar-day-row-meta">${courseMarkup}</div>
+                        </div>
+                        <span class="status-badge ${statusInfo.className}">${statusInfo.label}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        const footer = document.createElement('div');
+        footer.className = 'semester-mobile-sheet-footer assignments-calendar-day-sheet-footer';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'semester-mobile-sheet-cancel control-surface control-surface--secondary';
+        cancelButton.textContent = 'Cancel';
+        footer.appendChild(cancelButton);
+
+        sheet.appendChild(indicator);
+        sheet.appendChild(header);
+        sheet.appendChild(body);
+        sheet.appendChild(footer);
+        layer.appendChild(backdrop);
+        layer.appendChild(sheet);
+        (this.root || document.body).appendChild(layer);
+
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            this.closeCalendarDayDetailSheet();
+        };
+
+        const onResize = () => {
+            if (this.isMobileViewport()) return;
+            this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+        };
+
+        const hadModalOpenClass = document.body.classList.contains('modal-open');
+        this.calendarDaySheetState = {
+            layer,
+            sheet,
+            onKeyDown,
+            onResize,
+            closeTimer: null,
+            hadModalOpenClass
+        };
+
+        body.addEventListener('click', async (event) => {
+            const openButton = event.target.closest('.assignments-calendar-day-row[data-assignment-id]');
+            if (openButton) {
+                event.preventDefault();
+                const assignmentId = openButton.dataset.assignmentId;
+                if (!assignmentId) return;
+                this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+                await this.openAssignmentById(assignmentId);
+                return;
+            }
+
+            const newButton = event.target.closest('[data-day-detail-action="new-assignment"]');
+            if (newButton) {
+                event.preventDefault();
+                this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+                await this.openNewAssignmentModal({ dueDate: selectedDate });
+            }
+        });
+
+        layer.addEventListener('click', (event) => {
+            if (event.target === backdrop || event.target === cancelButton) {
+                event.preventDefault();
+                this.closeCalendarDayDetailSheet();
+            }
+        });
+
+        document.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('resize', onResize);
+        document.body.classList.add('modal-open');
+
+        if (typeof window.addSwipeToCloseSimple === 'function') {
+            window.addSwipeToCloseSimple(sheet, backdrop, () => {
+                this.closeCalendarDayDetailSheet({ immediate: true, restoreFocus: false });
+            });
+        }
+
+        window.requestAnimationFrame(() => {
+            layer.classList.add('show');
+            sheet.classList.add('show');
+        });
+
+        window.setTimeout(() => {
+            cancelButton.focus({ preventScroll: true });
+        }, 20);
+
+        return true;
+    }
+
+    closeCalendarDayDetailSheet({ immediate = false, restoreFocus = false } = {}) {
+        const state = this.calendarDaySheetState;
+        if (!state) return;
+
+        const {
+            layer,
+            sheet,
+            onKeyDown,
+            onResize,
+            hadModalOpenClass
+        } = state;
+
+        if (state.closeTimer) {
+            window.clearTimeout(state.closeTimer);
+            state.closeTimer = null;
+        }
+
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('resize', onResize);
+
+        if (!hadModalOpenClass) {
+            document.body.classList.remove('modal-open');
+        }
+
+        if (immediate) {
+            layer.remove();
+            this.calendarDaySheetState = null;
+            return;
+        }
+
+        layer.classList.remove('show');
+        sheet.classList.remove('show', 'swiping');
+        state.closeTimer = window.setTimeout(() => {
+            layer.remove();
+            if (this.calendarDaySheetState === state) {
+                this.calendarDaySheetState = null;
+            }
+        }, 320);
+    }
+
+    openAssignmentActionsSheet(assignmentId, triggerElement = null) {
+        if (!this.isMobileViewport()) return false;
+        const assignment = this.assignments.find((item) => String(item?.id) === String(assignmentId));
+        if (!assignment) return false;
+
+        this.closeAssignmentActionsSheet({ immediate: true, restoreFocus: false });
+
+        const normalizedStatus = this.getCanonicalStatus(assignment.status);
+        const layer = document.createElement('div');
+        layer.className = 'semester-mobile-sheet-layer assignment-actions-sheet-layer';
+        layer.setAttribute('role', 'presentation');
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'semester-mobile-sheet-backdrop assignment-actions-sheet-backdrop';
+
+        const sheet = document.createElement('div');
+        sheet.className = 'semester-mobile-sheet assignment-actions-sheet';
+        sheet.dataset.swipeLockSelector = '.assignment-actions-sheet-options';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-label', 'Assignment actions');
+
+        const indicator = document.createElement('div');
+        indicator.className = 'swipe-indicator';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'semester-mobile-sheet-options assignment-actions-sheet-options';
+
+        const actionItems = [
+            { action: 'open', label: 'Open', disabled: false, danger: false },
+            { action: 'edit', label: 'Edit', disabled: false, danger: false },
+            { action: 'mark-in-progress', label: 'Mark in progress', disabled: normalizedStatus === 'in_progress', danger: false },
+            { action: 'mark-completed', label: 'Mark completed', disabled: normalizedStatus === 'completed', danger: false },
+            { action: 'delete', label: 'Delete', disabled: false, danger: true }
+        ];
+
+        actionItems.forEach((item) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `semester-mobile-sheet-option assignment-actions-sheet-item${item.danger ? ' assignment-actions-sheet-item--danger' : ''}`;
+            button.dataset.rowAction = item.action;
+            if (item.disabled) {
+                button.disabled = true;
+                button.setAttribute('aria-disabled', 'true');
+            }
+
+            const icon = document.createElement('span');
+            icon.className = 'assignment-actions-sheet-item-icon';
+            icon.setAttribute('aria-hidden', 'true');
+
+            const label = document.createElement('span');
+            label.className = 'assignment-actions-sheet-item-label';
+            label.textContent = item.label;
+
+            button.appendChild(icon);
+            button.appendChild(label);
+            actionsWrap.appendChild(button);
+        });
+
+        const footer = document.createElement('div');
+        footer.className = 'semester-mobile-sheet-footer assignment-actions-sheet-footer';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'semester-mobile-sheet-cancel control-surface control-surface--secondary';
+        cancelButton.textContent = 'Cancel';
+
+        footer.appendChild(cancelButton);
+
+        sheet.appendChild(indicator);
+        sheet.appendChild(actionsWrap);
+        sheet.appendChild(footer);
+        layer.appendChild(backdrop);
+        layer.appendChild(sheet);
+        document.body.appendChild(layer);
+
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            this.closeAssignmentActionsSheet();
+        };
+
+        const onResize = () => {
+            if (this.isMobileViewport()) return;
+            this.closeAssignmentActionsSheet({ immediate: true, restoreFocus: false });
+        };
+
+        const hadModalOpenClass = document.body.classList.contains('modal-open');
+        this.assignmentActionsSheetState = {
+            assignmentId: String(assignmentId),
+            layer,
+            sheet,
+            triggerElement,
+            onKeyDown,
+            onResize,
+            closeTimer: null,
+            hadModalOpenClass
+        };
+
+        layer.addEventListener('click', async (event) => {
+            event.stopPropagation();
+
+            const actionButton = event.target.closest('.assignment-actions-sheet-item[data-row-action]');
+            if (actionButton) {
+                event.preventDefault();
+                if (actionButton.disabled) return;
+                const action = actionButton.dataset.rowAction;
+                this.closeAssignmentActionsSheet({ immediate: true, restoreFocus: false });
+                await this.handleRowAction(action, assignmentId, null, actionButton);
+                return;
+            }
+
+            if (event.target === backdrop || event.target === cancelButton) {
+                event.preventDefault();
+                this.closeAssignmentActionsSheet();
+            }
+        });
+
+        document.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('resize', onResize);
+        document.body.classList.add('modal-open');
+
+        if (typeof window.addSwipeToCloseSimple === 'function') {
+            window.addSwipeToCloseSimple(sheet, backdrop, () => {
+                this.closeAssignmentActionsSheet({ immediate: true, restoreFocus: false });
+            });
+        }
+
+        window.requestAnimationFrame(() => {
+            layer.classList.add('show');
+            sheet.classList.add('show');
+        });
+
+        window.setTimeout(() => {
+            cancelButton.focus({ preventScroll: true });
+        }, 20);
+
+        return true;
+    }
+
+    closeAssignmentActionsSheet({ immediate = false, restoreFocus = true } = {}) {
+        const state = this.assignmentActionsSheetState;
+        if (!state) return;
+
+        const {
+            layer,
+            sheet,
+            triggerElement,
+            onKeyDown,
+            onResize,
+            hadModalOpenClass
+        } = state;
+
+        if (state.closeTimer) {
+            window.clearTimeout(state.closeTimer);
+            state.closeTimer = null;
+        }
+
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('resize', onResize);
+
+        if (!hadModalOpenClass) {
+            document.body.classList.remove('modal-open');
+        }
+
+        if (immediate) {
+            layer.remove();
+            this.assignmentActionsSheetState = null;
+            if (restoreFocus && triggerElement && typeof triggerElement.focus === 'function') {
+                triggerElement.focus({ preventScroll: true });
+            }
+            return;
+        }
+
+        layer.classList.remove('show');
+        sheet.classList.remove('show', 'swiping');
+        state.closeTimer = window.setTimeout(() => {
+            layer.remove();
+            if (this.assignmentActionsSheetState === state) {
+                this.assignmentActionsSheetState = null;
+            }
+        }, 320);
+
+        if (restoreFocus && triggerElement && typeof triggerElement.focus === 'function') {
+            window.setTimeout(() => {
+                triggerElement.focus({ preventScroll: true });
+            }, 20);
+        }
+    }
+
+    async openAssignmentById(assignmentId, options = {}) {
+        const assignment = this.assignments.find((item) => String(item?.id) === String(assignmentId));
+        if (!assignment) return;
+        this.openAssignmentModal(assignment);
+        if (options.focusTitle) {
+            window.setTimeout(() => {
+                const input = document.getElementById('assignment-modal-title');
+                if (input) input.focus();
+            }, 30);
+        }
+    }
+
+    closeAllOverflowMenus(exceptRow = null) {
+        this.closeAssignmentActionsSheet({ immediate: true, restoreFocus: false });
+
+        document.querySelectorAll('.assignment-row-card .assignment-overflow-menu').forEach((menu) => {
+            const row = menu.closest('.assignment-row-card');
+            const isTargetRow = exceptRow && row === exceptRow;
+            if (isTargetRow) return;
+            menu.hidden = true;
+            if (row) row.classList.remove('assignment-row-card--overflow-open');
+        });
+        document.querySelectorAll('.assignment-overflow-trigger[aria-expanded="true"]').forEach((trigger) => {
+            const row = trigger.closest('.assignment-row-card');
+            const isTargetRow = exceptRow && row === exceptRow;
+            if (isTargetRow) return;
+            trigger.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    async handleRowAction(action, assignmentId, row, actionButton) {
+        if (!action || !assignmentId) return;
+        if (action === 'toggle-overflow') {
+            if (this.isMobileViewport()) {
+                const isSameSheetOpen = this.assignmentActionsSheetState
+                    && this.assignmentActionsSheetState.assignmentId === String(assignmentId);
+                if (isSameSheetOpen) {
+                    this.closeAssignmentActionsSheet();
+                    return;
+                }
+
+                this.closeAllOverflowMenus();
+                this.openAssignmentActionsSheet(assignmentId, actionButton || null);
+                return;
+            }
+
+            const menu = row.querySelector('.assignment-overflow-menu');
+            const trigger = row.querySelector('.assignment-overflow-trigger');
+            if (!menu || !trigger) return;
+            const shouldOpen = menu.hidden;
+            this.closeAllOverflowMenus(shouldOpen ? row : null);
+            menu.hidden = !shouldOpen;
+            trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            row.classList.toggle('assignment-row-card--overflow-open', shouldOpen);
+            return;
+        }
+
+        this.closeAllOverflowMenus();
+
+        if (action === 'open') {
+            await this.openAssignmentById(assignmentId);
+            return;
+        }
+        if (action === 'edit') {
+            await this.openAssignmentById(assignmentId, { focusTitle: true });
+            return;
+        }
+        if (action === 'mark-in-progress') {
+            if (actionButton?.disabled) return;
+            await this.updateAssignment(assignmentId, { status: 'in_progress' });
+            return;
+        }
+        if (action === 'mark-completed') {
+            if (actionButton?.disabled) return;
+            await this.updateAssignment(assignmentId, { status: 'completed' });
+            return;
+        }
+        if (action === 'delete') {
+            await this.deleteAssignment(assignmentId);
+        }
     }
 
     updateSubjectSelectorAppearance(subjectTag = null, subjectSelector = null) {

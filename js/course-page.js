@@ -1,4 +1,4 @@
-import { fetchAvailableSemesters, fetchCourseData, openCourseInfoMenu } from "./shared.js";
+import { fetchAvailableSemesters, fetchCourseData, openCourseInfoMenu, formatProfessorDisplayName } from "./shared.js";
 import { getCurrentAppPath, withBase } from "./path-utils.js";
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
@@ -182,9 +182,10 @@ function setupCoursePageAutocomplete({
     suggestions = courses
       .filter((course) => {
         const title = String(course?.title || "").toLowerCase();
-        const professor = String(course?.professor || "").toLowerCase();
+        const professorRaw = String(course?.professor || "").toLowerCase();
+        const professorRomaji = String(formatProfessorDisplayName(course?.professor || "") || "").toLowerCase();
         const code = String(course?.course_code || "").toLowerCase();
-        return title.includes(query) || professor.includes(query) || code.includes(query);
+        return title.includes(query) || professorRaw.includes(query) || professorRomaji.includes(query) || code.includes(query);
       })
       .slice(0, 6);
 
@@ -199,7 +200,7 @@ function setupCoursePageAutocomplete({
 
     const itemsMarkup = suggestions.map((course, index) => {
       const title = highlightMatches(course?.title || "", queryText);
-      const professor = highlightMatches(course?.professor || "", queryText);
+      const professor = highlightMatches(formatProfessorDisplayName(course?.professor || ""), queryText);
       const code = highlightMatches(course?.course_code || "", queryText);
       const highlightedClass = highlightedIndex === index ? " highlighted" : "";
       return `

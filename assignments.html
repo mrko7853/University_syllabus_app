@@ -29,12 +29,12 @@
                 <div class="search-modal">
                     <div class="swipe-indicator"></div>
                     <h2>
-                        <div></div>Search Courses
+                        <div></div>Search Assignments
                     </h2>
                     <div class="search-input-container">
                         <input type="text" class="search-input" id="search-input"
-                            placeholder="Enter course title, professor name, or course code..." autocomplete="off">
-                        <div class="search-autocomplete" id="search-autocomplete"></div>
+                            placeholder="Search assignment title, notes, or course..." autocomplete="off">
+                        <div class="search-autocomplete" id="search-autocomplete" style="display: none;"></div>
                     </div>
                     <div class="search-buttons">
                         <button class="search-submit" id="search-submit">Search</button>
@@ -44,188 +44,214 @@
             </div>
         </div>
 
-        <section id="assignments-main">
-
-      <!-- Desktop semester selector -->
-      <div class="container-above container-above-desktop">
-        <div class="title-box">
-          <div id="filter-year-term">
-            <div class="filter-year-term-container">
-              <div class="custom-select" data-target="semester-select">
-                <div class="custom-select-trigger" tabindex="0">
-                  <span class="custom-select-value">Loading...</span>
-                  <div class="custom-select-arrow"></div>
-                </div>
-                <div class="custom-select-options">
-                  <!-- Options populated dynamically from database -->
-                </div>
-              </div>
-              <select name="semester" id="semester-select" class="semester-select" style="display: none;">
-                <!-- Options populated dynamically from database -->
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="buttons-box">
-          <!-- Desktop inline search pill -->
-          <div class="search-pill-container">
-            <div class="search-pill">
-              <div class="search-pill-icon"></div>
-              <input type="text" class="search-pill-input" id="search-pill-input" placeholder="Search courses..."
-                autocomplete="off">
-            </div>
-            <div class="search-pill-autocomplete" id="search-pill-autocomplete"></div>
-          </div>
-          <!-- Mobile search button (hidden on desktop) -->
-          <button class="search-btn">
-            <div></div>
-          </button>
-        </div>
-      </div>
-
-            <div class="assignments-container">
-
-        <!-- Mobile semester selector -->
-        <div class="container-above container-above-mobile">
-          <div class="title-box">
-            <div id="filter-year-term-mobile">
-              <div class="filter-year-term-container">
-                <div class="custom-select" data-target="semester-select-mobile">
-                  <div class="custom-select-trigger" tabindex="0">
-                    <span class="custom-select-value">Loading...</span>
-                    <div class="custom-select-arrow"></div>
-                  </div>
-                  <div class="custom-select-options">
-                    <!-- Options populated dynamically from database -->
-                  </div>
-                </div>
-                <select name="semester" id="semester-select-mobile" class="semester-select" style="display: none;">
-                  <!-- Options populated dynamically from database -->
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="buttons-box">
-            <button class="search-btn">
-              <div></div>
-            </button>
-          </div>
-        </div>
-                <!-- Header -->
-                <div class="assignments-header">
-                    <div class="assignments-tabs">
-                        <button class="tab-btn active" data-view="all-assignments">
-                            <div class="button-icon">
-                                <p>List View</p>
-                                <div class="assignment-all-icon assignment-icons"></div>
+        <section id="assignments-main" class="page-assignments">
+            <div class="courses-toolbar-shell assignments-toolbar-shell">
+                <div class="courses-toolbar courses-sticky-header assignments-toolbar">
+                    <div class="courses-sticky-inner">
+                        <div class="courses-toolbar-row courses-toolbar-row-a assignments-toolbar-row-a">
+                            <div class="courses-toolbar-term assignments-toolbar-term" id="filter-year-term">
+                                <div class="filter-year-term-container">
+                                    <div class="custom-select" data-target="semester-select">
+                                        <div class="custom-select-trigger control-surface control-surface--primary" tabindex="0">
+                                            <span class="custom-select-value">Loading...</span>
+                                            <div class="custom-select-arrow"></div>
+                                        </div>
+                                        <div class="custom-select-options"></div>
+                                    </div>
+                                    <select name="semester" id="semester-select" class="semester-select" style="display: none;"></select>
+                                </div>
                             </div>
-                        </button>
-                        <button class="tab-btn" data-view="by-due-date">
-                            <div class="button-icon">
-                                <p>Calendar</p>
-                                <div class="assignment-calendar-icon assignment-icons"></div>
-                            </div>
-                        </button>
-                    </div>
-                    <div class="assignments-actions">
-                        <button class="tab-btn" id="new-assignment-btn">
-                            <div class="button-icon">
-                                <p>New</p>
-                                <div class="assignment-add-icon assignment-icons"></div>
-                            </div>
-                        </button>
-                    </div>
-                </div>
 
-                <!-- All Assignments View (Table) -->
-                <div class="assignments-view" id="all-assignments-view">
-                    <div class="assignments-table-wrapper">
-                        <table class="assignments-table" id="assignments-table">
-                            <thead>
-                                <tr>
-                                    <th class="col-title">
-                                        <span class="col-icon assignment-name-icon"></span> Assignment Name
-                                    </th>
-                                    <th class="col-due-date">
-                                        <span class="col-icon assignment-due-icon"></span> Due Date
-                                    </th>
-                                    <th class="col-subject">
-                                        <span class="col-icon assignment-type-icon"></span> Subject
-                                    </th>
-                                    <th class="col-status">
-                                        <span class="col-icon assignment-status-icon"></span> Status
-                                    </th>
-                                    <th class="col-actions"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="assignments-tbody">
-                                <!-- Assignments will be rendered here -->
-                            </tbody>
-                        </table>
-                        <div class="quick-add-row" id="quick-add-row">
-                            <span class="quick-add-icon">+</span>
-                            <span class="quick-add-text">New Assignment</span>
-                        </div>
-                    </div>
-                    <div class="assignments-empty" id="assignments-empty" style="display: none;">
-                        <div class="empty-icon">📝</div>
-                        <h3>No assignments yet</h3>
-                        <p>Click "New" to create your first assignment</p>
-                    </div>
-                </div>
-
-                <!-- By Due Date View (Calendar) -->
-                <div class="assignments-view" id="by-due-date-view" style="display: none;">
-                    <div class="calendar-view-container">
-                        <div class="calendar-nav">
-                            <button class="calendar-nav-btn" id="calendar-prev-month">‹</button>
-                            <h2 class="calendar-month-title" id="calendar-month-title">February 2026</h2>
-                            <button class="calendar-nav-btn" id="calendar-next-month">›</button>
-                            <button class="calendar-today-btn" id="calendar-today-btn">Today</button>
-                        </div>
-                        <div class="calendar-grid" id="assignments-calendar-grid">
-                            <div class="calendar-header">
-                                <div class="calendar-day-header">Sun</div>
-                                <div class="calendar-day-header">Mon</div>
-                                <div class="calendar-day-header">Tue</div>
-                                <div class="calendar-day-header">Wed</div>
-                                <div class="calendar-day-header">Thu</div>
-                                <div class="calendar-day-header">Fri</div>
-                                <div class="calendar-day-header">Sat</div>
+                            <div class="courses-toolbar-search assignments-toolbar-search">
+                                <div class="search-pill-container">
+                                    <div class="search-pill">
+                                        <div class="search-pill-icon"></div>
+                                        <input type="text" class="search-pill-input" id="search-pill-input"
+                                            placeholder="Search assignments..." autocomplete="off">
+                                    </div>
+                                </div>
+                                <button type="button" class="search-btn control-surface control-surface--secondary" id="assignments-search-btn">
+                                    <div class="search-btn-icon" aria-hidden="true"></div>
+                                    <span class="search-btn-label">Search</span>
+                                </button>
                             </div>
-                            <div class="calendar-body" id="calendar-body">
-                                <!-- Calendar cells will be rendered here -->
+
+                            <div class="courses-toolbar-actions assignments-toolbar-actions">
+                                <div class="sort-wrapper">
+                                    <button type="button" class="sort-btn control-surface control-surface--secondary" id="assignments-sort-btn">
+                                        <div class="sort-btn-icon" aria-hidden="true"></div>
+                                        <span class="sort-btn-label" id="assignments-sort-label" data-sort="due_date_asc">Due date</span>
+                                    </button>
+                                    <div class="sort-dropdown" id="assignments-sort-dropdown">
+                                        <div class="sort-option selected" data-sort="due_date_asc">Due date</div>
+                                        <div class="sort-option" data-sort="due_date_desc">Due date</div>
+                                        <div class="sort-option" data-sort="title_az">Title A-Z</div>
+                                    </div>
+                                </div>
+
+                                <div class="assignments-filter-wrapper">
+                                    <button type="button" class="filter-btn control-surface control-surface--secondary" id="assignments-filter-btn" aria-haspopup="dialog" aria-expanded="false">
+                                        <div class="filter-btn-icon" aria-hidden="true"></div>
+                                        <span class="filter-btn-label">Filters</span>
+                                        <span class="assignment-filter-count-chip" id="assignment-filter-count-chip" hidden></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="calendar-toolbar-center assignments-toolbar-segmented" role="tablist" aria-label="Assignments view">
+                                <button class="calendar-view-btn assignments-view-segment is-active" data-view="all-assignments" aria-selected="true">List</button>
+                                <button class="calendar-view-btn assignments-view-segment" data-view="by-due-date" aria-selected="false">Calendar</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div id="assignments-filter-popover" class="filter-container hidden" role="dialog"
+                aria-labelledby="assignments-filter-heading" aria-modal="true">
+                <div class="filter-background" id="assignments-filter-background">
+                    <div class="filter-popup calendar-filter-popup assignments-filter-popup" id="assignments-filter-panel">
+                        <div class="filter-header">
+                            <div class="swipe-indicator"></div>
+                            <div class="filter-buttons">
+                                <button type="button" id="assignments-filter-see-results">See Results</button>
+                                <button type="button" id="assignments-clear-advanced-filters">Clear All</button>
+                            </div>
+                        </div>
+                        <div class="filter-content">
+                            <div id="filter-by-concentration" class="calendar-filter-group assignments-filter-group">
+                                <h3 class="filter-title" id="assignments-filter-heading">Assignment Filters</h3>
+                                <div class="checkboxes-container" id="assignments-filter-group">
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="assignments-filter-has-due-date" class="filter-checkbox" data-advanced-filter="has_due_date">
+                                        <label for="assignments-filter-has-due-date">Has due date<small>Only assignments with a due date</small></label>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="assignments-filter-no-due-date" class="filter-checkbox" data-advanced-filter="no_due_date">
+                                        <label for="assignments-filter-no-due-date">No due date<small>Only assignments without a due date</small></label>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="assignments-filter-with-course" class="filter-checkbox" data-advanced-filter="with_course">
+                                        <label for="assignments-filter-with-course">With course<small>Assigned to a linked course</small></label>
+                                    </div>
+                                    <div class="checkbox-content">
+                                        <input type="checkbox" id="assignments-filter-without-course" class="filter-checkbox" data-advanced-filter="without_course">
+                                        <label for="assignments-filter-without-course">Without course<small>No linked course yet</small></label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <main class="assignments-page-main">
+                <div class="assignments-container">
+                    <header class="assignments-module-header">
+                        <h1 class="assignments-module-title">Assignments</h1>
+                        <p class="assignments-module-subtitle" id="assignments-results-summary">Showing 0 items</p>
+                        <button type="button" class="assignments-new-btn control-surface control-surface--primary" id="new-assignment-btn">
+                            <div class="assignment-add-icon assignment-icons" aria-hidden="true"></div>
+                            <span>New Assignment</span>
+                        </button>
+                    </header>
+
+                    <div class="assignment-quick-filters">
+                        <button type="button" class="assignment-quick-filter active" data-filter="all">All</button>
+                        <button type="button" class="assignment-quick-filter" data-filter="due_today">Due Today</button>
+                        <button type="button" class="assignment-quick-filter" data-filter="due_soon">Due Soon</button>
+                        <button type="button" class="assignment-quick-filter" data-filter="in_progress">In Progress</button>
+                        <button type="button" class="assignment-quick-filter" data-filter="completed">Completed</button>
+                        <button type="button" class="assignment-quick-filter" data-filter="overdue">Overdue</button>
+                    </div>
+
+                    <div class="assignment-summary-cards">
+                        <button type="button" class="assignment-summary-card" data-filter="due_soon">
+                            <span class="assignment-summary-card-label">Due Soon</span>
+                            <span class="assignment-summary-card-count">0</span>
+                        </button>
+                        <button type="button" class="assignment-summary-card" data-filter="in_progress">
+                            <span class="assignment-summary-card-label">In Progress</span>
+                            <span class="assignment-summary-card-count">0</span>
+                        </button>
+                        <button type="button" class="assignment-summary-card" data-filter="completed">
+                            <span class="assignment-summary-card-label">Completed</span>
+                            <span class="assignment-summary-card-count">0</span>
+                        </button>
+                        <button type="button" class="assignment-summary-card" data-filter="overdue">
+                            <span class="assignment-summary-card-label">Overdue</span>
+                            <span class="assignment-summary-card-count">0</span>
+                        </button>
+                    </div>
+
+                    <div class="assignments-view" id="all-assignments-view">
+                        <div class="assignments-list" id="assignments-list"></div>
+                        <div class="assignments-empty" id="assignments-empty" hidden></div>
+                    </div>
+
+                    <div class="assignments-view" id="by-due-date-view" style="display: none;">
+                        <div class="calendar-view-container">
+                            <div class="calendar-nav">
+                                <button class="calendar-nav-btn" id="calendar-prev-month">‹</button>
+                                <h2 class="calendar-month-title" id="calendar-month-title">February 2026</h2>
+                                <button class="calendar-nav-btn" id="calendar-next-month">›</button>
+                                <button class="calendar-today-btn" id="calendar-today-btn">Today</button>
+                            </div>
+                            <div class="assignments-calendar-layout">
+                                <div class="calendar-grid" id="assignments-calendar-grid">
+                                    <div class="calendar-header">
+                                        <div class="calendar-day-header">Sun</div>
+                                        <div class="calendar-day-header">Mon</div>
+                                        <div class="calendar-day-header">Tue</div>
+                                        <div class="calendar-day-header">Wed</div>
+                                        <div class="calendar-day-header">Thu</div>
+                                        <div class="calendar-day-header">Fri</div>
+                                        <div class="calendar-day-header">Sat</div>
+                                    </div>
+                                    <div class="calendar-body" id="calendar-body"></div>
+                                </div>
+                                <section class="assignments-calendar-day-detail" id="assignments-calendar-day-detail" aria-live="polite">
+                                    <div class="assignments-calendar-day-detail-header">
+                                        <h3 class="assignments-calendar-day-detail-title" id="assignments-calendar-day-label">Selected date</h3>
+                                    </div>
+                                    <div class="assignments-calendar-day-detail-body" id="assignments-calendar-day-list"></div>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
 
             <!-- Assignment Detail Modal -->
             <div class="assignment-modal-overlay" id="assignment-modal-overlay" style="display: none;">
                 <div class="assignment-modal">
                     <div class="assignment-modal-header">
-                        <div class="meta-item">
-                            <div class="emoji-selector" id="assignment-emoji-selector">
-                                <button type="button" class="emoji-trigger" id="assignment-emoji-trigger">📄</button>
-                                <div class="emoji-picker" id="assignment-emoji-picker" style="display: none;">
-                                    <div class="emoji-picker-header">
-                                        <div class="emoji-picker-title">Emoji</div>
-                                        <button type="button" class="emoji-picker-remove" id="assignment-emoji-remove">Remove</button>
+                        <div class="assignment-modal-header-main">
+                            <div class="assignment-modal-icon-wrap">
+                                <div class="emoji-selector" id="assignment-emoji-selector">
+                                    <button type="button" class="emoji-trigger" id="assignment-emoji-trigger">📄</button>
+                                    <div class="emoji-picker" id="assignment-emoji-picker" style="display: none;">
+                                        <div class="emoji-picker-header">
+                                            <div class="emoji-picker-title">Emoji</div>
+                                            <button type="button" class="emoji-picker-remove" id="assignment-emoji-remove">Remove</button>
+                                        </div>
+                                        <div class="emoji-picker-search">
+                                            <input type="text" placeholder="Filter..." id="assignment-emoji-search" />
+                                            <button type="button" class="emoji-picker-random" id="assignment-emoji-random">🔀</button>
+                                            <span class="emoji-picker-preview" id="assignment-emoji-preview">✋</span>
+                                        </div>
+                                        <div class="emoji-picker-sections" id="assignment-emoji-sections"></div>
+                                        <div class="emoji-picker-footer" id="assignment-emoji-categories"></div>
                                     </div>
-                                    <div class="emoji-picker-search">
-                                        <input type="text" placeholder="Filter..." id="assignment-emoji-search" />
-                                        <button type="button" class="emoji-picker-random" id="assignment-emoji-random">🔀</button>
-                                        <span class="emoji-picker-preview" id="assignment-emoji-preview">✋</span>
-                                    </div>
-                                    <div class="emoji-picker-sections" id="assignment-emoji-sections"></div>
-                                    <div class="emoji-picker-footer" id="assignment-emoji-categories"></div>
                                 </div>
                             </div>
+                            <div class="assignment-modal-title-wrap">
+                                <input type="text" spellcheck="false" class="assignment-modal-title" id="assignment-modal-title"
+                                    placeholder="Assignment title">
+                                <p class="assignment-modal-subtitle" id="assignment-modal-subtitle">New assignment</p>
+                            </div>
                         </div>
-                        <input type="text" spellcheck="false" class="assignment-modal-title" id="assignment-modal-title"
-                            placeholder="Assignment Title">
-                        <button class="assignment-modal-close" id="assignment-modal-close">
+                        <button type="button" class="assignment-modal-close" id="assignment-modal-close" aria-label="Close assignment modal">
                             <div class="button-icon">
                                 <div class="exit-icon"></div>
                             </div>
@@ -242,7 +268,7 @@
                         <div class="meta-item">
                             <span class="meta-label">
                                 <span class="col-icon assignment-type-icon"></span>
-                                Subject
+                                Course
                             </span>
                             <div class="subject-selector" id="assignment-modal-subject">
                                 <div class="subject-current" id="subject-current">
@@ -266,27 +292,32 @@
                                 </div>
                                 <div class="custom-select-options">
                                     <div class="custom-select-option selected" data-value="not_started"><span class="option-tag">Not Started</span></div>
-                                    <div class="custom-select-option" data-value="ongoing"><span class="option-tag">Ongoing</span></div>
+                                    <div class="custom-select-option" data-value="in_progress"><span class="option-tag">In Progress</span></div>
                                     <div class="custom-select-option" data-value="completed"><span class="option-tag">Completed</span></div>
                                 </div>
                             </div>
                             <select class="status-select" id="assignment-modal-status">
                                 <option value="not_started" selected>Not Started</option>
-                                <option value="ongoing">Ongoing</option>
+                                <option value="in_progress">In Progress</option>
                                 <option value="completed">Completed</option>
                             </select>
                         </div>
                     </div>
                     <div class="assignment-modal-body">
                         <div class="instructions-section">
-                            <h3 class="section-title"><span class="col-icon assignment-instructions-icon"></span>Instructions</h3>
+                            <h3 class="section-title"><span class="col-icon assignment-instructions-icon"></span>Notes</h3>
                             <textarea class="instructions-editor" id="assignment-modal-instructions"
-                                placeholder="Add instructions, notes, or any details here..."></textarea>
+                                placeholder="Add assignment details..."></textarea>
                         </div>
                     </div>
                     <div class="assignment-modal-footer">
-                        <button class="delete-btn" id="assignment-delete-btn">Delete</button>
-                        <button class="save-btn" id="assignment-save-btn">Save</button>
+                        <div class="assignment-modal-footer-left">
+                            <button type="button" class="delete-btn assignment-modal-delete" id="assignment-delete-btn">Delete</button>
+                        </div>
+                        <div class="assignment-modal-footer-right">
+                            <button type="button" class="cancel-btn" id="assignment-modal-cancel-btn">Cancel</button>
+                            <button type="button" class="save-btn" id="assignment-save-btn">Create Assignment</button>
+                        </div>
                     </div>
                 </div>
             </div>

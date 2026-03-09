@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters, openCourseSearchForSlot } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters, openCourseSearchForSlot, formatProfessorDisplayName } from "./shared.js";
 import { withBase } from "./path-utils.js";
 import {
   applyPreferredTermToGlobals,
@@ -600,6 +600,7 @@ const homeDesktopHeaderState = {
 };
 let homeMobileHeaderBehaviorCleanup = null;
 let homeMobileSearchModalCleanup = null;
+let homeDesktopToolbarScrollCleanup = null;
 let homeMobileModalLockCount = 0;
 let homeMobileModalScrollY = 0;
 
@@ -829,9 +830,10 @@ function getHomeSearchSuggestions(query, limit = 6) {
   return (homeDesktopHeaderState.searchCourses || [])
     .filter((course) => {
       const title = String(course?.title || '').toLowerCase();
-      const professor = String(course?.professor || '').toLowerCase();
+      const professorRaw = String(course?.professor || '').toLowerCase();
+      const professorRomaji = String(formatProfessorDisplayName(course?.professor || '') || '').toLowerCase();
       const code = String(course?.course_code || '').toLowerCase();
-      return title.includes(normalizedQuery) || professor.includes(normalizedQuery) || code.includes(normalizedQuery);
+      return title.includes(normalizedQuery) || professorRaw.includes(normalizedQuery) || professorRomaji.includes(normalizedQuery) || code.includes(normalizedQuery);
     })
     .slice(0, limit);
 }
@@ -853,10 +855,10 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
     return;
   }
 
-  autocompleteContainer.innerHTML = suggestions.map((course, index) => {
+  const itemsMarkup = suggestions.map((course, index) => {
     const rawCode = String(course?.course_code || '');
     const title = highlightHomeSearchMatch(course?.title || '', trimmed);
-    const professor = highlightHomeSearchMatch(course?.professor || '', trimmed);
+    const professor = highlightHomeSearchMatch(formatProfessorDisplayName(course?.professor || ''), trimmed);
     const code = highlightHomeSearchMatch(rawCode, trimmed);
     return `
       <div class="search-autocomplete-item" data-suggestion-index="${index}">
@@ -868,6 +870,12 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
       </div>
     `;
   }).join('');
+
+  if (autocompleteContainer.classList.contains('search-pill-autocomplete')) {
+    autocompleteContainer.innerHTML = `<div class="search-pill-autocomplete-inner">${itemsMarkup}</div>`;
+  } else {
+    autocompleteContainer.innerHTML = itemsMarkup;
+  }
 
   autocompleteContainer.style.display = 'block';
 
@@ -889,6 +897,36 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
   });
 }
 
+function bindHomeAutocompleteScrollContainment(autocompleteContainer) {
+  if (!autocompleteContainer || autocompleteContainer.dataset.scrollContainmentBound === 'true') return;
+
+  const getScrollHost = () => (
+    autocompleteContainer.querySelector('.search-pill-autocomplete-inner')
+    || autocompleteContainer
+  );
+
+  autocompleteContainer.addEventListener('wheel', (event) => {
+    const host = getScrollHost();
+    if (!host) return;
+
+    const canScroll = host.scrollHeight > host.clientHeight + 1;
+    if (!canScroll) {
+      event.preventDefault();
+      return;
+    }
+
+    const deltaY = event.deltaY;
+    const atTop = host.scrollTop <= 0;
+    const atBottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 1;
+
+    if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  autocompleteContainer.dataset.scrollContainmentBound = 'true';
+}
+
 function refreshHomeSearchAutocomplete() {
   const input = document.getElementById('search-pill-input');
   const autocomplete = document.getElementById('search-pill-autocomplete');
@@ -902,6 +940,7 @@ function setupHomeSearchAutocomplete() {
   if (!input || !autocomplete) return;
   if (input.dataset.listenerAttached === 'true') return;
   input.dataset.listenerAttached = 'true';
+  bindHomeAutocompleteScrollContainment(autocomplete);
 
   const rerender = () => renderHomeSearchAutocomplete(input.value, input, autocomplete);
 
@@ -935,6 +974,64 @@ function setupHomeSearchAutocomplete() {
     });
     document.body.dataset.homeSearchOutsideBound = 'true';
   }
+}
+
+function teardownHomeDesktopToolbarScrollState() {
+  if (typeof homeDesktopToolbarScrollCleanup === 'function') {
+    homeDesktopToolbarScrollCleanup();
+    homeDesktopToolbarScrollCleanup = null;
+  }
+}
+
+function initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader) {
+  teardownHomeDesktopToolbarScrollState();
+
+  const appContent = document.getElementById('app-content');
+  let rafId = 0;
+
+  const getScrollTop = () => {
+    const windowScrollY = window.scrollY || window.pageYOffset || 0;
+    const rootScrollY = document.documentElement?.scrollTop || 0;
+    const bodyScrollY = document.body?.scrollTop || 0;
+    const contentScrollY = appContent ? appContent.scrollTop : 0;
+    const homeScrollY = homeMain ? homeMain.scrollTop : 0;
+    return Math.max(windowScrollY, rootScrollY, bodyScrollY, contentScrollY, homeScrollY);
+  };
+
+  const applyScrollState = () => {
+    rafId = 0;
+    if (window.innerWidth <= 1023) {
+      desktopHeader.classList.remove('is-scrolled');
+      return;
+    }
+    const isScrolled = getScrollTop() > 0;
+    desktopHeader.classList.toggle('is-scrolled', isScrolled);
+  };
+
+  const requestApply = () => {
+    if (rafId) return;
+    rafId = window.requestAnimationFrame(applyScrollState);
+  };
+
+  window.addEventListener('scroll', requestApply, { passive: true });
+  appContent?.addEventListener('scroll', requestApply, { passive: true });
+  homeMain?.addEventListener('scroll', requestApply, { passive: true });
+  document.addEventListener('scroll', requestApply, { passive: true, capture: true });
+  window.addEventListener('resize', requestApply);
+  applyScrollState();
+
+  homeDesktopToolbarScrollCleanup = () => {
+    if (rafId) {
+      window.cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    window.removeEventListener('scroll', requestApply);
+    appContent?.removeEventListener('scroll', requestApply);
+    homeMain?.removeEventListener('scroll', requestApply);
+    document.removeEventListener('scroll', requestApply, true);
+    window.removeEventListener('resize', requestApply);
+    desktopHeader.classList.remove('is-scrolled');
+  };
 }
 
 function lockHomeMobileModalScroll() {
@@ -1260,11 +1357,13 @@ async function initializeHomeDesktopHeader() {
   const homeMain = document.getElementById('home-main');
   const desktopHeader = homeMain?.querySelector('.home-container-above.container-above-desktop');
   if (!homeMain || !desktopHeader) {
+    teardownHomeDesktopToolbarScrollState();
     teardownHomeMobileStickyHeaderBehavior();
     teardownHomeMobileSearchModal();
     return;
   }
 
+  initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader);
   setupHomeMobileSearchModal();
   initializeHomeMobileStickyHeaderBehavior();
 
