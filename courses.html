@@ -144,6 +144,37 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div id="filter-by-assessment">
+                            <h3 class="filter-title">Assessment</h3>
+                            <div class="checkboxes-container">
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-has-presentation" class="filter-checkbox" data-assessment-filter="has-presentation">
+                                    <label for="filter-has-presentation">Has presentation</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-has-exam" class="filter-checkbox" data-assessment-filter="has-exam">
+                                    <label for="filter-has-exam">Has exam</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-has-paper" class="filter-checkbox" data-assessment-filter="has-paper">
+                                    <label for="filter-has-paper">Has paper</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-has-weekly" class="filter-checkbox" data-assessment-filter="has-weekly">
+                                    <label for="filter-has-weekly">Has weekly assignments</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-no-exam" class="filter-checkbox" data-assessment-filter="no-exam">
+                                    <label for="filter-no-exam">No exam</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-no-presentation" class="filter-checkbox" data-assessment-filter="no-presentation">
+                                    <label for="filter-no-presentation">No presentation</label>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -235,6 +266,7 @@
                             <button type="button" id="course-clear-active-filters"
                                 class="ui-btn ui-btn--secondary course-active-filters-clear control-surface control-surface--secondary">Clear</button>
                         </div>
+                        <p class="course-main-paragraph course-filter-paragraph course-results-summary-mobile" id="course-results-summary-mobile"></p>
                     </div>
                 </div>
             </div>
@@ -253,6 +285,14 @@
                     <!-- Hidden inputs to store parsed term and year values (shared) -->
                     <input type="hidden" id="term-select" value="Fall">
                     <input type="hidden" id="year-select" value="">
+                    <div class="assignment-quick-filters course-quick-filters" role="group" aria-label="Course quick filters">
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-empty-slots" aria-pressed="false">My empty slots</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-no-conflicts" aria-pressed="false">No conflicts</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-saved-only" aria-pressed="false">Saved only</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-registered-only" aria-pressed="false">Registered only</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-presentation" aria-pressed="false">Has no presentation</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-exam" aria-pressed="false">Has no exam</button>
+                    </div>
                     <div id="course-list" class="loading course-grid">
                         <!-- Initial skeleton placeholders - replaced when courses load -->
                         <div class="skeleton-class-outside">

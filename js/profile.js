@@ -16,14 +16,24 @@ import {
   getPreferredTermValue,
   getStoredPreferences,
   parseTermValue,
+  resolvePreferredTermForAvailableSemesters,
   setPreferredTermValue,
   setStoredPreference,
   clearStoredPreferences,
   normalizeTermValue
 } from "./preferences.js";
+import {
+  SETUP_CONCENTRATION_OPTIONS,
+  SETUP_PREFER_NOT_TO_ANSWER,
+  SETUP_YEAR_OPTIONS,
+  mapConcentrationSelectionToPayload,
+  mapYearSelectionToPayload,
+  normalizeSetupProfile
+} from "./setup-status.js";
 
 const PROFILE_ROUTES = new Set(["/profile", "/settings"]);
 const AUTH_PROMPT_KEY = "ila_profile_auth_prompt";
+const AUTH_LOGOUT_TOAST_KEY = "ila_auth_logout_toast";
 const PROFILE_MODAL_LAYER_ID = "profile-modal-layer";
 let profileCustomSelectDocumentHandler = null;
 let profileHeaderScrollCleanup = null;
@@ -38,7 +48,8 @@ const state = {
   calendarIntegrationError: null,
   semesters: [],
   userSettingsTableAvailable: true,
-  profileProgramYearColumnsAvailable: true
+  profileProgramYearColumnsAvailable: true,
+  profileSetupColumnsAvailable: true
 };
 
 function getDefaultCalendarIntegrationState() {
@@ -222,6 +233,12 @@ function navigateTo(path) {
   window.location.href = withBase(path);
 }
 
+function queueLogoutSuccessToast(message = "Logged out successfully.") {
+  try {
+    window.sessionStorage.setItem(AUTH_LOGOUT_TOAST_KEY, String(message || "Logged out successfully."));
+  } catch (_) { }
+}
+
 function isMissingRelationError(error, token) {
   if (!error) return false;
   const message = String(error.message || "").toLowerCase();
@@ -323,6 +340,12 @@ async function fetchSemestersSafe() {
 function resolveTermValueForSelection(termValue, semesters) {
   const normalized = normalizeTermValue(termValue);
   const options = Array.isArray(semesters) ? semesters : [];
+  const optionValues = options.map((semester) => `${semester.term}-${semester.year}`);
+  const resolvedDefault = resolvePreferredTermForAvailableSemesters(optionValues);
+
+  if (resolvedDefault && options.some((semester) => `${semester.term}-${semester.year}` === resolvedDefault)) {
+    return resolvedDefault;
+  }
 
   if (normalized && options.some((semester) => `${semester.term}-${semester.year}` === normalized)) {
     return normalized;
@@ -343,18 +366,58 @@ function resolveTermValueForSelection(termValue, semesters) {
 async function fetchProfileSafe(user) {
   if (!user?.id) return null;
 
-  const profileColumns = "id, display_name, avatar_url, program, year";
+  const setupColumns = "id, display_name, avatar_url, current_year, concentration, year_opt_out, concentration_opt_out, setup_completed_at, setup_version";
+  const setupWithLegacyColumns = `${setupColumns}, program, year`;
+  const legacyColumns = "id, display_name, avatar_url, program, year";
   const fallbackColumns = "id, display_name, avatar_url";
 
-  if (state.profileProgramYearColumnsAvailable) {
+  if (state.profileSetupColumnsAvailable) {
+    const preferredColumns = state.profileProgramYearColumnsAvailable ? setupWithLegacyColumns : setupColumns;
+
     const { data, error } = await supabase
       .from("profiles")
-      .select(profileColumns)
+      .select(preferredColumns)
       .eq("id", user.id)
       .maybeSingle();
 
     if (!error) {
-      return data;
+      return normalizeSetupProfile({
+        ...(data || {}),
+        program: data?.program ?? null,
+        year: data?.year ?? null
+      });
+    }
+
+    const missingSetupColumn = ["current_year", "concentration", "year_opt_out", "concentration_opt_out", "setup_completed_at", "setup_version"]
+      .some((column) => isMissingColumnError(error, column));
+
+    if (missingSetupColumn) {
+      state.profileSetupColumnsAvailable = false;
+    } else if (isMissingColumnError(error, "program") || isMissingColumnError(error, "year")) {
+      state.profileProgramYearColumnsAvailable = false;
+      return fetchProfileSafe(user);
+    } else {
+      throw error;
+    }
+  }
+
+  if (state.profileProgramYearColumnsAvailable) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select(legacyColumns)
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!error) {
+      return {
+        ...data,
+        current_year: null,
+        concentration: null,
+        year_opt_out: false,
+        concentration_opt_out: false,
+        setup_completed_at: null,
+        setup_version: 0
+      };
     }
 
     if (!isMissingColumnError(error, "program") && !isMissingColumnError(error, "year")) {
@@ -376,6 +439,12 @@ async function fetchProfileSafe(user) {
 
   return {
     ...data,
+    current_year: null,
+    concentration: null,
+    year_opt_out: false,
+    concentration_opt_out: false,
+    setup_completed_at: null,
+    setup_version: 0,
     program: null,
     year: null
   };
@@ -454,6 +523,51 @@ function getInitials(name, email) {
   }
 
   return String(email || "").split("@")[0].slice(0, 2).toUpperCase() || "IL";
+}
+
+function normalizeOptionValue(value, options) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return options.includes(normalized) ? normalized : "";
+}
+
+function getSetupYearLabel(profile) {
+  if (!state.profileSetupColumnsAvailable) {
+    const legacyYear = profile?.year ? String(profile.year).trim() : "";
+    return legacyYear ? `Year ${legacyYear}` : "Not Set";
+  }
+
+  if (profile?.year_opt_out) return SETUP_PREFER_NOT_TO_ANSWER;
+  const selected = normalizeOptionValue(profile?.current_year, SETUP_YEAR_OPTIONS);
+  return selected || "Not Set";
+}
+
+function getSetupConcentrationLabel(profile) {
+  if (!state.profileSetupColumnsAvailable) {
+    const legacyProgram = String(profile?.program || "").trim();
+    return legacyProgram || "Not Set";
+  }
+
+  if (profile?.concentration_opt_out) return SETUP_PREFER_NOT_TO_ANSWER;
+  const selected = normalizeOptionValue(profile?.concentration, SETUP_CONCENTRATION_OPTIONS);
+  return selected || "Not Set";
+}
+
+function isSetupFieldCompleted(profile, field) {
+  if (!profile) return false;
+  if (!state.profileSetupColumnsAvailable) {
+    if (field === "year") return Boolean(profile?.year);
+    if (field === "concentration") return Boolean(String(profile?.program || "").trim());
+    return false;
+  }
+
+  if (field === "year") {
+    return Boolean(String(profile?.current_year || "").trim()) || Boolean(profile?.year_opt_out);
+  }
+  if (field === "concentration") {
+    return Boolean(String(profile?.concentration || "").trim()) || Boolean(profile?.concentration_opt_out);
+  }
+  return false;
 }
 
 function consumeGuestPrompt(route) {
@@ -850,11 +964,11 @@ function renderSignedInView() {
   const displayName = getProfileDisplayName(state.profile, state.user);
   const email = state.user?.email || "";
   const initials = getInitials(displayName, email);
-  const programValue = state.profile?.program ? String(state.profile.program) : "";
-  const yearValue = state.profile?.year ? String(state.profile.year) : "";
-  const hasProgram = Boolean(programValue);
-  const hasYear = Boolean(yearValue);
-  const setupLabel = hasProgram || hasYear ? "Edit" : "Set Up";
+  const hasConcentration = isSetupFieldCompleted(state.profile, "concentration");
+  const hasYear = isSetupFieldCompleted(state.profile, "year");
+  const setupLabel = hasConcentration || hasYear ? "Edit" : "Set Up";
+  const concentrationLabel = getSetupConcentrationLabel(state.profile);
+  const yearLabel = getSetupYearLabel(state.profile);
   const useMobilePicker = isMobileViewport();
 
   if (identity) {
@@ -894,23 +1008,23 @@ function renderSignedInView() {
       `
         ${settingRow("Current term", "Used for courses, schedule, and assignments", currentTermControl)}
         ${settingRow(
-          "Program",
-          "Your current program",
+          "Concentration",
+          "Your current concentration",
           `${
-            hasProgram
-              ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(programValue)}</span>`
+            hasConcentration
+              ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(concentrationLabel)}</span>`
               : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
-          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
         ${settingRow(
-          "Year",
+          "Current year",
           "Current year",
           `${
             hasYear
-              ? `<span class="ui-pill status-pill status-pill--value">Year ${escapeHtml(yearValue)}</span>`
+              ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(yearLabel)}</span>`
               : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
-          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-program-year">${escapeHtml(setupLabel)}</button>`,
+          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
       `
@@ -1074,8 +1188,8 @@ function bindSignedInActions() {
     await applySettingChanges({ reduceMotion: next });
   });
 
-  document.querySelectorAll("[data-action='setup-program-year']").forEach((button) => {
-    button.addEventListener("click", openProgramYearSetupModal);
+  document.querySelectorAll("[data-action='setup-academic']").forEach((button) => {
+    button.addEventListener("click", openAcademicSetupModal);
   });
 
   document.getElementById("profile-manage-integrations")?.addEventListener("click", openCalendarIntegrationsModal);
@@ -1182,9 +1296,7 @@ function openModal({
     modal.classList.add("profile-modal--swipe");
   }
 
-  if (resolvedMode === "sheet" || resolvedMode === "fullscreen") {
-    document.body.classList.add("modal-open");
-  }
+  document.body.classList.add("modal-open");
 
   if (enableSwipeSheet && modal) {
     requestAnimationFrame(() => {
@@ -1823,7 +1935,7 @@ function openEditProfileModal() {
   });
 }
 
-function openProgramYearSetupModal() {
+function openLegacyProgramYearSetupModal() {
   const program = state.profile?.program ? String(state.profile.program) : "";
   const year = state.profile?.year ? String(state.profile.year) : "";
   const useMobileYearPicker = isMobileViewport();
@@ -1875,6 +1987,7 @@ function openProgramYearSetupModal() {
     mode: "dialog",
     mobileMode: "sheet"
   });
+
   if (!useMobileYearPicker) {
     initializeProfileCustomSelects();
   } else {
@@ -1964,11 +2077,225 @@ function openProgramYearSetupModal() {
   });
 }
 
+function openAcademicSetupModal() {
+  if (!state.profileSetupColumnsAvailable) {
+    openLegacyProgramYearSetupModal();
+    return;
+  }
+
+  const useMobilePicker = isMobileViewport();
+  const selectedYear = state.profile?.year_opt_out
+    ? SETUP_PREFER_NOT_TO_ANSWER
+    : normalizeOptionValue(state.profile?.current_year, SETUP_YEAR_OPTIONS);
+  const selectedConcentration = state.profile?.concentration_opt_out
+    ? SETUP_PREFER_NOT_TO_ANSWER
+    : normalizeOptionValue(state.profile?.concentration, SETUP_CONCENTRATION_OPTIONS);
+
+  const yearPickerOptions = [{ value: "", label: "Select year" }, ...SETUP_YEAR_OPTIONS.map((value) => ({ value, label: value }))];
+  const concentrationPickerOptions = [{ value: "", label: "Select concentration" }, ...SETUP_CONCENTRATION_OPTIONS.map((value) => ({ value, label: value }))];
+  const selectedYearOption = yearPickerOptions.find((option) => option.value === selectedYear) || yearPickerOptions[0];
+  const selectedConcentrationOption = concentrationPickerOptions.find((option) => option.value === selectedConcentration) || concentrationPickerOptions[0];
+
+  const buildPickerMarkup = (selectId, pickerId, options, selectedOption) => {
+    const selectOptions = options
+      .map((option) => `<option value="${escapeHtml(option.value)}"${option.value === selectedOption.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+      .join("");
+    return `
+      <button
+        type="button"
+        id="${escapeHtml(pickerId)}"
+        class="ui-btn ui-btn--secondary control-surface profile-picker-trigger profile-modal-picker-trigger"
+        aria-haspopup="dialog"
+      >
+        <span class="picker-value">${escapeHtml(selectedOption.label)}</span>
+        <span class="picker-chevron" aria-hidden="true">›</span>
+      </button>
+      <select id="${escapeHtml(selectId)}" class="profile-native-select" style="display:none;">
+        ${selectOptions}
+      </select>
+    `;
+  };
+
+  const yearControlMarkup = useMobilePicker
+    ? buildPickerMarkup("profile-edit-current-year", "profile-current-year-picker", yearPickerOptions, selectedYearOption)
+    : renderCustomSelectMarkup("profile-edit-current-year", yearPickerOptions, selectedYearOption.value);
+
+  const concentrationControlMarkup = useMobilePicker
+    ? buildPickerMarkup("profile-edit-concentration", "profile-concentration-picker", concentrationPickerOptions, selectedConcentrationOption)
+    : renderCustomSelectMarkup("profile-edit-concentration", concentrationPickerOptions, selectedConcentrationOption.value);
+
+  const layer = openModal({
+    title: "Set Up Academic Details",
+    bodyMarkup: `
+      <form id="profile-academic-setup-form" novalidate>
+        <label class="profile-modal-label" for="profile-edit-current-year">Current year</label>
+        ${yearControlMarkup}
+        <p class="profile-inline-error" id="profile-edit-current-year-error"></p>
+
+        <label class="profile-modal-label" for="profile-edit-concentration">Concentration</label>
+        ${concentrationControlMarkup}
+        <p class="profile-inline-error" id="profile-edit-concentration-error"></p>
+      </form>
+    `,
+    footerMarkup: `
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="submit" class="ui-btn ui-btn--secondary control-surface" form="profile-academic-setup-form" id="profile-academic-setup-save">Save</button>
+    `,
+    mode: "dialog",
+    mobileMode: "sheet"
+  });
+
+  if (!useMobilePicker) {
+    initializeProfileCustomSelects();
+  } else {
+    const yearPickerButton = layer.querySelector("#profile-current-year-picker");
+    const yearSelect = layer.querySelector("#profile-edit-current-year");
+    const concentrationPickerButton = layer.querySelector("#profile-concentration-picker");
+    const concentrationSelect = layer.querySelector("#profile-edit-concentration");
+
+    yearPickerButton?.addEventListener("click", () => {
+      openNestedChoicePicker({
+        title: "Current year",
+        options: yearPickerOptions,
+        selectedValue: String(yearSelect?.value || ""),
+        onSelect: async (value) => {
+          if (yearSelect) {
+            yearSelect.value = value;
+            yearSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const selected = yearPickerOptions.find((option) => option.value === value) || yearPickerOptions[0];
+          updatePickerLabel("profile-current-year-picker", selected.label);
+        }
+      });
+    });
+
+    concentrationPickerButton?.addEventListener("click", () => {
+      openNestedChoicePicker({
+        title: "Concentration",
+        options: concentrationPickerOptions,
+        selectedValue: String(concentrationSelect?.value || ""),
+        onSelect: async (value) => {
+          if (concentrationSelect) {
+            concentrationSelect.value = value;
+            concentrationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const selected = concentrationPickerOptions.find((option) => option.value === value) || concentrationPickerOptions[0];
+          updatePickerLabel("profile-concentration-picker", selected.label);
+        }
+      });
+    });
+  }
+
+  const form = layer.querySelector("#profile-academic-setup-form");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const yearValue = String(layer.querySelector("#profile-edit-current-year")?.value || "").trim();
+    const concentrationValue = String(layer.querySelector("#profile-edit-concentration")?.value || "").trim();
+
+    const yearError = yearValue && SETUP_YEAR_OPTIONS.includes(yearValue)
+      ? ""
+      : "Select your current year or choose Prefer not to answer.";
+    const concentrationError = concentrationValue && SETUP_CONCENTRATION_OPTIONS.includes(concentrationValue)
+      ? ""
+      : "Select your concentration or choose Prefer not to answer.";
+
+    layer.querySelector("#profile-edit-current-year-error").textContent = yearError;
+    layer.querySelector("#profile-edit-concentration-error").textContent = concentrationError;
+
+    if (yearError || concentrationError) return;
+
+    const yearPayload = mapYearSelectionToPayload(yearValue);
+    const concentrationPayload = mapConcentrationSelectionToPayload(concentrationValue);
+    const completionTimestamp = state.profile?.setup_completed_at || new Date().toISOString();
+
+    const payload = {
+      id: state.user.id,
+      display_name: getProfileDisplayName(state.profile, state.user),
+      ...yearPayload,
+      ...concentrationPayload,
+      setup_completed_at: completionTimestamp,
+      setup_version: Math.max(Number(state.profile?.setup_version || 0), 1),
+      updated_at: new Date().toISOString()
+    };
+
+    const saveButton = layer.querySelector("#profile-academic-setup-save");
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving...";
+    }
+
+    try {
+      await upsertProfileSafe(payload);
+
+      state.profile = normalizeSetupProfile({
+        ...(state.profile || {}),
+        display_name: payload.display_name,
+        ...yearPayload,
+        ...concentrationPayload,
+        setup_completed_at: payload.setup_completed_at,
+        setup_version: payload.setup_version
+      });
+
+      if (window.router && typeof window.router.setSetupCompletionForCurrentUser === "function") {
+        window.router.setSetupCompletionForCurrentUser(true, state.user?.id || null);
+      }
+
+      closeModal();
+      renderSignedInView();
+      applyRouteFocus(getCurrentRouteForProfile());
+      showProfileToast("Saved");
+    } catch (error) {
+      console.error("Profile: failed to save academic setup", error);
+      layer.querySelector("#profile-edit-concentration-error").textContent = "Could not save right now.";
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = "Save";
+      }
+    }
+  });
+}
+
 async function upsertProfileSafe(payload) {
-  if (state.profileProgramYearColumnsAvailable) {
+  if (state.profileSetupColumnsAvailable) {
     const { error } = await supabase
       .from("profiles")
       .upsert(payload, { onConflict: "id" });
+
+    if (!error) {
+      return;
+    }
+
+    const missingSetupColumn = ["current_year", "concentration", "year_opt_out", "concentration_opt_out", "setup_completed_at", "setup_version"]
+      .some((column) => isMissingColumnError(error, column));
+
+    if (missingSetupColumn) {
+      state.profileSetupColumnsAvailable = false;
+    } else if (isMissingColumnError(error, "program") || isMissingColumnError(error, "year")) {
+      state.profileProgramYearColumnsAvailable = false;
+      return upsertProfileSafe(payload);
+    } else {
+      throw error;
+    }
+  }
+
+  if (state.profileProgramYearColumnsAvailable) {
+    const legacyPayload = {
+      id: payload.id,
+      display_name: payload.display_name,
+      updated_at: payload.updated_at
+    };
+
+    if (Object.prototype.hasOwnProperty.call(payload, "program")) {
+      legacyPayload.program = payload.program;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "year")) {
+      legacyPayload.year = payload.year;
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(legacyPayload, { onConflict: "id" });
 
     if (!error) {
       return;
@@ -2055,6 +2382,7 @@ async function signOutUser() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
 
+    queueLogoutSuccessToast();
     navigateTo("/");
   } catch (error) {
     console.error("Profile: sign out failed", error);
@@ -2088,10 +2416,13 @@ async function loadSignedInState() {
       .catch((error) => ({ data: null, error }))
   ]);
 
-  state.profile = {
+  const mergedProfile = {
     ...(profileRow || {}),
     display_name: getProfileDisplayName(profileRow, state.user)
   };
+  state.profile = state.profileSetupColumnsAvailable
+    ? normalizeSetupProfile(mergedProfile)
+    : mergedProfile;
 
   state.semesters = semesters;
   state.settings = mergeSettings(baseSettings, settingsRow, semesters);

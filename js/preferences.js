@@ -1,5 +1,6 @@
 export const PREFERENCE_KEYS = {
   currentTerm: 'ila_current_term',
+  latestAvailableTerm: 'ila_latest_available_term',
   language: 'ila_lang',
   timeFormat: 'ila_timefmt',
   weekStart: 'ila_weekstart',
@@ -120,13 +121,88 @@ export function setPreferredTermValue(value) {
   return normalized
 }
 
+function syncHiddenYearTermInputs(parsed) {
+  if (!parsed?.term || !parsed?.year) return
+
+  document.querySelectorAll('[id="term-select"]').forEach((input) => {
+    input.value = parsed.term
+  })
+  document.querySelectorAll('[id="year-select"]').forEach((input) => {
+    input.value = String(parsed.year)
+  })
+}
+
+function syncSemesterSelectors(parsed) {
+  if (!parsed?.value) return
+
+  document.querySelectorAll('select.semester-select').forEach((select) => {
+    const matchingOption = Array.from(select.options || []).find(
+      (option) => normalizeTermValue(option.value) === parsed.value
+    )
+    if (matchingOption) {
+      select.value = matchingOption.value
+    }
+  })
+
+  document.querySelectorAll('.custom-select[data-target^="semester-select"]').forEach((customSelect) => {
+    const valueElement = customSelect.querySelector('.custom-select-value')
+    customSelect.querySelectorAll('.custom-select-option').forEach((option) => {
+      const selected = normalizeTermValue(option.dataset.value) === parsed.value
+      option.classList.toggle('selected', selected)
+      if (selected && valueElement) {
+        valueElement.textContent = option.textContent || parsed.value
+      }
+    })
+  })
+}
+
 export function applyPreferredTermToGlobals(value = getPreferredTermValue()) {
   const parsed = parseTermValue(value)
   if (!parsed.value) return parsed
 
   window.globalCurrentTerm = parsed.term
   window.globalCurrentYear = parsed.year
+  window.globalCurrentSemesterValue = parsed.value
+
+  syncHiddenYearTermInputs(parsed)
+  syncSemesterSelectors(parsed)
+
+  document.dispatchEvent(new CustomEvent('app:semester-changed', {
+    detail: {
+      term: parsed.term,
+      year: parsed.year,
+      value: parsed.value
+    }
+  }))
+
   return parsed
+}
+
+export function resolvePreferredTermForAvailableSemesters(semesterValues = []) {
+  const normalizedValues = (Array.isArray(semesterValues) ? semesterValues : [])
+    .map((value) => normalizeTermValue(value))
+    .filter(Boolean)
+
+  if (!normalizedValues.length) return null
+
+  const latestAvailable = normalizedValues[0]
+  const preferred = getPreferredTermValue()
+  const previousLatest = normalizeTermValue(readStorage(PREFERENCE_KEYS.latestAvailableTerm))
+  const hasNewSemester = Boolean(previousLatest && previousLatest !== latestAvailable)
+
+  if (previousLatest !== latestAvailable) {
+    writeStorage(PREFERENCE_KEYS.latestAvailableTerm, latestAvailable)
+  }
+
+  if (hasNewSemester) {
+    return latestAvailable
+  }
+
+  if (preferred && normalizedValues.includes(preferred)) {
+    return preferred
+  }
+
+  return latestAvailable
 }
 
 export function getStoredPreferences() {

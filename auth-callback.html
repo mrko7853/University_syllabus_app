@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Signing In - ILA Companion</title>
+  <link rel="stylesheet" href="css/blaze.css">
+</head>
+<body class="setup-flow-active auth-callback-active">
+  <app-navigation></app-navigation>
+  <div class="app-header app-header--title-mode">
+    <div class="app-header-brand">
+      <div class="app-logo"></div>
+      <h1 class="app-mobile-page-title" aria-live="polite">Signing in</h1>
+    </div>
+    <div class="app-misc"></div>
+  </div>
+
+  <div id="app-content" class="ui-page">
+    <main id="auth-callback-main" class="setup-flow-page">
+      <section class="setup-card ui-card card-surface">
+        <h1 class="setup-question-title">Signing you in...</h1>
+        <p class="setup-status-text" id="auth-callback-status" role="status" aria-live="polite">Finalizing sign-in...</p>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="js/components.js"></script>
+  <script type="module" src="js/shared.js"></script>
+  <script type="module" src="js/router.js"></script>
+  <script type="module" src="js/auth-callback.js"></script>
+</body>
+</html>

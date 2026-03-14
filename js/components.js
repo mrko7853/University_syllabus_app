@@ -6,11 +6,13 @@ import {
   applyStoredPreferences,
   getPreferredTermValue,
   normalizeTermValue,
+  resolvePreferredTermForAvailableSemesters,
   setPreferredTermValue
 } from "./preferences.js";
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 import { readSavedCourses, syncSavedCoursesForUser } from "./saved-courses.js";
-
+import guestScreen2 from "../assets/screen2.png";
+import guestMobileScreen from "../assets/mobilescreen.png";
 function bootstrapStoredPreferences() {
   const applyBootPreferences = () => {
     applyStoredPreferences();
@@ -25,21 +27,16 @@ function bootstrapStoredPreferences() {
       }
     }
   };
-
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", applyBootPreferences, { once: true });
     return;
   }
-
   applyBootPreferences();
 }
-
 bootstrapStoredPreferences();
-
 function syncAppViewportHeight() {
   const root = document.documentElement;
   if (!root) return;
-
   const viewportHeight = Math.round(
     window.visualViewport?.height
     || window.innerHeight
@@ -47,82 +44,62 @@ function syncAppViewportHeight() {
     || 0
   );
   if (viewportHeight <= 0) return;
-
   root.style.setProperty('--vh', `${viewportHeight * 0.01}px`);
   root.style.setProperty('--app-height', `${viewportHeight}px`);
 }
-
 function initializeAppViewportHeightSync() {
   if (window.__appViewportHeightSyncBound) return;
   window.__appViewportHeightSyncBound = true;
-
   syncAppViewportHeight();
-
   window.addEventListener('resize', syncAppViewportHeight, { passive: true });
   window.addEventListener('orientationchange', () => {
     window.setTimeout(syncAppViewportHeight, 250);
   }, { passive: true });
-
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', syncAppViewportHeight);
   }
-
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     syncAppViewportHeight();
   });
 }
-
 initializeAppViewportHeightSync();
-
 // Helper function to normalize course titles
 function normalizeCourseTitle(title) {
   if (!title) return title;
-
   // Convert full-width characters to normal characters
   let normalized = title.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
     return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
   });
-
   // Convert full-width spaces to normal spaces
   normalized = normalized.replace(/　/g, ' ');
-
   // Remove parentheses and their contents
   normalized = normalized.replace(/[()（）]/g, '');
-
   // Clean up extra spaces
   normalized = normalized.replace(/\s+/g, ' ').trim();
-
   return normalized;
 }
-
 // Helper function to normalize short titles for Next Class display
 function normalizeShortTitle(shortTitle) {
   if (!shortTitle) return shortTitle;
-
   // Convert full-width characters to normal width
   let normalized = shortTitle.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (char) {
     return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
   });
-
   // Convert full-width spaces to normal spaces
   normalized = normalized.replace(/　/g, ' ');
-
   // Remove ○ symbol
   normalized = normalized.replace(/○/g, '');
-
   // Remove parentheses
   normalized = normalized.replace(/[()（）]/g, '');
-
   // Clean up extra spaces and convert to UPPERCASE
   normalized = normalized.replace(/\s+/g, ' ').trim().toUpperCase();
-
   return normalized;
 }
-
 const HOME_DESKTOP_BREAKPOINT = 1024;
 const HOME_SEMESTER_MIN_CREDITS = 2;
 const HOME_SEMESTER_MAX_CREDITS = 24;
+const HOME_OPEN_ASSIGNMENT_INTENT_KEY = 'ila_open_assignment_id';
 const HOME_DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const HOME_DAY_SHORT_LABELS = {
   Mon: 'Mon',
@@ -143,7 +120,6 @@ const HOME_PERIOD_BY_NUMBER = HOME_PERIODS.reduce((acc, slot) => {
   return acc;
 }, {});
 const HOME_REVIEW_SUGGESTION_OPEN_REVIEW_KEY = 'ila_open_review_from_suggestion';
-
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -152,18 +128,15 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
 function highlightHomeSearchMatch(value, query) {
   const text = String(value || '');
   const normalizedQuery = String(query || '').trim();
   if (!normalizedQuery || normalizedQuery.length < 2) {
     return escapeHtml(text);
   }
-
   const pattern = new RegExp(`(${escapeRegExp(normalizedQuery)})`, 'ig');
   return text
     .split(pattern)
@@ -175,21 +148,18 @@ function highlightHomeSearchMatch(value, query) {
     })
     .join('');
 }
-
 function normalizeTermName(termValue) {
   if (!termValue) return 'Fall';
   const raw = String(termValue).trim();
   if (raw.includes('/')) {
     return normalizeTermName(raw.split('/').pop());
   }
-
   const lowered = raw.toLowerCase();
   if (lowered.includes('fall') || raw.includes('秋')) return 'Fall';
   if (lowered.includes('spring') || raw.includes('春')) return 'Spring';
   if (!raw) return 'Fall';
   return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
-
 function parseSemesterValue(value) {
   const normalized = normalizeTermValue(String(value || '').replace('/', '-'));
   if (!normalized) return { term: null, year: null, value: null };
@@ -201,12 +171,10 @@ function parseSemesterValue(value) {
     value: normalized
   };
 }
-
 function formatSemesterValue(term, year) {
   if (!term || !year) return null;
   return normalizeTermValue(`${normalizeTermName(term)}-${year}`);
 }
-
 function getCurrentHomeSemesterContext() {
   const yearValue = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById('year-select')?.value || new Date().getFullYear(), 10);
   const termValue = window.getCurrentTerm ? window.getCurrentTerm() : document.getElementById('term-select')?.value || 'Fall';
@@ -215,7 +183,16 @@ function getCurrentHomeSemesterContext() {
     term: normalizeTermName(termValue)
   };
 }
-
+function filterSavedCoursesBySemester(savedCourses, year, term) {
+  const targetYear = Number(year);
+  const targetTerm = normalizeTermName(term);
+  if (!Array.isArray(savedCourses) || !Number.isFinite(targetYear) || !targetTerm) return [];
+  return savedCourses.filter((savedCourse) => {
+    const savedYear = Number(savedCourse?.year);
+    const savedTerm = normalizeTermName(savedCourse?.term);
+    return savedYear === targetYear && savedTerm === targetTerm;
+  });
+}
 function parseCreditsValue(rawCredits) {
   if (rawCredits === null || rawCredits === undefined || rawCredits === '') return 0;
   if (typeof rawCredits === 'number') return Number.isFinite(rawCredits) ? rawCredits : 0;
@@ -224,23 +201,18 @@ function parseCreditsValue(rawCredits) {
   const parsed = parseFloat(matched[1]);
   return Number.isFinite(parsed) ? parsed : 0;
 }
-
 function getPeriodMeta(period) {
   return HOME_PERIOD_BY_NUMBER[Number(period)] || null;
 }
-
 function formatSlotLabel(day, period) {
   return `${HOME_DAY_SHORT_LABELS[day] || day} • P${period}`;
 }
-
 function formatPeriodWindow(period) {
   const meta = getPeriodMeta(period);
   return meta ? `${meta.start} - ${meta.end}` : '';
 }
-
 function parseCourseTimeSlot(timeSlot) {
   if (!timeSlot) return null;
-
   let match = String(timeSlot).match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
   if (match) {
     const dayJP = match[1];
@@ -250,7 +222,6 @@ function parseCourseTimeSlot(timeSlot) {
     if (!day || !HOME_PERIOD_BY_NUMBER[period]) return null;
     return { day, period, timeLabel: formatPeriodWindow(period) };
   }
-
   match = String(timeSlot).match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
   if (match) {
     const day = match[1];
@@ -261,10 +232,8 @@ function parseCourseTimeSlot(timeSlot) {
     if (!period) return null;
     return { day, period, timeLabel: `${match[2]}:${match[3]} - ${match[4]}:${match[5]}` };
   }
-
   return null;
 }
-
 function formatDueDateLabel(dateValue) {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return '';
@@ -273,17 +242,14 @@ function formatDueDateLabel(dateValue) {
     day: 'numeric'
   });
 }
-
 function getDaysUntilDate(dateValue) {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return null;
   date.setHours(0, 0, 0, 0);
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
-
 function navigateToRoute(path) {
   if (!path) return;
   if (window.router?.navigate) {
@@ -292,7 +258,6 @@ function navigateToRoute(path) {
   }
   window.location.href = withBase(path);
 }
-
 function navigateToSlotCourseSearch(day, period, term, year) {
   openCourseSearchForSlot({
     day,
@@ -302,7 +267,6 @@ function navigateToSlotCourseSearch(day, period, term, year) {
     source: 'home-planner'
   });
 }
-
 function navigateToDayCourseSearch(day, term, year) {
   openCourseSearchForSlot({
     day,
@@ -311,7 +275,6 @@ function navigateToDayCourseSearch(day, term, year) {
     source: 'home-calendar-day'
   });
 }
-
 function isSemesterSelectionTarget(target) {
   const targetId = target?.id;
   if (!targetId) return false;
@@ -322,14 +285,12 @@ function isSemesterSelectionTarget(target) {
     || targetId === 'year-select'
   );
 }
-
 let homePlannerDataCache = {
   key: null,
   updatedAt: 0,
   data: null,
   pending: null
 };
-
 function invalidateHomePlannerDataCache() {
   homePlannerDataCache = {
     key: null,
@@ -338,15 +299,13 @@ function invalidateHomePlannerDataCache() {
     pending: null
   };
 }
-
 async function fetchHomePlannerData() {
   const { year, term } = getCurrentHomeSemesterContext();
+  const normalizedTerm = normalizeTermName(term);
   const selectedSemesterValue = formatSemesterValue(term, year);
-  let savedCourses = readSavedCourses(5);
-
+  let savedCourses = [];
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user || null;
-
   const emptySlotsFallback = HOME_DAY_ORDER.flatMap((day) =>
     HOME_PERIODS.map((slot) => ({
       day,
@@ -354,7 +313,6 @@ async function fetchHomePlannerData() {
       label: formatSlotLabel(day, slot.period)
     }))
   );
-
   if (!user) {
     return {
       isAuthenticated: false,
@@ -371,33 +329,27 @@ async function fetchHomePlannerData() {
       courseCount: 0,
       typeBreakdown: [],
       assignmentsDueSoon: [],
-      savedCourses
+      savedCourses: []
     };
   }
-
   try {
-    savedCourses = (await syncSavedCoursesForUser(user.id)).slice(0, 5);
+    savedCourses = await syncSavedCoursesForUser(user.id);
   } catch (savedSyncError) {
     console.warn('Unable to sync saved courses for user:', savedSyncError);
-    savedCourses = readSavedCourses(5);
+    savedCourses = readSavedCourses(Number.POSITIVE_INFINITY);
   }
-
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('courses_selection')
     .eq('id', user.id)
     .single();
-
   if (profileError) throw profileError;
-
   const selectedCourseEntries = Array.isArray(profile?.courses_selection) ? profile.courses_selection : [];
-  const normalizedTerm = normalizeTermName(term);
   const selectedForSemester = selectedCourseEntries.filter((course) => {
     const courseYear = Number(course?.year);
     const courseTerm = course?.term ? normalizeTermName(course.term) : null;
     return courseYear === Number(year) && (!courseTerm || courseTerm === normalizedTerm);
   });
-
   let userCourses = [];
   let typeBreakdown = [];
   let creditsTotal = 0;
@@ -405,7 +357,6 @@ async function fetchHomePlannerData() {
     const semesterCourses = await fetchCourseData(year, normalizedTerm);
     const selectionCodes = new Set(selectedForSemester.map((course) => String(course?.code || '').trim()).filter(Boolean));
     userCourses = (semesterCourses || []).filter((course) => selectionCodes.has(String(course?.course_code || '').trim()));
-
     const breakdownMap = new Map();
     userCourses.forEach((course) => {
       const type = String(course?.type || 'General').trim() || 'General';
@@ -416,13 +367,11 @@ async function fetchHomePlannerData() {
       existing.credits += credits;
       breakdownMap.set(type, existing);
     });
-
     typeBreakdown = [...breakdownMap.values()].sort((a, b) => {
       if (b.credits !== a.credits) return b.credits - a.credits;
       return b.count - a.count;
     });
   }
-
   const slotMap = new Map();
   userCourses.forEach((course) => {
     const slot = parseCourseTimeSlot(course?.time_slot);
@@ -432,7 +381,6 @@ async function fetchHomePlannerData() {
     existing.push(course);
     slotMap.set(key, existing);
   });
-
   const emptySlots = [];
   HOME_DAY_ORDER.forEach((day) => {
     HOME_PERIODS.forEach((slot) => {
@@ -446,7 +394,6 @@ async function fetchHomePlannerData() {
       }
     });
   });
-
   const conflicts = [];
   slotMap.forEach((courses, key) => {
     if (courses.length < 2) return;
@@ -458,54 +405,45 @@ async function fetchHomePlannerData() {
       courses: courses.map((course) => normalizeCourseTitle(course?.title || course?.course_code || 'Course'))
     });
   });
-
   let assignmentsDueSoon = [];
   try {
     const { data: assignments, error: assignmentsError } = await supabase
       .from('assignments')
-      .select('title, due_date, status, course_code, course_year, course_term')
+      .select('id, title, due_date, status, assignment_icon, course_code, course_year, course_term')
       .eq('user_id', user.id)
       .neq('status', 'completed')
       .not('due_date', 'is', null);
-
     if (assignmentsError) throw assignmentsError;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const windowEnd = new Date(today);
     windowEnd.setDate(windowEnd.getDate() + 7);
-
     const dueSoonAssignments = (assignments || [])
       .filter((assignment) => {
         const dueDate = assignment?.due_date ? new Date(assignment.due_date) : null;
         if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
         dueDate.setHours(0, 0, 0, 0);
         if (dueDate < today || dueDate > windowEnd) return false;
-
         const assignmentYear = assignment?.course_year === null || assignment?.course_year === undefined
           ? null
           : Number(assignment.course_year);
         const assignmentTerm = assignment?.course_term ? normalizeTermName(assignment.course_term) : null;
         const hasSemesterMeta = assignmentYear !== null && assignmentTerm;
-
         if (!hasSemesterMeta) return true;
         return assignmentYear === Number(year) && assignmentTerm === normalizedTerm;
       })
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-
     const courseNameByCode = new Map();
     userCourses.forEach((course) => {
       const code = String(course?.course_code || '').trim();
       if (!code || courseNameByCode.has(code)) return;
       courseNameByCode.set(code, normalizeCourseTitle(course?.title || code));
     });
-
     const missingCourseCodes = [...new Set(
       dueSoonAssignments
         .map((assignment) => String(assignment?.course_code || '').trim())
         .filter((code) => code && !courseNameByCode.has(code))
     )];
-
     if (missingCourseCodes.length > 0) {
       try {
         const { data: mappedCourses, error: mappedCoursesError } = await supabase
@@ -514,7 +452,6 @@ async function fetchHomePlannerData() {
           .in('course_code', missingCourseCodes)
           .eq('academic_year', Number(year))
           .eq('term', normalizedTerm);
-
         if (!mappedCoursesError) {
           (mappedCourses || []).forEach((course) => {
             const code = String(course?.course_code || '').trim();
@@ -526,11 +463,13 @@ async function fetchHomePlannerData() {
         console.warn('Unable to map assignment course names for due-soon widget:', mappingError);
       }
     }
-
     assignmentsDueSoon = dueSoonAssignments.map((assignment) => {
       const courseCode = assignment?.course_code ? String(assignment.course_code).trim() : '';
       return {
+        id: assignment?.id ? String(assignment.id) : '',
         title: String(assignment?.title || 'Untitled assignment').trim() || 'Untitled assignment',
+        status: String(assignment?.status || '').trim().toLowerCase(),
+        assignmentIcon: String(assignment?.assignment_icon || '📄').trim() || '📄',
         courseCode,
         courseName: courseNameByCode.get(courseCode) || courseCode || 'Course not set',
         dueDate: assignment?.due_date,
@@ -541,7 +480,6 @@ async function fetchHomePlannerData() {
     console.error('Error loading home planner assignments:', error);
     assignmentsDueSoon = [];
   }
-
   return {
     isAuthenticated: true,
     user,
@@ -557,23 +495,19 @@ async function fetchHomePlannerData() {
     courseCount: userCourses.length,
     typeBreakdown,
     assignmentsDueSoon,
-    savedCourses
+    savedCourses: filterSavedCoursesBySemester(savedCourses, year, normalizedTerm)
   };
 }
-
 async function getHomePlannerData({ force = false } = {}) {
   const { year, term } = getCurrentHomeSemesterContext();
   const key = `${year}-${term}`;
   const isFresh = (Date.now() - homePlannerDataCache.updatedAt) < 9000;
-
   if (!force && homePlannerDataCache.key === key && homePlannerDataCache.data && isFresh) {
     return homePlannerDataCache.data;
   }
-
   if (!force && homePlannerDataCache.key === key && homePlannerDataCache.pending) {
     return homePlannerDataCache.pending;
   }
-
   const pending = fetchHomePlannerData()
     .then((data) => {
       homePlannerDataCache = {
@@ -588,12 +522,10 @@ async function getHomePlannerData({ force = false } = {}) {
       homePlannerDataCache.pending = null;
       throw error;
     });
-
   homePlannerDataCache.pending = pending;
   homePlannerDataCache.key = key;
   return pending;
 }
-
 const homeDesktopHeaderState = {
   searchCourses: [],
   initializedAtLeastOnce: false
@@ -609,42 +541,35 @@ const MOBILE_HEADER_TOP_REVEAL_THRESHOLD = 8;
 const MOBILE_PAGE_TOOLBAR_SELECTOR = [
   '.page-courses .courses-toolbar-shell',
   '#assignments-main.page-assignments .assignments-toolbar-shell',
-  '#course-summary.calendar-page-modern .container-above.container-above-mobile'
+  '#course-summary.calendar-page-modern .container-above.container-above-mobile',
+  'body.course-page-mode #course-page .course-page-toolbar-shell'
 ].join(', ');
-
 function isHomeMobileViewport() {
   return window.innerWidth <= 1023;
 }
-
 async function populateHomeSemesterDropdown() {
   const homeMain = document.getElementById('home-main');
   if (!homeMain) return;
-
   const semesterSelects = homeMain.querySelectorAll('.semester-select');
   const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
   if (!semesterSelects.length || !customSelects.length) return;
-
   const semesters = await fetchAvailableSemesters();
   if (!Array.isArray(semesters) || semesters.length === 0) return;
-
   const semesterValues = semesters
     .map((semester) => formatSemesterValue(semester.term, semester.year))
     .filter(Boolean);
-
-  const preferredTerm = getPreferredTermValue();
   const hiddenTerm = document.getElementById('term-select');
   const hiddenYear = document.getElementById('year-select');
   const hiddenSelection = formatSemesterValue(hiddenTerm?.value || '', hiddenYear?.value || '');
+  const resolvedDefault = resolvePreferredTermForAvailableSemesters(semesterValues);
   const selectedSemesterValue = (
-    (preferredTerm && semesterValues.includes(preferredTerm) && preferredTerm)
+    (resolvedDefault && semesterValues.includes(resolvedDefault) && resolvedDefault)
     || (hiddenSelection && semesterValues.includes(hiddenSelection) && hiddenSelection)
     || semesterValues[0]
   );
-
   const selectedSemester = semesters.find((semester) => (
     formatSemesterValue(semester.term, semester.year) === selectedSemesterValue
   )) || semesters[0];
-
   semesterSelects.forEach((select) => {
     select.innerHTML = '';
     semesters.forEach((semester) => {
@@ -658,12 +583,10 @@ async function populateHomeSemesterDropdown() {
     });
     select.value = selectedSemesterValue;
   });
-
   customSelects.forEach((customSelect) => {
     const optionsContainer = customSelect.querySelector('.custom-select-options');
     const valueElement = customSelect.querySelector('.custom-select-value');
     if (!optionsContainer || !valueElement) return;
-
     optionsContainer.innerHTML = '';
     semesters.forEach((semester) => {
       const value = formatSemesterValue(semester.term, semester.year);
@@ -674,35 +597,27 @@ async function populateHomeSemesterDropdown() {
       option.textContent = semester.label || `${semester.term} ${semester.year}`;
       optionsContainer.appendChild(option);
     });
-
     valueElement.textContent = selectedSemester?.label || `${selectedSemester?.term || ''} ${selectedSemester?.year || ''}`.trim();
   });
-
   if (selectedSemesterValue) {
     setPreferredTermValue(selectedSemesterValue);
     applyPreferredTermToGlobals(selectedSemesterValue);
   }
-
   const hiddenTermInput = document.getElementById('term-select');
   const hiddenYearInput = document.getElementById('year-select');
   if (selectedSemester?.term && hiddenTermInput) hiddenTermInput.value = normalizeTermName(selectedSemester.term);
   if (selectedSemester?.year && hiddenYearInput) hiddenYearInput.value = String(selectedSemester.year);
 }
-
 function applyHomeSemesterSelection(value, { dispatchChange = true } = {}) {
   const parsed = parseSemesterValue(value);
   if (!parsed.value || !parsed.term || !parsed.year) return;
-
   const homeMain = document.getElementById('home-main');
   if (!homeMain) return;
-
   const semesterSelects = homeMain.querySelectorAll('.semester-select');
   const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
-
   semesterSelects.forEach((select) => {
     select.value = parsed.value;
   });
-
   customSelects.forEach((customSelect) => {
     const valueElement = customSelect.querySelector('.custom-select-value');
     customSelect.querySelectorAll('.custom-select-option').forEach((option) => {
@@ -713,17 +628,14 @@ function applyHomeSemesterSelection(value, { dispatchChange = true } = {}) {
       }
     });
   });
-
   const termInput = document.getElementById('term-select');
   const yearInput = document.getElementById('year-select');
   if (termInput) termInput.value = parsed.term;
   if (yearInput) yearInput.value = String(parsed.year);
-
   setPreferredTermValue(parsed.value);
   applyPreferredTermToGlobals(parsed.value);
   homeDesktopHeaderState.initializedAtLeastOnce = true;
   invalidateHomePlannerDataCache();
-
   if (dispatchChange) {
     yearInput?.dispatchEvent(new Event('change', { bubbles: true }));
     termInput?.dispatchEvent(new Event('change', { bubbles: true }));
@@ -735,10 +647,60 @@ function applyHomeSemesterSelection(value, { dispatchChange = true } = {}) {
     }));
   }
 }
-
 function initializeHomeCustomSelects() {
   const homeMain = document.getElementById('home-main');
   if (!homeMain) return;
+
+  const bindContainedScroll = (optionsEl) => {
+    if (!optionsEl || optionsEl.dataset.scrollContainBound === 'true') return;
+    optionsEl.dataset.scrollContainBound = 'true';
+
+    const canScroll = () => optionsEl.scrollHeight > (optionsEl.clientHeight + 1);
+    const atTop = () => optionsEl.scrollTop <= 0;
+    const atBottom = () => (optionsEl.scrollTop + optionsEl.clientHeight) >= (optionsEl.scrollHeight - 1);
+    let lastTouchY = null;
+
+    optionsEl.addEventListener('wheel', (event) => {
+      event.stopPropagation();
+      if (!canScroll()) {
+        event.preventDefault();
+        return;
+      }
+      if ((event.deltaY < 0 && atTop()) || (event.deltaY > 0 && atBottom())) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    optionsEl.addEventListener('touchstart', (event) => {
+      if (!event.touches || !event.touches.length) return;
+      lastTouchY = event.touches[0].clientY;
+    }, { passive: true });
+
+    optionsEl.addEventListener('touchmove', (event) => {
+      event.stopPropagation();
+      if (!event.touches || !event.touches.length || lastTouchY === null) return;
+
+      const currentY = event.touches[0].clientY;
+      const deltaY = lastTouchY - currentY;
+      lastTouchY = currentY;
+
+      if (!canScroll()) {
+        event.preventDefault();
+        return;
+      }
+      if ((deltaY < 0 && atTop()) || (deltaY > 0 && atBottom())) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    optionsEl.addEventListener('touchend', () => {
+      lastTouchY = null;
+    }, { passive: true });
+
+    optionsEl.addEventListener('touchcancel', () => {
+      lastTouchY = null;
+    }, { passive: true });
+  };
 
   const customSelects = homeMain.querySelectorAll('.custom-select[data-target^="semester-select"]');
   customSelects.forEach((customSelect) => {
@@ -748,23 +710,20 @@ function initializeHomeCustomSelects() {
     const targetSelect = document.getElementById(targetId);
     if (!trigger || !optionsContainer || !targetSelect) return;
     if (customSelect.dataset.initialized === 'true') return;
+    bindContainedScroll(optionsContainer);
     customSelect.dataset.initialized = 'true';
-
     trigger.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-
       if (openSemesterMobileSheet({ targetSelect })) {
         customSelect.classList.remove('open');
         return;
       }
-
       homeMain.querySelectorAll('.custom-select').forEach((other) => {
         if (other !== customSelect) other.classList.remove('open');
       });
       customSelect.classList.toggle('open');
     });
-
     optionsContainer.addEventListener('click', (event) => {
       const option = event.target.closest('.custom-select-option');
       if (!option) return;
@@ -775,7 +734,6 @@ function initializeHomeCustomSelects() {
       customSelect.classList.remove('open');
     });
   });
-
   if (!document.body.dataset.homeCustomSelectOutsideBound) {
     document.addEventListener('click', (event) => {
       const activeHomeMain = document.getElementById('home-main');
@@ -787,11 +745,9 @@ function initializeHomeCustomSelects() {
     document.body.dataset.homeCustomSelectOutsideBound = 'true';
   }
 }
-
 function setupHomeSemesterSync() {
   const homeMain = document.getElementById('home-main');
   if (!homeMain) return;
-
   const semesterSelects = homeMain.querySelectorAll('.semester-select');
   semesterSelects.forEach((select) => {
     if (select.dataset.listenerAttached === 'true') return;
@@ -803,7 +759,6 @@ function setupHomeSemesterSync() {
     });
   });
 }
-
 function getSelectedHomeSemester() {
   const semesterSelect = document.getElementById('semester-select');
   if (!semesterSelect?.value) return null;
@@ -811,14 +766,12 @@ function getSelectedHomeSemester() {
   if (!parsed.term || !parsed.year) return null;
   return parsed;
 }
-
 async function loadHomeSearchCourses() {
   const selected = getSelectedHomeSemester();
   if (!selected) {
     homeDesktopHeaderState.searchCourses = [];
     return [];
   }
-
   try {
     const courses = await fetchCourseData(selected.year, selected.term);
     homeDesktopHeaderState.searchCourses = Array.isArray(courses) ? courses : [];
@@ -826,14 +779,11 @@ async function loadHomeSearchCourses() {
     console.error('Error loading home desktop search courses:', error);
     homeDesktopHeaderState.searchCourses = [];
   }
-
   return homeDesktopHeaderState.searchCourses;
 }
-
 function getHomeSearchSuggestions(query, limit = 6) {
   const trimmed = String(query || '').trim();
   if (trimmed.length < 2) return [];
-
   const normalizedQuery = trimmed.toLowerCase();
   return (homeDesktopHeaderState.searchCourses || [])
     .filter((course) => {
@@ -845,7 +795,6 @@ function getHomeSearchSuggestions(query, limit = 6) {
     })
     .slice(0, limit);
 }
-
 function renderHomeSearchAutocomplete(query, input, autocompleteContainer, options = {}) {
   const { onSelect } = options;
   const trimmed = String(query || '').trim();
@@ -854,15 +803,12 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
     autocompleteContainer.innerHTML = '';
     return;
   }
-
   const suggestions = getHomeSearchSuggestions(trimmed, 6);
-
   if (!suggestions.length) {
     autocompleteContainer.style.display = 'none';
     autocompleteContainer.innerHTML = '';
     return;
   }
-
   const itemsMarkup = suggestions.map((course, index) => {
     const rawCode = String(course?.course_code || '');
     const title = highlightHomeSearchMatch(course?.title || '', trimmed);
@@ -878,15 +824,12 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
       </div>
     `;
   }).join('');
-
   if (autocompleteContainer.classList.contains('search-pill-autocomplete')) {
     autocompleteContainer.innerHTML = `<div class="search-pill-autocomplete-inner">${itemsMarkup}</div>`;
   } else {
     autocompleteContainer.innerHTML = itemsMarkup;
   }
-
   autocompleteContainer.style.display = 'block';
-
   autocompleteContainer.querySelectorAll('.search-autocomplete-item').forEach((item) => {
     item.addEventListener('click', () => {
       const index = Number(item.dataset.suggestionIndex);
@@ -904,44 +847,35 @@ function renderHomeSearchAutocomplete(query, input, autocompleteContainer, optio
     });
   });
 }
-
 function bindHomeAutocompleteScrollContainment(autocompleteContainer) {
   if (!autocompleteContainer || autocompleteContainer.dataset.scrollContainmentBound === 'true') return;
-
   const getScrollHost = () => (
     autocompleteContainer.querySelector('.search-pill-autocomplete-inner')
     || autocompleteContainer
   );
-
   autocompleteContainer.addEventListener('wheel', (event) => {
     const host = getScrollHost();
     if (!host) return;
-
     const canScroll = host.scrollHeight > host.clientHeight + 1;
     if (!canScroll) {
       event.preventDefault();
       return;
     }
-
     const deltaY = event.deltaY;
     const atTop = host.scrollTop <= 0;
     const atBottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 1;
-
     if ((deltaY < 0 && atTop) || (deltaY > 0 && atBottom)) {
       event.preventDefault();
     }
   }, { passive: false });
-
   autocompleteContainer.dataset.scrollContainmentBound = 'true';
 }
-
 function refreshHomeSearchAutocomplete() {
   const input = document.getElementById('search-pill-input');
   const autocomplete = document.getElementById('search-pill-autocomplete');
   if (!input || !autocomplete) return;
   renderHomeSearchAutocomplete(input.value, input, autocomplete);
 }
-
 function setupHomeSearchAutocomplete() {
   const input = document.getElementById('search-pill-input');
   const autocomplete = document.getElementById('search-pill-autocomplete');
@@ -949,9 +883,7 @@ function setupHomeSearchAutocomplete() {
   if (input.dataset.listenerAttached === 'true') return;
   input.dataset.listenerAttached = 'true';
   bindHomeAutocompleteScrollContainment(autocomplete);
-
   const rerender = () => renderHomeSearchAutocomplete(input.value, input, autocomplete);
-
   input.addEventListener('input', rerender);
   input.addEventListener('focus', async () => {
     await loadHomeSearchCourses();
@@ -968,7 +900,6 @@ function setupHomeSearchAutocomplete() {
     event.preventDefault();
     firstItem.click();
   });
-
   if (!document.body.dataset.homeSearchOutsideBound) {
     document.addEventListener('click', (event) => {
       if (!document.getElementById('home-main')) return;
@@ -983,20 +914,16 @@ function setupHomeSearchAutocomplete() {
     document.body.dataset.homeSearchOutsideBound = 'true';
   }
 }
-
 function teardownHomeDesktopToolbarScrollState() {
   if (typeof homeDesktopToolbarScrollCleanup === 'function') {
     homeDesktopToolbarScrollCleanup();
     homeDesktopToolbarScrollCleanup = null;
   }
 }
-
 function initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader) {
   teardownHomeDesktopToolbarScrollState();
-
   const appContent = document.getElementById('app-content');
   let rafId = 0;
-
   const getScrollTop = () => {
     const windowScrollY = window.scrollY || window.pageYOffset || 0;
     const rootScrollY = document.documentElement?.scrollTop || 0;
@@ -1005,7 +932,6 @@ function initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader) {
     const homeScrollY = homeMain ? homeMain.scrollTop : 0;
     return Math.max(windowScrollY, rootScrollY, bodyScrollY, contentScrollY, homeScrollY);
   };
-
   const applyScrollState = () => {
     rafId = 0;
     if (window.innerWidth <= 1023) {
@@ -1015,19 +941,16 @@ function initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader) {
     const isScrolled = getScrollTop() > 0;
     desktopHeader.classList.toggle('is-scrolled', isScrolled);
   };
-
   const requestApply = () => {
     if (rafId) return;
     rafId = window.requestAnimationFrame(applyScrollState);
   };
-
   window.addEventListener('scroll', requestApply, { passive: true });
   appContent?.addEventListener('scroll', requestApply, { passive: true });
   homeMain?.addEventListener('scroll', requestApply, { passive: true });
   document.addEventListener('scroll', requestApply, { passive: true, capture: true });
   window.addEventListener('resize', requestApply);
   applyScrollState();
-
   homeDesktopToolbarScrollCleanup = () => {
     if (rafId) {
       window.cancelAnimationFrame(rafId);
@@ -1041,16 +964,13 @@ function initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader) {
     desktopHeader.classList.remove('is-scrolled');
   };
 }
-
 function lockHomeMobileModalScroll() {
   homeMobileModalLockCount += 1;
   if (homeMobileModalLockCount !== 1) return;
-
   homeMobileModalScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
   document.body.classList.add('home-modal-open');
   document.body.style.top = `-${homeMobileModalScrollY}px`;
 }
-
 function unlockHomeMobileModalScroll({ force = false } = {}) {
   const wasLocked = document.body.classList.contains('home-modal-open');
   if (force) {
@@ -1059,14 +979,12 @@ function unlockHomeMobileModalScroll({ force = false } = {}) {
     homeMobileModalLockCount = Math.max(0, homeMobileModalLockCount - 1);
   }
   if (homeMobileModalLockCount > 0) return;
-
   document.body.classList.remove('home-modal-open');
   document.body.style.top = '';
   if (wasLocked) {
     window.scrollTo(0, homeMobileModalScrollY);
   }
 }
-
 function teardownHomeMobileSearchModal() {
   if (typeof homeMobileSearchModalCleanup === 'function') {
     homeMobileSearchModalCleanup();
@@ -1074,13 +992,10 @@ function teardownHomeMobileSearchModal() {
   }
   unlockHomeMobileModalScroll({ force: true });
 }
-
 function setupHomeMobileSearchModal() {
   teardownHomeMobileSearchModal();
-
   const homeMain = document.getElementById('home-main');
   if (!homeMain) return;
-
   const searchContainer = homeMain.querySelector('#home-search-container');
   const searchModal = homeMain.querySelector('#home-search-modal');
   const searchBackground = homeMain.querySelector('#home-search-container .search-background');
@@ -1090,19 +1005,15 @@ function setupHomeMobileSearchModal() {
   const searchCancel = homeMain.querySelector('#home-search-cancel');
   const searchButton = homeMain.querySelector('.home-container-above .search-btn');
   let closeTimerId = null;
-
   if (!searchContainer || !searchModal || !searchInput || !searchAutocomplete || !searchButton) return;
-
   const closeSearchModal = ({ forceUnlock = false, immediate = false } = {}) => {
     if (closeTimerId) {
       window.clearTimeout(closeTimerId);
       closeTimerId = null;
     }
-
     searchModal.classList.remove('show');
     searchAutocomplete.style.display = 'none';
     searchAutocomplete.innerHTML = '';
-
     const finalizeClose = () => {
       searchContainer.classList.add('hidden');
       if (forceUnlock) {
@@ -1111,18 +1022,15 @@ function setupHomeMobileSearchModal() {
         unlockHomeMobileModalScroll();
       }
     };
-
     if (immediate) {
       finalizeClose();
       return;
     }
-
     closeTimerId = window.setTimeout(() => {
       closeTimerId = null;
       finalizeClose();
     }, 400);
   };
-
   const openSearchModal = async () => {
     if (!isHomeMobileViewport()) return;
     if (closeTimerId) {
@@ -1130,11 +1038,9 @@ function setupHomeMobileSearchModal() {
       closeTimerId = null;
     }
     if (!searchContainer.classList.contains('hidden')) return;
-
     searchContainer.classList.remove('hidden');
     searchModal.classList.add('show');
     lockHomeMobileModalScroll();
-
     await loadHomeSearchCourses();
     renderHomeSearchAutocomplete(searchInput.value, searchInput, searchAutocomplete, {
       onSelect: (selectedCourse) => {
@@ -1142,47 +1048,39 @@ function setupHomeMobileSearchModal() {
         openCourseInfoMenu(selectedCourse);
       }
     });
-
     window.setTimeout(() => {
       searchInput.focus();
       if (searchInput.value) searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
     }, 90);
   };
-
   const handleSearchSubmit = async () => {
     const query = String(searchInput.value || '').trim();
     if (!query) {
       closeSearchModal();
       return;
     }
-
     await loadHomeSearchCourses();
     const firstSuggestion = getHomeSearchSuggestions(query, 1)[0];
     if (!firstSuggestion) {
       closeSearchModal();
       return;
     }
-
     closeSearchModal();
     openCourseInfoMenu(firstSuggestion);
   };
-
   const handleSearchButtonClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
     openSearchModal();
   };
-
   const handleSearchCancel = (event) => {
     event.preventDefault();
     closeSearchModal();
   };
-
   const handleSearchBackgroundClick = (event) => {
     if (event.target !== searchBackground) return;
     closeSearchModal();
   };
-
   const handleSearchInput = () => {
     renderHomeSearchAutocomplete(searchInput.value, searchInput, searchAutocomplete, {
       onSelect: (selectedCourse) => {
@@ -1191,7 +1089,6 @@ function setupHomeMobileSearchModal() {
       }
     });
   };
-
   const handleSearchKeydown = async (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -1203,27 +1100,23 @@ function setupHomeMobileSearchModal() {
       await handleSearchSubmit();
       return;
     }
-
     if (event.key === 'Escape') {
       event.preventDefault();
       closeSearchModal();
     }
   };
-
   if (searchBackground && typeof window.addSwipeToCloseSimple === 'function' && searchModal.dataset.swipeBound !== 'true') {
     window.addSwipeToCloseSimple(searchModal, searchBackground, () => {
       closeSearchModal({ forceUnlock: true, immediate: true });
     });
     searchModal.dataset.swipeBound = 'true';
   }
-
   searchButton.addEventListener('click', handleSearchButtonClick);
   searchCancel?.addEventListener('click', handleSearchCancel);
   searchSubmit?.addEventListener('click', handleSearchSubmit);
   searchBackground?.addEventListener('click', handleSearchBackgroundClick);
   searchInput.addEventListener('input', handleSearchInput);
   searchInput.addEventListener('keydown', handleSearchKeydown);
-
   homeMobileSearchModalCleanup = () => {
     if (closeTimerId) {
       window.clearTimeout(closeTimerId);
@@ -1240,26 +1133,22 @@ function setupHomeMobileSearchModal() {
     unlockHomeMobileModalScroll({ force: true });
   };
 }
-
 function teardownHomeMobileStickyHeaderBehavior() {
   if (typeof homeMobileHeaderBehaviorCleanup === 'function') {
     homeMobileHeaderBehaviorCleanup();
     homeMobileHeaderBehaviorCleanup = null;
   }
-
   document.querySelector('.app-header')?.classList.remove('app-header--hidden');
   document.querySelector('#home-main .home-container-above.container-above-desktop')?.classList.remove('home-toolbar--hidden');
   document.body.classList.remove('home-mobile-header-sticky');
   document.documentElement.style.removeProperty('--home-mobile-header-height');
   document.documentElement.style.removeProperty('--home-mobile-toolbar-height');
 }
-
 function teardownMobilePageStickyHeaderBehavior() {
   if (typeof mobilePageHeaderBehaviorCleanup === 'function') {
     mobilePageHeaderBehaviorCleanup();
     mobilePageHeaderBehaviorCleanup = null;
   }
-
   document.body.classList.remove('mobile-page-header-sticky');
   document.querySelector('.app-header')?.classList.remove('app-header--hidden');
   document.querySelectorAll(MOBILE_PAGE_TOOLBAR_SELECTOR).forEach((toolbar) => {
@@ -1268,31 +1157,27 @@ function teardownMobilePageStickyHeaderBehavior() {
   document.documentElement.style.removeProperty('--mobile-page-header-height');
   document.documentElement.style.removeProperty('--mobile-page-toolbar-height');
 }
-
 function initializeHomeMobileStickyHeaderBehavior() {
+  // Ensure cross-page mobile sticky state is fully reset before applying Home behavior.
+  teardownMobilePageStickyHeaderBehavior();
   teardownHomeMobileStickyHeaderBehavior();
-
   const homeMain = document.getElementById('home-main');
   const header = document.querySelector('.app-header');
   const homeToolbar = homeMain?.querySelector('.home-container-above.container-above-desktop');
   const appContent = document.getElementById('app-content');
   if (!homeMain || !header || !homeToolbar) return;
-
   if (!isHomeMobileViewport()) {
     header.classList.remove('app-header--hidden');
     homeToolbar.classList.remove('home-toolbar--hidden');
     return;
   }
-
   document.body.classList.add('home-mobile-header-sticky');
-
   const setHeights = () => {
-    const headerHeight = Math.ceil(header.getBoundingClientRect().height || 0);
-    const toolbarHeight = Math.ceil(homeToolbar.getBoundingClientRect().height || 0);
+    const headerHeight = Math.min(160, Math.ceil(header.getBoundingClientRect().height || 0));
+    const toolbarHeight = Math.min(160, Math.ceil(homeToolbar.getBoundingClientRect().height || 0));
     document.documentElement.style.setProperty('--home-mobile-header-height', `${headerHeight}px`);
     document.documentElement.style.setProperty('--home-mobile-toolbar-height', `${toolbarHeight}px`);
   };
-
   const getCurrentScrollY = () => {
     const windowScrollY = window.scrollY || window.pageYOffset || 0;
     const rootScrollY = document.documentElement?.scrollTop || 0;
@@ -1302,24 +1187,19 @@ function initializeHomeMobileStickyHeaderBehavior() {
     const homeScrollY = homeMain.scrollTop || 0;
     return Math.max(windowScrollY, rootScrollY, bodyScrollY, docScrollY, contentScrollY, homeScrollY);
   };
-
   let lastScrollY = getCurrentScrollY();
   let ticking = false;
-
   const applyScrollState = () => {
     ticking = false;
     const currentScrollY = getCurrentScrollY();
-
     if (currentScrollY <= MOBILE_HEADER_TOP_REVEAL_THRESHOLD) {
       header.classList.remove('app-header--hidden');
       homeToolbar.classList.remove('home-toolbar--hidden');
       lastScrollY = currentScrollY;
       return;
     }
-
     const deltaY = currentScrollY - lastScrollY;
     if (Math.abs(deltaY) <= MOBILE_HEADER_SCROLL_THRESHOLD) return;
-
     if (deltaY > 0) {
       header.classList.add('app-header--hidden');
       homeToolbar.classList.add('home-toolbar--hidden');
@@ -1327,42 +1207,34 @@ function initializeHomeMobileStickyHeaderBehavior() {
       header.classList.remove('app-header--hidden');
       homeToolbar.classList.remove('home-toolbar--hidden');
     }
-
     lastScrollY = currentScrollY;
   };
-
   const onScroll = () => {
     if (ticking) return;
     ticking = true;
     window.requestAnimationFrame(applyScrollState);
   };
-
   const onResize = () => {
     if (!document.getElementById('home-main')) {
       teardownHomeMobileStickyHeaderBehavior();
       return;
     }
-
     if (!isHomeMobileViewport()) {
       teardownHomeMobileStickyHeaderBehavior();
       return;
     }
-
     setHeights();
     header.classList.remove('app-header--hidden');
     homeToolbar.classList.remove('home-toolbar--hidden');
   };
-
   setHeights();
   header.classList.remove('app-header--hidden');
   homeToolbar.classList.remove('home-toolbar--hidden');
-
   window.addEventListener('scroll', onScroll, { passive: true });
   appContent?.addEventListener('scroll', onScroll, { passive: true });
   homeMain.addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('scroll', onScroll, { passive: true, capture: true });
   window.addEventListener('resize', onResize);
-
   homeMobileHeaderBehaviorCleanup = () => {
     window.removeEventListener('scroll', onScroll);
     appContent?.removeEventListener('scroll', onScroll);
@@ -1373,46 +1245,69 @@ function initializeHomeMobileStickyHeaderBehavior() {
     homeToolbar.classList.remove('home-toolbar--hidden');
   };
 }
-
 function initializeMobilePageStickyHeaderBehavior() {
   teardownMobilePageStickyHeaderBehavior();
-
   const header = document.querySelector('.app-header');
   const appContent = document.getElementById('app-content');
   const homeMain = document.getElementById('home-main');
   const profileMain = document.getElementById('profile-main');
-  if (!header || homeMain || profileMain || document.body.classList.contains('course-page-mode')) return;
-
+  if (!header || homeMain || profileMain) return;
   if (!isHomeMobileViewport()) {
     header.classList.remove('app-header--hidden');
     return;
   }
-
   const toolbars = Array.from(document.querySelectorAll(MOBILE_PAGE_TOOLBAR_SELECTOR))
     .filter((toolbar) => {
       if (!(toolbar instanceof HTMLElement)) return false;
       const styles = window.getComputedStyle(toolbar);
       return styles.display !== 'none' && toolbar.getBoundingClientRect().height > 0;
     });
-
   document.body.classList.add('mobile-page-header-sticky');
-
   const setHeaderStackHeights = () => {
-    const headerHeight = Math.ceil(header.getBoundingClientRect().height || 0);
-    const toolbarHeight = Math.ceil(
+    const headerHeight = Math.min(160, Math.ceil(header.getBoundingClientRect().height || 0));
+    const toolbarHeight = Math.min(240, Math.ceil(
       toolbars.reduce((total, toolbar) => total + (toolbar.getBoundingClientRect().height || 0), 0)
-    );
+    ));
     document.documentElement.style.setProperty('--mobile-page-header-height', `${headerHeight}px`);
     document.documentElement.style.setProperty('--mobile-page-toolbar-height', `${toolbarHeight}px`);
   };
-
+  let measureRafId = 0;
+  const scheduleHeaderStackMeasure = () => {
+    if (measureRafId) return;
+    measureRafId = window.requestAnimationFrame(() => {
+      measureRafId = 0;
+      setHeaderStackHeights();
+    });
+  };
+  let toolbarResizeObserver = null;
+  let toolbarMutationObserver = null;
+  if (typeof ResizeObserver === 'function') {
+    toolbarResizeObserver = new ResizeObserver(() => {
+      scheduleHeaderStackMeasure();
+    });
+    toolbarResizeObserver.observe(header);
+    toolbars.forEach((toolbar) => {
+      toolbarResizeObserver.observe(toolbar);
+    });
+  } else if (typeof MutationObserver === 'function') {
+    toolbarMutationObserver = new MutationObserver(() => {
+      scheduleHeaderStackMeasure();
+    });
+    toolbars.forEach((toolbar) => {
+      toolbarMutationObserver.observe(toolbar, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden']
+      });
+    });
+  }
   const setHiddenState = (hidden) => {
     header.classList.toggle('app-header--hidden', hidden);
     toolbars.forEach((toolbar) => {
       toolbar.classList.toggle('app-mobile-toolbar--hidden', hidden);
     });
   };
-
   const getCurrentScrollY = () => {
     const windowScrollY = window.scrollY || window.pageYOffset || 0;
     const rootScrollY = document.documentElement?.scrollTop || 0;
@@ -1421,60 +1316,54 @@ function initializeMobilePageStickyHeaderBehavior() {
     const contentScrollY = appContent ? appContent.scrollTop : 0;
     return Math.max(windowScrollY, rootScrollY, bodyScrollY, docScrollY, contentScrollY);
   };
-
   let lastScrollY = getCurrentScrollY();
   let ticking = false;
-
   const applyScrollState = () => {
     ticking = false;
     const currentScrollY = getCurrentScrollY();
-
     if (currentScrollY <= MOBILE_HEADER_TOP_REVEAL_THRESHOLD) {
       setHiddenState(false);
       lastScrollY = currentScrollY;
       return;
     }
-
     const deltaY = currentScrollY - lastScrollY;
     if (Math.abs(deltaY) <= MOBILE_HEADER_SCROLL_THRESHOLD) return;
-
     setHiddenState(deltaY > 0);
     lastScrollY = currentScrollY;
   };
-
   const onScroll = () => {
     if (ticking) return;
     ticking = true;
     window.requestAnimationFrame(applyScrollState);
   };
-
   const onResize = () => {
-    if (!isHomeMobileViewport() || document.getElementById('home-main') || document.getElementById('profile-main') || document.body.classList.contains('course-page-mode')) {
+    if (!isHomeMobileViewport() || document.getElementById('home-main') || document.getElementById('profile-main')) {
       teardownMobilePageStickyHeaderBehavior();
       return;
     }
-
     setHeaderStackHeights();
     setHiddenState(false);
   };
-
   setHeaderStackHeights();
   setHiddenState(false);
-
   window.addEventListener('scroll', onScroll, { passive: true });
   appContent?.addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('scroll', onScroll, { passive: true, capture: true });
   window.addEventListener('resize', onResize);
-
   mobilePageHeaderBehaviorCleanup = () => {
     window.removeEventListener('scroll', onScroll);
     appContent?.removeEventListener('scroll', onScroll);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('resize', onResize);
+    if (measureRafId) {
+      window.cancelAnimationFrame(measureRafId);
+      measureRafId = 0;
+    }
+    toolbarResizeObserver?.disconnect();
+    toolbarMutationObserver?.disconnect();
     setHiddenState(false);
   };
 }
-
 async function initializeHomeDesktopHeader() {
   const homeMain = document.getElementById('home-main');
   const desktopHeader = homeMain?.querySelector('.home-container-above.container-above-desktop');
@@ -1484,62 +1373,50 @@ async function initializeHomeDesktopHeader() {
     teardownHomeMobileSearchModal();
     return;
   }
-
   initializeHomeDesktopToolbarScrollState(homeMain, desktopHeader);
   setupHomeMobileSearchModal();
   initializeHomeMobileStickyHeaderBehavior();
-
   try {
     await populateHomeSemesterDropdown();
     initializeHomeCustomSelects();
     setupHomeSemesterSync();
-
     if (!homeDesktopHeaderState.initializedAtLeastOnce) {
       const selectedValue = document.getElementById('semester-select')?.value;
       if (selectedValue) {
         applyHomeSemesterSelection(selectedValue, { dispatchChange: true });
       }
     }
-
     await loadHomeSearchCourses();
     setupHomeSearchAutocomplete();
   } catch (error) {
     console.error('Error initializing home desktop header:', error);
   }
 }
-
 const handleHomeDesktopHeaderSetup = () => {
   setTimeout(() => {
     initializeHomeDesktopHeader();
   }, 30);
 };
-
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', handleHomeDesktopHeaderSetup, { once: true });
 } else {
   handleHomeDesktopHeaderSetup();
 }
-
 document.addEventListener('pageLoaded', handleHomeDesktopHeaderSetup);
-
 const handleMobilePageHeaderSetup = () => {
   setTimeout(() => {
     initializeMobilePageStickyHeaderBehavior();
   }, 30);
 };
-
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', handleMobilePageHeaderSetup, { once: true });
 } else {
   handleMobilePageHeaderSetup();
 }
-
 document.addEventListener('pageLoaded', handleMobilePageHeaderSetup);
-
 // Initialize session state - will be updated by components as needed
 window.globalSession = null;
 window.globalUser = null;
-
 // Initialize session asynchronously
 (async () => {
   try {
@@ -1550,23 +1427,18 @@ window.globalUser = null;
     console.error('Error initializing global session:', error);
   }
 })();
-
 const yearSelect = document.getElementById("year-select");
 const termSelect = document.getElementById("term-select");
-
 // Keep for backward compatibility, but components should fetch fresh sessions
 const user = window.globalUser;
-
 const MOBILE_BREAKPOINT = 1023;
 const KEYBOARD_HEIGHT_THRESHOLD = 120;
-
 function isEditableElement(element) {
   if (!element) return false;
   if (element.isContentEditable) return true;
   if (!element.matches) return false;
   return element.matches('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]');
 }
-
 function updateMobileNavSafeHeight() {
   const root = document.documentElement;
   const nav = document.querySelector('app-navigation');
@@ -1574,74 +1446,57 @@ function updateMobileNavSafeHeight() {
     root?.style.removeProperty('--mobile-nav-safe-height');
     return;
   }
-
   const navHeight = Math.ceil(nav.getBoundingClientRect().height || 0);
   if (navHeight > 0) {
     root.style.setProperty('--mobile-nav-safe-height', `${navHeight + 0}px`);
   }
 }
-
 function initializeMobileNavKeyboardState() {
   if (window.__mobileNavKeyboardStateInitialized) return;
   window.__mobileNavKeyboardStateInitialized = true;
-
   let baselineViewportHeight = window.visualViewport?.height || window.innerHeight;
-
   const updateKeyboardState = () => {
     if (!document.body) return;
-
     if (window.innerWidth > MOBILE_BREAKPOINT) {
       document.body.classList.remove('keyboard-visible');
       return;
     }
-
     const viewportHeight = window.visualViewport?.height || window.innerHeight;
     if (viewportHeight > baselineViewportHeight - 32) {
       baselineViewportHeight = viewportHeight;
     }
-
     const activeElement = document.activeElement;
     const isEditing = isEditableElement(activeElement);
     const keyboardHeight = baselineViewportHeight - viewportHeight;
     const isKeyboardVisible = isEditing && keyboardHeight > KEYBOARD_HEIGHT_THRESHOLD;
-
     document.body.classList.toggle('keyboard-visible', isKeyboardVisible);
   };
-
   const refreshMobileNavState = () => {
     updateMobileNavSafeHeight();
     updateKeyboardState();
   };
-
   window.addEventListener('resize', refreshMobileNavState, { passive: true });
   window.addEventListener('orientationchange', () => {
     baselineViewportHeight = window.visualViewport?.height || window.innerHeight;
     setTimeout(refreshMobileNavState, 250);
   });
-
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', refreshMobileNavState);
     window.visualViewport.addEventListener('scroll', updateKeyboardState);
   }
-
   document.addEventListener('focusin', updateKeyboardState, true);
   document.addEventListener('focusout', () => {
     setTimeout(updateKeyboardState, 120);
   }, true);
-
   document.addEventListener('pageLoaded', () => {
     setTimeout(refreshMobileNavState, 30);
   });
-
   setTimeout(refreshMobileNavState, 0);
 }
-
 initializeMobileNavKeyboardState();
-
 class AppNavigation extends HTMLElement {
   constructor() {
     super();
-
     // Use regular DOM instead of Shadow DOM to avoid CSS import issues
     this.innerHTML = `
             <nav class="test">
@@ -1655,9 +1510,9 @@ class AppNavigation extends HTMLElement {
                         <span class="nav-icon"></span>
                         <span class="navigation-text">Courses</span>
                     </button></li>
-                    <li class="nav-main-item"><button class="nav-btn" id="calendar-btn" data-route="/calendar">
+                    <li class="nav-main-item"><button class="nav-btn" id="calendar-btn" data-route="/timetable">
                         <span class="nav-icon"></span>
-                        <span class="navigation-text">Calendar</span>
+                        <span class="navigation-text">Timetable</span>
                     </button></li>
                     <li class="nav-main-item"><button class="nav-btn" id="assignments-btn" data-route="/assignments">
                         <span class="nav-icon"></span>
@@ -1671,12 +1526,10 @@ class AppNavigation extends HTMLElement {
             </nav>
         `;
   }
-
   connectedCallback() {
     updateMobileNavSafeHeight();
   }
 }
-
 class TotalCourses extends HTMLElement {
   constructor() {
     super();
@@ -1686,7 +1539,6 @@ class TotalCourses extends HTMLElement {
     this.handleSemesterSelectionChange = (event) => {
       const targetId = event?.target?.id;
       if (!targetId) return;
-
       if (
         targetId === 'semester-select'
         || targetId === 'semester-select-mobile'
@@ -1709,7 +1561,6 @@ class TotalCourses extends HTMLElement {
         this.handleAssignmentsCardClick();
       }
     };
-
     this.innerHTML = `
             <div class="total-courses" id="total-registered-courses">
                 <div class="total-courses-container">
@@ -1724,17 +1575,14 @@ class TotalCourses extends HTMLElement {
             </div>
         `;
   }
-
   connectedCallback() {
     // Always reinitialize when connected
     this.updateTotalCourses();
-
     // Set up refresh on router navigation
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
     document.removeEventListener('change', this.handleSemesterSelectionChange);
     document.addEventListener('change', this.handleSemesterSelectionChange);
-
     const assignmentsContainer = this.querySelector('.total-courses-container');
     if (assignmentsContainer) {
       assignmentsContainer.setAttribute('role', 'button');
@@ -1743,42 +1591,34 @@ class TotalCourses extends HTMLElement {
       assignmentsContainer.addEventListener('keydown', this.handleAssignmentsCardKeyDown);
     }
   }
-
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.removeEventListener('change', this.handleSemesterSelectionChange);
-
     const assignmentsContainer = this.querySelector('.total-courses-container');
     if (assignmentsContainer) {
       assignmentsContainer.removeEventListener('click', this.handleAssignmentsCardClick);
       assignmentsContainer.removeEventListener('keydown', this.handleAssignmentsCardKeyDown);
     }
   }
-
   getDaysLeft(dueDateValue) {
     const dueDate = new Date(dueDateValue);
     if (Number.isNaN(dueDate.getTime())) return null;
     dueDate.setHours(0, 0, 0, 0);
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     return Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }
-
   formatDaysLeft(daysLeft) {
     if (daysLeft === null) return '';
     if (daysLeft <= 0) return 'Due today';
     if (daysLeft === 1) return '1 day left';
     return `${daysLeft} days left`;
   }
-
   async updateTotalCourses() {
     const totalCountEl = this.querySelector('.total-count');
     const upcomingAssignmentTitleEl = this.querySelector('.upcoming-assignment-title');
     const noUpcomingTextEl = this.querySelector('.no-upcoming-assignment-text');
     const upcomingDeadlineEl = this.querySelector('.upcoming-assignment-deadline');
-
     const updateDisplay = ({
       count = '0',
       assignmentTitle = '',
@@ -1788,76 +1628,61 @@ class TotalCourses extends HTMLElement {
     }) => {
       if (totalCountEl) totalCountEl.textContent = String(count);
       if (upcomingDeadlineEl) upcomingDeadlineEl.textContent = daysLeftText;
-
       if (upcomingAssignmentTitleEl) {
         upcomingAssignmentTitleEl.textContent = hasUpcomingAssignment ? assignmentTitle : '';
         upcomingAssignmentTitleEl.hidden = !hasUpcomingAssignment;
       }
-
       if (noUpcomingTextEl) {
         noUpcomingTextEl.textContent = hasUpcomingAssignment ? '' : noUpcomingText;
         noUpcomingTextEl.hidden = hasUpcomingAssignment;
       }
     };
-
     const fetchDueAssignments = async () => {
       try {
         // Get fresh session data
         const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user || null;
-
         if (!currentUser) {
           return { guestUser: true, dueAssignments: [] };
         }
-
         const { data: assignments, error: assignmentsError } = await supabase
           .from('assignments')
           .select('title, due_date, status, course_year, course_term')
           .eq('user_id', currentUser.id)
           .neq('status', 'completed')
           .not('due_date', 'is', null);
-
         if (assignmentsError) {
           throw assignmentsError;
         }
-
         const currentYear = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById("year-select")?.value || new Date().getFullYear(), 10);
         const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (document.getElementById("term-select")?.value || 'Fall');
         const normalizedCurrentTerm = String(currentTerm).trim().toLowerCase();
         const normalizedCurrentYear = Number(currentYear);
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         const dueAssignments = (assignments || [])
           .filter((assignment) => {
             const dueDate = assignment?.due_date ? new Date(assignment.due_date) : null;
             if (!dueDate || Number.isNaN(dueDate.getTime())) return false;
             dueDate.setHours(0, 0, 0, 0);
-
             if (dueDate < today) return false;
-
             const assignmentYear = assignment?.course_year === null || assignment?.course_year === undefined
               ? null
               : Number(assignment.course_year);
             const assignmentTerm = assignment?.course_term ? String(assignment.course_term).trim().toLowerCase() : null;
             const hasSemesterMetadata = assignmentYear !== null && assignmentTerm;
-
             if (!hasSemesterMetadata) return true;
             return assignmentYear === normalizedCurrentYear && assignmentTerm === normalizedCurrentTerm;
           })
           .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-
         return { guestUser: false, dueAssignments };
       } catch (error) {
         console.error('Error fetching due assignments:', error);
         return { guestUser: false, dueAssignments: [] };
       }
     };
-
     try {
       const { guestUser, dueAssignments } = await fetchDueAssignments();
-
       if (guestUser) {
         updateDisplay({
           count: '--',
@@ -1867,11 +1692,9 @@ class TotalCourses extends HTMLElement {
         });
         return;
       }
-
       const upcoming = dueAssignments[0] || null;
       const daysLeft = upcoming?.due_date ? this.getDaysLeft(upcoming.due_date) : null;
       const assignmentTitle = upcoming?.title?.trim() || 'Untitled Assignment';
-
       updateDisplay({
         count: dueAssignments.length,
         assignmentTitle,
@@ -1890,17 +1713,14 @@ class TotalCourses extends HTMLElement {
     }
   }
 }
-
 class TermBox extends HTMLElement {
   constructor() {
     super();
-
     // ====================================================================
     // NEXT CLASS FEATURE - ENABLED
     // Semester end check is DISABLED for styling purposes
     // ====================================================================
     this.enableNextClass = true;
-
     // Temporary HTML for styling (shows old term/year display)
     if (!this.enableNextClass) {
       this.innerHTML = `
@@ -1919,13 +1739,18 @@ class TermBox extends HTMLElement {
             <h3 class="total-text" id="next-class-label">Next Class</h3>
             <div class="home-next-class-title-wrap" id="next-class-title-wrap">
               <h3 class="total-count" id="next-class-name">Loading...</h3>
+              <h3 class="total-text" id="next-class-time">Calculating...</h3>
+              <div class="home-next-class-action-wrap" id="next-class-action-cue" hidden aria-hidden="true">
+                <span class="home-review-suggestion-course-action">
+                  <span class="home-review-suggestion-course-action-label">Class Info</span>
+                </span>
+                <span class="home-review-suggestion-course-action-chevron"></span>
+              </div>
             </div>
-            <h3 class="total-text" id="next-class-time">Calculating...</h3>
           </div>
         </div>
       `;
     }
-
     this.updateInterval = null;
     this.courses = [];
     this.currentNextClassCourse = null;
@@ -1949,7 +1774,6 @@ class TermBox extends HTMLElement {
       }
     };
   }
-
   connectedCallback() {
     // ====================================================================
     // ENABLE NEXT CLASS FEATURE BY CHANGING enableNextClass to true
@@ -1959,26 +1783,20 @@ class TermBox extends HTMLElement {
       this.showOldTermDisplay();
       return;
     }
-
     // New behavior: show next class
     this.updateNextClass();
-
     // Update every minute
     this.updateInterval = setInterval(() => {
       this.updateNextClass();
     }, 60000); // 60 seconds
-
     // Listen for selector changes
     this.yearSelectEl = document.getElementById('year-select');
     this.termSelectEl = document.getElementById('term-select');
-
     this.yearSelectEl?.addEventListener('change', this.handleNextClassSelectionChange);
     this.termSelectEl?.addEventListener('change', this.handleNextClassSelectionChange);
-
     // Refresh on page navigation
     document.removeEventListener('pageLoaded', this.handleNextClassPageLoaded);
     document.addEventListener('pageLoaded', this.handleNextClassPageLoaded);
-
     const nextClassContainer = this.querySelector('.total-courses-container');
     if (nextClassContainer) {
       nextClassContainer.setAttribute('role', 'button');
@@ -1987,59 +1805,47 @@ class TermBox extends HTMLElement {
       nextClassContainer.addEventListener('keydown', this.handleNextClassCardKeyDown);
     }
   }
-
   disconnectedCallback() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
     }
-
     this.yearSelectEl?.removeEventListener('change', this.handleNextClassSelectionChange);
     this.termSelectEl?.removeEventListener('change', this.handleNextClassSelectionChange);
     this.yearSelectEl = null;
     this.termSelectEl = null;
     document.removeEventListener('pageLoaded', this.handleNextClassPageLoaded);
-
     const nextClassContainer = this.querySelector('.total-courses-container');
     if (nextClassContainer) {
       nextClassContainer.removeEventListener('click', this.handleNextClassCardClick);
       nextClassContainer.removeEventListener('keydown', this.handleNextClassCardKeyDown);
     }
   }
-
   // ====================================================================
   // OLD TERM DISPLAY (temporary for styling)
   // ====================================================================
   showOldTermDisplay() {
     this.updateDisplayTerm();
-
     const yearSelect = document.getElementById('year-select');
     const termSelect = document.getElementById('term-select');
-
     if (yearSelect) {
       yearSelect.addEventListener('change', () => this.updateDisplayTerm());
     }
-
     if (termSelect) {
       termSelect.addEventListener('change', () => this.updateDisplayTerm());
     }
-
     document.addEventListener('pageLoaded', () => {
       setTimeout(() => this.updateDisplayTerm(), 100);
     });
   }
-
   updateDisplayTerm() {
     const displayTermSemester = this.querySelector('#term-semester');
     const displayTermYear = this.querySelector('#term-year');
     if (!displayTermSemester || !displayTermYear) return;
-
     const ys = document.getElementById('year-select');
     const ts = document.getElementById('term-select');
-
     let year = ys?.value || '';
     let termRaw = ts?.value || '';
-
     if (termRaw.includes('/')) {
       const parts = termRaw.split('/');
       if (parts.length > 1) {
@@ -2047,40 +1853,73 @@ class TermBox extends HTMLElement {
         termRaw = (parts[1] || '').trim();
       }
     }
-
     const term = termRaw.trim();
     displayTermSemester.textContent = term;
     displayTermYear.textContent = year;
   }
-
   // ====================================================================
   // NEW NEXT CLASS FUNCTIONALITY (will run when enableNextClass = true)
   // ====================================================================
-
   async updateNextClass() {
     const labelEl = this.querySelector('#next-class-label');
     const nameEl = this.querySelector('#next-class-name');
     const timeEl = this.querySelector('#next-class-time');
     const titleWrapEl = this.querySelector('#next-class-title-wrap');
-
+    const actionCueEl = this.querySelector('#next-class-action-cue');
     if (!labelEl || !nameEl || !timeEl) return;
     this.currentNextClassCourse = null;
-
+    if (actionCueEl) actionCueEl.hidden = true;
+    const toSoftAccentColor = (colorValue, alpha = 0.34) => {
+      const raw = String(colorValue || '').trim();
+      if (!raw) return null;
+      if (raw.startsWith('#')) {
+        const hex = raw.slice(1);
+        if (hex.length === 3) {
+          const [r, g, b] = hex.split('');
+          return `rgba(${parseInt(`${r}${r}`, 16)}, ${parseInt(`${g}${g}`, 16)}, ${parseInt(`${b}${b}`, 16)}, ${alpha})`;
+        }
+        if (hex.length === 6) {
+          const r = parseInt(hex.slice(0, 2), 16);
+          const g = parseInt(hex.slice(2, 4), 16);
+          const b = parseInt(hex.slice(4, 6), 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+      }
+      const rgbMatch = raw.match(/^rgba?\(([^)]+)\)$/i);
+      if (rgbMatch) {
+        const parts = rgbMatch[1].split(',').map(part => part.trim());
+        if (parts.length >= 3) {
+          const r = parseFloat(parts[0]);
+          const g = parseFloat(parts[1]);
+          const b = parseFloat(parts[2]);
+          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          }
+        }
+      }
+      return null;
+    };
     const applyTitleAccent = (courseType) => {
       if (!titleWrapEl) return;
       const accent = getCourseColorByType(courseType);
       if (accent) {
         titleWrapEl.style.setProperty('--next-class-accent', accent);
+        const softAccent = toSoftAccentColor(accent);
+        if (softAccent) {
+          titleWrapEl.style.setProperty('--next-class-accent-soft', softAccent);
+        } else {
+          titleWrapEl.style.removeProperty('--next-class-accent-soft');
+        }
       } else {
         titleWrapEl.style.removeProperty('--next-class-accent');
+        titleWrapEl.style.removeProperty('--next-class-accent-soft');
       }
     };
-
     const resetTitleAccent = () => {
       if (!titleWrapEl) return;
       titleWrapEl.style.removeProperty('--next-class-accent');
+      titleWrapEl.style.removeProperty('--next-class-accent-soft');
     };
-
     try {
       // Get current user
       const { data: { session } } = await supabase.auth.getSession();
@@ -2088,65 +1927,58 @@ class TermBox extends HTMLElement {
         resetTitleAccent();
         nameEl.textContent = 'Please log in';
         timeEl.textContent = '';
+        timeEl.style.display = 'none';
+        if (actionCueEl) actionCueEl.hidden = true;
         return;
       }
-
       // Get selected semester
       const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
       const termRaw = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
       const term = termRaw.includes('/') ? termRaw.split('/')[1] : termRaw;
-
       // Get user's selected courses
       const { data: profile } = await supabase
         .from('profiles')
         .select('courses_selection')
         .eq('id', session.user.id)
         .single();
-
       const selectedCourses = profile?.courses_selection || [];
       const normalizedTerm = term.trim();
-
       // Filter for current semester
       const semesterCourses = selectedCourses.filter(course => {
         const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
         return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
       });
-
       if (semesterCourses.length === 0) {
         resetTitleAccent();
         labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
         timeEl.style.display = 'none';
+        if (actionCueEl) actionCueEl.hidden = true;
         return;
       }
-
       // Fetch full course data
       const allCoursesInSemester = await fetchCourseData(year, term);
       const userCourses = allCoursesInSemester.filter(course =>
         semesterCourses.some(sc => sc.code === course.course_code)
       );
-
       // Find next class
       const nextClass = this.findNextClass(userCourses, year, term);
-
       if (!nextClass) {
         resetTitleAccent();
         labelEl.textContent = 'Next Class';
         nameEl.textContent = 'No classes scheduled';
         timeEl.textContent = '';
         timeEl.style.display = 'none';
+        if (actionCueEl) actionCueEl.hidden = true;
         return;
       }
-
       // Display the class info
       let displayName = nextClass.course.title || nextClass.course.course_code;
-
       // Truncate to 32 characters if needed
       if (displayName.length > 32) {
         displayName = `${displayName.substring(0, 32).trimEnd()}…`;
       }
-
       if (nextClass.isCurrent) {
         applyTitleAccent(nextClass.course?.type);
         labelEl.textContent = 'Current Class';
@@ -2154,6 +1986,7 @@ class TermBox extends HTMLElement {
         timeEl.textContent = '';
         timeEl.style.display = 'none';
         this.currentNextClassCourse = nextClass.course;
+        if (actionCueEl) actionCueEl.hidden = false;
       } else {
         applyTitleAccent(nextClass.course?.type);
         labelEl.textContent = 'Next Class';
@@ -2161,20 +1994,36 @@ class TermBox extends HTMLElement {
         timeEl.textContent = nextClass.timeRemaining;
         timeEl.style.display = nextClass.timeRemaining ? 'block' : 'none';
         this.currentNextClassCourse = nextClass.course;
+        if (actionCueEl) actionCueEl.hidden = false;
       }
     } catch (error) {
       console.error('Error updating next class:', error);
       resetTitleAccent();
       nameEl.textContent = 'Error loading';
       timeEl.textContent = '';
+      timeEl.style.display = 'none';
+      if (actionCueEl) actionCueEl.hidden = true;
     }
   }
-
+  formatHumanizedTimeRemaining(totalMinutes) {
+    const minutes = Number.isFinite(Number(totalMinutes))
+      ? Math.max(0, Math.floor(Number(totalMinutes)))
+      : 0;
+    if (minutes >= 24 * 60) {
+      const days = Math.floor(minutes / (24 * 60));
+      return `in ${days} day${days === 1 ? '' : 's'}`;
+    }
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      return `in ${hours} hour${hours === 1 ? '' : 's'}`;
+    }
+    const remainingMinutes = Math.max(1, minutes);
+    return `in ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}`;
+  }
   findNextClass(courses, year, term) {
     const now = new Date();
     const currentDay = now.getDay(); // 0=Sunday, 1=Monday, etc.
     const currentTime = now.getHours() * 60 + now.getMinutes(); // minutes since midnight
-
     // ====================================================================
     // SEMESTER END CHECK - TEMPORARILY DISABLED FOR STYLING
     // To enable: Uncomment the lines below
@@ -2185,22 +2034,17 @@ class TermBox extends HTMLElement {
       return null;
     }
     */
-
     const dayMap = {
       'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5,
       '月': 1, '火': 2, '水': 3, '木': 4, '金': 5
     };
-
     const scheduledClasses = [];
-
     courses.forEach(course => {
       const parsed = this.parseTimeSlot(course.time_slot);
       if (!parsed) return;
-
       const { day, startTime, endTime } = parsed;
       const dayNum = dayMap[day];
       if (!dayNum) return;
-
       scheduledClasses.push({
         course,
         dayNum,
@@ -2208,16 +2052,13 @@ class TermBox extends HTMLElement {
         endTime
       });
     });
-
     if (scheduledClasses.length === 0) return null;
-
     // Check for current class (within first 30 minutes)
     const currentClasses = scheduledClasses.filter(cls => {
       return cls.dayNum === currentDay &&
         currentTime >= cls.startTime &&
         currentTime < cls.startTime + 30;
     });
-
     if (currentClasses.length > 0) {
       return {
         course: currentClasses[0].course,
@@ -2225,21 +2066,16 @@ class TermBox extends HTMLElement {
         timeRemaining: ''
       };
     }
-
     // Find next upcoming class
     let nextClass = null;
     let minDiff = Infinity;
-
     for (let daysAhead = 0; daysAhead < 14; daysAhead++) {
       const targetDate = new Date(now);
       targetDate.setDate(targetDate.getDate() + daysAhead);
       const targetDay = targetDate.getDay();
-
       if (targetDay === 0 || targetDay === 6) continue; // Skip weekends
-
       scheduledClasses.forEach(cls => {
         if (cls.dayNum !== targetDay) return;
-
         let timeDiff;
         if (daysAhead === 0) {
           // Today: only consider future classes
@@ -2249,44 +2085,27 @@ class TermBox extends HTMLElement {
           // Future days
           timeDiff = (daysAhead * 24 * 60) + (cls.startTime - currentTime);
         }
-
         if (timeDiff > 0 && timeDiff < minDiff) {
           minDiff = timeDiff;
           nextClass = cls;
         }
       });
-
       if (nextClass) break; // Found a class this week
     }
-
     if (!nextClass) return null;
-
-    // Calculate time remaining string
-    const days = Math.floor(minDiff / (24 * 60));
-    const hours = Math.floor((minDiff % (24 * 60)) / 60);
-    const minutes = Math.floor(minDiff % 60);
-
-    let timeStr = 'in ';
-    if (days > 0) timeStr += `${days}d `;
-    if (hours > 0) timeStr += `${hours}h `;
-    if (minutes > 0 || (days === 0 && hours === 0)) timeStr += `${minutes}m`;
-
     return {
       course: nextClass.course,
       isCurrent: false,
-      timeRemaining: timeStr.trim()
+      timeRemaining: this.formatHumanizedTimeRemaining(minDiff)
     };
   }
-
   parseTimeSlot(timeSlot) {
     if (!timeSlot) return null;
-
     // Try Japanese format: (月1講時) or (月曜日1講時)
     let match = timeSlot.match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
     if (match) {
       const dayJP = match[1];
       const period = parseInt(match[2], 10);
-
       const timeSlots = {
         1: { start: 9 * 60, end: 10 * 60 + 30 },      // 09:00-10:30
         2: { start: 10 * 60 + 45, end: 12 * 60 + 15 }, // 10:45-12:15
@@ -2294,17 +2113,14 @@ class TermBox extends HTMLElement {
         4: { start: 14 * 60 + 55, end: 16 * 60 + 25 }, // 14:55-16:25
         5: { start: 16 * 60 + 40, end: 18 * 60 + 10 }  // 16:40-18:10
       };
-
       const slot = timeSlots[period];
       if (!slot) return null;
-
       return {
         day: dayJP,
         startTime: slot.start,
         endTime: slot.end
       };
     }
-
     // Try English format: "Mon 09:00 - 10:30"
     const engMatch = timeSlot.match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
     if (engMatch) {
@@ -2313,28 +2129,24 @@ class TermBox extends HTMLElement {
       const startMin = parseInt(engMatch[3], 10);
       const endHour = parseInt(engMatch[4], 10);
       const endMin = parseInt(engMatch[5], 10);
-
       return {
         day,
         startTime: startHour * 60 + startMin,
         endTime: endHour * 60 + endMin
       };
     }
-
     return null;
   }
-
   getSemesterEnd(year, term) {
-    // Spring semester: April 1 - July 31
-    // Fall semester: October 1 - January 31 (next year)
+    // Spring semester lock: August 1 (same year)
+    // Fall semester lock: March 1 (next year)
     if (term === 'Spring') {
-      return new Date(year, 6, 31, 23, 59, 59); // July 31 (month is 0-indexed)
+      return new Date(year, 7, 1, 0, 0, 0, 0); // August 1 (month is 0-indexed)
     } else {
-      return new Date(parseInt(year) + 1, 0, 31, 23, 59, 59); // January 31 next year
+      return new Date(parseInt(year, 10) + 1, 2, 1, 0, 0, 0, 0); // March 1 next year
     }
   }
 }
-
 class CourseCalendar extends HTMLElement {
   constructor() {
     super();
@@ -2364,7 +2176,6 @@ class CourseCalendar extends HTMLElement {
         this.hideTooltip();
       }
     };
-
     this.innerHTML = `
       <div class="calendar-container-main">
         <div class="calendar-wrapper">
@@ -2416,16 +2227,13 @@ class CourseCalendar extends HTMLElement {
         </div>
       </div>
     `;
-
     this.shadow = this;
     this.calendar = this.querySelector("#calendar-main");
     this.calendarHeader = this.calendar.querySelectorAll("thead th");
     this.loadingIndicator = this.querySelector("#loading-indicator");
     this.initializeDayHeaderInteractions();
-
     this.displayedYear = null;
     this.displayedTerm = null;
-
     this.dayIdByEN = {
       Mon: 'calendar-monday',
       Tue: 'calendar-tuesday',
@@ -2433,14 +2241,12 @@ class CourseCalendar extends HTMLElement {
       Thu: 'calendar-thursday',
       Fri: 'calendar-friday'
     };
-
     this.calendar.addEventListener("click", this.handleCalendarClickBound);
     this.calendar.addEventListener("keydown", this.handleCalendarKeyDownBound);
     this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
   }
-
   initializeDayHeaderInteractions() {
     const headerCells = Array.from(this.calendarHeader).slice(1);
     headerCells.forEach((headerCell, index) => {
@@ -2451,13 +2257,11 @@ class CourseCalendar extends HTMLElement {
       headerCell.setAttribute('aria-label', `Filter courses by ${HOME_DAY_SHORT_LABELS[dayCode]}`);
     });
   }
-
   connectedCallback() {
     // Only initialize if not already done
     if (!this.isInitialized) {
       this.initializeCalendar();
     }
-
     // Set up refresh on router navigation only once
     if (!this.pageLoadedListenerAdded) {
       this.pageLoadedListenerAdded = true;
@@ -2467,7 +2271,6 @@ class CourseCalendar extends HTMLElement {
       window.addEventListener('resize', this.handleCalendarResize);
     }
   }
-
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handleCalendarPageLoaded);
     document.removeEventListener('change', this.handleCalendarSelectionChange);
@@ -2476,7 +2279,6 @@ class CourseCalendar extends HTMLElement {
     this.hideTooltip();
     this.pageLoadedListenerAdded = false;
   }
-
   refreshFromSelectors() {
     const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
@@ -2484,26 +2286,20 @@ class CourseCalendar extends HTMLElement {
     console.log('Mini calendar: Refreshing from selectors:', year, term);
     this.showCourseWithRetry(year, term);
   }
-
   async initializeCalendar() {
     try {
       this.showLoading();
-
       // Get fresh session data
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
-
       // Initial highlight
       this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
       this.highlightPeriod();
       this.highlightCurrentTimePeriod();
-
       // Use selected year/term from selectors instead of current date
       const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
       const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
-
       console.log('Mini calendar: Initializing with year/term:', year, term);
-
       // Load courses with retry mechanism
       await this.showCourseWithRetry(year, term);
       this.isInitialized = true;
@@ -2518,45 +2314,36 @@ class CourseCalendar extends HTMLElement {
       }
     }
   }
-
   showLoading() {
     if (this.loadingIndicator) {
       this.loadingIndicator.style.display = 'block';
     }
   }
-
   hideLoading() {
     if (this.loadingIndicator) {
       this.loadingIndicator.style.display = 'none';
     }
   }
-
   createRenderRequestId() {
     this.renderRequestId += 1;
     return this.renderRequestId;
   }
-
   isRenderRequestStale(requestId) {
     return requestId !== this.renderRequestId;
   }
-
   async showCourseWithRetry(year, term, retryAttempt = 0, requestId = null) {
     const activeRequestId = requestId ?? this.createRenderRequestId();
-
     try {
       if (retryAttempt === 0) this.showLoading();
       await this.showCourse(year, term, activeRequestId);
-
       if (this.isRenderRequestStale(activeRequestId)) {
         return;
       }
-
       if (retryAttempt === 0) this.hideLoading(); // Only hide loading if this was the initial attempt
     } catch (error) {
       if (this.isRenderRequestStale(activeRequestId)) {
         return;
       }
-
       if (retryAttempt < this.maxRetries) {
         // Don't hide loading for retries
         // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
@@ -2572,7 +2359,6 @@ class CourseCalendar extends HTMLElement {
       }
     }
   }
-
   getColIndexByDayEN(dayEN) {
     const id = this.dayIdByEN[dayEN];
     if (!id) return -1;
@@ -2580,14 +2366,12 @@ class CourseCalendar extends HTMLElement {
     if (!el) return -1;
     return Array.from(this.calendarHeader).indexOf(el);
   }
-
   clearCourseCells() {
     // Remove all course/placeholder blocks in day cells.
     this.calendar.querySelectorAll('tbody tr td:not(:first-child)').forEach(cell => {
       cell.textContent = '';
     });
   }
-
   populateEmptyPlaceholders() {
     const rows = this.calendar.querySelectorAll('tbody tr');
     rows.forEach((row, rowIndex) => {
@@ -2608,23 +2392,19 @@ class CourseCalendar extends HTMLElement {
       });
     });
   }
-
   showEmptyCalendar() {
     this.clearCourseCells();
     this.populateEmptyPlaceholders();
     this.renderLegendFromCourses([]);
     this.hideTooltip();
   }
-
   getLegendContainer() {
     const calendarContainer = this.closest('#calendar-container');
     return calendarContainer?.querySelector('.home-calendar-legend') || document.querySelector('#home-main .home-calendar-legend');
   }
-
   renderLegendFromCourses(courses) {
     const legendContainer = this.getLegendContainer();
     if (!legendContainer) return;
-
     const normalizeLegendType = (rawTypeLabel) => {
       const typeLabel = String(rawTypeLabel || 'General').trim() || 'General';
       const seminarTypes = new Set([
@@ -2632,35 +2412,29 @@ class CourseCalendar extends HTMLElement {
         'Intermediate Seminars',
         'Advanced Seminars and Honors Thesis'
       ]);
-
       if (seminarTypes.has(typeLabel)) {
         return {
           label: 'Seminar and Honor Thesis',
           color: getCourseColorByType('Advanced Seminars and Honors Thesis')
         };
       }
-
       return {
         label: typeLabel,
         color: getCourseColorByType(typeLabel)
       };
     };
-
     const typeColorMap = new Map();
     (Array.isArray(courses) ? courses : []).forEach((course) => {
       const normalized = normalizeLegendType(course?.type);
       if (typeColorMap.has(normalized.label)) return;
       typeColorMap.set(normalized.label, normalized.color);
     });
-
     const legendEntries = Array.from(typeColorMap.entries())
       .sort((a, b) => a[0].localeCompare(b[0]));
-
     if (!legendEntries.length) {
       legendContainer.innerHTML = '<span class="home-calendar-legend-empty">No registered courses yet</span>';
       return;
     }
-
     legendContainer.innerHTML = legendEntries.map(([typeLabel, color]) => `
       <span class="home-calendar-legend-item">
         <span class="home-calendar-legend-dot" style="background:${color};"></span>
@@ -2668,27 +2442,22 @@ class CourseCalendar extends HTMLElement {
       </span>
     `).join('');
   }
-
   highlightDay(dayShort) {
     // Remove previous highlights
     this.calendar.querySelectorAll('thead th, tbody td').forEach(el => {
       el.classList.remove('highlight-day', 'highlight-current-day');
     });
-
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
-
     // Highlight the header
     const header = this.calendarHeader[colIndex];
     if (header) header.classList.add('highlight-day');
-
     // Highlight entire column for current day
     this.calendar.querySelectorAll(`tbody tr`).forEach(row => {
       const cell = row.querySelector(`td:nth-child(${colIndex + 1})`);
       if (cell) cell.classList.add('highlight-current-day');
     });
   }
-
   highlightPeriod() {
     // Minimal highlight for the first column (time slots)
     if (this.calendarHeader[0]) this.calendarHeader[0].classList.add("calendar-first");
@@ -2697,7 +2466,6 @@ class CourseCalendar extends HTMLElement {
       if (cell) cell.classList.add("calendar-first");
     });
   }
-
   highlightCurrentTimePeriod() {
     // Get current time
     const now = new Date();
@@ -2705,7 +2473,6 @@ class CourseCalendar extends HTMLElement {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute; // minutes since midnight
     const currentDay = now.toLocaleDateString("en-US", { weekday: "short" });
-
     // Time periods in minutes
     const periods = [
       { start: 9 * 60, end: 10 * 60 + 30, row: 0 },      // 09:00-10:30 (period 1)
@@ -2714,15 +2481,12 @@ class CourseCalendar extends HTMLElement {
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 }, // 14:55-16:25 (period 4)
       { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }  // 16:40-18:10 (period 5)
     ];
-
     // Find current period
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
     if (!currentPeriod) return; // Not during class time
-
     // Get column index for current day
     const colIndex = this.getColIndexByDayEN(currentDay);
     if (colIndex === -1) return;
-
     // Highlight the cell
     const rows = this.calendar.querySelectorAll('tbody tr');
     if (rows[currentPeriod.row]) {
@@ -2730,11 +2494,9 @@ class CourseCalendar extends HTMLElement {
       if (cell) cell.classList.add('highlight-current-time');
     }
   }
-
   async showCourse(year, term, requestId = this.renderRequestId) {
     this.displayedYear = year;
     this.displayedTerm = term;
-
     try {
       // Ensure we have the latest user session
       if (!this.currentUser) {
@@ -2742,10 +2504,8 @@ class CourseCalendar extends HTMLElement {
         if (this.isRenderRequestStale(requestId)) return;
         this.currentUser = session?.user || null;
       }
-
       let selectedCourses = [];
       let normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
-
       if (this.currentUser) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -2754,49 +2514,37 @@ class CourseCalendar extends HTMLElement {
           .single();
         if (profileError) throw profileError;
         if (this.isRenderRequestStale(requestId)) return;
-
         selectedCourses = profile?.courses_selection || [];
         normalizedTerm = term.includes('/') ? term.split('/')[1] : term;
-
         // Filter to only show courses for the current year and term
         selectedCourses = selectedCourses.filter(course => {
           const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
           return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
         });
-
         console.log('Mini calendar: Selected courses for', year, normalizedTerm, ':', selectedCourses.length);
       }
-
       // If no user or no selected courses for current year/term, fill with EMPTY placeholders
       if (!this.currentUser || !selectedCourses.length) {
         if (this.isRenderRequestStale(requestId)) return;
         this.showEmptyCalendar();
         return;
       }
-
       const allCoursesInSemester = await fetchCourseData(year, term);
       if (this.isRenderRequestStale(requestId)) return;
-
       const coursesToShow = allCoursesInSemester.filter(course =>
         selectedCourses.some((profileCourse) =>
           profileCourse.code === course.course_code
         )
       );
-
       this.renderLegendFromCourses(coursesToShow);
-
       console.log('Mini calendar: Courses to show:', coursesToShow.length);
       console.log('Mini calendar: Course details:', coursesToShow.map(c => ({ code: c.course_code, time: c.time_slot })));
-
       this.clearCourseCells();
-
       for (const course of coursesToShow) {
         if (this.isRenderRequestStale(requestId)) return;
-
         // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
         let match = course.time_slot?.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
         let dayEN, period;
-
         if (match) {
           // Japanese format
           const dayJP = match[1];
@@ -2810,7 +2558,6 @@ class CourseCalendar extends HTMLElement {
             dayEN = englishMatch[1];
             const startHour = parseInt(englishMatch[2], 10);
             const startMin = parseInt(englishMatch[3], 10);
-
             // Map time to period based on start time
             const timeToSlot = startHour * 100 + startMin;
             if (timeToSlot >= 900 && timeToSlot < 1030) period = 1;
@@ -2821,31 +2568,25 @@ class CourseCalendar extends HTMLElement {
             else period = -1; // Invalid time slot
           }
         }
-
         if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
           continue;
         }
-
         const colIndex = this.getColIndexByDayEN(dayEN);
         if (colIndex === -1) {
           console.log('Invalid column index for day:', dayEN);
           continue;
         }
-
         const rowIndex = Number.isFinite(period) ? (period - 1) : -1;
         if (rowIndex < 0 || rowIndex >= 5) {
           console.log('Invalid row index for period:', period, 'rowIndex:', rowIndex);
           continue;
         }
-
         const cell = this.calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
         if (!cell) {
           console.log('Cell not found for position:', { rowIndex: rowIndex + 1, colIndex: colIndex + 1 });
           continue;
         }
-
         console.log('Rendering course in cell:', { course: course.course_code, dayEN, period, colIndex, rowIndex });
-
         const div = document.createElement("div");
         const div_title = document.createElement("div");
         const div_box = document.createElement("div");
@@ -2854,11 +2595,9 @@ class CourseCalendar extends HTMLElement {
         div_box.classList.add("course-cell-box");
         div_title.classList.add("course-title");
         div_classroom.classList.add("course-classroom");
-
         // Set the course content
         // div_title.textContent = course.short_title || course.title || course.course_code;
         // div_classroom.textContent = course.classroom || '';
-
         //if (div_classroom.textContent === "") {
         //  div_classroom.classList.add("empty-classroom");
         //  div_title.classList.add("empty-classroom-title");
@@ -2869,7 +2608,6 @@ class CourseCalendar extends HTMLElement {
           ? `${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`
           : '';
         const typeLabel = String(course.type || 'General').trim() || 'General';
-
         div_box.style.backgroundColor = getCourseColorByType(course.type);
         div.dataset.courseIdentifier = course.course_code;
         div.dataset.courseCode = String(course.course_code || '');
@@ -2889,7 +2627,6 @@ class CourseCalendar extends HTMLElement {
         div.appendChild(div_title);
         div.appendChild(div_classroom);
       }
-
       // Fill remaining empty cells with placeholders
       if (this.isRenderRequestStale(requestId)) return;
       this.populateEmptyPlaceholders();
@@ -2899,16 +2636,13 @@ class CourseCalendar extends HTMLElement {
       throw error; // Re-throw to trigger retry mechanism
     }
   }
-
   isDesktopPlannerMode() {
     return window.innerWidth >= HOME_DESKTOP_BREAKPOINT;
   }
-
   ensureTooltipElement() {
     if (this.tooltipElement && document.body.contains(this.tooltipElement)) {
       return this.tooltipElement;
     }
-
     const tooltip = document.createElement('div');
     tooltip.className = 'home-calendar-tooltip';
     tooltip.setAttribute('role', 'tooltip');
@@ -2916,11 +2650,9 @@ class CourseCalendar extends HTMLElement {
     this.tooltipElement = tooltip;
     return tooltip;
   }
-
   positionTooltip(clientX, clientY) {
     const tooltip = this.tooltipElement;
     if (!tooltip) return;
-
     const offset = 14;
     const maxX = window.innerWidth - tooltip.offsetWidth - 8;
     const maxY = window.innerHeight - tooltip.offsetHeight - 8;
@@ -2929,19 +2661,16 @@ class CourseCalendar extends HTMLElement {
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   }
-
   showTooltipForCell(cell, event) {
     if (!this.isDesktopPlannerMode()) return;
     const tooltip = this.ensureTooltipElement();
     if (!tooltip) return;
-
     const isEmpty = cell.dataset.emptySlot === 'true';
     const slotLabel = cell.dataset.slotLabel || '';
     const timeLabel = cell.dataset.timeLabel || '';
     let title = '';
     let subtitle = '';
     let detail = '';
-
     if (isEmpty) {
       title = 'Empty slot';
       subtitle = [slotLabel, timeLabel].filter(Boolean).join(' • ');
@@ -2957,7 +2686,6 @@ class CourseCalendar extends HTMLElement {
       this.hideTooltip();
       return;
     }
-
     tooltip.innerHTML = `
       <div class="home-calendar-tooltip-title">${escapeHtml(title)}</div>
       <div class="home-calendar-tooltip-subtitle">${escapeHtml(subtitle)}</div>
@@ -2966,12 +2694,10 @@ class CourseCalendar extends HTMLElement {
     tooltip.classList.add('is-visible');
     this.positionTooltip(event.clientX, event.clientY);
   }
-
   hideTooltip() {
     if (!this.tooltipElement) return;
     this.tooltipElement.classList.remove('is-visible');
   }
-
   handleCalendarPointerOver(event) {
     if (!this.isDesktopPlannerMode()) return;
     const cell = event.target.closest('.course-cell-main');
@@ -2979,24 +2705,20 @@ class CourseCalendar extends HTMLElement {
     this.activeTooltipCell = cell;
     this.showTooltipForCell(cell, event);
   }
-
   handleCalendarPointerMove(event) {
     if (!this.isDesktopPlannerMode() || !this.activeTooltipCell) return;
     this.positionTooltip(event.clientX, event.clientY);
   }
-
   handleCalendarPointerLeave() {
     this.activeTooltipCell = null;
     this.hideTooltip();
   }
-
   getHeaderDayFromEventTarget(target) {
     const dayHeader = target?.closest('th[data-day]');
     if (!dayHeader || !this.calendar.contains(dayHeader)) return null;
     const day = dayHeader.dataset.day;
     return day && HOME_DAY_ORDER.includes(day) ? day : null;
   }
-
   navigateToDayFromHeader(day) {
     if (!day) return;
     const fallbackSemester = getCurrentHomeSemesterContext();
@@ -3005,29 +2727,23 @@ class CourseCalendar extends HTMLElement {
     if (!targetYear || !targetTerm) return;
     navigateToDayCourseSearch(day, targetTerm, targetYear);
   }
-
   handleCalendarKeyDown(event) {
     if (!event) return;
     const isActivationKey = event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar';
     if (!isActivationKey) return;
-
     const day = this.getHeaderDayFromEventTarget(event.target);
     if (!day) return;
-
     event.preventDefault();
     this.navigateToDayFromHeader(day);
   }
-
   async handleCalendarClick(event) {
     const selectedDay = this.getHeaderDayFromEventTarget(event.target);
     if (selectedDay) {
       this.navigateToDayFromHeader(selectedDay);
       return;
     }
-
     const clickedCell = event.target.closest("div.course-cell-main");
     if (!clickedCell) return;
-
     if (clickedCell.dataset.emptySlot === 'true') {
       if (!this.isDesktopPlannerMode()) return;
       const day = clickedCell.dataset.day;
@@ -3037,10 +2753,8 @@ class CourseCalendar extends HTMLElement {
       }
       return;
     }
-
     const courseCode = clickedCell.dataset.courseIdentifier;
     if (!this.displayedYear || !this.displayedTerm || !courseCode) return;
-
     try {
       const courses = await fetchCourseData(this.displayedYear, this.displayedTerm);
       const clickedCourse = courses.find((course) => course.course_code === courseCode);
@@ -3049,28 +2763,22 @@ class CourseCalendar extends HTMLElement {
       console.error('Error handling calendar click:', error);
     }
   }
-
   // Public method to refresh calendar data
   async refreshCalendar() {
     console.log('Refreshing calendar...');
-
     // Clear current user to force fresh session fetch
     this.currentUser = null;
-
     if (!this.isInitialized) {
       return this.initializeCalendar();
     }
-
     // Use utility functions to get current year and term from selectors
     const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
     const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
       const currentMonth = new Date().getMonth() + 1;
       return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
     })();
-
     await this.showCourseWithRetry(currentYear, currentTerm);
   }
-
   // Public method to show specific term
   async showTerm(year, term) {
     // Clear current user to force fresh session fetch
@@ -3078,7 +2786,6 @@ class CourseCalendar extends HTMLElement {
     await this.showCourseWithRetry(year, term);
   }
 }
-
 class LatestCoursesPreview extends HTMLElement {
   constructor() {
     super();
@@ -3089,7 +2796,6 @@ class LatestCoursesPreview extends HTMLElement {
     }, 70);
     this.renderQuickActions();
   }
-
   renderQuickActions() {
     this.innerHTML = `
       <div class="home-courses-preview home-quick-actions-panel">
@@ -3099,24 +2805,22 @@ class LatestCoursesPreview extends HTMLElement {
         <div class="home-quick-actions-stack">
           <button type="button" class="home-quick-action-btn" data-action="add-assignment">Add assignment</button>
           <button type="button" class="home-quick-action-btn" data-action="browse-courses">Browse courses</button>
+          <button type="button" class="home-quick-action-btn" data-action="view-saved-courses">Saved courses</button>
         </div>
       </div>
     `;
   }
-
   bindQuickActionHandlers() {
     const actionStack = this.querySelector('.home-quick-actions-stack');
     if (!actionStack) return;
     actionStack.removeEventListener('click', this.handleActionClick);
     actionStack.addEventListener('click', this.handleActionClick);
   }
-
   connectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
     this.bindQuickActionHandlers();
   }
-
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     const actionStack = this.querySelector('.home-quick-actions-stack');
@@ -3124,13 +2828,11 @@ class LatestCoursesPreview extends HTMLElement {
       actionStack.removeEventListener('click', this.handleActionClick);
     }
   }
-
   handleActionClick(event) {
     const actionButton = event.target.closest('.home-quick-action-btn');
     if (!actionButton) return;
     const action = actionButton.dataset.action;
     if (!action) return;
-
     if (action === 'add-assignment') {
       try {
         sessionStorage.setItem('open_new_assignment_modal', '1');
@@ -3140,56 +2842,400 @@ class LatestCoursesPreview extends HTMLElement {
       navigateToRoute('/assignments');
       return;
     }
-
     if (action === 'browse-courses') {
       navigateToRoute('/courses');
       return;
     }
-
+    if (action === 'view-saved-courses') {
+      try {
+        sessionStorage.setItem('ila_courses_preset_prefill', JSON.stringify({
+          presetId: 'preset-saved-only',
+          createdAt: Date.now()
+        }));
+      } catch (error) {
+        console.warn('Unable to store courses preset prefill payload:', error);
+      }
+      navigateToRoute('/courses');
+      return;
+    }
   }
 }
-
-class ReviewSuggestionWidget extends HTMLElement {
+class GuestHomeBrowseWidget extends HTMLElement {
   constructor() {
     super();
-    this.suggestedCourse = null;
-    this.lastSuggestedCourseKey = null;
+    this.courseLookup = new Map();
+    this.refreshToken = 0;
+    this.handleWidgetClick = this.handleWidgetClick.bind(this);
     this.handlePageLoaded = () => {
-      setTimeout(() => this.refreshSuggestion(), 120);
+      setTimeout(() => this.refreshCoursePreview(), 80);
     };
-    this.handleCourseCardClick = () => {
-      this.openSuggestedCourseForReview();
-    };
-    this.handleCourseCardKeyDown = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        this.openSuggestedCourseForReview();
-      }
-    };
-    this.handleWriteReviewClick = (event) => {
-      event.preventDefault();
-      this.openSuggestedCourseForReview();
-    };
+    this.renderLoadingState();
+  }
+  connectedCallback() {
+    this.removeEventListener('click', this.handleWidgetClick);
+    this.addEventListener('click', this.handleWidgetClick);
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.addEventListener('pageLoaded', this.handlePageLoaded);
+    this.refreshCoursePreview();
+  }
+  disconnectedCallback() {
+    this.removeEventListener('click', this.handleWidgetClick);
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+  }
+  normalizeCourseCode(codeValue) {
+    return String(codeValue || '').trim().toUpperCase();
+  }
+  dedupeCourses(courses) {
+    if (!Array.isArray(courses) || !courses.length) return [];
+    const uniqueByCode = new Map();
+    courses.forEach((course) => {
+      const code = this.normalizeCourseCode(course?.course_code);
+      if (!code || uniqueByCode.has(code)) return;
+      uniqueByCode.set(code, course);
+    });
+    return Array.from(uniqueByCode.values());
+  }
+  pickRandomCourses(courses, maxCount = 4) {
+    if (!Array.isArray(courses) || !courses.length) return [];
+    const pool = [...courses];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const randomIndex = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[randomIndex]] = [pool[randomIndex], pool[i]];
+    }
+    return pool.slice(0, Math.max(1, maxCount));
+  }
+  isMobileViewport() {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(max-width: 1023px)').matches;
+  }
+  getViewportCourseLimit() {
+    return this.isMobileViewport() ? 3 : 4;
+  }
+  resolveCourseAccent(course) {
+    const fallback = 'var(--color-accent-primary-soft)';
+    const rawValue = String(getCourseColorByType(course?.type) || '').trim();
+    if (!rawValue) return fallback;
+    if (/^#[0-9A-Fa-f]{3,8}$/.test(rawValue)) return rawValue;
+    if (/^rgba?\([^)]*\)$/.test(rawValue)) return rawValue;
+    if (/^var\(--[a-zA-Z0-9-_]+\)$/.test(rawValue)) return rawValue;
+    return fallback;
+  }
+  renderLoadingState() {
+    const loadingSkeletonCount = this.getViewportCourseLimit();
     this.innerHTML = `
-      <div class="home-review-suggestion">
-        <div class="home-review-suggestion-header">
-          <h3 class="home-review-suggestion-title">Suggestion</h3>
-          <button type="button" class="home-calendar-link home-review-suggestion-link">Write Review</button>
+      <div class="guest-v2-browse">
+        <div class="guest-v2-browse-header">
+          <div class="guest-v2-browse-copy">
+            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <p class="guest-v2-browse-subtitle">Loading the current semester preview...</p>
+          </div>
+          <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
         </div>
-        <p class="home-review-suggestion-text">Review a course you have registered for.</p>
-        <div class="home-review-suggestion-course-card" role="button" tabindex="0">
-          <h3 class="home-review-suggestion-course">Loading...</h3>
-          <p class="home-review-suggestion-meta"></p>
+        <div class="guest-v2-course-grid guest-v2-course-grid--loading" aria-hidden="true">
+          ${Array.from({ length: loadingSkeletonCount }, () => '<div class="guest-v2-course-skeleton"></div>').join('')}
         </div>
       </div>
     `;
   }
-
-  openSuggestedCourseForReview() {
-    if (!this.suggestedCourse) return false;
-    const code = this.normalizeCourseCode(this.suggestedCourse.code);
-    const year = Number(this.suggestedCourse.year) || new Date().getFullYear();
-    const term = this.normalizeTerm(this.suggestedCourse.term);
+  renderEmptyState(message, semesterLabel = 'Latest semester') {
+    this.innerHTML = `
+      <div class="guest-v2-browse">
+        <div class="guest-v2-browse-header">
+          <div class="guest-v2-browse-copy">
+            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <p class="guest-v2-browse-subtitle">${escapeHtml(semesterLabel)} preview</p>
+          </div>
+          <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
+        </div>
+        <p class="guest-v2-browse-empty">${escapeHtml(message || 'Courses are not available right now. Please browse the full course list.')}</p>
+      </div>
+    `;
+  }
+  renderCourses(courses, semesterLabel) {
+    const safeSemesterLabel = escapeHtml(semesterLabel || 'Latest semester');
+    const picksLabel = Number(courses?.length) || 0;
+    const cardsMarkup = courses.map((course) => {
+      const courseCode = this.normalizeCourseCode(course?.course_code);
+      const title = normalizeCourseTitle(course?.title || courseCode || 'Untitled course');
+      const professor = formatProfessorDisplayName(course?.professor || '') || 'Professor TBA';
+      const courseAccent = this.resolveCourseAccent(course);
+      const meta = professor;
+      return `
+        <button
+          type="button"
+          class="home-review-suggestion-course-card guest-v2-course-card"
+          data-course-code="${escapeHtml(courseCode)}"
+          style="background-color:${courseAccent};"
+        >
+          <span class="home-review-suggestion-course-content">
+            <h3 class="home-review-suggestion-course">${escapeHtml(title)}</h3>
+            <p class="home-review-suggestion-meta">${escapeHtml(meta)}</p>
+          </span>
+          <span class="home-review-suggestion-course-action-wrap" aria-hidden="true">
+            <span class="home-review-suggestion-course-action">
+              <span class="home-review-suggestion-course-action-label">Course info</span>
+            </span>
+            <span class="home-review-suggestion-course-action-chevron"></span>
+          </span>
+        </button>
+      `;
+    }).join('');
+    this.innerHTML = `
+      <div class="guest-v2-browse">
+        <div class="guest-v2-browse-header">
+          <div class="guest-v2-browse-copy">
+            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <p class="guest-v2-browse-subtitle">${picksLabel} randomized picks from ${safeSemesterLabel}</p>
+          </div>
+          <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
+        </div>
+        <div class="guest-v2-course-grid">
+          ${cardsMarkup}
+        </div>
+      </div>
+    `;
+  }
+  getCurrentSemesterTarget() {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const term = month >= 8 || month <= 2 ? 'Fall' : 'Spring';
+    const year = now.getFullYear();
+    return { term, year };
+  }
+  async refreshCoursePreview() {
+    const currentToken = ++this.refreshToken;
+    this.renderLoadingState();
+    try {
+      const semesters = await fetchAvailableSemesters();
+      if (!this.isConnected || currentToken !== this.refreshToken) return;
+      const { term: currentTerm, year: currentYear } = this.getCurrentSemesterTarget();
+      const currentSemester = Array.isArray(semesters)
+        ? semesters.find((semester) => (
+          normalizeTermName(semester?.term) === currentTerm
+          && Number(semester?.year) === Number(currentYear)
+        ))
+        : null;
+      if (!currentSemester) {
+        this.courseLookup = new Map();
+        this.renderEmptyState(`No courses available for ${currentTerm} ${currentYear}.`, `${currentTerm} ${currentYear}`);
+        return;
+      }
+      const semesterLabel = `${currentTerm} ${currentYear}`;
+      const semesterCourses = await fetchCourseData(currentYear, currentTerm);
+      if (!this.isConnected || currentToken !== this.refreshToken) return;
+      const dedupedCourses = this.dedupeCourses(semesterCourses);
+      if (!dedupedCourses.length) {
+        this.courseLookup = new Map();
+        this.renderEmptyState(`No courses available for ${semesterLabel}.`, semesterLabel);
+        return;
+      }
+      const randomizedCourses = this.pickRandomCourses(dedupedCourses, this.getViewportCourseLimit());
+      this.courseLookup = new Map(randomizedCourses.map((course) => [this.normalizeCourseCode(course?.course_code), course]));
+      this.renderCourses(randomizedCourses, semesterLabel);
+    } catch (error) {
+      console.error('Unable to load guest browse preview:', error);
+      if (!this.isConnected || currentToken !== this.refreshToken) return;
+      this.courseLookup = new Map();
+      this.renderEmptyState('Unable to load course previews right now.');
+    }
+  }
+  handleWidgetClick(event) {
+    const actionElement = event.target.closest('[data-action]');
+    if (actionElement && this.contains(actionElement)) {
+      if (actionElement.dataset.action === 'browse-courses') {
+        navigateToRoute('/courses');
+      }
+      return;
+    }
+    const courseButton = event.target.closest('.guest-v2-course-card[data-course-code]');
+    if (!courseButton || !this.contains(courseButton)) return;
+    const courseCode = this.normalizeCourseCode(courseButton.dataset.courseCode);
+    if (!courseCode) return;
+    const selectedCourse = this.courseLookup.get(courseCode);
+    if (!selectedCourse) return;
+    openCourseInfoMenu(selectedCourse);
+  }
+}
+class GuestHomeTeaserWidget extends HTMLElement {
+  constructor() {
+    super();
+    this.storageKey = 'ila_guest_home_teaser_variant_last';
+    this.handlePageLoaded = () => {
+      this.renderTeaser();
+    };
+    this.handleViewportResize = () => {
+      this.renderTeaser();
+    };
+  }
+  connectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    document.addEventListener('pageLoaded', this.handlePageLoaded);
+    window.removeEventListener('resize', this.handleViewportResize);
+    window.addEventListener('resize', this.handleViewportResize, { passive: true });
+    this.renderTeaser();
+  }
+  disconnectedCallback() {
+    document.removeEventListener('pageLoaded', this.handlePageLoaded);
+    window.removeEventListener('resize', this.handleViewportResize);
+  }
+  isMobileViewport() {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(max-width: 1023px)').matches;
+  }
+  readLastVariantIndex() {
+    try {
+      const rawValue = window.localStorage.getItem(this.storageKey);
+      const parsed = Number.parseInt(rawValue || '', 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    } catch (error) {
+      console.warn('Guest teaser: unable to read localStorage state', error);
+      return null;
+    }
+  }
+  writeLastVariantIndex(index) {
+    try {
+      window.localStorage.setItem(this.storageKey, String(index));
+    } catch (error) {
+      console.warn('Guest teaser: unable to persist localStorage state', error);
+    }
+  }
+  pickVariantIndex(length) {
+    if (!Number.isFinite(length) || length <= 1) return 0;
+    const lastIndex = this.readLastVariantIndex();
+    let selectedIndex = Math.floor(Math.random() * length);
+    if (Number.isFinite(lastIndex) && lastIndex >= 0 && lastIndex < length && selectedIndex === lastIndex) {
+      selectedIndex = (selectedIndex + 1 + Math.floor(Math.random() * (length - 1))) % length;
+    }
+    this.writeLastVariantIndex(selectedIndex);
+    return selectedIndex;
+  }
+  getImageCandidates(primarySrc, fileName) {
+    const safePrimarySrc = String(primarySrc || '').trim();
+    const safeFileName = String(fileName || '').trim();
+    const candidatePool = [];
+    if (safePrimarySrc) candidatePool.push(safePrimarySrc);
+    if (!safeFileName) return Array.from(new Set(candidatePool));
+    const candidates = [
+      ...candidatePool,
+      withBase(`/assets/${safeFileName}`),
+      `/assets/${safeFileName}`,
+      `assets/${safeFileName}`,
+      `./assets/${safeFileName}`
+    ].filter(Boolean);
+    return Array.from(new Set(candidates));
+  }
+  getMockVariants() {
+    const isMobile = this.isMobileViewport();
+    return [
+      {
+        id: isMobile ? 'mobilescreen' : 'screen2',
+        label: isMobile ? 'Feature preview mobile screen' : 'Feature preview screen 2',
+        imageSrc: isMobile ? guestMobileScreen : guestScreen2,
+        imageFile: isMobile ? 'mobilescreen.png' : 'screen2.png'
+      }
+    ];
+  }
+  renderTeaser() {
+    const variants = this.getMockVariants();
+    if (!Array.isArray(variants) || !variants.length) return;
+    const selectedIndex = this.pickVariantIndex(variants.length);
+    const selectedVariant = variants[selectedIndex] || variants[0];
+    this.innerHTML = `
+      <div class="guest-v2-teaser">
+        <div class="guest-v2-teaser-mock guest-v2-teaser-mock--${escapeHtml(selectedVariant.id)}" aria-hidden="true">
+          <img
+            class="guest-v2-teaser-image"
+            title="${escapeHtml(selectedVariant.label || 'Feature preview')}"
+            src=""
+            loading="eager"
+            decoding="async"
+            draggable="false"
+            aria-hidden="true"
+          />
+        </div>
+        <div class="guest-v2-teaser-fade" aria-hidden="true"></div>
+        <div class="guest-v2-teaser-cta">
+          <h3 class="guest-v2-teaser-title">Build your semester in one personal workspace.</h3>
+          <p class="guest-v2-teaser-subtitle">Save courses, track assignments, and keep your timetable organized so every week is easier to manage.</p>
+          <div class="guest-v2-teaser-actions">
+            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--primary" href="/register">Create Free Account</a>
+            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--secondary" href="/login">Sign In</a>
+          </div>
+        </div>
+      </div>
+    `;
+    const previewImage = this.querySelector('.guest-v2-teaser-image');
+    if (!previewImage) return;
+    const imageCandidates = this.getImageCandidates(selectedVariant.imageSrc, selectedVariant.imageFile);
+    if (!imageCandidates.length) {
+      previewImage.style.visibility = 'hidden';
+      this.classList.add('guest-v2-teaser-image-error');
+      return;
+    }
+    let candidateIndex = 0;
+    const tryNextCandidate = () => {
+      if (candidateIndex >= imageCandidates.length) {
+        previewImage.style.visibility = 'hidden';
+        this.classList.add('guest-v2-teaser-image-error');
+        return;
+      }
+      const nextSrc = imageCandidates[candidateIndex++];
+      previewImage.src = nextSrc;
+    };
+    previewImage.addEventListener('load', () => {
+      previewImage.style.visibility = 'visible';
+      this.classList.remove('guest-v2-teaser-image-error');
+    }, { once: true });
+    previewImage.addEventListener('error', () => {
+      tryNextCandidate();
+    });
+    tryNextCandidate();
+  }
+}
+class ReviewSuggestionWidget extends HTMLElement {
+  constructor() {
+    super();
+    this.suggestedCourses = [];
+    this.lastSuggestedCourseKey = null;
+    this.handlePageLoaded = () => {
+      setTimeout(() => this.refreshSuggestion(), 120);
+    };
+    this.handleSuggestionCardClick = (event) => {
+      const cardButton = event.target.closest('.home-review-suggestion-course-card[data-index]');
+      if (!cardButton || !this.contains(cardButton)) return;
+      const index = Number(cardButton.dataset.index);
+      if (!Number.isFinite(index)) return;
+      this.openCourseSuggestionByIndex(index);
+    };
+    this.innerHTML = `
+      <div class="home-review-suggestion">
+        <div class="home-review-suggestion-header">
+          <div class="home-review-suggestion-header-copy">
+            <h3 class="home-review-suggestion-title">Suggestion</h3>
+            <p class="home-review-suggestion-text">Review a course you have registered for</p>
+          </div>
+        </div>
+        <div class="home-review-suggestion-grid">
+          <button type="button" class="home-review-suggestion-course-card home-review-suggestion-course-card--loading" data-index="0" disabled>
+            <span class="home-review-suggestion-course-content">
+              <h3 class="home-review-suggestion-course">Loading...</h3>
+              <p class="home-review-suggestion-meta"></p>
+            </span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  openCourseSuggestionByIndex(index) {
+    if (!Array.isArray(this.suggestedCourses) || this.suggestedCourses.length === 0) return false;
+    const selectedCourse = this.suggestedCourses[index];
+    return this.openCourseForReview(selectedCourse || this.suggestedCourses[0]);
+  }
+  openCourseForReview(course) {
+    if (!course) return false;
+    const code = this.normalizeCourseCode(course.code);
+    const year = Number(course.year) || new Date().getFullYear();
+    const term = this.normalizeTerm(course.term);
     try {
       sessionStorage.setItem(HOME_REVIEW_SUGGESTION_OPEN_REVIEW_KEY, JSON.stringify({
         courseCode: code,
@@ -3208,42 +3254,17 @@ class ReviewSuggestionWidget extends HTMLElement {
     window.location.href = withBase(route);
     return true;
   }
-
   connectedCallback() {
     this.refreshSuggestion();
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
     document.addEventListener('pageLoaded', this.handlePageLoaded);
-
-    const courseCard = this.querySelector('.home-review-suggestion-course-card');
-    if (courseCard) {
-      courseCard.removeEventListener('click', this.handleCourseCardClick);
-      courseCard.removeEventListener('keydown', this.handleCourseCardKeyDown);
-      courseCard.addEventListener('click', this.handleCourseCardClick);
-      courseCard.addEventListener('keydown', this.handleCourseCardKeyDown);
-    }
-
-    const writeReviewButton = this.querySelector('.home-review-suggestion-link');
-    if (writeReviewButton) {
-      writeReviewButton.removeEventListener('click', this.handleWriteReviewClick);
-      writeReviewButton.addEventListener('click', this.handleWriteReviewClick);
-    }
+    this.removeEventListener('click', this.handleSuggestionCardClick);
+    this.addEventListener('click', this.handleSuggestionCardClick);
   }
-
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePageLoaded);
-
-    const courseCard = this.querySelector('.home-review-suggestion-course-card');
-    if (courseCard) {
-      courseCard.removeEventListener('click', this.handleCourseCardClick);
-      courseCard.removeEventListener('keydown', this.handleCourseCardKeyDown);
-    }
-
-    const writeReviewButton = this.querySelector('.home-review-suggestion-link');
-    if (writeReviewButton) {
-      writeReviewButton.removeEventListener('click', this.handleWriteReviewClick);
-    }
+    this.removeEventListener('click', this.handleSuggestionCardClick);
   }
-
   setContainerVisibility(isVisible) {
     this.style.display = isVisible ? 'block' : 'none';
     const container = this.closest('#home-review-suggestion-container');
@@ -3251,27 +3272,52 @@ class ReviewSuggestionWidget extends HTMLElement {
       container.style.display = isVisible ? 'block' : 'none';
     }
   }
-
+  renderLoadingCards() {
+    const suggestionGrid = this.querySelector('.home-review-suggestion-grid');
+    if (!suggestionGrid) return;
+    suggestionGrid.innerHTML = `
+      <button type="button" class="home-review-suggestion-course-card home-review-suggestion-course-card--loading" data-index="0" disabled>
+        <span class="home-review-suggestion-course-content">
+          <h3 class="home-review-suggestion-course">Loading...</h3>
+          <p class="home-review-suggestion-meta"></p>
+        </span>
+      </button>
+    `;
+  }
+  renderSuggestionCards(suggestions) {
+    const suggestionGrid = this.querySelector('.home-review-suggestion-grid');
+    if (!suggestionGrid) return;
+    suggestionGrid.innerHTML = suggestions.map((suggestion, index) => `
+      <button type="button" class="home-review-suggestion-course-card" data-index="${index}" style="background-color:${suggestion.color};">
+        <span class="home-review-suggestion-course-content">
+          <h3 class="home-review-suggestion-course">${escapeHtml(suggestion.title)}</h3>
+          <p class="home-review-suggestion-meta">${escapeHtml(suggestion.meta)}</p>
+        </span>
+        <span class="home-review-suggestion-course-action-wrap" aria-hidden="true">
+          <span class="home-review-suggestion-course-action">
+            <span class="home-review-suggestion-course-action-label">Write review</span>
+          </span>
+          <span class="home-review-suggestion-course-action-chevron"></span>
+        </span>
+      </button>
+    `).join('');
+  }
   normalizeTerm(termValue) {
     if (termValue === null || termValue === undefined || termValue === '') {
       return window.getCurrentTerm ? String(window.getCurrentTerm()) : 'Fall';
     }
-
     const raw = String(termValue).trim();
     if (raw.includes('/')) {
       return raw.split('/').pop().trim();
     }
-
     const lower = raw.toLowerCase();
     if (lower.includes('fall') || raw.includes('秋')) return 'Fall';
     if (lower.includes('spring') || raw.includes('春')) return 'Spring';
     return raw;
   }
-
   normalizeCourseCode(codeValue) {
     return String(codeValue || '').trim().toUpperCase();
   }
-
   getCourseSuggestionKey(course) {
     if (!course) return '';
     const code = this.normalizeCourseCode(course.code);
@@ -3279,60 +3325,58 @@ class ReviewSuggestionWidget extends HTMLElement {
     const term = this.normalizeTerm(course.term || '');
     return `${code}|${year}|${term}`;
   }
-
   getReviewedCourseKey(code, termValue) {
     const normalizedCode = this.normalizeCourseCode(code);
     const normalizedTerm = this.normalizeTerm(termValue || '');
     return `${normalizedCode}|${normalizedTerm}`;
   }
-
-  pickRandomCourse(courses) {
-    if (!Array.isArray(courses) || courses.length === 0) return null;
-    if (courses.length === 1) return courses[0];
-
-    const candidates = this.lastSuggestedCourseKey
-      ? courses.filter((course) => this.getCourseSuggestionKey(course) !== this.lastSuggestedCourseKey)
-      : courses;
-    const pool = candidates.length > 0 ? candidates : courses;
-    const randomIndex = Math.floor(Math.random() * pool.length);
-    return pool[randomIndex];
+  pickSuggestionCourses(courses, maxCount = 4) {
+    if (!Array.isArray(courses) || courses.length === 0) return [];
+    const shuffled = [...courses];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const randomIndex = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[i]];
+    }
+    if (this.lastSuggestedCourseKey && shuffled.length > 1) {
+      const firstDifferentIndex = shuffled.findIndex((course) => (
+        this.getCourseSuggestionKey(course) !== this.lastSuggestedCourseKey
+      ));
+      if (firstDifferentIndex > 0) {
+        const [nextPrimary] = shuffled.splice(firstDifferentIndex, 1);
+        shuffled.unshift(nextPrimary);
+      }
+    }
+    return shuffled.slice(0, Math.max(1, maxCount));
   }
-
+  resolveSuggestionCardColor(courseType) {
+    if (!courseType) return 'var(--color-bg-card)';
+    const resolvedColor = getCourseColorByType(courseType);
+    return resolvedColor || 'var(--color-bg-card)';
+  }
   async refreshSuggestion() {
-    const courseTitleEl = this.querySelector('.home-review-suggestion-course');
-    const courseMetaEl = this.querySelector('.home-review-suggestion-meta');
-    const courseCardEl = this.querySelector('.home-review-suggestion-course-card');
-    if (courseTitleEl) courseTitleEl.textContent = 'Loading...';
-    if (courseMetaEl) courseMetaEl.textContent = '';
-    if (courseCardEl) courseCardEl.style.backgroundColor = 'rgba(255, 255, 255, 0.72)';
-
+    this.renderLoadingCards();
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user || null;
       if (!user) {
-        this.suggestedCourse = null;
+        this.suggestedCourses = [];
         this.setContainerVisibility(false);
         return;
       }
-
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('courses_selection')
         .eq('id', user.id)
         .single();
-
       if (error) {
         throw error;
       }
-
       const selectedCourses = Array.isArray(profile?.courses_selection)
         ? profile.courses_selection.filter((course) => course?.code && course?.year)
         : [];
-
       const uniqueSelectedCourses = [...new Map(
         selectedCourses.map((course) => [this.getCourseSuggestionKey(course), course])
       ).values()];
-
       let reviewedCourseKeys = new Set();
       let reviewedCourseCodes = new Set();
       try {
@@ -3340,11 +3384,9 @@ class ReviewSuggestionWidget extends HTMLElement {
           .from('course_reviews')
           .select('course_code, term')
           .eq('user_id', user.id);
-
         if (reviewedCoursesError) {
           throw reviewedCoursesError;
         }
-
         reviewedCourseKeys = new Set((reviewedCourses || []).map((review) => (
           this.getReviewedCourseKey(review.course_code, review.term)
         )));
@@ -3354,7 +3396,6 @@ class ReviewSuggestionWidget extends HTMLElement {
       } catch (error) {
         console.error('Error loading reviewed courses for suggestion widget:', error);
       }
-
       const availableCourses = uniqueSelectedCourses.filter((course) => {
         const normalizedCode = this.normalizeCourseCode(course.code);
         const reviewedKey = this.getReviewedCourseKey(course.code, course.term);
@@ -3362,51 +3403,73 @@ class ReviewSuggestionWidget extends HTMLElement {
         if (reviewedCourseCodes.has(normalizedCode)) return false;
         return true;
       });
-
       if (availableCourses.length === 0) {
-        this.suggestedCourse = null;
+        this.suggestedCourses = [];
         this.setContainerVisibility(false);
         return;
       }
-
-      const selectedCourse = this.pickRandomCourse(availableCourses) || availableCourses[0];
-      const year = Number(selectedCourse.year) || new Date().getFullYear();
-      const term = this.normalizeTerm(selectedCourse.term);
-      const code = this.normalizeCourseCode(selectedCourse.code);
-
-      let displayTitle = code;
-      let courseType = null;
-      try {
-        const semesterCourses = await fetchCourseData(year, term);
-        const matchedCourse = Array.isArray(semesterCourses)
-          ? semesterCourses.find((course) => this.normalizeCourseCode(course.course_code) === code)
-          : null;
+      const pickedCourses = this.pickSuggestionCourses(availableCourses, 4);
+      const semesterCourseCache = new Map();
+      const getSemesterCourses = async (year, term) => {
+        const semesterKey = `${year}|${term}`;
+        if (semesterCourseCache.has(semesterKey)) {
+          return semesterCourseCache.get(semesterKey);
+        }
+        try {
+          const semesterCourses = await fetchCourseData(year, term);
+          const normalizedCourses = Array.isArray(semesterCourses) ? semesterCourses : [];
+          semesterCourseCache.set(semesterKey, normalizedCourses);
+          return normalizedCourses;
+        } catch (error) {
+          console.error('Error fetching course title for review suggestion:', error);
+          semesterCourseCache.set(semesterKey, []);
+          return [];
+        }
+      };
+      const resolvedSuggestions = [];
+      for (const pickedCourse of pickedCourses) {
+        const year = Number(pickedCourse.year) || new Date().getFullYear();
+        const term = this.normalizeTerm(pickedCourse.term);
+        const code = this.normalizeCourseCode(pickedCourse.code);
+        let displayTitle = code;
+        let courseType = null;
+        const semesterCourses = await getSemesterCourses(year, term);
+        const matchedCourse = semesterCourses.find((course) => (
+          this.normalizeCourseCode(course.course_code) === code
+        ));
         if (matchedCourse) {
           displayTitle = normalizeCourseTitle(matchedCourse.title || code);
           courseType = matchedCourse.type || null;
         }
-      } catch (error) {
-        console.error('Error fetching course title for review suggestion:', error);
+        resolvedSuggestions.push({
+          code,
+          year,
+          term,
+          title: displayTitle,
+          meta: `${term} ${year}`,
+          color: this.resolveSuggestionCardColor(courseType)
+        });
       }
-
-      this.suggestedCourse = { code, year, term };
-      this.lastSuggestedCourseKey = `${code}|${year}|${term}`;
-      if (courseTitleEl) courseTitleEl.textContent = displayTitle;
-      if (courseMetaEl) courseMetaEl.textContent = `${term} ${year}`;
-      if (courseCardEl) {
-        courseCardEl.style.backgroundColor = courseType
-          ? getCourseColorByType(courseType)
-          : 'rgba(255, 255, 255, 0.72)';
+      if (resolvedSuggestions.length === 0) {
+        this.suggestedCourses = [];
+        this.setContainerVisibility(false);
+        return;
       }
+      this.suggestedCourses = resolvedSuggestions.map((suggestion) => ({
+        code: suggestion.code,
+        year: suggestion.year,
+        term: suggestion.term
+      }));
+      this.lastSuggestedCourseKey = this.getCourseSuggestionKey(this.suggestedCourses[0]);
+      this.renderSuggestionCards(resolvedSuggestions);
       this.setContainerVisibility(true);
     } catch (error) {
       console.error('Error loading review suggestion widget:', error);
-      this.suggestedCourse = null;
+      this.suggestedCourses = [];
       this.setContainerVisibility(false);
     }
   }
 }
-
 class HomePlannerWidgetBase extends HTMLElement {
   constructor() {
     super();
@@ -3420,7 +3483,6 @@ class HomePlannerWidgetBase extends HTMLElement {
       }
     };
   }
-
   connectedCallback() {
     this.refreshWidget();
     document.removeEventListener('pageLoaded', this.handlePlannerPageLoaded);
@@ -3430,13 +3492,11 @@ class HomePlannerWidgetBase extends HTMLElement {
     document.removeEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
     document.addEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
   }
-
   disconnectedCallback() {
     document.removeEventListener('pageLoaded', this.handlePlannerPageLoaded);
     document.removeEventListener('change', this.handlePlannerSelectionChange);
     document.removeEventListener('homeSemesterChanged', this.handlePlannerSelectionChange);
   }
-
   async refreshWidget(force = false) {
     if (!document.getElementById('home-main')) return;
     try {
@@ -3448,86 +3508,39 @@ class HomePlannerWidgetBase extends HTMLElement {
       this.renderWidgetError();
     }
   }
-
   renderWidget(_data) { }
-
   renderWidgetError() {
     this.innerHTML = '<p class="home-planner-empty">Unable to load data.</p>';
   }
 }
-
 class HomePlannerOverview extends HomePlannerWidgetBase {
   constructor() {
     super();
     this.handleActionClick = this.handleActionClick.bind(this);
   }
-
   connectedCallback() {
     super.connectedCallback();
     this.removeEventListener('click', this.handleActionClick);
     this.addEventListener('click', this.handleActionClick);
   }
-
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('click', this.handleActionClick);
   }
-
   renderWidget(data) {
-    const credits = Number(data?.creditsTotal || 0);
-    const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
-    const creditsProgressLabel = `${creditsLabel}/${HOME_SEMESTER_MAX_CREDITS}`;
-    const slotCountLabel = `${data?.occupiedSlotsCount || 0}/25`;
-    const conflicts = Array.isArray(data?.conflicts) ? data.conflicts : [];
-    const conflictSectionMarkup = conflicts.length
-      ? `
-        <div class="home-planner-conflict-box">
-          <h4>Conflicts</h4>
-          <ul class="home-planner-conflict-list">
-            ${conflicts.slice(0, 2).map((conflict) => `
-              <li>${escapeHtml(conflict.label)} (${conflict.courses.length})</li>
-            `).join('')}
-          </ul>
-        </div>
-      `
-      : '';
-
     this.innerHTML = `
       <div class="home-planner-overview">
         <h3 class="home-planner-section-title">Planner</h3>
-        <div class="home-planner-kpi-grid">
-          <div class="home-planner-kpi">
-            <span>Credits</span>
-            <strong>${creditsProgressLabel}</strong>
-          </div>
-          <div class="home-planner-kpi">
-            <span>Courses</span>
-            <strong>${data?.courseCount || 0}</strong>
-          </div>
-          <div class="home-planner-kpi">
-            <span>Slots</span>
-            <strong>${slotCountLabel}</strong>
-          </div>
-        </div>
-        ${conflictSectionMarkup}
         <div class="home-planner-actions">
-          <button type="button" class="home-planner-action-btn" data-action="add-course">Add course</button>
           <button type="button" class="home-planner-action-btn" data-action="find-slots">Find courses for empty slots</button>
         </div>
       </div>
     `;
   }
-
   handleActionClick(event) {
     const actionElement = event.target.closest('[data-action]');
     if (!actionElement) return;
-
     const action = actionElement.dataset.action;
-    if (action === 'add-course') {
-      navigateToRoute('/courses');
-      return;
-    }
-
     if (action === 'find-slots') {
       const firstEmpty = this.latestData?.emptySlots?.[0];
       if (firstEmpty && this.latestData?.year && this.latestData?.term) {
@@ -3537,10 +3550,8 @@ class HomePlannerOverview extends HomePlannerWidgetBase {
       navigateToRoute('/courses');
       return;
     }
-
   }
 }
-
 class HomeProgressRequirements extends HomePlannerWidgetBase {
   renderWidget(data) {
     if (!data?.isAuthenticated) {
@@ -3554,31 +3565,14 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
       `;
       return;
     }
-
     const credits = Number(data?.creditsTotal || 0);
     const creditsLabel = credits % 1 === 0 ? credits.toFixed(0) : credits.toFixed(1);
     const creditsProgressLabel = `${creditsLabel}/${HOME_SEMESTER_MAX_CREDITS}`;
     const totalForBars = credits > 0 ? credits : Math.max(Number(data?.courseCount || 0), 1);
     const breakdown = Array.isArray(data?.typeBreakdown) ? data.typeBreakdown.slice(0, 4) : [];
-
-    this.innerHTML = `
-      <div class="home-progress-card-content">
-        <div class="home-progress-card-header">
-          <h3 class="home-progress-card-title">Progress / Requirements</h3>
-          <span class="home-progress-meta">${data?.courseCount || 0} courses</span>
-        </div>
-        <div class="home-progress-stat-grid">
-          <div class="home-progress-stat">
-            <span class="home-progress-stat-label">Credits</span>
-            <strong class="home-progress-stat-value">${creditsProgressLabel}</strong>
-          </div>
-          <div class="home-progress-stat">
-            <span class="home-progress-stat-label">Slots filled</span>
-            <strong class="home-progress-stat-value">${data?.occupiedSlotsCount || 0}/25</strong>
-          </div>
-        </div>
+    const breakdownMarkup = breakdown.length ? `
         <div class="home-progress-breakdown">
-          ${breakdown.length ? breakdown.map((entry) => {
+          ${breakdown.map((entry) => {
       const amount = entry.credits > 0 ? entry.credits : entry.count;
       const pct = Math.max(6, Math.min(100, Math.round((amount / totalForBars) * 100)));
       const amountLabel = entry.credits > 0
@@ -3593,33 +3587,45 @@ class HomeProgressRequirements extends HomePlannerWidgetBase {
                 <div class="home-progress-bar"><span style="width:${pct}%"></span></div>
               </div>
             `;
-    }).join('') : '<p class="home-planner-empty">Requirements breakdown coming soon.</p>'}
+    }).join('')}
         </div>
+      ` : '';
+    this.innerHTML = `
+        <div class="home-progress-card-content">
+        <div class="home-progress-card-header">
+          <h3 class="home-progress-card-title">Progress / Requirements</h3>
+        </div>
+        <div class="home-progress-stat-grid">
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Credits</span>
+            <strong class="home-progress-stat-value">${creditsProgressLabel}</strong>
+          </div>
+          <div class="home-progress-stat">
+            <span class="home-progress-stat-label">Courses</span>
+            <strong class="home-progress-stat-value">${data?.courseCount || 0}</strong>
+          </div>
+        </div>
+        ${breakdownMarkup}
       </div>
     `;
   }
 }
-
 class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
   constructor() {
     super();
     this.handleSlotClick = this.handleSlotClick.bind(this);
   }
-
   connectedCallback() {
     super.connectedCallback();
     this.removeEventListener('click', this.handleSlotClick);
     this.addEventListener('click', this.handleSlotClick);
   }
-
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('click', this.handleSlotClick);
   }
-
   renderWidget(data) {
-    const slots = Array.isArray(data?.emptySlots) ? data.emptySlots.slice(0, 6) : [];
-
+    const slots = Array.isArray(data?.emptySlots) ? data.emptySlots.slice(0, 5) : [];
     if (!slots.length) {
       this.innerHTML = `
         <div class="home-planner-module">
@@ -3632,7 +3638,6 @@ class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
       `;
       return;
     }
-
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
@@ -3648,20 +3653,27 @@ class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
             </li>
           `).join('')}
         </ul>
+        <button type="button" class="home-module-link-btn" data-action="find-slots">Find courses for empty slots</button>
       </div>
     `;
   }
-
   handleSlotClick(event) {
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) return;
-
     const action = actionButton.dataset.action;
     if (action === 'browse-courses') {
       navigateToRoute('/courses');
       return;
     }
-
+    if (action === 'find-slots') {
+      const firstEmpty = this.latestData?.emptySlots?.[0];
+      if (firstEmpty && this.latestData?.year && this.latestData?.term) {
+        navigateToSlotCourseSearch(firstEmpty.day, firstEmpty.period, this.latestData.term, this.latestData.year);
+        return;
+      }
+      navigateToRoute('/courses');
+      return;
+    }
     if (action !== 'slot-search') return;
     const day = actionButton.dataset.day;
     const period = Number(actionButton.dataset.period);
@@ -3669,19 +3681,18 @@ class HomeEmptySlotsWidget extends HomePlannerWidgetBase {
       navigateToRoute('/courses');
       return;
     }
-
     navigateToSlotCourseSearch(day, period, this.latestData.term, this.latestData.year);
   }
 }
-
 class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
   constructor() {
     super();
     this.handleSavedAction = this.handleSavedAction.bind(this);
     this.handleSavedCoursesChanged = () => this.refreshWidget(true);
     this.savedEntries = [];
+    this.pageSize = 3;
+    this.currentPage = 0;
   }
-
   connectedCallback() {
     super.connectedCallback();
     this.removeEventListener('click', this.handleSavedAction);
@@ -3689,63 +3700,123 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
     window.removeEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
     window.addEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
   }
-
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('click', this.handleSavedAction);
     window.removeEventListener('saved-courses:changed', this.handleSavedCoursesChanged);
   }
-
   renderWidget(data) {
-    this.savedEntries = Array.isArray(data?.savedCourses) ? data.savedCourses.slice(0, 5) : [];
-
+    this.savedEntries = Array.isArray(data?.savedCourses) ? data.savedCourses : [];
     if (!this.savedEntries.length) {
       this.innerHTML = `
         <div class="home-planner-module">
           <div class="home-planner-module-header">
-            <h3 class="home-planner-module-title">Saved for later</h3>
+            <div class="home-due-header-copy">
+              <h3 class="home-planner-module-title">Saved for Later</h3>
+              <p class="home-planner-empty home-saved-subtitle">Saved courses will appear here</p>
+            </div>
           </div>
-          <p class="home-planner-empty">Save courses to add later.</p>
-          <button type="button" class="home-module-link-btn" data-action="browse-courses">Browse courses</button>
         </div>
       `;
       return;
     }
-
+    const totalPages = Math.ceil(this.savedEntries.length / this.pageSize);
+    this.currentPage = Math.max(0, Math.min(this.currentPage, totalPages - 1));
+    const pageStart = this.currentPage * this.pageSize;
+    const pageEntries = this.savedEntries.slice(pageStart, pageStart + this.pageSize);
+    const showPager = totalPages > 1;
+    const fillerCount = showPager ? Math.max(0, this.pageSize - pageEntries.length) : 0;
     this.innerHTML = `
       <div class="home-planner-module">
         <div class="home-planner-module-header">
-          <h3 class="home-planner-module-title">Saved for later</h3>
+          <h3 class="home-planner-module-title">Saved for Later</h3>
         </div>
-        <ul class="home-planner-list">
-          ${this.savedEntries.map((course, index) => `
-            <li class="home-planner-list-item">
-              <span>
-                <strong>${escapeHtml(course.title)}</strong>
-                ${course.day && course.period ? `<small>${escapeHtml(formatSlotLabel(course.day, course.period))}</small>` : ''}
-              </span>
-              <button type="button" class="home-module-link-btn" data-action="add-saved" data-index="${index}">Add</button>
-            </li>
-          `).join('')}
-        </ul>
+        <div class="home-saved-list-viewport${showPager ? ' is-paginated' : ''}">
+          <ul class="home-planner-list home-saved-list${showPager ? ' is-paginated' : ''}" data-page="${this.currentPage + 1}">
+            ${pageEntries.map((course, index) => `
+              <li class="home-planner-list-item">
+                <span>
+                  <strong>${escapeHtml(course.title)}</strong>
+                  ${course.day && course.period ? `<small>${escapeHtml(formatSlotLabel(course.day, course.period))}</small>` : ''}
+                </span>
+                <button type="button" class="home-module-link-btn" data-action="add-saved" data-index="${pageStart + index}">
+                  ${this.getSavedActionLabel(course)}
+                </button>
+              </li>
+            `).join('')}
+            ${Array.from({ length: fillerCount }, () => (
+      '<li class="home-planner-list-item home-saved-list-item-ghost" aria-hidden="true"></li>'
+    )).join('')}
+          </ul>
+        </div>
+        ${showPager ? `
+          <div class="home-saved-pagination" aria-label="Saved courses pages">
+            <button
+              type="button"
+              class="home-saved-pagination-arrow"
+              data-action="saved-prev"
+              aria-label="Previous saved courses page"
+              ${this.currentPage === 0 ? 'disabled' : ''}>
+            </button>
+            <span class="home-saved-pagination-label" aria-live="polite">${this.currentPage + 1} / ${totalPages}</span>
+            <button
+              type="button"
+              class="home-saved-pagination-arrow"
+              data-action="saved-next"
+              aria-label="Next saved courses page"
+              ${this.currentPage >= totalPages - 1 ? 'disabled' : ''}>
+            </button>
+          </div>
+        ` : ''}
       </div>
     `;
   }
-
+  animateSavedPage(direction = 'next') {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rows = this.querySelectorAll('.home-saved-list .home-planner-list-item:not(.home-saved-list-item-ghost)');
+    const baseOffset = direction === 'prev' ? -12 : 12;
+    rows.forEach((row, index) => {
+      row.animate(
+        [
+          { opacity: 0, transform: `translateX(${baseOffset}px)` },
+          { opacity: 1, transform: 'translateX(0)' }
+        ],
+        {
+          duration: 220,
+          delay: index * 22,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'both'
+        }
+      );
+    });
+  }
+  getSavedActionLabel(savedCourse) {
+    if (savedCourse?.code && savedCourse?.year && savedCourse?.term) return 'Open';
+    if (savedCourse?.day && savedCourse?.period && this.latestData?.term && this.latestData?.year) return 'Find courses';
+    return 'Browse courses';
+  }
   async handleSavedAction(event) {
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) return;
     const action = actionButton.dataset.action;
+    if (action === 'saved-prev' || action === 'saved-next') {
+      const totalPages = Math.max(1, Math.ceil(this.savedEntries.length / this.pageSize));
+      const nextPage = action === 'saved-prev' ? this.currentPage - 1 : this.currentPage + 1;
+      const clamped = Math.max(0, Math.min(nextPage, totalPages - 1));
+      if (clamped === this.currentPage) return;
+      this.currentPage = clamped;
+      this.renderWidget(this.latestData || { savedCourses: this.savedEntries });
+      this.animateSavedPage(action === 'saved-prev' ? 'prev' : 'next');
+      return;
+    }
     if (action === 'browse-courses') {
       navigateToRoute('/courses');
       return;
     }
-
     if (action !== 'add-saved') return;
     const index = Number(actionButton.dataset.index);
     const savedCourse = this.savedEntries[index];
     if (!savedCourse) return;
-
     if (!this.latestData?.isAuthenticated) {
       if (typeof window.requireAuth === 'function') {
         window.requireAuth('save-plan', () => navigateToRoute('/courses'));
@@ -3754,7 +3825,6 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
       }
       return;
     }
-
     if (savedCourse.code && savedCourse.year && savedCourse.term) {
       try {
         const semesterCourses = await fetchCourseData(savedCourse.year, savedCourse.term);
@@ -3767,33 +3837,27 @@ class HomeSavedCoursesWidget extends HomePlannerWidgetBase {
         console.error('Unable to open saved course detail:', error);
       }
     }
-
     if (savedCourse.day && savedCourse.period && this.latestData?.term && this.latestData?.year) {
       navigateToSlotCourseSearch(savedCourse.day, savedCourse.period, this.latestData.term, this.latestData.year);
       return;
     }
-
     navigateToRoute('/courses');
   }
 }
-
 class HomeDueSoonWidget extends HomePlannerWidgetBase {
   constructor() {
     super();
     this.handleDueSoonClick = this.handleDueSoonClick.bind(this);
   }
-
   connectedCallback() {
     super.connectedCallback();
     this.removeEventListener('click', this.handleDueSoonClick);
     this.addEventListener('click', this.handleDueSoonClick);
   }
-
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener('click', this.handleDueSoonClick);
   }
-
   renderWidget(data) {
     if (!data?.isAuthenticated) {
       this.innerHTML = `
@@ -3806,46 +3870,113 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       `;
       return;
     }
-
-    const dueSoonItems = Array.isArray(data?.assignmentsDueSoon) ? data.assignmentsDueSoon.slice(0, 3) : [];
-    if (!dueSoonItems.length) {
+    const allDueSoonItems = Array.isArray(data?.assignmentsDueSoon) ? data.assignmentsDueSoon : [];
+    const dueSoonCount = allDueSoonItems.length;
+    if (!dueSoonCount) {
       this.innerHTML = `
         <div class="home-planner-module">
-          <div class="home-planner-module-header">
-            <h3 class="home-planner-module-title">Due Soon</h3>
+          <div class="home-due-header">
+            <div class="home-due-header-copy">
+              <h3 class="home-planner-module-title">Due Soon</h3>
+              <p class="home-planner-empty home-due-subtitle">No deadlines in the next 7 days</p>
+            </div>
+            <button type="button" class="home-calendar-link home-due-open-btn" data-action="open-assignments">Open assignments</button>
           </div>
-          <p class="home-planner-empty">No deadlines in the next 7 days.</p>
-          <button type="button" class="home-module-link-btn" data-action="open-assignments">Open assignments</button>
         </div>
       `;
       return;
     }
-
+    const isMobileViewport = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(max-width: 1023px)').matches;
+    const dueSoonItems = isMobileViewport
+      ? allDueSoonItems
+      : (dueSoonCount <= 3 ? allDueSoonItems : allDueSoonItems.slice(0, 3));
+    const showOpenAllCta = dueSoonCount > 3;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const parseDueDate = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (!Number.isFinite(parsed.getTime())) return null;
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    };
+    const getAssignmentDueMeta = (assignment) => {
+      const dueDate = parseDueDate(assignment?.dueDate);
+      if (!dueDate) {
+        return {
+          dueDate: null,
+          isOverdue: false,
+          daysUntilDue: null,
+          urgencyLabel: ''
+        };
+      }
+      const diffDays = Math.round((dueDate.getTime() - startOfToday.getTime()) / MS_PER_DAY);
+      const isCompleted = String(assignment?.status || '') === 'completed';
+      const isOverdue = diffDays < 0 && !isCompleted;
+      let urgencyLabel = '';
+      if (!isCompleted && diffDays >= 0 && diffDays <= 7) {
+        if (diffDays === 0) urgencyLabel = 'Due today';
+        else if (diffDays === 1) urgencyLabel = 'Due in 1 day';
+        else urgencyLabel = `Due in ${diffDays} days`;
+      }
+      return {
+        dueDate,
+        isOverdue,
+        daysUntilDue: diffDays,
+        urgencyLabel
+      };
+    };
+    const getStatusInfo = (assignment) => {
+      const dueMeta = getAssignmentDueMeta(assignment);
+      const statusMap = {
+        'not_started': { text: 'Not Started', className: 'status-not-started' },
+        'ongoing': { text: 'In Progress', className: 'status-ongoing' },
+        'in_progress': { text: 'In Progress', className: 'status-ongoing' },
+        'completed': { text: 'Completed', className: 'status-completed' }
+      };
+      if (dueMeta.isOverdue) {
+        return { text: 'Overdue', className: 'status-overdue' };
+      }
+      return statusMap[assignment?.status] || { text: 'Not Started', className: 'status-not-started' };
+    };
+    const formatAssignmentDueDate = (dateValue) => {
+      const parsed = parseDueDate(dateValue);
+      if (!parsed) return 'No due date';
+      return `Due ${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    };
     this.innerHTML = `
       <div class="home-planner-module">
-        <div class="home-planner-module-header">
-          <h3 class="home-planner-module-title">Due Soon</h3>
-          <span class="home-module-badge">${data.assignmentsDueSoon.length}</span>
+        <div class="home-planner-module-header home-due-module-header">
+          <div class="home-due-header-left">
+            <h3 class="home-planner-module-title">Due Soon</h3>
+            <span class="home-module-badge">${dueSoonCount}</span>
+          </div>
+          ${showOpenAllCta ? '<button type="button" class="home-calendar-link home-due-open-btn" data-action="open-assignments">All assignments</button>' : ''}
         </div>
         <ul class="home-planner-list">
           ${dueSoonItems.map((assignment) => {
-      const daysLeft = assignment.daysLeft;
-      const deadlineText = daysLeft === 0
-        ? 'Due today'
-        : (daysLeft === 1 ? '1 day left' : `${daysLeft} days left`);
-      const dueDateLabel = formatDueDateLabel(assignment.dueDate) || 'Date not set';
-      const courseLabel = assignment.courseName || assignment.courseCode || 'Course not set';
+      const dueMeta = getAssignmentDueMeta(assignment);
+      const statusInfo = getStatusInfo(assignment);
       return `
               <li class="home-planner-list-item home-due-item">
-                <button type="button" class="home-due-item-btn" data-action="open-assignments">
-                  <strong>${escapeHtml(assignment.title)}</strong>
-                  <small class="home-due-item-meta">
-                    <span class="home-due-item-meta-value">${escapeHtml(dueDateLabel)}</span>
-                    <span class="home-due-item-meta-separator">•</span>
-                    <span class="home-due-item-meta-value home-due-item-meta-course">${escapeHtml(courseLabel)}</span>
-                    <span class="home-due-item-meta-separator">•</span>
-                    <span class="home-due-item-meta-value">${escapeHtml(deadlineText)}</span>
-                  </small>
+                <button type="button" class="home-due-item-btn course-assignment-item" data-action="open-assignments" data-assignment-id="${escapeHtml(assignment.id || '')}">
+                  <div class="assignment-item-left">
+                    <span class="assignment-item-icon">${escapeHtml(assignment.assignmentIcon || '📄')}</span>
+                    <div class="assignment-item-details">
+                      <p class="assignment-item-title">${escapeHtml(assignment.title || 'Untitled assignment')}</p>
+                      <div class="assignment-item-meta">
+                        <p class="assignment-item-due">${escapeHtml(formatAssignmentDueDate(assignment.dueDate))}</p>
+                        ${dueMeta.urgencyLabel ? `<span class="assignment-item-urgency">${escapeHtml(dueMeta.urgencyLabel)}</span>` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="assignment-item-right">
+                    <span class="status-badge ${statusInfo.className}">${statusInfo.text}</span>
+                    <span class="assignment-item-hover-action" aria-hidden="true">Open</span>
+                    <span class="assignment-item-chevron" aria-hidden="true">›</span>
+                  </div>
                 </button>
               </li>
             `;
@@ -3854,21 +3985,24 @@ class HomeDueSoonWidget extends HomePlannerWidgetBase {
       </div>
     `;
   }
-
   handleDueSoonClick(event) {
     const actionElement = event.target.closest('[data-action]');
-    if (!actionElement) {
-      if (event.target.closest('.home-planner-module')) {
-        navigateToRoute('/assignments');
-      }
-      return;
-    }
+    if (!actionElement) return;
     if (actionElement.dataset.action === 'open-assignments') {
+      const assignmentId = String(actionElement.dataset.assignmentId || '').trim();
+      try {
+        if (assignmentId) {
+          sessionStorage.setItem(HOME_OPEN_ASSIGNMENT_INTENT_KEY, assignmentId);
+        } else {
+          sessionStorage.removeItem(HOME_OPEN_ASSIGNMENT_INTENT_KEY);
+        }
+      } catch (error) {
+        console.warn('Unable to store assignment navigation intent:', error);
+      }
       navigateToRoute('/assignments');
     }
   }
 }
-
 class WeeklyCalendar extends HTMLElement {
   constructor() {
     super();
@@ -3876,7 +4010,6 @@ class WeeklyCalendar extends HTMLElement {
     this.retryCount = 0;
     this.maxRetries = 3;
   }
-
   async connectedCallback() {
     await this.render();
     this.highlightToday();
@@ -3884,7 +4017,6 @@ class WeeklyCalendar extends HTMLElement {
     this.setupMobile();
     await this.loadCourses();
   }
-
   async render() {
     this.innerHTML = `
       <table id="calendar">
@@ -3942,11 +4074,9 @@ class WeeklyCalendar extends HTMLElement {
         </tbody>
       </table>
     `;
-
     // Add event listeners
     this.setupEventListeners();
   }
-
   setupEventListeners() {
     const previousBtn = this.querySelector('#previous');
     if (previousBtn) {
@@ -3955,55 +4085,42 @@ class WeeklyCalendar extends HTMLElement {
         this.loadCourses();
       });
     }
-
     // Set up mobile resize listener
     window.addEventListener('resize', () => this.checkMobile());
     this.checkMobile();
   }
-
   checkMobile() {
     window.isMobile = window.innerWidth <= 1023;
     if (window.isMobile) {
       this.generateMobileButtons();
     }
   }
-
   generateMobileButtons() {
     const mobileButtonsContainer = document.querySelector(".mobile-day-buttons");
     if (!mobileButtonsContainer) return;
-
     mobileButtonsContainer.innerHTML = "";
-
     const dayHeaders = this.querySelectorAll("#calendar thead th");
     dayHeaders.forEach((header, index) => {
       if (index === 0) return; // Skip the first column (time)
-
       const button = document.createElement("div");
       button.className = "day-button";
       button.textContent = header.textContent.trim().substring(0, 1);
       button.dataset.day = header.textContent.trim();
       mobileButtonsContainer.appendChild(button);
-
       button.addEventListener("click", () => this.showDay(header.textContent.trim()));
     });
   }
-
   showDay(day) {
     if (!window.isMobile) return;
-
     const dayHeaders = this.querySelectorAll("#calendar thead th");
     const dayButtons = document.querySelectorAll(".day-button");
-
     let columnIndexToShow = -1;
-
     dayHeaders.forEach((header, index) => {
       if (header.textContent.trim() === day) {
         columnIndexToShow = index;
       }
     });
-
     if (columnIndexToShow === -1) return;
-
     this.querySelectorAll("#calendar tr").forEach(row => {
       const cells = row.children;
       for (let i = 0; i < cells.length; i++) {
@@ -4014,7 +4131,6 @@ class WeeklyCalendar extends HTMLElement {
         }
       }
     });
-
     // Update day button styles
     dayButtons.forEach((button, index) => {
       if (button.textContent === day.substring(0, 1)) {
@@ -4023,7 +4139,6 @@ class WeeklyCalendar extends HTMLElement {
         button.classList.remove("active");
       }
     });
-
     // Update header highlighting
     dayHeaders.forEach((header, index) => {
       if (index === columnIndexToShow) {
@@ -4032,18 +4147,14 @@ class WeeklyCalendar extends HTMLElement {
         header.classList.remove("highlight-day");
       }
     });
-
     window.currentDay = day;
   }
-
   setupMobile() {
     this.checkMobile();
   }
-
   highlightToday() {
     const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
     const headers = this.querySelectorAll('#calendar thead th');
-
     // Find column index for today
     let todayIndex = -1;
     headers.forEach((header, index) => {
@@ -4052,9 +4163,7 @@ class WeeklyCalendar extends HTMLElement {
         header.classList.add('highlight-day');
       }
     });
-
     if (todayIndex === -1) return;
-
     // Highlight entire column
     const rows = this.querySelectorAll('#calendar tbody tr');
     rows.forEach(row => {
@@ -4064,14 +4173,12 @@ class WeeklyCalendar extends HTMLElement {
       }
     });
   }
-
   highlightCurrentTimePeriod() {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     const today = new Date().toLocaleDateString("en-US", { weekday: "short" });
-
     // Time periods in minutes
     const periods = [
       { start: 9 * 60, end: 10 * 60 + 30, row: 0 },
@@ -4080,10 +4187,8 @@ class WeeklyCalendar extends HTMLElement {
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 },
       { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }
     ];
-
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
     if (!currentPeriod) return;
-
     // Find today's column
     const headers = this.querySelectorAll('#calendar thead th');
     let todayIndex = -1;
@@ -4092,9 +4197,7 @@ class WeeklyCalendar extends HTMLElement {
         todayIndex = index;
       }
     });
-
     if (todayIndex === -1) return;
-
     // Highlight the specific cell
     const rows = this.querySelectorAll('#calendar tbody tr');
     if (rows[currentPeriod.row]) {
@@ -4104,10 +4207,8 @@ class WeeklyCalendar extends HTMLElement {
       }
     }
   }
-
   async getCurrentUser() {
     if (this.currentUser) return this.currentUser;
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
@@ -4117,7 +4218,6 @@ class WeeklyCalendar extends HTMLElement {
       return null;
     }
   }
-
   async loadCourses() {
     try {
       const user = await this.getCurrentUser();
@@ -4125,19 +4225,15 @@ class WeeklyCalendar extends HTMLElement {
         console.log('No user session found for weekly calendar');
         return;
       }
-
       // Get current year and term from global state
       const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
       const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
         const currentMonth = new Date().getMonth() + 1;
         return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
       })();
-
       console.log(`Loading courses for weekly calendar: ${currentYear} ${currentTerm} for user ${user.id}`);
-
       const courses = await fetchCourseData(currentYear, currentTerm);
       console.log('Courses fetched for weekly calendar:', courses);
-
       if (courses && courses.length > 0) {
         this.renderCourses(courses);
         this.retryCount = 0; // Reset retry count on success
@@ -4147,7 +4243,6 @@ class WeeklyCalendar extends HTMLElement {
       }
     } catch (error) {
       console.error('Error loading courses for weekly calendar:', error);
-
       // Retry logic
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
@@ -4159,11 +4254,9 @@ class WeeklyCalendar extends HTMLElement {
       }
     }
   }
-
   renderCourses(courses) {
     // Clear existing courses
     this.clearCalendar();
-
     // Day mapping
     const dayMap = {
       'Mon': 1, 'Monday': 1, '月': 1,
@@ -4172,21 +4265,16 @@ class WeeklyCalendar extends HTMLElement {
       'Thu': 4, 'Thursday': 4, '木': 4,
       'Fri': 5, 'Friday': 5, '金': 5
     };
-
     courses.forEach(course => {
       if (!course.day || !course.period) return;
-
       const dayIndex = dayMap[course.day];
       if (!dayIndex) return;
-
       const period = parseInt(course.period);
       if (isNaN(period) || period < 1 || period > 5) return;
-
       // Find the cell (row = period, column = day)
       const table = this.querySelector('#calendar tbody');
       const row = table.rows[period - 1]; // 0-indexed
       const cell = row.cells[dayIndex]; // day index is already 1-based, so this works
-
       if (cell) {
         // Create course element
         const courseElement = document.createElement('div');
@@ -4196,17 +4284,14 @@ class WeeklyCalendar extends HTMLElement {
             <span style="display: none;">${normalizeCourseTitle(course.title)}</span>
           </div>
         `;
-
         // Add click handler
         courseElement.addEventListener('click', () => {
           openCourseInfoMenu(course);
         });
-
         cell.appendChild(courseElement);
       }
     });
   }
-
   clearCalendar() {
     // Remove all course elements from table cells
     const cells = this.querySelectorAll('#calendar tbody td:not(:first-child)');
@@ -4216,14 +4301,12 @@ class WeeklyCalendar extends HTMLElement {
       courseElements.forEach(el => el.remove());
     });
   }
-
   // Public method to refresh calendar
   async refresh() {
     console.log('Refreshing weekly calendar...');
     this.currentUser = null; // Force fresh session fetch
     await this.loadCourses();
   }
-
   // Public method to show specific term
   async showTerm(year, term) {
     console.log(`Showing weekly calendar for: ${year} ${term}`);
@@ -4231,12 +4314,13 @@ class WeeklyCalendar extends HTMLElement {
     await this.loadCourses();
   }
 }
-
 customElements.define('app-navigation', AppNavigation);
 customElements.define('total-courses', TotalCourses);
 customElements.define('term-box', TermBox);
 customElements.define('course-calendar', CourseCalendar);
 customElements.define('latest-courses-preview', LatestCoursesPreview);
+customElements.define('guest-home-browse-widget', GuestHomeBrowseWidget);
+customElements.define('guest-home-teaser-widget', GuestHomeTeaserWidget);
 customElements.define('review-suggestion-widget', ReviewSuggestionWidget);
 customElements.define('home-planner-overview', HomePlannerOverview);
 customElements.define('home-progress-requirements', HomeProgressRequirements);
@@ -4244,19 +4328,15 @@ customElements.define('home-empty-slots-widget', HomeEmptySlotsWidget);
 customElements.define('home-saved-courses-widget', HomeSavedCoursesWidget);
 customElements.define('home-due-soon-widget', HomeDueSoonWidget);
 customElements.define('weekly-calendar', WeeklyCalendar);
-
 window.refreshCalendar = () => {
   const calendar = document.querySelector('course-calendar');
   const weeklyCalendar = document.querySelector('weekly-calendar');
-
   if (calendar) {
     calendar.forceReinit();
   }
-
   if (weeklyCalendar) {
     weeklyCalendar.refresh();
   }
-
   if (!calendar && !weeklyCalendar) {
     console.log('No calendar components found');
   }

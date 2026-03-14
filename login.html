@@ -2,26 +2,24 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ILA Companion | Login</title>
+    <title>ILA Companion | Continue</title>
     <link rel="stylesheet" href="css/blaze.css">
 </head>
 
-<body>
-
+<body class="auth-page">
     <section id="auth-main" class="ui-page">
         <div class="ui-page-content auth-container">
             <div class="ui-card auth-background">
-                <h1>Login</h1>
+                <h1>Continue</h1>
+                <p>Enter your email and password to sign in or create your account.</p>
+                <div id="message" aria-live="polite"></div>
                 <form id="login-form" method="post">
                     <label for="email">Email</label>
-                    <input type="text" name="email" id="email">
+                    <input type="email" name="email" id="email" autocomplete="email" required>
                     <label for="password">Password</label>
-                    <input type="password" name="password" id="password">
-                    <input type="submit" value="Sign In">
+                    <input type="password" name="password" id="password" autocomplete="current-password" required>
+                    <button type="submit" class="ui-btn ui-btn--secondary sign-up-btn">Continue</button>
                 </form>
-                <p>Forgot password?</p>
-                <p>You don't have an account yet?</p>
-                <button class="ui-btn ui-btn--secondary sign-up-btn">Sign Up</button>
             </div>
         </div>
     </section>

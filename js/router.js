@@ -3,10 +3,15 @@
  * Ensures all components work properly on every navigation
  */
 import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
+import { applyPreferredTermToGlobals, normalizeTermValue, setPreferredTermValue } from './preferences.js'
+import { isSetupCompleteFromProfile, isSetupSchemaMissingError, normalizeSetupProfile } from './setup-status.js'
+import * as wanakana from 'wanakana'
 
 const IS_PRODUCTION = import.meta.env.PROD
 const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter'
 const HOME_SLOT_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000
+const SETUP_BYPASS_ROUTES = new Set(['/setup', '/auth/callback', '/profile', '/settings', '/help'])
+const AUTH_LOGOUT_TOAST_KEY = 'ila_auth_logout_toast'
 
 class SimpleRouter {
   constructor() {
@@ -15,9 +20,11 @@ class SimpleRouter {
       '/home': '/index.html',
       '/courses': '/courses.html',
       '/dashboard': '/courses.html', // Legacy redirect
-      '/calendar': '/calendar.html',
+      '/timetable': '/timetable.html',
       '/assignments': '/assignments.html',
       '/profile': '/profile.html',
+      '/setup': '/setup.html',
+      '/auth/callback': '/auth-callback.html',
       '/login': '/login.html',
       '/register': '/register.html',
       '/settings': '/profile.html', // For now, settings goes to profile
@@ -48,9 +55,15 @@ class SimpleRouter {
       initials: '',
       fetchedAt: 0
     }
+    this.setupStatusCache = {
+      userId: null,
+      isComplete: null,
+      checkedAt: 0
+    }
 
     // Initialize global year/term variables
     this.initializeGlobalYearTerm()
+    this.bindGlobalSemesterSync()
 
     // Load styles immediately
     this.addLockedPageStyles()
@@ -58,7 +71,30 @@ class SimpleRouter {
     // Create loading bar
     this.createLoadingBar()
 
+    // Keep SPA route changes from restoring previous scroll positions.
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+
     this.init()
+  }
+
+  bindGlobalSemesterSync() {
+    if (this.semesterSyncBound) return
+    this.semesterSyncBound = true
+
+    document.addEventListener('app:semester-changed', (event) => {
+      const detail = event?.detail || {}
+      const term = String(detail.term || '').trim()
+      const yearNumber = Number.parseInt(detail.year, 10)
+
+      if (!term || !Number.isFinite(yearNumber)) return
+
+      window.globalCurrentTerm = term
+      window.globalCurrentYear = yearNumber
+      this.coursesPageState.term = term
+      this.coursesPageState.year = String(yearNumber)
+    })
   }
 
   initializeGlobalYearTerm() {
@@ -74,7 +110,8 @@ class SimpleRouter {
 
   init() {
     // Handle browser back/forward
-    window.addEventListener('popstate', (e) => {
+    window.addEventListener('popstate', () => {
+      this.resetRouteScrollPosition()
       this.loadPage(getCurrentAppPath())
     })
 
@@ -112,6 +149,8 @@ class SimpleRouter {
     const basePath = this.extractBasePath(currentPath)
     const hasHomeMarkup = !!document.getElementById('home-main')
     const hasCoursesMarkup = !!document.getElementById('course-main-div')
+    const hasSetupMarkup = !!document.getElementById('setup-flow-main')
+    const hasAuthCallbackMarkup = !!document.getElementById('auth-callback-main')
 
     if (this.isHomeRoute(basePath) && hasHomeMarkup) {
       this.currentPath = '/'
@@ -119,6 +158,12 @@ class SimpleRouter {
     } else if ((basePath === '/courses' || basePath === '/dashboard') && hasCoursesMarkup) {
       this.currentPath = '/courses'
       this.initializeCurrentPageOnly('/courses')
+    } else if (basePath === '/setup' && hasSetupMarkup) {
+      this.currentPath = '/setup'
+      this.initializeCurrentPageOnly('/setup')
+    } else if (basePath === '/auth/callback' && hasAuthCallbackMarkup) {
+      this.currentPath = '/auth/callback'
+      this.initializeCurrentPageOnly('/auth/callback')
     } else {
       // For non-entrypoint pages loaded directly, clear the default content and load the correct page
       const appContent = document.querySelector('#app-content')
@@ -182,8 +227,9 @@ class SimpleRouter {
   }
 
   getMobileHeaderRouteTitle(path) {
+    if (typeof path === 'string' && (path.startsWith('/courses/') || path.startsWith('/course/'))) return 'Courses'
     if (path === '/courses' || path === '/dashboard') return 'Courses'
-    if (path === '/calendar') return 'Calendar'
+    if (path === '/timetable') return 'Timetable'
     if (path === '/assignments') return 'Assignments'
     if (path === '/profile' || path === '/settings' || path === '/help') return 'Profile'
     return ''
@@ -207,6 +253,57 @@ class SimpleRouter {
       titleNode.textContent = ''
       appHeader.classList.remove('app-header--title-mode')
     }
+  }
+
+  setSetupShellMode(path = this.currentPath) {
+    const normalizedPath = this.extractBasePath(path || this.currentPath)
+    const isSetupPath = normalizedPath === '/setup' || normalizedPath === '/auth/callback'
+    document.body.classList.toggle('setup-flow-active', isSetupPath)
+    document.body.classList.toggle('auth-callback-active', normalizedPath === '/auth/callback')
+  }
+
+  showRouteToast(message, durationMs = 2200) {
+    const normalized = String(message || '').trim()
+    if (!normalized) return
+
+    const existingToast = document.getElementById('link-copied-notification')
+    if (existingToast) existingToast.remove()
+
+    const toast = document.createElement('div')
+    toast.id = 'link-copied-notification'
+    toast.textContent = normalized
+    document.body.appendChild(toast)
+
+    requestAnimationFrame(() => {
+      toast.classList.add('show')
+    })
+
+    window.setTimeout(() => {
+      toast.classList.remove('show')
+      window.setTimeout(() => {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast)
+        }
+      }, 300)
+    }, durationMs)
+  }
+
+  flushQueuedRouteToasts() {
+    try {
+      const logoutMessage = window.sessionStorage.getItem(AUTH_LOGOUT_TOAST_KEY)
+      if (logoutMessage) {
+        window.sessionStorage.removeItem(AUTH_LOGOUT_TOAST_KEY)
+        this.showRouteToast(logoutMessage)
+      }
+    } catch (error) {
+      console.warn('Router: unable to read queued route toast message', error)
+    }
+  }
+
+  setAuthShellMode(path = this.currentPath) {
+    const normalizedPath = this.extractBasePath(path || this.currentPath)
+    const isAuthPath = normalizedPath === '/login' || normalizedPath === '/register'
+    document.body.classList.toggle('auth-page', isAuthPath)
   }
 
   shouldRedirectGuestProfileRoute(path, isAuthenticated) {
@@ -372,6 +469,7 @@ class SimpleRouter {
     if (this.coursePattern.test(normalizedAppPath)) {
       if (normalizedAppPath !== this.currentPath || !this.isInitialized) {
         window.history.pushState({}, '', withBase(normalizedAppPath))
+        this.resetRouteScrollPosition()
         this.loadPage(normalizedAppPath)
       }
       return
@@ -392,8 +490,41 @@ class SimpleRouter {
     if (path !== this.currentPath || !this.isInitialized) {
       const canonicalHistoryPath = this.getCanonicalHistoryPath(path)
       window.history.pushState({}, '', withBase(canonicalHistoryPath))
+      this.resetRouteScrollPosition()
       this.loadPage(path)
     }
+  }
+
+  resetRouteScrollPosition() {
+    const applyScrollTop = () => {
+      try {
+        window.scrollTo(0, 0)
+      } catch {
+        // no-op
+      }
+
+      const candidates = [
+        document.scrollingElement,
+        document.documentElement,
+        document.body,
+        document.getElementById('app-content'),
+        document.querySelector('.main-content')
+      ]
+
+      candidates.forEach((node) => {
+        if (!node) return
+        node.scrollTop = 0
+        node.scrollLeft = 0
+      })
+    }
+
+    applyScrollTop()
+    requestAnimationFrame(() => {
+      applyScrollTop()
+      requestAnimationFrame(() => {
+        applyScrollTop()
+      })
+    })
   }
 
   getCanonicalHistoryPath(path) {
@@ -403,13 +534,15 @@ class SimpleRouter {
     // This avoids duplicate route forms like /dev/assignments and /dev/assignments/.
     const trailingSlashRoutes = new Set([
       '/courses',
-      '/calendar',
+      '/timetable',
       '/assignments',
       '/profile',
+      '/setup',
       '/login',
       '/register',
       '/settings',
-      '/help'
+      '/help',
+      '/auth/callback'
     ])
 
     if (trailingSlashRoutes.has(normalized)) {
@@ -455,6 +588,9 @@ class SimpleRouter {
     document.body.classList.remove('home-modal-open')
     document.body.classList.remove('profile-page-header-sticky')
     document.body.classList.remove('mobile-page-header-sticky')
+    document.body.classList.remove('setup-flow-active')
+    document.body.classList.remove('auth-callback-active')
+    document.body.classList.remove('auth-page')
     document.querySelector('.app-header')?.classList.remove('app-header--hidden')
     document.querySelector('#home-main .home-container-above.container-above-desktop')?.classList.remove('home-toolbar--hidden')
     document.querySelectorAll('.app-mobile-toolbar--hidden').forEach((toolbar) => toolbar.classList.remove('app-mobile-toolbar--hidden'))
@@ -549,6 +685,17 @@ class SimpleRouter {
   }
 
   async loadPage(path) {
+    const pendingPath = this.extractBasePath(path)
+    if (this.isHomeRoute(pendingPath)) {
+      document.body.classList.add('home-auth-pending')
+      document.body.classList.remove('home-authenticated')
+    } else {
+      document.body.classList.remove('home-auth-pending')
+      document.body.classList.remove('home-authenticated')
+    }
+
+    this.resetRouteScrollPosition()
+
     // Show loading bar
     this.showLoadingBar()
 
@@ -605,10 +752,19 @@ class SimpleRouter {
         appContent.appendChild(courseAppContent)
 
         document.body.classList.add('course-page-mode')
+        if (window.innerWidth <= 1023) {
+          document.body.classList.add('mobile-page-header-sticky')
+        }
         this.updateActiveNav('')
 
         await this.initializeShared()
         const isAuthenticated = await this.checkAuthentication()
+        const courseGateRedirect = await this.resolveSetupGateRedirect('/courses', isAuthenticated)
+        if (courseGateRedirect) {
+          this.hideLoadingBar()
+          this.navigate(courseGateRedirect)
+          return
+        }
         await this.updateMobileGuestAuthHeader(isAuthenticated)
         await this.hydrateDesktopProfileNavInitials(isAuthenticated)
         this.handleGuestDashboard(isAuthenticated, path)
@@ -624,6 +780,9 @@ class SimpleRouter {
           detail: { path }
         }))
 
+        this.resetRouteScrollPosition()
+
+        this.flushQueuedRouteToasts()
         this.hideLoadingBar()
         return
       } catch (error) {
@@ -636,10 +795,18 @@ class SimpleRouter {
     // Extract base path for route matching
     const basePath = this.extractBasePath(path)
     this.currentPath = basePath
+    this.setSetupShellMode(basePath)
+    this.setAuthShellMode(basePath)
 
     // Check if user is authenticated for protected routes
     const isProtectedRoute = this.isProtectedRoute(basePath)
     const isAuthenticated = await this.checkAuthentication()
+    const setupGateRedirect = await this.resolveSetupGateRedirect(basePath, isAuthenticated)
+    if (setupGateRedirect) {
+      this.hideLoadingBar()
+      this.navigate(setupGateRedirect)
+      return
+    }
     await this.updateMobileGuestAuthHeader(isAuthenticated)
     await this.hydrateDesktopProfileNavInitials(isAuthenticated)
 
@@ -673,11 +840,10 @@ class SimpleRouter {
     this.updateMobileHeaderTitle(basePath)
 
     try {
-      // If protected route and user not authenticated, show locked message
+      // If protected route and user not authenticated, send guest to unified auth page.
       if (isProtectedRoute && !isAuthenticated) {
-        document.body.classList.remove('course-page-mode')
-        this.showLockedPage(basePath)
         this.hideLoadingBar()
+        this.navigate('/login')
         return
       }
 
@@ -738,8 +904,12 @@ class SimpleRouter {
       // Re-initialize everything for the new content
       await this.reinitializeEverything(basePath)
 
+      this.resetRouteScrollPosition()
+
       // Update loading progress
       this.updateLoadingProgress(95)
+
+      this.flushQueuedRouteToasts()
 
       // Complete loading
       this.updateLoadingProgress(100)
@@ -756,31 +926,49 @@ class SimpleRouter {
   async initializeCurrentPageOnly(path) {
     try {
       console.log('Router: Initializing current page only (no HTML fetch):', path)
+      const basePath = this.extractBasePath(path)
+      this.currentPath = basePath
+      if (this.isHomeRoute(basePath)) {
+        document.body.classList.add('home-auth-pending')
+        document.body.classList.remove('home-authenticated')
+      } else {
+        document.body.classList.remove('home-auth-pending')
+        document.body.classList.remove('home-authenticated')
+      }
+      this.setSetupShellMode(basePath)
+      this.setAuthShellMode(basePath)
 
       const appContent = document.querySelector('#app-content')
-      if (appContent && !this.getCachedRouteMarkup(path)) {
-        this.setCachedRouteMarkup(path, appContent.innerHTML)
+      if (appContent && !this.getCachedRouteMarkup(basePath)) {
+        this.setCachedRouteMarkup(basePath, appContent.innerHTML)
       }
 
       // Check authentication status
       const isAuthenticated = await this.checkAuthentication()
+      const setupGateRedirect = await this.resolveSetupGateRedirect(basePath, isAuthenticated)
+      if (setupGateRedirect) {
+        this.navigate(setupGateRedirect)
+        return
+      }
       await this.updateMobileGuestAuthHeader(isAuthenticated)
       await this.hydrateDesktopProfileNavInitials(isAuthenticated)
 
-      if (this.shouldRedirectGuestProfileRoute(path, isAuthenticated)) {
+      if (this.shouldRedirectGuestProfileRoute(basePath, isAuthenticated)) {
         this.navigate('/login')
         return
       }
 
       // Update active navigation
-      this.updateActiveNav(path)
-      this.updateMobileHeaderTitle(path)
+      this.updateActiveNav(basePath)
+      this.updateMobileHeaderTitle(basePath)
 
       // Toggle guest vs authenticated home layout early to avoid signed-in widget flashes
-      this.handleGuestDashboard(isAuthenticated, path)
+      this.handleGuestDashboard(isAuthenticated, basePath)
 
       // Re-initialize everything for the current content
-      await this.reinitializeEverything(path)
+      await this.reinitializeEverything(basePath)
+
+      this.flushQueuedRouteToasts()
 
       console.log('Router: Current page initialized successfully')
 
@@ -817,8 +1005,8 @@ class SimpleRouter {
         await this.initializeDashboard()
       }
 
-      // Re-import and reinitialize calendar.js functionality if on calendar
-      if (path === '/calendar' || this.routes[path] === '/calendar.html') {
+      // Re-import and reinitialize calendar.js functionality if on timetable
+      if (path === '/timetable' || this.routes[path] === '/timetable.html') {
         await this.initializeCalendar()
       }
 
@@ -830,6 +1018,14 @@ class SimpleRouter {
       // Re-import and reinitialize assignments.js functionality if on assignments
       if (path === '/assignments' || this.routes[path] === '/assignments.html') {
         await this.initializeAssignments()
+      }
+
+      if (path === '/setup' || this.routes[path] === '/setup.html') {
+        await this.initializeSetupFlow()
+      }
+
+      if (path === '/auth/callback' || this.routes[path] === '/auth-callback.html') {
+        await this.initializeAuthCallback()
       }
 
       // Initialize shared functionality for all pages
@@ -1187,6 +1383,7 @@ class SimpleRouter {
 
             const { term, year } = parsedValue;
             const yearInt = parseInt(year);
+            const normalizedSelection = normalizeTermValue(`${term}-${yearInt}`);
 
             console.log('  → Updating hidden inputs to:', yearInt, term);
 
@@ -1201,6 +1398,30 @@ class SimpleRouter {
             if (yearSelect) {
               yearSelect.value = yearInt;
               console.log('  → year-select updated to:', yearSelect.value);
+            }
+
+            if (normalizedSelection) {
+              setPreferredTermValue(normalizedSelection);
+              applyPreferredTermToGlobals(normalizedSelection);
+              console.log('  → Preferred term synced to:', normalizedSelection);
+
+              document.querySelectorAll('.semester-select').forEach((selectEl) => {
+                if (selectEl.value !== normalizedSelection) {
+                  selectEl.value = normalizedSelection;
+                }
+              });
+
+              document.querySelectorAll('.custom-select[data-target^="semester-select"]').forEach((customSelect) => {
+                const valueElement = customSelect.querySelector('.custom-select-value');
+                const options = customSelect.querySelectorAll('.custom-select-option');
+                options.forEach((option) => {
+                  const isSelected = option.dataset.value === normalizedSelection;
+                  option.classList.toggle('selected', isSelected);
+                  if (isSelected && valueElement) {
+                    valueElement.textContent = option.textContent || normalizedSelection;
+                  }
+                });
+              });
             }
 
             // Update calendar FIRST (so it doesn't interrupt search update)
@@ -1264,7 +1485,9 @@ class SimpleRouter {
         // Or if it has a showCourse method, call it
         else if (calendarComponent.showCourse) {
           const currentYear = window.globalCurrentYear || new Date().getFullYear()
-          const currentTerm = window.globalCurrentTerm || (new Date().getMonth() >= 7 ? "Fall" : "Spring")
+          const currentMonth = new Date().getMonth() + 1
+          const inferredTerm = (currentMonth >= 8 || currentMonth <= 2) ? "Fall" : "Spring"
+          const currentTerm = window.globalCurrentTerm || inferredTerm
           calendarComponent.showCourse(currentYear, currentTerm)
         }
       }
@@ -1276,8 +1499,8 @@ class SimpleRouter {
       } else {
         console.log('No calendar page component found in DOM')
 
-        // If we're on calendar page but component isn't found, try dynamic import
-        if (basePath === '/calendar') {
+        // If we're on timetable page but component isn't found, try dynamic import
+        if (basePath === '/timetable') {
           console.log('Attempting dynamic import of calendar page component...')
           try {
             if (!this.isProduction()) {
@@ -1404,6 +1627,46 @@ class SimpleRouter {
       console.log('Router: Assignments page initialized');
     } catch (error) {
       console.error('Error initializing assignments:', error);
+    }
+  }
+
+  async initializeSetupFlow() {
+    try {
+      let setupModule = null
+
+      if (typeof window.initializeSetupFlow !== 'function') {
+        setupModule = await import('./setup-flow.js')
+      }
+
+      if (typeof window.initializeSetupFlow === 'function') {
+        await window.initializeSetupFlow()
+      } else if (setupModule && typeof setupModule.initializeSetupFlow === 'function') {
+        await setupModule.initializeSetupFlow()
+      } else {
+        console.error('Router: initializeSetupFlow is unavailable')
+      }
+    } catch (error) {
+      console.error('Error initializing setup flow:', error)
+    }
+  }
+
+  async initializeAuthCallback() {
+    try {
+      let callbackModule = null
+
+      if (typeof window.initializeAuthCallback !== 'function') {
+        callbackModule = await import('./auth-callback.js')
+      }
+
+      if (typeof window.initializeAuthCallback === 'function') {
+        await window.initializeAuthCallback()
+      } else if (callbackModule && typeof callbackModule.initializeAuthCallback === 'function') {
+        await callbackModule.initializeAuthCallback()
+      } else {
+        console.error('Router: initializeAuthCallback is unavailable')
+      }
+    } catch (error) {
+      console.error('Error initializing auth callback:', error)
     }
   }
 
@@ -1548,11 +1811,17 @@ class SimpleRouter {
     if (normalizedPath === '/dashboard' || normalizedPath.startsWith('/dashboard/')) {
       return '/courses' // Redirect legacy dashboard paths
     }
-    if (normalizedPath.startsWith('/calendar/')) {
-      return '/calendar'
+    if (normalizedPath.startsWith('/timetable/')) {
+      return '/timetable'
     }
     if (normalizedPath.startsWith('/settings/')) {
       return '/settings'
+    }
+    if (normalizedPath === '/setup' || normalizedPath.startsWith('/setup/')) {
+      return '/setup'
+    }
+    if (normalizedPath === '/auth/callback' || normalizedPath.startsWith('/auth/callback/')) {
+      return '/auth/callback'
     }
     if (normalizedPath === '/home' || normalizedPath === '/home/' || normalizedPath.startsWith('/home/')) {
       return '/'
@@ -1567,27 +1836,124 @@ class SimpleRouter {
 
   // Check if a route requires authentication
   isProtectedRoute(path) {
-    const protectedRoutes = ['/calendar', '/assignments']
+    const protectedRoutes = ['/timetable', '/assignments', '/setup']
     return protectedRoutes.includes(path)
+  }
+
+  async getSupabaseClient() {
+    if (this.isProduction()) {
+      return window.supabase || null
+    }
+
+    const { supabase } = await import('../supabase.js')
+    return supabase
+  }
+
+  async getCurrentAuthenticatedUser() {
+    try {
+      const client = await this.getSupabaseClient()
+      if (!client) return null
+      const { data: { session } } = await client.auth.getSession()
+      return session?.user || null
+    } catch (error) {
+      console.error('Router: failed to resolve authenticated user', error)
+      return null
+    }
+  }
+
+  isSetupBypassRoute(path) {
+    return SETUP_BYPASS_ROUTES.has(path)
+  }
+
+  setSetupCompletionForCurrentUser(isComplete, userId = null) {
+    const normalized = Boolean(isComplete)
+    const resolvedUserId = userId || this.setupStatusCache.userId || null
+    if (!resolvedUserId) return
+    this.setupStatusCache = {
+      userId: resolvedUserId,
+      isComplete: normalized,
+      checkedAt: Date.now()
+    }
+  }
+
+  async isAuthenticatedUserSetupComplete(user) {
+    if (!user?.id) return true
+
+    const cache = this.setupStatusCache
+    if (
+      cache.userId === user.id &&
+      typeof cache.isComplete === 'boolean' &&
+      (Date.now() - cache.checkedAt) < 15000
+    ) {
+      return cache.isComplete
+    }
+
+    try {
+      const client = await this.getSupabaseClient()
+      if (!client) return true
+
+      const { data, error } = await client
+        .from('profiles')
+        .select('current_year, concentration, year_opt_out, concentration_opt_out, setup_completed_at, setup_version')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (error) {
+        if (isSetupSchemaMissingError(error)) {
+          this.setSetupCompletionForCurrentUser(true, user.id)
+          return true
+        }
+        throw error
+      }
+
+      if (!data) {
+        this.setSetupCompletionForCurrentUser(false, user.id)
+        return false
+      }
+
+      const isComplete = isSetupCompleteFromProfile(normalizeSetupProfile(data))
+      this.setSetupCompletionForCurrentUser(isComplete, user.id)
+      return isComplete
+    } catch (error) {
+      console.warn('Router: failed to read setup completion status', error)
+      return true
+    }
+  }
+
+  async resolveSetupGateRedirect(path, isAuthenticated) {
+    const normalizedPath = this.extractBasePath(path)
+    if (!isAuthenticated) {
+      if (normalizedPath === '/setup') {
+        return '/login'
+      }
+      return null
+    }
+    if (normalizedPath === '/auth/callback') {
+      return null
+    }
+
+    const user = await this.getCurrentAuthenticatedUser()
+    if (!user) return null
+
+    const setupComplete = await this.isAuthenticatedUserSetupComplete(user)
+    if (setupComplete && normalizedPath === '/setup') {
+      return '/'
+    }
+
+    if (!setupComplete && !this.isSetupBypassRoute(normalizedPath)) {
+      return '/setup'
+    }
+
+    return null
   }
 
   // Check if user is authenticated
   async checkAuthentication() {
     try {
-      // Import supabase dynamically to avoid circular dependencies
-      if (this.isProduction()) {
-        // In production, supabase is already available globally
-        if (window.supabase) {
-          const { data: { session } } = await window.supabase.auth.getSession()
-          return !!session
-        }
-        return false
-      } else {
-        // Development mode - dynamic import
-        const { supabase } = await import('../supabase.js')
-        const { data: { session } } = await supabase.auth.getSession()
-        return !!session
-      }
+      const client = await this.getSupabaseClient()
+      if (!client) return false
+      const { data: { session } } = await client.auth.getSession()
+      return !!session
     } catch (error) {
       console.error('Error checking authentication:', error)
       return false
@@ -1606,7 +1972,7 @@ class SimpleRouter {
       '/': 'Home',
       '/home': 'Home',
       '/profile': 'Profile',
-      '/calendar': 'Calendar',
+      '/timetable': 'Timetable',
       '/assignments': 'Assignments',
       '/courses': 'Courses',
       '/dashboard': 'Courses',
@@ -1848,10 +2214,14 @@ class SimpleRouter {
 
     if (!isHomeRoute) {
       pageWrapper.classList.remove('guest-dashboard')
+      pageWrapper.classList.remove('home-auth-pending')
+      pageWrapper.classList.remove('home-authenticated')
       return
     }
 
     pageWrapper.classList.toggle('guest-dashboard', !isAuthenticated)
+    pageWrapper.classList.toggle('home-authenticated', !!isAuthenticated)
+    pageWrapper.classList.remove('home-auth-pending')
   }
 
   // Open search modal
@@ -1889,10 +2259,13 @@ class SimpleRouter {
       existingModal.remove()
     }
 
-    // Get current year and term for defaults
-    const currentYear = new Date().getFullYear()
-    const currentMonth = new Date().getMonth() + 1
-    const defaultTerm = (currentMonth >= 8 || currentMonth <= 2) ? "秋学期/Fall" : "春学期/Spring"
+    // Get current global semester selection for defaults
+    const selectedYear = Number.isFinite(Number(window.globalCurrentYear))
+      ? Number(window.globalCurrentYear)
+      : new Date().getFullYear()
+    const selectedTerm = String(window.globalCurrentTerm || '').trim().toLowerCase() === 'spring'
+      ? "春学期/Spring"
+      : "秋学期/Fall"
 
     // Create modal HTML
     const modal = document.createElement('div')
@@ -1921,17 +2294,17 @@ class SimpleRouter {
             <div class="filter-group">
               <label for="search-year-select">Year:</label>
               <select id="search-year-select">
-                <option value="${currentYear - 1}">${currentYear - 1}</option>
-                <option value="${currentYear}" selected>${currentYear}</option>
-                <option value="${currentYear + 1}">${currentYear + 1}</option>
+                <option value="${selectedYear - 1}">${selectedYear - 1}</option>
+                <option value="${selectedYear}" selected>${selectedYear}</option>
+                <option value="${selectedYear + 1}">${selectedYear + 1}</option>
               </select>
             </div>
             
             <div class="filter-group">
               <label for="search-term-select">Semester:</label>
               <select id="search-term-select">
-                <option value="春学期/Spring" ${defaultTerm === "春学期/Spring" ? 'selected' : ''}>春学期/Spring</option>
-                <option value="秋学期/Fall" ${defaultTerm === "秋学期/Fall" ? 'selected' : ''}>秋学期/Fall</option>
+                <option value="春学期/Spring" ${selectedTerm === "春学期/Spring" ? 'selected' : ''}>春学期/Spring</option>
+                <option value="秋学期/Fall" ${selectedTerm === "秋学期/Fall" ? 'selected' : ''}>秋学期/Fall</option>
               </select>
             </div>
           </div>
@@ -2402,54 +2775,132 @@ class SimpleRouter {
     if (!name) return ''
     const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim()
     if (!normalizedInput) return ''
+    if (!this.professorRomanizationData) {
+      const japaneseCharRegex = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/
+      const fullNameMap = {
+        '二村 太郎': 'Nimura Taro',
+        '今西 ケルシー オリバー': 'Imanishi Kelsey Oliver',
+        '仲間 壮彦': 'Nakama Takehiko',
+        '八木 匡': 'Yagi Tadashi',
+        '原田 勉': 'Harada Tsutomu',
+        '和泉 真澄': 'Izumi Masumi',
+        '和田 喜彦': 'Wada Yoshihiko',
+        '小西 尚実': 'Konishi Naomi',
+        '張 皓程': 'Chou Koutei',
+        '槇殿 伴子': 'Makidono Tomoko',
+        '河島 伸子': 'Kawashima Nobuko',
+        '河村 晴久': 'Kawamura Haruhisa',
+        '石井 弘明': 'Ishii Hiroaki',
+        '西村 幸宏': 'Nishimura Yukihiro',
+        '趙 亮': 'Chou Ryou',
+        '鈴木 桂子': 'Suzuki Keiko',
+        '陳 依君': 'Chin Ikun',
+        '梶 藍子': 'Kaji Aiko',
+        '松川 杏寧': 'Matsukawa Anna',
+        '津田 太郎': 'Tsuda Taro',
+        '髙橋 旬子': 'Takahashi Junko'
+      }
 
-    const fullNameMap = {
-      '二村 太郎': 'Nimura Taro',
-      '今西 ケルシー オリバー': 'Imanishi Kelsey Oliver',
-      '仲間 壮彦': 'Nakama Takehiko',
-      '八木 匡': 'Yagi Tadashi',
-      '原田 勉': 'Harada Tsutomu',
-      '和泉 真澄': 'Izumi Masumi',
-      '和田 喜彦': 'Wada Yoshihiko',
-      '小西 尚実': 'Konishi Naomi',
-      '張 皓程': 'Chou Koutei',
-      '槇殿 伴子': 'Makidono Tomoko',
-      '河島 伸子': 'Kawashima Nobuko',
-      '河村 晴久': 'Kawamura Haruhisa',
-      '石井 弘明': 'Ishii Hiroaki',
-      '西村 幸宏': 'Nishimura Yukihiro',
-      '趙 亮': 'Chou Ryou',
-      '鈴木 桂子': 'Suzuki Keiko',
-      '陳 依君': 'Chin Ikun',
-      '髙橋 旬子': 'Takahashi Junko'
+      const normalizedFullNameLookup = Object.entries(fullNameMap).reduce((lookup, [fullName, romanized]) => {
+        const normalized = String(fullName || '').replace(/[　\s]+/g, ' ').trim()
+        if (!normalized) return lookup
+        lookup[normalized] = romanized
+        lookup[normalized.replace(/\s+/g, '')] = romanized
+        return lookup
+      }, {})
+
+      const nameMap = {
+        '髙橋': 'Takahashi', '高橋': 'Takahashi', '八木': 'Yagi', '和田': 'Wada',
+        '津田': 'Tsuda',
+        '張': 'Chou', '趙': 'Chou', '仲間': 'Nakama', '河村': 'Kawamura', '河島': 'Kawashima',
+        '陳': 'Chin', '今西': 'Imanishi', '石井': 'Ishii', '小西': 'Konishi', '和泉': 'Izumi',
+        '二村': 'Nimura', '原田': 'Harada', '槇殿': 'Makidono', '西村': 'Nishimura', '鈴木': 'Suzuki',
+        '松川': 'Matsukawa', '梶': 'Kaji',
+        '旬子': 'Junko', '太郎': 'Taro', '匡': 'Tadashi', '喜彦': 'Yoshihiko', '皓程': 'Koutei',
+        '亮': 'Ryou', '壮彦': 'Takehiko', '晴久': 'Haruhisa', '依君': 'Ikun', '尚実': 'Naomi',
+        '真澄': 'Masumi', '弘明': 'Hiroaki', '幸宏': 'Yukihiro', '桂子': 'Keiko', '伸子': 'Nobuko',
+        '伴子': 'Tomoko', '藍子': 'Aiko', '杏寧': 'Anna', '勉': 'Tsutomu',
+        'ケルシー': 'Kelsey', 'オリバー': 'Oliver',
+        '河': 'Kawa', '村': 'Mura', '島': 'Shima', '伸': 'Nobu', '子': 'Ko',
+        '津': 'Tsu', '藍': 'Ai', '杏': 'An', '寧': 'Na'
+      }
+
+      const tokenEntries = Object.entries(nameMap)
+        .filter(([token]) => token.length > 1)
+        .sort((left, right) => right[0].length - left[0].length)
+
+      this.professorRomanizationData = {
+        japaneseCharRegex,
+        normalizedFullNameLookup,
+        nameMap,
+        tokenEntries
+      }
     }
-    if (fullNameMap[normalizedInput]) return fullNameMap[normalizedInput]
 
-    const nameMap = {
-      '髙橋': 'Takahashi', '高橋': 'Takahashi', '八木': 'Yagi', '和田': 'Wada',
-      '張': 'Chou', '趙': 'Chou', '仲間': 'Nakama', '河村': 'Kawamura', '河島': 'Kawashima',
-      '陳': 'Chin', '今西': 'Imanishi', '石井': 'Ishii', '小西': 'Konishi', '和泉': 'Izumi',
-      '二村': 'Nimura', '原田': 'Harada', '槇殿': 'Makidono', '西村': 'Nishimura', '鈴木': 'Suzuki',
-      '旬子': 'Junko', '太郎': 'Taro', '匡': 'Tadashi', '喜彦': 'Yoshihiko', '皓程': 'Koutei',
-      '亮': 'Ryou', '壮彦': 'Takehiko', '晴久': 'Haruhisa', '依君': 'Ikun', '尚実': 'Naomi',
-      '真澄': 'Masumi', '弘明': 'Hiroaki', '幸宏': 'Yukihiro', '桂子': 'Keiko', '伸子': 'Nobuko',
-      '伴子': 'Tomoko', '勉': 'Tsutomu', 'ケルシー': 'Kelsey', 'オリバー': 'Oliver',
-      '河': 'Kawa', '村': 'Mura', '島': 'Shima', '伸': 'Nobu', '子': 'Ko'
-    }
+    const {
+      japaneseCharRegex,
+      normalizedFullNameLookup,
+      nameMap,
+      tokenEntries
+    } = this.professorRomanizationData
 
-    if (!/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(normalizedInput)) {
+    const compactInput = normalizedInput.replace(/\s+/g, '')
+    if (normalizedFullNameLookup[normalizedInput]) return normalizedFullNameLookup[normalizedInput]
+    if (normalizedFullNameLookup[compactInput]) return normalizedFullNameLookup[compactInput]
+
+    if (!japaneseCharRegex.test(normalizedInput)) {
       return normalizedInput
     }
 
-    const parts = normalizedInput.split(/\s+/).map((part) => {
+    const romanizePart = (part) => {
+      if (!part || !japaneseCharRegex.test(part)) return part
+
       if (nameMap[part]) return nameMap[part]
-      let mapped = ''
-      for (const char of part) {
-        if (!nameMap[char]) return part
-        mapped += nameMap[char]
+
+      const kanaResult = wanakana.toRomaji(part)
+      if (kanaResult && !japaneseCharRegex.test(kanaResult)) {
+        return kanaResult
       }
-      return mapped || part
-    })
+
+      let cursor = 0
+      let mappedAny = false
+      let result = ''
+      while (cursor < part.length) {
+        let tokenMatched = false
+        for (const [token, tokenRomaji] of tokenEntries) {
+          if (part.startsWith(token, cursor)) {
+            result += tokenRomaji
+            cursor += token.length
+            mappedAny = true
+            tokenMatched = true
+            break
+          }
+        }
+        if (tokenMatched) continue
+
+        const char = part[cursor]
+        const mappedChar = nameMap[char]
+        if (mappedChar) {
+          result += mappedChar
+          mappedAny = true
+          cursor += 1
+          continue
+        }
+
+        const charRomaji = wanakana.toRomaji(char)
+        if (charRomaji && !japaneseCharRegex.test(charRomaji)) {
+          result += charRomaji
+          mappedAny = true
+        } else {
+          result += char
+        }
+        cursor += 1
+      }
+
+      return mappedAny ? result : part
+    }
+
+    const parts = normalizedInput.split(/\s+/).map((part) => romanizePart(part))
 
     return parts.join(' ')
   }

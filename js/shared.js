@@ -35,6 +35,69 @@ let courseEvalTooltipElement = null;
 let activeCourseEvalTooltipTarget = null;
 let courseEvalInfoPopoverElement = null;
 let activeCourseEvalInfoTrigger = null;
+const MOBILE_ROTATION_BLOCK_CLASS = 'mobile-rotation-blocked';
+
+function isMobileDeviceForOrientationPolicy() {
+    if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+
+    const userAgent = String(navigator.userAgent || '');
+    const looksLikeMobileUA = /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(userAgent);
+    const isIpadDesktopUA = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+
+    return Boolean(looksLikeMobileUA || isIpadDesktopUA);
+}
+
+function setMobileLandscapeBlockState() {
+    if (!document.body) return;
+
+    const shouldBlock = isMobileDeviceForOrientationPolicy()
+        && window.matchMedia
+        && window.matchMedia('(orientation: landscape)').matches;
+
+    document.body.classList.toggle(MOBILE_ROTATION_BLOCK_CLASS, shouldBlock);
+}
+
+async function enforcePortraitOrientationOnMobile() {
+    if (!isMobileDeviceForOrientationPolicy()) return;
+
+    let lockSucceeded = false;
+    const orientationController = window.screen && window.screen.orientation;
+    if (orientationController && typeof orientationController.lock === 'function') {
+        try {
+            await orientationController.lock('portrait');
+            lockSucceeded = true;
+        } catch (error) {
+            lockSucceeded = false;
+        }
+    }
+
+    if (!lockSucceeded) {
+        setMobileLandscapeBlockState();
+    } else if (document.body) {
+        document.body.classList.remove(MOBILE_ROTATION_BLOCK_CLASS);
+    }
+}
+
+function initMobileOrientationPolicy() {
+    if (!isMobileDeviceForOrientationPolicy()) return;
+
+    void enforcePortraitOrientationOnMobile();
+
+    window.addEventListener('orientationchange', setMobileLandscapeBlockState);
+    window.addEventListener('resize', setMobileLandscapeBlockState);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            void enforcePortraitOrientationOnMobile();
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileOrientationPolicy, { once: true });
+} else {
+    initMobileOrientationPolicy();
+}
 
 function normalizeSlotDay(day) {
     const raw = String(day || '').trim();
@@ -163,6 +226,7 @@ const japaneseNameMapping = {
     '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
     '八木': 'Yagi', '木': 'Ki',
     '和田': 'Wada', '田': 'Da', '和': 'Wa',
+    '津田': 'Tsuda', '津': 'Tsu',
     '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
@@ -188,6 +252,8 @@ const japaneseNameMapping = {
     '原田': 'Harada', '原': 'Hara',
     '槇殿': 'Makidono', '槇': 'Maki', '殿': 'Dono',
     '西村': 'Nishimura',
+    '松川': 'Matsukawa',
+    '梶': 'Kaji',
     '林': 'Hayashi',
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
@@ -210,6 +276,8 @@ const japaneseNameMapping = {
     '桂子': 'Keiko', '桂': 'Kei',
     '伸子': 'Nobuko', '伸': 'Nobu',
     '伴子': 'Tomoko', '伴': 'Tomo',
+    '藍子': 'Aiko', '藍': 'Ai',
+    '杏寧': 'Anna', '杏': 'An', '寧': 'Na',
     '勉': 'Tsutomu',
 
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
@@ -246,10 +314,79 @@ const japaneseFullNameMapping = {
     '趙 亮': 'Chou Ryou',
     '鈴木 桂子': 'Suzuki Keiko',
     '陳 依君': 'Chin Ikun',
+    '梶 藍子': 'Kaji Aiko',
+    '松川 杏寧': 'Matsukawa Anna',
+    '津田 太郎': 'Tsuda Taro',
     '髙橋 旬子': 'Takahashi Junko'
 };
 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+const japaneseNameTokenEntries = Object.entries(japaneseNameMapping)
+    .filter(([token]) => token.length > 1)
+    .sort((left, right) => right[0].length - left[0].length);
+const japaneseFullNameLookup = Object.entries(japaneseFullNameMapping).reduce((lookup, [name, romanized]) => {
+    const normalizedName = String(name || '').replace(/[　\s]+/g, ' ').trim();
+    if (!normalizedName) return lookup;
+    lookup[normalizedName] = romanized;
+    lookup[normalizedName.replace(/\s+/g, '')] = romanized;
+    return lookup;
+}, {});
+
+function normalizeProfessorNameInput(name) {
+    return String(name || '').replace(/[　\s]+/g, ' ').trim();
+}
+
+function romanizeJapaneseNamePart(part) {
+    if (!part || !JAPANESE_CHAR_REGEX.test(part)) return part;
+
+    const mappedWholePart = japaneseNameMapping[part];
+    if (mappedWholePart) return mappedWholePart;
+
+    const wanaKanaResult = wanakana.toRomaji(part);
+    if (wanaKanaResult && !JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
+        return wanaKanaResult;
+    }
+
+    let cursor = 0;
+    let mappedAny = false;
+    let result = '';
+
+    while (cursor < part.length) {
+        let matchedToken = false;
+
+        for (const [token, tokenRomaji] of japaneseNameTokenEntries) {
+            if (part.startsWith(token, cursor)) {
+                result += tokenRomaji;
+                cursor += token.length;
+                mappedAny = true;
+                matchedToken = true;
+                break;
+            }
+        }
+
+        if (matchedToken) continue;
+
+        const char = part[cursor];
+        const mappedChar = japaneseNameMapping[char];
+        if (mappedChar) {
+            result += mappedChar;
+            mappedAny = true;
+            cursor += 1;
+            continue;
+        }
+
+        const charRomaji = wanakana.toRomaji(char);
+        if (charRomaji && !JAPANESE_CHAR_REGEX.test(charRomaji)) {
+            result += charRomaji;
+            mappedAny = true;
+        } else {
+            result += char;
+        }
+        cursor += 1;
+    }
+
+    return mappedAny ? result : part;
+}
 
 // Cache for romanized professor names
 const romanizedProfessorCache = new Map();
@@ -260,7 +397,7 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
-    const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim();
+    const normalizedInput = normalizeProfessorNameInput(name);
     if (!normalizedInput) return name;
 
     // Check cache first
@@ -281,50 +418,15 @@ function romanizeProfessorName(name) {
     let romanized = normalizedInput;
 
     try {
-        const exactNameMatch = japaneseFullNameMapping[normalizedInput];
+        const compactInput = normalizedInput.replace(/\s+/g, '');
+        const exactNameMatch = japaneseFullNameLookup[normalizedInput] || japaneseFullNameLookup[compactInput];
         if (exactNameMatch) {
             romanized = exactNameMatch;
         } else {
-        // Split the name and process each part
-        let parts = normalizedInput.split(/\s+/);
-        let romanizedParts = [];
-
-        for (let part of parts) {
-            let romanizedPart = part;
-
-            // Try exact mapping first
-            if (japaneseNameMapping[part]) {
-                romanizedPart = japaneseNameMapping[part];
-            } else {
-                // Try WanaKana for Hiragana/Katakana conversion
-                const wanaKanaResult = wanakana.toRomaji(part);
-                if (!JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
-                    romanizedPart = wanaKanaResult;
-                } else {
-                    // Character-by-character mapping, but avoid partial mixed results.
-                    let characterMapped = '';
-                    let fullyMapped = true;
-                    for (let char of part) {
-                        if (japaneseNameMapping[char]) {
-                            characterMapped += japaneseNameMapping[char];
-                        } else {
-                            const charRomaji = wanakana.toRomaji(char);
-                            if (!JAPANESE_CHAR_REGEX.test(charRomaji)) {
-                                characterMapped += charRomaji;
-                            } else {
-                                fullyMapped = false;
-                                break;
-                            }
-                        }
-                    }
-                    romanizedPart = fullyMapped && characterMapped ? characterMapped : part;
-                }
-            }
-
-            romanizedParts.push(romanizedPart);
-        }
-
-        romanized = romanizedParts.join(' ');
+            // Split by spaces and greedily map longest known tokens.
+            const parts = normalizedInput.split(/\s+/);
+            const romanizedParts = parts.map((part) => romanizeJapaneseNamePart(part));
+            romanized = romanizedParts.join(' ');
         }
 
         // Clean up and capitalize properly
@@ -344,7 +446,8 @@ function romanizeProfessorName(name) {
 
 // Synchronous function to get romanized professor name from cache
 function getRomanizedProfessorName(name) {
-    return romanizedProfessorCache.get(name) || romanizeProfessorName(name);
+    const normalizedInput = normalizeProfessorNameInput(name);
+    return romanizedProfessorCache.get(normalizedInput) || romanizeProfessorName(normalizedInput);
 }
 
 export function formatProfessorDisplayName(name) {
@@ -382,6 +485,24 @@ function normalizeCourseTitle(title) {
     normalized = normalized.replace(/\s+/g, ' ').trim();
 
     return normalized;
+}
+
+function getCourseDisplayTitle(course) {
+    if (!course || typeof course !== 'object') return '';
+
+    const rawTitle = String(
+        course.title
+        || course.course_title
+        || course.course_name
+        || course.name
+        || ''
+    ).trim();
+
+    const normalizedTitle = normalizeCourseTitle(rawTitle);
+    if (normalizedTitle) return normalizedTitle;
+    if (rawTitle) return rawTitle;
+
+    return String(course.course_code || '').trim();
 }
 
 function escapeHtml(value) {
@@ -609,6 +730,10 @@ function deriveEvaluationTagsFromComponents(components, maxTags = 6) {
         .toLowerCase();
 
     const keywordTags = [
+        ['presentation', 'Presentation'],
+        ['presenting', 'Presentation'],
+        ['presented', 'Presentation'],
+        ['発表', 'Presentation'],
         ['group', 'Group'],
         ['debate', 'Debate'],
         ['paper', 'Paper'],
@@ -805,6 +930,57 @@ function ensureCourseInfoReviewsTabActive(options = {}) {
     setActiveCourseInfoTab('reviews', { persist: true, scrollTop: options.scrollTop === true });
 }
 
+function getVisibleCourseInfoCourseContext() {
+    const classInfo = document.getElementById('class-info');
+    if (!classInfo || !classInfo.classList.contains('show')) {
+        return { classInfo: null, course: null };
+    }
+    return {
+        classInfo,
+        course: classInfo._activeCourseInfoCourse || null
+    };
+}
+
+async function refreshVisibleCourseInfoReviewsAfterMutation({ courseCode = '', term = '' } = {}) {
+    const { classInfo, course } = getVisibleCourseInfoCourseContext();
+    if (!classInfo || !course) return false;
+
+    const activeCourseCode = String(course?.course_code || '').trim();
+    const activeCourseTerm = normalizeCourseTerm(course?.term || '');
+    const normalizedTargetCode = String(courseCode || '').trim();
+    const normalizedTargetTerm = normalizeCourseTerm(term || '');
+
+    if (normalizedTargetCode && activeCourseCode && normalizedTargetCode !== activeCourseCode) return false;
+    if (normalizedTargetTerm && activeCourseTerm && normalizedTargetTerm !== activeCourseTerm) return false;
+
+    const previousSheetState = String(classInfo.dataset.sheetState || '').trim();
+    await openCourseInfoMenu(course, false, { initialTab: 'reviews' });
+
+    const nextClassInfo = document.getElementById('class-info');
+    const nextController = nextClassInfo?._courseInfoSheetController;
+    if (
+        nextController &&
+        (previousSheetState === 'full' || previousSheetState === 'collapsed')
+    ) {
+        nextController.snapTo(previousSheetState, { animate: false });
+    }
+
+    ensureCourseInfoReviewsTabActive({ scrollTop: true });
+    return true;
+}
+
+async function finalizeReviewMutationSuccess({ message, courseCode = '', term = '' } = {}) {
+    if (typeof window.closeReviewModal === 'function') {
+        window.closeReviewModal();
+    } else {
+        document.querySelector('.review-modal, .review-modal-host')?.remove();
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 240));
+    await refreshVisibleCourseInfoReviewsAfterMutation({ courseCode, term });
+    showGlobalToast(message || 'Saved.');
+}
+
 function getFocusableElements(container) {
     if (!container) return [];
     return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element) => {
@@ -935,7 +1111,7 @@ function syncModalOpenClass() {
     document.body.classList.toggle('modal-open', hasOpenModal);
 }
 
-function showGlobalToast(message, durationMs = 2200) {
+export function showGlobalToast(message, durationMs = 2200) {
     if (!message) return;
 
     const existingToast = document.getElementById('link-copied-notification');
@@ -958,6 +1134,15 @@ function showGlobalToast(message, durationMs = 2200) {
             }
         }, 300);
     }, durationMs);
+}
+
+function emitCourseStatusUpdated(detail = {}) {
+    document.dispatchEvent(new CustomEvent('course-status-updated', {
+        detail: {
+            ...detail,
+            updatedAt: Date.now()
+        }
+    }));
 }
 
 async function copyTextToClipboard(value) {
@@ -1408,7 +1593,7 @@ function CourseInfoSheet(containerEl, model) {
     containerEl.querySelector('.swipe-indicator')?.classList.add('courseinfo-grabber');
     (containerEl.querySelector('.sheet-body') || containerEl.querySelector('.class-content-wrapper'))?.classList.add('courseinfo-body');
     containerEl.querySelector('#course-info-peek')?.classList.add('courseinfo-peek');
-    const headerTitle = containerEl.querySelector('.class-header h2');
+    const headerTitle = containerEl.querySelector('.class-header h2, .class-header h3');
     if (headerTitle) headerTitle.textContent = model?.headerTitle || 'Class Info';
 }
 
@@ -1419,7 +1604,7 @@ function CourseInfoPage(containerEl, model) {
     containerEl.querySelector('.swipe-indicator')?.classList.add('courseinfo-grabber');
     (containerEl.querySelector('.sheet-body') || containerEl.querySelector('.class-content-wrapper'))?.classList.add('courseinfo-body');
     containerEl.querySelector('#course-info-peek')?.classList.add('courseinfo-peek');
-    const headerTitle = containerEl.querySelector('.class-header h2');
+    const headerTitle = containerEl.querySelector('.class-header h2, .class-header h3');
     if (headerTitle) headerTitle.textContent = model?.headerTitle || 'Class Info';
 }
 
@@ -1429,7 +1614,7 @@ function syncCourseInfoHeaderPresentation(containerEl, model, options = {}) {
     const isMobile = options.isMobile === true;
     const classHeader = containerEl.querySelector('.class-header');
     const headerWrap = containerEl.querySelector('.class-info-header');
-    const headerTitle = classHeader?.querySelector('h2');
+    const headerTitle = classHeader?.querySelector('h2, h3');
     const closeBtn = classHeader?.querySelector('#class-close');
     const existingActions = classHeader?.querySelector('[data-courseinfo-header-actions]');
     const existingTags = headerWrap?.querySelector('[data-courseinfo-header-tags]');
@@ -1493,7 +1678,17 @@ function syncCourseInfoHeaderPresentation(containerEl, model, options = {}) {
     classHeader.insertBefore(actionsWrap, closeBtn);
 }
 
-function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onMount = null, onClose = null, className = '', modalKind = 'ds' }) {
+function openDsModal({
+    title,
+    subtitle = '',
+    bodyHtml = '',
+    footerHtml = '',
+    onMount = null,
+    onClose = null,
+    className = '',
+    modalKind = 'ds',
+    mobileSwipe = null
+}) {
     const existing = document.querySelector(`.modal[data-modal-kind="${modalKind}"]`);
     if (existing) existing.remove();
 
@@ -1515,8 +1710,11 @@ function openDsModal({ title, subtitle = '', bodyHtml = '', footerHtml = '', onM
     `;
 
     const dialog = modal.querySelector('.modal-dialog');
-    const enableMobileSwipeSheet = isCourseInfoMobileViewport() &&
+    const autoEnableMobileSwipeSheet = isCourseInfoMobileViewport() &&
         (modal.classList.contains('review-modal-host') || modal.classList.contains('modal--confirm'));
+    const enableMobileSwipeSheet = typeof mobileSwipe === 'boolean'
+        ? mobileSwipe
+        : autoEnableMobileSwipeSheet;
     const closeDelayMs = enableMobileSwipeSheet ? (SWIPE_CLOSE_DURATION_MS + 20) : 220;
 
     if (enableMobileSwipeSheet && dialog) {
@@ -1689,6 +1887,63 @@ function normalizeCourseTerm(term) {
     if (lowerTerm.includes('spring') || rawTerm.includes('春')) return 'Spring';
 
     return rawTerm;
+}
+
+function hasAnyGpaSignal(course) {
+    if (!course) return false;
+    return (
+        (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
+        (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
+        (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
+        (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
+        (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
+    );
+}
+
+function normalizeProfessorForComparison(name) {
+    return String(name || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+export function isCourseGpaAlignedWithCurrentProfessor(course) {
+    if (!course) return false;
+
+    const currentProfessor = normalizeProfessorForComparison(course.professor);
+    const gpaSourceProfessor = normalizeProfessorForComparison(course.gpa_professor_source);
+
+    // If GPA source professor is known, require an exact normalized match.
+    if (gpaSourceProfessor) {
+        if (!currentProfessor) return false;
+        return gpaSourceProfessor === currentProfessor;
+    }
+
+    const sourceYearRaw = course.gpa_year_source;
+    const sourceTermRaw = course.gpa_term_source;
+    const hasSourceOfferingContext = (
+        sourceYearRaw !== null && sourceYearRaw !== undefined && String(sourceYearRaw).trim() !== ''
+    ) || (
+        sourceTermRaw !== null && sourceTermRaw !== undefined && String(sourceTermRaw).trim() !== ''
+    );
+
+    // No source context means GPA belongs to the current row; keep behavior unchanged.
+    if (!hasSourceOfferingContext) return true;
+
+    const sourceYear = normalizeCourseYear(sourceYearRaw);
+    const sourceTerm = normalizeCourseTerm(sourceTermRaw);
+    const currentYear = normalizeCourseYear(course.academic_year);
+    const currentTerm = normalizeCourseTerm(course.term);
+
+    const sameYear = String(sourceYear) === String(currentYear);
+    const sameTerm = String(sourceTerm) === String(currentTerm);
+
+    // If source offering differs and source professor is unknown, hide GPA conservatively.
+    if (!sameYear || !sameTerm) {
+        return false;
+    }
+
+    return true;
 }
 
 function getCourseCacheKey(year, term) {
@@ -2338,28 +2593,23 @@ export async function fetchCourseData(year, term, options = {}) {
 async function applyHistoricalGpaFallback(courses) {
     if (!courses || courses.length === 0) return courses;
 
-    // Check if GPA data is present (checking for non-null AND non-zero values)
-    const coursesWithGPA = courses.filter(course => {
-        const hasValidGPA = (
-            (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
-            (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
-            (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
-            (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
-            (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
-        );
-        return hasValidGPA;
+    // Normalize explicit source metadata for rows that already have GPA values.
+    courses.forEach((course) => {
+        if (!hasAnyGpaSignal(course)) return;
+
+        if (course.gpa_year_source === undefined || course.gpa_year_source === null || course.gpa_year_source === '') {
+            course.gpa_year_source = course.academic_year ?? null;
+        }
+        if (course.gpa_term_source === undefined || course.gpa_term_source === null || course.gpa_term_source === '') {
+            course.gpa_term_source = course.term ?? null;
+        }
+        if (course.gpa_professor_source === undefined || course.gpa_professor_source === null || course.gpa_professor_source === '') {
+            course.gpa_professor_source = course.professor ?? null;
+        }
     });
 
-    const coursesWithoutGPA = courses.filter(course => {
-        const hasValidGPA = (
-            (course.gpa_a_percent !== null && course.gpa_a_percent !== 0) ||
-            (course.gpa_b_percent !== null && course.gpa_b_percent !== 0) ||
-            (course.gpa_c_percent !== null && course.gpa_c_percent !== 0) ||
-            (course.gpa_d_percent !== null && course.gpa_d_percent !== 0) ||
-            (course.gpa_f_percent !== null && course.gpa_f_percent !== 0)
-        );
-        return !hasValidGPA;
-    });
+    const coursesWithGPA = courses.filter((course) => hasAnyGpaSignal(course));
+    const coursesWithoutGPA = courses.filter((course) => !hasAnyGpaSignal(course));
 
     if (coursesWithGPA.length > 0) {
         console.log(`Found GPA data for ${coursesWithGPA.length} out of ${courses.length} courses`);
@@ -2382,6 +2632,7 @@ async function applyHistoricalGpaFallback(courses) {
                 course.gpa_f_percent = historicalGpa.gpa_f_percent;
                 course.gpa_year_source = historicalGpa.academic_year; // Track where GPA came from
                 course.gpa_term_source = historicalGpa.term;
+                course.gpa_professor_source = historicalGpa.professor || null;
             }
         });
 
@@ -2517,6 +2768,7 @@ async function fetchHistoricalGpaData(courseCodes) {
                 course_code,
                 academic_year,
                 term,
+                professor,
                 gpa_a_percent,
                 gpa_b_percent,
                 gpa_c_percent,
@@ -2537,6 +2789,29 @@ async function fetchHistoricalGpaData(courseCodes) {
             console.log('No historical GPA data found');
             return {};
         }
+
+        const termRank = (term) => {
+            const normalized = normalizeCourseTerm(term);
+            if (normalized === 'Fall') return 4;
+            if (normalized === 'Summer') return 3;
+            if (normalized === 'Spring') return 2;
+            if (normalized === 'Winter') return 1;
+            return 0;
+        };
+
+        historicalData.sort((a, b) => {
+            const yearA = Number.parseInt(a?.academic_year, 10);
+            const yearB = Number.parseInt(b?.academic_year, 10);
+            const hasYearA = Number.isFinite(yearA);
+            const hasYearB = Number.isFinite(yearB);
+
+            if (hasYearA && hasYearB && yearA !== yearB) return yearB - yearA;
+            if (hasYearA !== hasYearB) return hasYearA ? -1 : 1;
+
+            const rankDiff = termRank(b?.term) - termRank(a?.term);
+            if (rankDiff !== 0) return rankDiff;
+            return String(b?.term || '').localeCompare(String(a?.term || ''));
+        });
 
         // Create a map of course_code to most recent GPA data
         const gpaMap = {};
@@ -2567,8 +2842,60 @@ async function fetchHistoricalGpaData(courseCodes) {
     }
 }
 
-// Cache for professor change data
+// Cache for professor change data.
+// Keyed by course_code + current offering context so each semester is evaluated independently.
 let professorChangeCache = {};
+
+function normalizeProfessorComparisonName(name) {
+    return String(name || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function getNormalizedTermSortRank(term) {
+    const normalized = normalizeCourseTerm(term);
+    if (normalized === 'Fall') return 4;
+    if (normalized === 'Summer') return 3;
+    if (normalized === 'Spring') return 2;
+    if (normalized === 'Winter') return 1;
+    return 0;
+}
+
+function compareOfferingsDesc(a, b) {
+    const yearA = Number.parseInt(a?.academic_year, 10);
+    const yearB = Number.parseInt(b?.academic_year, 10);
+    const hasYearA = Number.isFinite(yearA);
+    const hasYearB = Number.isFinite(yearB);
+
+    if (hasYearA && hasYearB && yearA !== yearB) {
+        return yearB - yearA;
+    }
+    if (hasYearA !== hasYearB) {
+        return hasYearA ? -1 : 1;
+    }
+
+    const termRankDiff = getNormalizedTermSortRank(b?.term) - getNormalizedTermSortRank(a?.term);
+    if (termRankDiff !== 0) return termRankDiff;
+
+    const termA = String(normalizeCourseTerm(a?.term) || '');
+    const termB = String(normalizeCourseTerm(b?.term) || '');
+    if (termA !== termB) return termB.localeCompare(termA);
+
+    const normalizedYearA = String(normalizeCourseYear(a?.academic_year) ?? '');
+    const normalizedYearB = String(normalizeCourseYear(b?.academic_year) ?? '');
+    return normalizedYearB.localeCompare(normalizedYearA);
+}
+
+function buildProfessorChangeCacheKey(courseCode, context = null) {
+    const normalizedCode = String(courseCode || '').trim();
+    const normalizedYear = context?.academic_year != null ? String(normalizeCourseYear(context.academic_year)) : '*';
+    const normalizedTerm = context?.term ? String(normalizeCourseTerm(context.term)) : '*';
+    const normalizedProfessor = context?.professor
+        ? normalizeProfessorComparisonName(context.professor)
+        : '*';
+    return `${normalizedCode}::${normalizedYear}::${normalizedTerm}::${normalizedProfessor || '*'}`;
+}
 
 // Function to clear professor change cache (call when semester changes)
 export function clearProfessorChangeCache() {
@@ -2576,102 +2903,173 @@ export function clearProfessorChangeCache() {
     console.log('Professor change cache cleared');
 }
 
-// Function to check which courses have professor changes across semesters
-// Returns a Set of course_codes that have had professor changes
-export async function fetchProfessorChanges(courseCodes) {
+// Determine whether each current course has a different professor compared to
+// the immediately previous offering of that same course code.
+// Returns a Set of changed course codes.
+export async function fetchProfessorChanges(courseCodes, options = {}) {
     if (!courseCodes || courseCodes.length === 0) {
         return new Set();
     }
 
-    // Check cache first - filter out already cached course codes
-    const uncachedCodes = courseCodes.filter(code => !(code in professorChangeCache));
+    const normalizedCodes = Array.from(new Set(
+        courseCodes
+            .map((code) => String(code || '').trim())
+            .filter(Boolean)
+    ));
+    if (normalizedCodes.length === 0) return new Set();
 
-    if (uncachedCodes.length === 0) {
-        // All codes are cached, build result from cache
-        const changedCourses = new Set();
-        courseCodes.forEach(code => {
-            if (professorChangeCache[code] === true) {
-                changedCourses.add(code);
-            }
+    const currentCourses = Array.isArray(options?.currentCourses) ? options.currentCourses : [];
+    const currentContextByCode = new Map();
+
+    currentCourses.forEach((course) => {
+        const code = String(course?.course_code || '').trim();
+        if (!code || currentContextByCode.has(code)) return;
+        currentContextByCode.set(code, {
+            academic_year: course?.academic_year ?? options?.currentYear ?? null,
+            term: course?.term ?? options?.currentTerm ?? null,
+            professor: course?.professor ?? null
         });
-        return changedCourses;
-    }
+    });
 
-    try {
-        console.log(`Checking professor changes for ${uncachedCodes.length} courses...`);
-
-        // Fetch all instances of these courses across all semesters
-        const { data: courseHistory, error } = await supabase
-            .from('courses')
-            .select('course_code, professor, academic_year, term')
-            .in('course_code', uncachedCodes)
-            .order('academic_year', { ascending: false })
-            .order('term', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching professor history:', error);
-            return new Set();
-        }
-
-        if (!courseHistory || courseHistory.length === 0) {
-            // No history found, cache as no change
-            uncachedCodes.forEach(code => {
-                professorChangeCache[code] = false;
+    // If explicit year/term context was provided but no full course objects were,
+    // still scope the cache key by that offering.
+    if (currentContextByCode.size === 0 && (options?.currentYear != null || options?.currentTerm != null)) {
+        normalizedCodes.forEach((code) => {
+            currentContextByCode.set(code, {
+                academic_year: options?.currentYear ?? null,
+                term: options?.currentTerm ?? null,
+                professor: null
             });
+        });
+    }
+
+    const cacheKeyByCode = new Map();
+    normalizedCodes.forEach((code) => {
+        const context = currentContextByCode.get(code) || null;
+        cacheKeyByCode.set(code, buildProfessorChangeCacheKey(code, context));
+    });
+
+    const uncachedCodes = normalizedCodes.filter((code) => {
+        const cacheKey = cacheKeyByCode.get(code);
+        return !(cacheKey in professorChangeCache);
+    });
+
+    if (uncachedCodes.length > 0) {
+        try {
+            console.log(`Checking professor changes for ${uncachedCodes.length} courses...`);
+
+            const { data: courseHistory, error } = await supabase
+                .from('courses')
+                .select('course_code, professor, academic_year, term')
+                .in('course_code', uncachedCodes);
+
+            if (error) {
+                console.error('Error fetching professor history:', error);
+                return new Set();
+            }
+
+            const coursesByCode = {};
+            (courseHistory || []).forEach((course) => {
+                const code = String(course?.course_code || '').trim();
+                if (!code) return;
+                if (!coursesByCode[code]) coursesByCode[code] = [];
+                coursesByCode[code].push(course);
+            });
+
+            uncachedCodes.forEach((code) => {
+                const context = currentContextByCode.get(code) || null;
+                const cacheKey = cacheKeyByCode.get(code);
+                const instances = Array.isArray(coursesByCode[code]) ? coursesByCode[code].slice() : [];
+
+                if (instances.length <= 1) {
+                    professorChangeCache[cacheKey] = false;
+                    return;
+                }
+
+                instances.sort(compareOfferingsDesc);
+
+                const offeringsByKey = new Map();
+                instances.forEach((instance) => {
+                    const offeringYear = normalizeCourseYear(instance?.academic_year);
+                    const offeringTerm = normalizeCourseTerm(instance?.term);
+                    const offeringKey = `${offeringYear}::${offeringTerm}`;
+                    if (!offeringsByKey.has(offeringKey)) {
+                        offeringsByKey.set(offeringKey, {
+                            academic_year: offeringYear,
+                            term: offeringTerm,
+                            professors: new Set()
+                        });
+                    }
+                    const professorName = normalizeProfessorComparisonName(instance?.professor);
+                    if (professorName) {
+                        offeringsByKey.get(offeringKey).professors.add(professorName);
+                    }
+                });
+
+                const offerings = Array.from(offeringsByKey.values()).sort(compareOfferingsDesc);
+                if (offerings.length <= 1) {
+                    professorChangeCache[cacheKey] = false;
+                    return;
+                }
+
+                let currentOfferingIndex = 0;
+                if (context?.academic_year != null && context?.term != null) {
+                    const targetYear = normalizeCourseYear(context.academic_year);
+                    const targetTerm = normalizeCourseTerm(context.term);
+                    const matchedIndex = offerings.findIndex((offering) => (
+                        String(normalizeCourseYear(offering.academic_year)) === String(targetYear)
+                        && String(normalizeCourseTerm(offering.term)) === String(targetTerm)
+                    ));
+                    if (matchedIndex >= 0) {
+                        currentOfferingIndex = matchedIndex;
+                    }
+                }
+
+                const currentOffering = offerings[currentOfferingIndex];
+                const previousOffering = offerings
+                    .slice(currentOfferingIndex + 1)
+                    .find((offering) => offering.professors.size > 0) || null;
+
+                if (!currentOffering || !previousOffering) {
+                    professorChangeCache[cacheKey] = false;
+                    return;
+                }
+
+                const contextProfessor = normalizeProfessorComparisonName(context?.professor);
+                let hasProfessorChanged = false;
+
+                if (contextProfessor) {
+                    hasProfessorChanged = !previousOffering.professors.has(contextProfessor);
+                } else if (currentOffering.professors.size > 0) {
+                    // Fallback when no explicit current professor was provided.
+                    hasProfessorChanged = Array.from(currentOffering.professors)
+                        .every((name) => !previousOffering.professors.has(name));
+                }
+
+                professorChangeCache[cacheKey] = hasProfessorChanged;
+                if (hasProfessorChanged) {
+                    console.log(`Professor change detected for ${code}:`, {
+                        currentOffering,
+                        previousOffering
+                    });
+                }
+            });
+        } catch (error) {
+            console.error('Error checking professor changes:', error);
             return new Set();
         }
-
-        // Group courses by course_code
-        const coursesByCode = {};
-        courseHistory.forEach(course => {
-            if (!coursesByCode[course.course_code]) {
-                coursesByCode[course.course_code] = [];
-            }
-            coursesByCode[course.course_code].push(course);
-        });
-
-        // Check each course code for professor changes
-        const changedCourses = new Set();
-
-        Object.entries(coursesByCode).forEach(([code, instances]) => {
-            if (instances.length <= 1) {
-                // Only one instance, no change possible
-                professorChangeCache[code] = false;
-                return;
-            }
-
-            // Get unique professors for this course (normalize for comparison)
-            const professors = new Set(
-                instances
-                    .map(i => i.professor)
-                    .filter(p => p && p.trim() !== '')
-                    .map(p => p.trim().toLowerCase())
-            );
-
-            // If there's more than one unique professor, mark as changed
-            if (professors.size > 1) {
-                changedCourses.add(code);
-                professorChangeCache[code] = true;
-                console.log(`Professor change detected for ${code}:`, [...professors]);
-            } else {
-                professorChangeCache[code] = false;
-            }
-        });
-
-        // Cache any codes that weren't found as no change
-        uncachedCodes.forEach(code => {
-            if (!(code in professorChangeCache)) {
-                professorChangeCache[code] = false;
-            }
-        });
-
-        console.log(`Found ${changedCourses.size} courses with professor changes`);
-        return changedCourses;
-
-    } catch (error) {
-        console.error('Error checking professor changes:', error);
-        return new Set();
     }
+
+    const changedCourses = new Set();
+    normalizedCodes.forEach((code) => {
+        const cacheKey = cacheKeyByCode.get(code);
+        if (professorChangeCache[cacheKey] === true) {
+            changedCourses.add(code);
+        }
+    });
+
+    console.log(`Found ${changedCourses.size} courses with professor changes`);
+    return changedCourses;
 }
 
 export async function openCourseInfoMenu(course, updateURL = true, options = {}) {
@@ -2681,6 +3079,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const requestedInitialTab = normalizeCourseInfoTab(options?.initialTab || readStoredCourseInfoTab());
     const shouldFocusAssessment = options?.focusAssessment === true;
     const isMobileCourseInfo = isCourseInfoMobileViewport();
+    const requestedCourseTitle = getCourseDisplayTitle(course) || 'Course';
+    const modalSheetHeaderTitle = 'Course Info';
 
     // Function to properly format time slots from Japanese to English
     function formatTimeSlot(timeSlot) {
@@ -2769,7 +3169,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const courseInfoActions = document.getElementById("course-info-actions");
     const courseInfoPeek = document.getElementById("course-info-peek");
     const classClose = document.getElementById("class-close");
-    const isStaleRequest = () => requestVersion !== courseInfoOpenRequestVersion;
+    const initialAppPath = getCurrentAppPath();
+    const isDedicatedCoursePageRequest = options.presentation === 'page' ||
+        (document.body.classList.contains('course-page-mode') && /^\/courses?\//.test(initialAppPath));
+    const isStaleRequest = () => {
+        if (requestVersion !== courseInfoOpenRequestVersion) return true;
+        if (!isDedicatedCoursePageRequest) return false;
+
+        const currentAppPath = getCurrentAppPath();
+        const isStillDedicatedRoute =
+            /^\/courses?\//.test(currentAppPath) &&
+            document.body.classList.contains('course-page-mode');
+        return !isStillDedicatedRoute || currentAppPath !== initialAppPath;
+    };
 
     if (!classInfo || !classClose || !courseInfoBody || !courseInfoContentRoot || !courseInfoActions || !courseInfoPeek) {
         console.error("Could not find the class info menu elements in the HTML.");
@@ -2796,6 +3208,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         return;
     }
 
+    classInfo._activeCourseInfoCourse = { ...course };
     classInfo.dataset.courseInfoRequestVersion = String(requestVersion);
     classInfo.classList.add('courseinfo-sheet');
     classInfo.setAttribute('role', 'dialog');
@@ -2839,15 +3252,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     resetSwipeHandlers(classInfo, '_classInfoSwipeHandlers');
     classInfo._classInfoSwipeHandlers = null;
 
-    const isDedicatedCoursePage = options.presentation === 'page' ||
-        (document.body.classList.contains('course-page-mode') && /^\/courses?\//.test(getCurrentAppPath()));
+    const isDedicatedCoursePage = isDedicatedCoursePageRequest;
 
     const modalReturnPath = !isDedicatedCoursePage ? rememberCourseModalReturnPath(getCurrentAppPath(), classInfo) : null;
 
     if (isDedicatedCoursePage) {
-        CourseInfoPage(classInfo, { headerTitle: 'Class Info' });
+        CourseInfoPage(classInfo, { headerTitle: requestedCourseTitle });
     } else {
-        CourseInfoSheet(classInfo, { headerTitle: 'Class Info' });
+        CourseInfoSheet(classInfo, { headerTitle: modalSheetHeaderTitle });
     }
 
     const releaseCourseInfoFocusTrap = () => {
@@ -2869,6 +3281,79 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             classInfo._courseInfoExternalModalWatchCleanup();
             classInfo._courseInfoExternalModalWatchCleanup = null;
         }
+    };
+
+    const releaseCourseInfoHeaderTagsCollapse = () => {
+        if (typeof classInfo._courseInfoHeaderTagsCollapseCleanup === 'function') {
+            classInfo._courseInfoHeaderTagsCollapseCleanup();
+            classInfo._courseInfoHeaderTagsCollapseCleanup = null;
+        }
+        classInfo.classList.remove('courseinfo-header-tags-collapsed');
+    };
+
+    const setupCourseInfoHeaderTagsCollapse = () => {
+        releaseCourseInfoHeaderTagsCollapse();
+
+        if (!isCourseInfoMobileViewport()) return;
+
+        const tagsWrap = classInfo.querySelector('[data-courseinfo-header-tags]');
+        const scrollHost = classInfo.querySelector('.sheet-body')
+            || classInfo.querySelector('.courseinfo-body')
+            || classInfo.querySelector('.class-content-wrapper');
+
+        if (!tagsWrap || !scrollHost) return;
+
+        let collapsed = false;
+        let rafId = 0;
+        let stateObserver = null;
+
+        const applyState = () => {
+            rafId = 0;
+            const top = Number(scrollHost.scrollTop) || 0;
+            const sheetState = String(
+                classInfo.dataset.sheetState
+                || classInfo._courseInfoSheetController?.getState?.()
+                || ''
+            );
+            const canCollapse = sheetState === 'full';
+            const nextCollapsed = canCollapse ? (collapsed ? top > 4 : top > 12) : false;
+            if (nextCollapsed === collapsed) return;
+            collapsed = nextCollapsed;
+            classInfo.classList.toggle('courseinfo-header-tags-collapsed', collapsed);
+        };
+
+        const onScroll = () => {
+            if (rafId) return;
+            rafId = window.requestAnimationFrame(applyState);
+        };
+
+        scrollHost.addEventListener('scroll', onScroll, { passive: true });
+
+        if (typeof MutationObserver === 'function') {
+            stateObserver = new MutationObserver(() => {
+                if (rafId) return;
+                rafId = window.requestAnimationFrame(applyState);
+            });
+            stateObserver.observe(classInfo, {
+                attributes: true,
+                attributeFilter: ['data-sheet-state']
+            });
+        }
+
+        applyState();
+
+        classInfo._courseInfoHeaderTagsCollapseCleanup = () => {
+            scrollHost.removeEventListener('scroll', onScroll);
+            if (stateObserver) {
+                stateObserver.disconnect();
+                stateObserver = null;
+            }
+            if (rafId) {
+                window.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            classInfo.classList.remove('courseinfo-header-tags-collapsed');
+        };
     };
 
     const releaseCourseEvalOverviewInteractions = () => {
@@ -2914,6 +3399,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             releaseCourseInfoFocusTrap();
             releaseCourseInfoResizeObserver();
             releaseCourseInfoExternalModalWatch();
+            releaseCourseInfoHeaderTagsCollapse();
             releaseCourseEvalOverviewInteractions();
             releaseCourseAssessmentAccordionInteractions();
             cleanupActiveCourseInfoTabController();
@@ -2922,6 +3408,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 activeBackground.parentNode.removeChild(activeBackground);
             }
             classInfoBackground = null;
+            classInfo._activeCourseInfoCourse = null;
         };
 
         if (immediate) {
@@ -3027,11 +3514,12 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
     // Check if course is already selected by user (for time slot background color)
     let isAlreadySelected = false;
-    let savedCoursesList = readSavedCourses(Number.POSITIVE_INFINITY);
-    let isSavedForLater = isCourseSaved(course, savedCoursesList);
+    let savedCoursesList = [];
+    let isSavedForLater = false;
     const { data: { session } } = await supabase.auth.getSession();
     if (isStaleRequest()) return;
     if (session) {
+        savedCoursesList = readSavedCourses(Number.POSITIVE_INFINITY);
         const { data: profileData } = await supabase
             .from('profiles')
             .select('courses_selection, saved_courses')
@@ -3058,14 +3546,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             isSavedForLater = isCourseSaved(course, savedCoursesList);
         }
     }
-    const canModifyCourseSelection = typeof isCurrentSemester === 'function' ? isCurrentSemester() : true;
-
     // Reference to the exported checkTimeConflict function defined later in the file
     const checkTimeConflictForModal = async (timeSlot, courseCode, academicYear) => {
         // This will reference the exported function defined at the bottom of the file
         return await window.checkTimeConflictExported(timeSlot, courseCode, academicYear);
     };
     let updateFooterActionLayout = () => { };
+    let syncRegistrationStatusBadge = () => { };
 
     function applyClassInfoCourseActionButtonState(button, state) {
         if (!button) return;
@@ -3077,7 +3564,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         button.style.cursor = '';
 
         if (state === 'locked') {
-            button.textContent = "Semester Ended";
+            button.textContent = "Registration Closed";
             button.classList.add('is-locked');
             button.disabled = true;
             button.style.cursor = "not-allowed";
@@ -3116,11 +3603,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             isAlreadySelected = isCurrentlySelected;
             updateFooterActionLayout(isCurrentlySelected);
 
-            if (isCurrentlySelected) {
+            if (!isCurrentSemester()) {
+                applyClassInfoCourseActionButtonState(button, 'locked');
+            } else if (isCurrentlySelected) {
                 applyClassInfoCourseActionButtonState(button, 'remove');
             } else {
                 applyClassInfoCourseActionButtonState(button, 'add');
             }
+            syncRegistrationStatusBadge();
         } catch (error) {
             console.error('Error updating course button state:', error);
         }
@@ -3141,7 +3631,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }] : []),
         ...(isMobileCourseInfo
             ? (isSavedForLater ? [{ label: 'Saved', variant: 'success', role: 'saved-status' }] : [])
-            : ((session || isSavedForLater) ? [{
+            : (session ? [{
                 label: isSavedForLater ? 'Saved' : 'Not saved',
                 variant: isSavedForLater ? 'success' : 'muted',
                 role: 'saved-status'
@@ -3149,9 +3639,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         ...(formatCourseCreditsLabel(course.credits) ? [{ label: formatCourseCreditsLabel(course.credits), variant: 'default' }] : []),
         { label: courseType, variant: 'default', dotColor: courseColor }
     ];
+    const resolvedCourseTitle = getCourseDisplayTitle(course) || 'Course';
     const courseInfoModel = {
-        headerTitle: 'Class Info',
-        title: normalizeCourseTitle(course.title) || course.course_code || 'Course',
+        headerTitle: isDedicatedCoursePage ? resolvedCourseTitle : modalSheetHeaderTitle,
+        title: resolvedCourseTitle,
         titleDotColor: courseColor,
         subline: heroSubline,
         badges: visibleBadges,
@@ -3188,6 +3679,26 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const classGPA = courseInfoContentRoot.querySelector("#class-gpa-graph");
     const classReview = courseInfoContentRoot.querySelector("#class-review");
     const classAssignments = courseInfoContentRoot.querySelector("#class-assignments");
+    const resetCourseInfoBodyScroll = () => {
+        const bodyScroller = classInfo.querySelector('.sheet-body')
+            || classInfo.querySelector('.courseinfo-body')
+            || classInfo.querySelector('.class-content-wrapper');
+
+        if (bodyScroller) {
+            bodyScroller.scrollTop = 0;
+        }
+
+        if (courseInfoBody) {
+            courseInfoBody.scrollTop = 0;
+        }
+
+        if (courseInfoContentRoot) {
+            courseInfoContentRoot.scrollTop = 0;
+            courseInfoContentRoot.querySelectorAll('.course-info-tab-panel').forEach((panel) => {
+                panel.scrollTop = 0;
+            });
+        }
+    };
     let guestAssignmentsModalOverlayEnabled = false;
     let syncGuestAssignmentsModalOverlayForTab = () => {
         classInfo.classList.remove('courseinfo-guest-assignments-preview');
@@ -3214,6 +3725,27 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         window.setTimeout(() => target.classList.remove('is-targeted'), 1200);
     };
+
+    syncRegistrationStatusBadge = () => {
+        const badgesWrap = classContent.querySelector('.ds-badges') || classInfo.querySelector('[data-courseinfo-header-tags]');
+        if (!badgesWrap) return;
+
+        let registrationBadge = badgesWrap.querySelector('[data-badge-role="registration-status"]');
+        if (!session) {
+            registrationBadge?.remove();
+            return;
+        }
+
+        if (!registrationBadge) {
+            registrationBadge = document.createElement('span');
+            registrationBadge.dataset.badgeRole = 'registration-status';
+            badgesWrap.insertBefore(registrationBadge, badgesWrap.firstChild || null);
+        }
+
+        registrationBadge.className = `ds-badge ${isAlreadySelected ? 'ds-badge--success' : 'ds-badge--muted'}`;
+        registrationBadge.textContent = isAlreadySelected ? 'Registered' : 'Not registered';
+    };
+    syncRegistrationStatusBadge();
 
     const syncSavedStatusBadge = () => {
         const badgesWrap = classContent.querySelector('.ds-badges') || classInfo.querySelector('[data-courseinfo-header-tags]');
@@ -3288,13 +3820,18 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     let hasProfessorChanged = false;
     if (course.course_code) {
         try {
-            const professorChanges = await fetchProfessorChanges([course.course_code]);
+            const professorChanges = await fetchProfessorChanges([course.course_code], {
+                currentCourses: [course],
+                currentYear: course?.academic_year ?? null,
+                currentTerm: course?.term ?? null
+            });
             if (isStaleRequest()) return;
             hasProfessorChanged = professorChanges.has(course.course_code);
         } catch (error) {
             console.warn('Could not check professor changes:', error);
         }
     }
+    const isGpaProfessorAligned = isCourseGpaAlignedWithCurrentProfessor(course);
 
     console.log('Course GPA data check:', {
         courseCode: course.course_code,
@@ -3304,11 +3841,16 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         gpa_d_percent: course.gpa_d_percent,
         gpa_f_percent: course.gpa_f_percent,
         hasValidGpaData,
-        hasProfessorChanged
+        hasProfessorChanged,
+        isGpaProfessorAligned,
+        gpa_professor_source: course.gpa_professor_source,
+        gpa_year_source: course.gpa_year_source,
+        gpa_term_source: course.gpa_term_source
     });
 
-    // Show GPA only if we have valid data AND professor hasn't changed
-    if (hasValidGpaData && !hasProfessorChanged) {
+    // Show GPA only if we have valid data, previous-offering professor compatibility,
+    // and the GPA source professor matches the current professor.
+    if (hasValidGpaData && !hasProfessorChanged && isGpaProfessorAligned) {
         const clampGpaPercent = (value) => {
             const parsed = Number.parseFloat(value);
             if (!Number.isFinite(parsed)) return 0;
@@ -3344,7 +3886,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         `;
     } else {
         // If no valid GPA data or professor has changed, ensure the element stays hidden
-        const reason = hasProfessorChanged ? 'new professor (previous GPA not applicable)' : 'no valid GPA data';
+        const reason = hasProfessorChanged
+            ? 'new professor compared to previous offering (previous GPA not applicable)'
+            : (!isGpaProfessorAligned
+                ? 'latest available GPA source belongs to a different professor'
+                : 'no valid GPA data');
         console.log(`GPA hidden for course ${course.course_code}: ${reason}`);
     }
 
@@ -3788,7 +4334,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         });
     };
 
-    classReview.classList.add('ds-card');
+    if (isDedicatedCoursePage) {
+        classReview.classList.remove('ds-card');
+    } else {
+        classReview.classList.add('ds-card');
+    }
     if (!isMobileCourseInfo) {
         const desktopReviewCtaLabel = userReview ? 'Edit Review' : 'Write Review';
         const desktopReviewCtaIcon = '<span class="pill-icon pill-icon--edit" aria-hidden="true"></span>';
@@ -4218,7 +4768,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     // Load and display assignments for this course
     if (classAssignments) {
         classInfo.classList.remove('courseinfo-guest-assignments-preview');
-        classAssignments.classList.add('ds-card');
+        if (isDedicatedCoursePage) {
+            classAssignments.classList.remove('ds-card');
+        } else {
+            classAssignments.classList.add('ds-card');
+        }
         const setGuestAssignmentsModalOverlay = (enabled) => {
             guestAssignmentsModalOverlayEnabled = !!enabled;
             syncGuestAssignmentsModalOverlayForTab();
@@ -4254,6 +4808,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             }
             releaseCourseInfoFocusTrap();
             releaseCourseInfoResizeObserver();
+            releaseCourseInfoHeaderTagsCollapse();
             cleanupActiveCourseInfoTabController();
             if (classInfoBackground?.parentNode) {
                 classInfoBackground.parentNode.removeChild(classInfoBackground);
@@ -4656,18 +5211,309 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         `;
         courseInfoBody.insertBefore(tabsWrap, courseInfoContentRoot);
 
+        let tabPanelsViewport = courseInfoBody.querySelector('.course-info-tab-panels-viewport');
+        if (!tabPanelsViewport) {
+            tabPanelsViewport = document.createElement('div');
+            tabPanelsViewport.className = 'course-info-tab-panels-viewport';
+            courseInfoBody.insertBefore(tabPanelsViewport, courseInfoContentRoot);
+        }
+        if (courseInfoContentRoot.parentNode !== tabPanelsViewport) {
+            tabPanelsViewport.appendChild(courseInfoContentRoot);
+        }
+        courseInfoContentRoot.classList.add('course-info-tab-panels-active');
+        tabPanelsViewport.querySelectorAll('.course-info-tab-panel-swipe-preview').forEach((node) => node.remove());
+
+        const tabOrder = ['overview', 'assignments', 'reviews'];
+        tabsWrap.style.setProperty('--tab-count', String(tabOrder.length));
         const panelMap = new Map([
             ['overview', overviewPanel],
             ['assignments', assignmentsPanel],
             ['reviews', reviewsPanel]
         ]);
+        if (isDedicatedCoursePage) {
+            tabsWrap.classList.add('course-info-mobile-tabs--dedicated');
+            tabPanelsViewport.classList.add('course-info-tab-panels-viewport--dedicated');
+            courseInfoContentRoot.classList.add('course-info-tab-panels-active--dedicated');
+            panelMap.forEach((panelEl) => {
+                panelEl.classList.add('course-info-tab-panel--dedicated');
+            });
+        }
         const tabsBodyScroller = classInfo.querySelector('.sheet-body') || classInfo.querySelector('.class-content-wrapper');
+        const tabBodySurface = classInfo.querySelector('.courseinfo-body') || tabsBodyScroller || tabPanelsViewport;
         let activeTab = requestedInitialTab;
+        const shouldMeasureTabViewport = !isDedicatedCoursePage;
+        const tabSwipePanelGap = isDedicatedCoursePage ? 15 : 0;
+
+        let tabSwipePreview = null;
+        let tabSwipePreviewTab = null;
+        let tabSwipeDirection = 0;
+        let tabSwipeSettleTimer = null;
+        let tabSwipeAnimating = false;
+        let tabTouchInProgress = false;
+        let tabTouchIgnoreSwipe = false;
+        let tabTouchAxisLock = null;
+        let tabTouchStartX = 0;
+        let tabTouchStartY = 0;
+        let tabTouchStartTime = 0;
+        let tabPointerId = null;
+        let tabPointerInProgress = false;
+        let tabPointerIgnoreSwipe = false;
+        let tabPointerAxisLock = null;
+        let tabPointerStartX = 0;
+        let tabPointerStartY = 0;
+        let tabPointerStartTime = 0;
+        let tabPointerCaptured = false;
+        let tabViewportResizeObserver = null;
+
+        const isTabSwipeEnabled = () => {
+            const state = String(classInfo.dataset.sheetState || '').trim();
+            return !state || state === 'full';
+        };
+
+        const getTabIndex = (tabKey) => {
+            const normalized = normalizeCourseInfoTab(tabKey);
+            const index = tabOrder.indexOf(normalized);
+            return index < 0 ? 0 : index;
+        };
+
+        const getTabViewportWidth = () => {
+            if (!tabPanelsViewport && !courseInfoContentRoot) return 0;
+            const rectWidth = tabPanelsViewport?.getBoundingClientRect?.().width
+                || courseInfoContentRoot?.getBoundingClientRect?.().width
+                || 0;
+            if (rectWidth > 0) return rectWidth;
+            return tabPanelsViewport?.clientWidth || courseInfoContentRoot?.clientWidth || 0;
+        };
+
+        const measureTabPanelHeight = (panelEl) => {
+            if (!panelEl) return 0;
+            const rectHeight = panelEl.getBoundingClientRect?.().height || 0;
+            const scrollHeight = panelEl.scrollHeight || 0;
+            return Math.max(rectHeight, scrollHeight);
+        };
+
+        const updateDedicatedTabViewportMinHeight = (previewPanelEl = null) => {
+            if (!isDedicatedCoursePage || !tabPanelsViewport) return;
+            const activePanelHeight = measureTabPanelHeight(panelMap.get(activeTab));
+            const previewPanelHeight = measureTabPanelHeight(previewPanelEl);
+            const nextMinHeight = Math.max(activePanelHeight, previewPanelHeight, 0);
+            if (nextMinHeight <= 0) {
+                tabPanelsViewport.style.removeProperty('--course-info-tab-panels-min-height');
+                return;
+            }
+            const nextMinHeightValue = `${Math.round(nextMinHeight)}px`;
+            if (tabPanelsViewport.style.getPropertyValue('--course-info-tab-panels-min-height') === nextMinHeightValue) {
+                return;
+            }
+            tabPanelsViewport.style.setProperty('--course-info-tab-panels-min-height', nextMinHeightValue);
+        };
+
+        const updateTabPanelsViewportMinHeight = () => {
+            if (!tabPanelsViewport || !tabBodySurface || !tabsWrap) return;
+            if (!shouldMeasureTabViewport) {
+                updateDedicatedTabViewportMinHeight();
+                return;
+            }
+            const surfaceHeight = tabBodySurface.clientHeight
+                || tabBodySurface.getBoundingClientRect?.().height
+                || 0;
+            const tabsHeight = tabsWrap.getBoundingClientRect?.().height
+                || tabsWrap.offsetHeight
+                || 0;
+            const nextMinHeight = Math.max(0, Math.round(surfaceHeight - tabsHeight));
+            const nextMinHeightValue = `${nextMinHeight}px`;
+            if (tabPanelsViewport.style.getPropertyValue('--course-info-tab-panels-min-height') === nextMinHeightValue) {
+                return;
+            }
+            tabPanelsViewport.style.setProperty('--course-info-tab-panels-min-height', nextMinHeightValue);
+        };
+
+        const getSwipeTargetTab = (direction) => {
+            const nextIndex = getTabIndex(activeTab) + direction;
+            if (nextIndex < 0 || nextIndex >= tabOrder.length) return null;
+            return tabOrder[nextIndex] || null;
+        };
+
+        const clearTabSwipeSettleTimer = () => {
+            if (!tabSwipeSettleTimer) return;
+            clearTimeout(tabSwipeSettleTimer);
+            tabSwipeSettleTimer = null;
+        };
+
+        const cleanupTabSwipePreview = () => {
+            if (tabSwipePreview?.parentElement) {
+                tabSwipePreview.remove();
+            }
+            tabSwipePreview = null;
+            tabSwipePreviewTab = null;
+            tabSwipeDirection = 0;
+        };
+
+        const resetTabSwipeTransforms = ({ instant = false } = {}) => {
+            if (!courseInfoContentRoot) return;
+            if (instant) {
+                courseInfoContentRoot.classList.add('is-swipe-dragging');
+            }
+            courseInfoContentRoot.classList.remove('is-swipe-settling');
+            if (!instant) {
+                courseInfoContentRoot.classList.remove('is-swipe-dragging');
+            }
+            courseInfoContentRoot.style.transform = '';
+            courseInfoContentRoot.style.opacity = '';
+            if (tabSwipePreview) {
+                if (instant) {
+                    tabSwipePreview.classList.add('is-swipe-dragging');
+                }
+                tabSwipePreview.classList.remove('is-swipe-settling');
+                if (!instant) {
+                    tabSwipePreview.classList.remove('is-swipe-dragging');
+                }
+                tabSwipePreview.style.transform = '';
+                tabSwipePreview.style.opacity = '';
+            }
+            if (instant) {
+                void courseInfoContentRoot.offsetWidth;
+                courseInfoContentRoot.classList.remove('is-swipe-dragging');
+                tabSwipePreview?.classList.remove('is-swipe-dragging');
+            }
+        };
+
+        const createSwipePreviewFromPanel = (panelEl) => {
+            if (!panelEl) return null;
+            const preview = panelEl.cloneNode(true);
+            preview.classList.add('course-info-tab-panel-swipe-preview');
+            preview.removeAttribute('hidden');
+            preview.hidden = false;
+            preview.setAttribute('aria-hidden', 'true');
+            const viewportWidth = getTabViewportWidth();
+            if (viewportWidth > 0) {
+                preview.style.width = `${viewportWidth}px`;
+                preview.style.minWidth = `${viewportWidth}px`;
+            }
+            return preview;
+        };
+
+        const ensureTabSwipePreview = (targetTab, direction) => {
+            if (!tabPanelsViewport || !courseInfoContentRoot) return null;
+            if (!targetTab) {
+                cleanupTabSwipePreview();
+                return null;
+            }
+            if (tabSwipePreview && tabSwipePreviewTab === targetTab && tabSwipeDirection === direction) {
+                return tabSwipePreview;
+            }
+
+            cleanupTabSwipePreview();
+            const sourcePanel = panelMap.get(targetTab);
+            if (!sourcePanel) return null;
+
+            const preview = createSwipePreviewFromPanel(sourcePanel);
+            if (!preview) return null;
+
+            tabPanelsViewport.appendChild(preview);
+            tabSwipePreview = preview;
+            tabSwipePreviewTab = targetTab;
+            tabSwipeDirection = direction;
+            return preview;
+        };
+
+        const applyTabSwipeDrag = (deltaX) => {
+            if (!courseInfoContentRoot || !tabPanelsViewport) return;
+            const width = getTabViewportWidth() || 1;
+            if (width <= 0) return;
+
+            const direction = deltaX < 0 ? 1 : -1;
+            const targetTab = getSwipeTargetTab(direction);
+            const boundedDeltaX = Math.max(-width, Math.min(width, deltaX));
+            const translateX = !targetTab ? boundedDeltaX * 0.32 : boundedDeltaX;
+            const progress = Math.min(Math.abs(translateX) / width, 1);
+
+            courseInfoContentRoot.classList.add('is-swipe-dragging');
+            courseInfoContentRoot.style.transform = `translate3d(${translateX}px, 0, 0)`;
+            courseInfoContentRoot.style.opacity = String(Math.max(0.68, 1 - (progress * 0.32)));
+
+            const preview = ensureTabSwipePreview(targetTab, direction);
+            if (!preview) return;
+
+            preview.classList.add('is-swipe-dragging');
+            const previewBaseX = direction > 0
+                ? width + tabSwipePanelGap
+                : -(width + tabSwipePanelGap);
+            const previewX = previewBaseX + translateX;
+            preview.style.transform = `translate3d(${previewX}px, 0, 0)`;
+            preview.style.opacity = String(Math.min(1, 0.58 + (progress * 0.42)));
+            updateDedicatedTabViewportMinHeight(preview);
+        };
+
+        const settleTabSwipe = ({ targetTab = null, direction = 0, commit = false } = {}) => {
+            if (!courseInfoContentRoot || !tabPanelsViewport) {
+                cleanupTabSwipePreview();
+                return;
+            }
+
+            const width = getTabViewportWidth() || 1;
+            const preview = tabSwipePreview;
+            const validDirection = direction === 1 || direction === -1 ? direction : tabSwipeDirection;
+
+            courseInfoContentRoot.classList.remove('is-swipe-dragging');
+            courseInfoContentRoot.classList.add('is-swipe-settling');
+            if (preview) {
+                preview.classList.remove('is-swipe-dragging');
+                preview.classList.add('is-swipe-settling');
+            }
+
+            if (commit && targetTab) {
+                tabSwipeAnimating = true;
+                const currentTargetX = validDirection > 0
+                    ? -(width + tabSwipePanelGap)
+                    : width + tabSwipePanelGap;
+                courseInfoContentRoot.style.transform = `translate3d(${currentTargetX}px, 0, 0)`;
+                courseInfoContentRoot.style.opacity = '0.72';
+                if (preview) {
+                    preview.style.transform = 'translate3d(0px, 0, 0)';
+                    preview.style.opacity = '1';
+                }
+
+                clearTabSwipeSettleTimer();
+                tabSwipeSettleTimer = window.setTimeout(() => {
+                    tabSwipeSettleTimer = null;
+                    cleanupTabSwipePreview();
+                    switchCourseInfoTab(targetTab, {
+                        persist: true,
+                        scrollTop: true,
+                        preserveSwipeState: true
+                    });
+                    resetTabSwipeTransforms({ instant: true });
+                    tabSwipeAnimating = false;
+                }, 230);
+                return;
+            }
+
+            courseInfoContentRoot.style.transform = 'translate3d(0px, 0, 0)';
+            courseInfoContentRoot.style.opacity = '1';
+            if (preview) {
+                const previewBaseX = validDirection > 0
+                    ? width + tabSwipePanelGap
+                    : -(width + tabSwipePanelGap);
+                preview.style.transform = `translate3d(${previewBaseX}px, 0, 0)`;
+                preview.style.opacity = '0.58';
+            }
+
+            clearTabSwipeSettleTimer();
+            tabSwipeSettleTimer = window.setTimeout(() => {
+                tabSwipeSettleTimer = null;
+                cleanupTabSwipePreview();
+                resetTabSwipeTransforms();
+                updateDedicatedTabViewportMinHeight();
+            }, 220);
+        };
 
         const applyCourseInfoTabState = (nextTab) => {
             const normalizedTab = normalizeCourseInfoTab(nextTab);
             activeTab = normalizedTab;
             classInfo.dataset.activeCourseInfoTab = normalizedTab;
+            tabsWrap.dataset.activeCourseInfoTab = normalizedTab;
+            tabsWrap.style.setProperty('--course-info-tab-index', String(getTabIndex(normalizedTab)));
             syncGuestAssignmentsModalOverlayForTab();
 
             panelMap.forEach((panelEl, tabKey) => {
@@ -4684,8 +5530,17 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             });
         };
 
-        const switchCourseInfoTab = (nextTab, { persist = true, scrollTop = false, focusButton = false } = {}) => {
+        const switchCourseInfoTab = (
+            nextTab,
+            { persist = true, scrollTop = false, focusButton = false, preserveSwipeState = false } = {}
+        ) => {
             const normalizedTab = normalizeCourseInfoTab(nextTab);
+            if (!preserveSwipeState) {
+                clearTabSwipeSettleTimer();
+                cleanupTabSwipePreview();
+                resetTabSwipeTransforms();
+                tabSwipeAnimating = false;
+            }
             applyCourseInfoTabState(normalizedTab);
             if (persist) {
                 writeStoredCourseInfoTab(normalizedTab);
@@ -4693,6 +5548,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             if (scrollTop && tabsBodyScroller) {
                 tabsBodyScroller.scrollTop = 0;
             }
+            updateDedicatedTabViewportMinHeight();
             if (focusButton) {
                 const activeButton = tabsWrap.querySelector(`[data-course-info-tab="${normalizedTab}"]`);
                 activeButton?.focus({ preventScroll: true });
@@ -4709,23 +5565,395 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             });
         });
 
+        tabsWrap.addEventListener('keydown', (event) => {
+            if (event.defaultPrevented) return;
+            const activeIndex = getTabIndex(activeTab);
+            let nextIndex = null;
+
+            if (event.key === 'ArrowRight') {
+                nextIndex = Math.min(tabOrder.length - 1, activeIndex + 1);
+            } else if (event.key === 'ArrowLeft') {
+                nextIndex = Math.max(0, activeIndex - 1);
+            } else if (event.key === 'Home') {
+                nextIndex = 0;
+            } else if (event.key === 'End') {
+                nextIndex = tabOrder.length - 1;
+            }
+
+            if (nextIndex === null) return;
+            event.preventDefault();
+            switchCourseInfoTab(tabOrder[nextIndex], {
+                persist: true,
+                scrollTop: true,
+                focusButton: true
+            });
+        });
+
+        const isHorizontalBadgeScrollTarget = (target) => {
+            const targetEl = target instanceof Element
+                ? target
+                : (target && target.nodeType === Node.TEXT_NODE ? target.parentElement : null);
+            if (!(targetEl instanceof Element)) return false;
+            const scrollRow = targetEl.closest('.course-info-hero-main .ds-badges, .courseinfo-header-tags');
+            return scrollRow instanceof HTMLElement;
+        };
+
+        const handlePanelsTouchStart = (event) => {
+            if (tabSwipeAnimating) return;
+            if (!isTabSwipeEnabled()) return;
+            tabTouchIgnoreSwipe = isHorizontalBadgeScrollTarget(event.target);
+            if (tabTouchIgnoreSwipe) {
+                tabTouchInProgress = false;
+                tabTouchAxisLock = null;
+                return;
+            }
+            const touch = event.touches?.[0];
+            if (!touch) return;
+
+            clearTabSwipeSettleTimer();
+            cleanupTabSwipePreview();
+            resetTabSwipeTransforms();
+            tabTouchStartX = touch.clientX;
+            tabTouchStartY = touch.clientY;
+            tabTouchStartTime = Date.now();
+            tabTouchInProgress = true;
+            tabTouchAxisLock = null;
+        };
+
+        const handlePanelsTouchMove = (event) => {
+            if (tabTouchIgnoreSwipe) return;
+            if (!tabTouchInProgress || tabSwipeAnimating) return;
+            const touch = event.touches?.[0];
+            if (!touch) return;
+
+            const deltaX = touch.clientX - tabTouchStartX;
+            const deltaY = touch.clientY - tabTouchStartY;
+            const absDeltaX = Math.abs(deltaX);
+            const absDeltaY = Math.abs(deltaY);
+
+            if (!tabTouchAxisLock) {
+                if (absDeltaX < 8 && absDeltaY < 8) return;
+                if (absDeltaY > absDeltaX * 1.1) {
+                    tabTouchInProgress = false;
+                    tabTouchAxisLock = 'y';
+                    return;
+                }
+                tabTouchAxisLock = 'x';
+            }
+
+            if (tabTouchAxisLock !== 'x') return;
+            event.preventDefault();
+            applyTabSwipeDrag(deltaX);
+        };
+
+        const handlePanelsTouchCancel = () => {
+            if (tabTouchIgnoreSwipe) {
+                tabTouchIgnoreSwipe = false;
+                return;
+            }
+            if (!tabTouchInProgress) return;
+            tabTouchInProgress = false;
+            if (tabTouchAxisLock === 'x') {
+                settleTabSwipe({ commit: false });
+            }
+            tabTouchAxisLock = null;
+        };
+
+        const handlePanelsTouchEnd = (event) => {
+            if (tabTouchIgnoreSwipe) {
+                tabTouchIgnoreSwipe = false;
+                return;
+            }
+            if (!tabTouchInProgress || tabSwipeAnimating) return;
+            const touch = event.changedTouches?.[0];
+            if (!touch) return;
+
+            const deltaX = touch.clientX - tabTouchStartX;
+            const deltaY = touch.clientY - tabTouchStartY;
+            tabTouchInProgress = false;
+
+            if (tabTouchAxisLock !== 'x') {
+                tabTouchAxisLock = null;
+                return;
+            }
+
+            const width = getTabViewportWidth() || 1;
+            const durationMs = Math.max(1, Date.now() - tabTouchStartTime);
+            const velocityX = deltaX / durationMs;
+            const swipeDirection = deltaX < 0 ? 1 : -1;
+            const targetTab = getSwipeTargetTab(swipeDirection);
+            const shouldCommit = targetTab && (
+                Math.abs(deltaX) >= width * 0.22
+                || Math.abs(velocityX) > 0.42
+            ) && Math.abs(deltaY) < Math.abs(deltaX) * 1.2;
+
+            settleTabSwipe({
+                targetTab: shouldCommit ? targetTab : null,
+                direction: swipeDirection,
+                commit: Boolean(shouldCommit)
+            });
+            tabTouchAxisLock = null;
+        };
+
+        const isPointerTabSwipeTarget = (event) => {
+            if (!event) return false;
+            if (tabSwipeAnimating) return false;
+            if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
+            if (event.button !== undefined && event.button !== 0) return false;
+            if (!isCourseInfoMobileViewport()) return false;
+            if (!isTabSwipeEnabled()) return false;
+
+            const pointerType = String(event.pointerType || '').toLowerCase();
+            if (pointerType && pointerType !== 'mouse' && pointerType !== 'pen') return false;
+            const targetEl = event.target instanceof Element ? event.target : null;
+            if (!targetEl) return false;
+            if (!targetEl.closest('.courseinfo-body, .course-info-mobile-tabs, .course-info-tab-panels-viewport')) return false;
+            if (targetEl.closest('button, a, input, textarea, select, label')) return false;
+            if (isHorizontalBadgeScrollTarget(targetEl)) return false;
+            return true;
+        };
+
+        const handlePanelsPointerDown = (event) => {
+            tabPointerIgnoreSwipe = isHorizontalBadgeScrollTarget(event.target);
+            if (tabPointerIgnoreSwipe) {
+                tabPointerId = event.pointerId;
+                tabPointerCaptured = false;
+                tabPointerInProgress = false;
+                tabPointerAxisLock = null;
+                return;
+            }
+            if (!isPointerTabSwipeTarget(event)) return;
+
+            clearTabSwipeSettleTimer();
+            cleanupTabSwipePreview();
+            resetTabSwipeTransforms();
+            tabPointerId = event.pointerId;
+            tabPointerStartX = event.clientX;
+            tabPointerStartY = event.clientY;
+            tabPointerStartTime = Date.now();
+            tabPointerInProgress = true;
+            tabPointerAxisLock = null;
+            tabPointerCaptured = false;
+        };
+
+        const handlePanelsPointerMove = (event) => {
+            if (tabPointerIgnoreSwipe) return;
+            if (!tabPointerInProgress || tabSwipeAnimating || tabPointerId === null) return;
+            if (event.pointerId !== tabPointerId) return;
+
+            const deltaX = event.clientX - tabPointerStartX;
+            const deltaY = event.clientY - tabPointerStartY;
+            const absDeltaX = Math.abs(deltaX);
+            const absDeltaY = Math.abs(deltaY);
+
+            if (!tabPointerAxisLock) {
+                if (absDeltaX < 8 && absDeltaY < 8) return;
+                if (absDeltaY > absDeltaX * 1.1) {
+                    tabPointerInProgress = false;
+                    tabPointerAxisLock = 'y';
+                    if (tabPointerCaptured) {
+                        try {
+                            if (tabBodySurface?.hasPointerCapture?.(tabPointerId)) {
+                                tabBodySurface.releasePointerCapture(tabPointerId);
+                            }
+                        } catch (_) { }
+                    }
+                    tabPointerCaptured = false;
+                    tabPointerId = null;
+                    return;
+                }
+                tabPointerAxisLock = 'x';
+                if (!tabPointerCaptured) {
+                    try {
+                        tabBodySurface?.setPointerCapture?.(tabPointerId);
+                        tabPointerCaptured = true;
+                    } catch (_) {
+                        tabPointerCaptured = false;
+                    }
+                }
+            }
+
+            if (tabPointerAxisLock !== 'x') return;
+            if (event.cancelable) {
+                event.preventDefault();
+            }
+            applyTabSwipeDrag(deltaX);
+        };
+
+        const handlePanelsPointerCancel = (event) => {
+            if (tabPointerIgnoreSwipe) {
+                if (event.pointerId !== tabPointerId) return;
+                tabPointerIgnoreSwipe = false;
+                tabPointerCaptured = false;
+                tabPointerId = null;
+                tabPointerInProgress = false;
+                tabPointerAxisLock = null;
+                return;
+            }
+            if (!tabPointerInProgress || tabPointerId === null) return;
+            if (event.pointerId !== tabPointerId) return;
+            if (tabPointerAxisLock === 'x') {
+                settleTabSwipe({ commit: false });
+            }
+            if (tabPointerCaptured) {
+                try {
+                    if (tabBodySurface?.hasPointerCapture?.(tabPointerId)) {
+                        tabBodySurface.releasePointerCapture(tabPointerId);
+                    }
+                } catch (_) { }
+            }
+            tabPointerCaptured = false;
+            tabPointerId = null;
+            tabPointerInProgress = false;
+            tabPointerAxisLock = null;
+        };
+
+        const handlePanelsPointerUp = (event) => {
+            if (tabPointerIgnoreSwipe) {
+                if (event.pointerId !== tabPointerId) return;
+                tabPointerIgnoreSwipe = false;
+                tabPointerCaptured = false;
+                tabPointerId = null;
+                tabPointerInProgress = false;
+                tabPointerAxisLock = null;
+                return;
+            }
+            if (!tabPointerInProgress || tabSwipeAnimating || tabPointerId === null) return;
+            if (event.pointerId !== tabPointerId) return;
+
+            const deltaX = event.clientX - tabPointerStartX;
+            const deltaY = event.clientY - tabPointerStartY;
+            tabPointerInProgress = false;
+
+            if (tabPointerCaptured) {
+                try {
+                    if (tabBodySurface?.hasPointerCapture?.(tabPointerId)) {
+                        tabBodySurface.releasePointerCapture(tabPointerId);
+                    }
+                } catch (_) { }
+            }
+            tabPointerCaptured = false;
+            tabPointerId = null;
+
+            if (tabPointerAxisLock !== 'x') {
+                tabPointerAxisLock = null;
+                return;
+            }
+
+            const width = getTabViewportWidth() || 1;
+            const durationMs = Math.max(1, Date.now() - tabPointerStartTime);
+            const velocityX = deltaX / durationMs;
+            const swipeDirection = deltaX < 0 ? 1 : -1;
+            const targetTab = getSwipeTargetTab(swipeDirection);
+            const shouldCommit = targetTab && (
+                Math.abs(deltaX) >= width * 0.22
+                || Math.abs(velocityX) > 0.42
+            ) && Math.abs(deltaY) < Math.abs(deltaX) * 1.2;
+
+            settleTabSwipe({
+                targetTab: shouldCommit ? targetTab : null,
+                direction: swipeDirection,
+                commit: Boolean(shouldCommit)
+            });
+            tabPointerAxisLock = null;
+        };
+
+        const tabSwipeSurface = isDedicatedCoursePage
+            ? (tabBodySurface || tabPanelsViewport)
+            : (tabPanelsViewport || tabBodySurface);
+        tabSwipeSurface?.addEventListener('touchstart', handlePanelsTouchStart, { passive: true });
+        tabSwipeSurface?.addEventListener('touchmove', handlePanelsTouchMove, { passive: false });
+        tabSwipeSurface?.addEventListener('touchend', handlePanelsTouchEnd, { passive: true });
+        tabSwipeSurface?.addEventListener('touchcancel', handlePanelsTouchCancel, { passive: true });
+        tabSwipeSurface?.addEventListener('pointerdown', handlePanelsPointerDown, true);
+        tabSwipeSurface?.addEventListener('pointermove', handlePanelsPointerMove, { passive: false, capture: true });
+        tabSwipeSurface?.addEventListener('pointerup', handlePanelsPointerUp, true);
+        tabSwipeSurface?.addEventListener('pointercancel', handlePanelsPointerCancel, true);
+
+        const detachPanelsSwipeHandlers = () => {
+            tabSwipeSurface?.removeEventListener('touchstart', handlePanelsTouchStart);
+            tabSwipeSurface?.removeEventListener('touchmove', handlePanelsTouchMove);
+            tabSwipeSurface?.removeEventListener('touchend', handlePanelsTouchEnd);
+            tabSwipeSurface?.removeEventListener('touchcancel', handlePanelsTouchCancel);
+            tabSwipeSurface?.removeEventListener('pointerdown', handlePanelsPointerDown, true);
+            tabSwipeSurface?.removeEventListener('pointermove', handlePanelsPointerMove, true);
+            tabSwipeSurface?.removeEventListener('pointerup', handlePanelsPointerUp, true);
+            tabSwipeSurface?.removeEventListener('pointercancel', handlePanelsPointerCancel, true);
+        };
+
         const handleCourseInfoResize = () => {
+            clearTabSwipeSettleTimer();
+            cleanupTabSwipePreview();
+            resetTabSwipeTransforms();
+            updateTabPanelsViewportMinHeight();
             applyCourseInfoTabState(activeTab);
         };
         window.addEventListener('resize', handleCourseInfoResize);
+        if (typeof ResizeObserver === 'function') {
+            tabViewportResizeObserver = new ResizeObserver(() => {
+                updateTabPanelsViewportMinHeight();
+            });
+            if (shouldMeasureTabViewport && tabBodySurface) {
+                tabViewportResizeObserver.observe(tabBodySurface);
+                tabViewportResizeObserver.observe(tabsWrap);
+            } else {
+                panelMap.forEach((panelEl) => {
+                    tabViewportResizeObserver.observe(panelEl);
+                });
+                if (courseInfoContentRoot) {
+                    tabViewportResizeObserver.observe(courseInfoContentRoot);
+                }
+            }
+        }
+        updateTabPanelsViewportMinHeight();
         classInfo._mobileTabsResizeCleanup = () => {
             window.removeEventListener('resize', handleCourseInfoResize);
+            if (tabViewportResizeObserver) {
+                tabViewportResizeObserver.disconnect();
+                tabViewportResizeObserver = null;
+            }
         };
 
         activeCourseInfoTabController = {
             setActiveTab: switchCourseInfoTab,
             cleanup: () => {
+                clearTabSwipeSettleTimer();
+                detachPanelsSwipeHandlers();
+                cleanupTabSwipePreview();
+                resetTabSwipeTransforms({ instant: true });
                 window.removeEventListener('resize', handleCourseInfoResize);
+                if (tabViewportResizeObserver) {
+                    tabViewportResizeObserver.disconnect();
+                    tabViewportResizeObserver = null;
+                }
                 panelMap.forEach((panelEl) => {
                     panelEl.hidden = false;
                     panelEl.removeAttribute('aria-hidden');
                 });
+                if (tabPanelsViewport && tabPanelsViewport.parentNode) {
+                    tabPanelsViewport.parentNode.insertBefore(courseInfoContentRoot, tabPanelsViewport);
+                    tabPanelsViewport.remove();
+                }
+                courseInfoContentRoot.classList.remove('course-info-tab-panels-active', 'is-swipe-dragging', 'is-swipe-settling');
+                courseInfoContentRoot.classList.remove('course-info-tab-panels-active--dedicated');
+                courseInfoContentRoot.style.transform = '';
+                courseInfoContentRoot.style.opacity = '';
+                courseInfoContentRoot.style.minHeight = '';
+                tabPanelsViewport?.style.removeProperty('--course-info-tab-panels-min-height');
+                tabPanelsViewport?.classList.remove('course-info-tab-panels-viewport--dedicated');
+                panelMap.forEach((panelEl) => {
+                    panelEl.classList.remove('course-info-tab-panel--dedicated');
+                });
+                tabTouchIgnoreSwipe = false;
+                tabPointerIgnoreSwipe = false;
+                tabTouchInProgress = false;
+                tabPointerInProgress = false;
+                tabTouchAxisLock = null;
+                tabPointerAxisLock = null;
+                tabPointerId = null;
+                tabPointerCaptured = false;
                 if (tabsWrap.parentNode) {
+                    tabsWrap.classList.remove('course-info-mobile-tabs--dedicated');
                     tabsWrap.parentNode.removeChild(tabsWrap);
                 }
                 delete classInfo.dataset.activeCourseInfoTab;
@@ -4735,13 +5963,16 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             cleanupActiveCourseInfoTabController();
         };
 
-        switchCourseInfoTab(requestedInitialTab, { persist: false });
+        switchCourseInfoTab(requestedInitialTab, { persist: false, scrollTop: true });
+        courseInfoContentRoot.style.minHeight = shouldMeasureTabViewport ? '100%' : '';
+        resetCourseInfoBodyScroll();
     } else {
         courseInfoBody.querySelector('.course-info-mobile-tabs')?.remove();
         courseInfoContentRoot.replaceChildren(classContent, classGPA, classAssignments, classReview);
         releaseCourseInfoResizeObserver();
         cleanupActiveCourseInfoTabController();
         classInfo.classList.remove('courseinfo-guest-assignments-preview');
+        resetCourseInfoBodyScroll();
         activeCourseInfoTabController = {
             setActiveTab: () => { },
             cleanup: () => {
@@ -4759,6 +5990,17 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     classInfo.style.transition = '';
     classInfo.style.opacity = '';
     classInfo.classList.add("show");
+    window.requestAnimationFrame(() => {
+        resetCourseInfoBodyScroll();
+    });
+
+    if (isMobileCourseInfo && !isDedicatedCoursePage) {
+        window.requestAnimationFrame(() => {
+            setupCourseInfoHeaderTagsCollapse();
+        });
+    } else {
+        releaseCourseInfoHeaderTagsCollapse();
+    }
 
     if (isDedicatedCoursePage) {
         document.body.style.overflow = '';
@@ -4864,9 +6106,15 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 isSavedForLater = !!result?.saved;
                 syncSavedStatusBadge();
                 updateFooterActionLayout(isAlreadySelected);
+                emitCourseStatusUpdated({
+                    action: isSavedForLater ? 'saved' : 'unsaved',
+                    courseCode: String(course.course_code || '').trim(),
+                    year: Number(course.academic_year) || null,
+                    term: normalizeCourseTerm(course.term || '')
+                });
             } catch (saveError) {
                 console.error('Error toggling saved course:', saveError);
-                alert('Unable to update saved course right now. Please try again.');
+                showGlobalToast('Unable to update saved course right now. Please try again.');
             } finally {
                 saveToggleBtn.disabled = false;
             }
@@ -4969,27 +6217,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }
 
         function showCourseActionToast(message, durationMs = 2200) {
-            if (!message) return;
-            const existingToast = document.getElementById('link-copied-notification');
-            if (existingToast) existingToast.remove();
-
-            const toast = document.createElement('div');
-            toast.id = 'link-copied-notification';
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            requestAnimationFrame(() => {
-                toast.classList.add('show');
-            });
-
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.parentNode.removeChild(toast);
-                    }
-                }, 300);
-            }, durationMs);
+            showGlobalToast(message, durationMs);
         }
 
         function formatConflictSlotForToast(timeSlot) {
@@ -5078,6 +6306,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             } else {
                 applyClassInfoCourseActionButtonState(newButton, 'add');
             }
+            syncRegistrationStatusBadge();
         }
 
         // Set initial button state
@@ -5089,7 +6318,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
             // Check if we can modify courses for this semester
             if (!isCurrentSemester()) {
-                alert('You can only add or remove courses for the current semester. Please switch to the current semester to make changes.');
+                showCourseActionToast('Registration is closed for this semester.');
                 return;
             }
 
@@ -5104,7 +6333,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         newButton.click();
                     });
                 } else {
-                    alert('Please log in to manage courses.');
+                    showCourseActionToast('Please log in to manage courses.');
                 }
                 return;
             }
@@ -5170,9 +6399,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     );
 
                     if (removalStats.selectedCount > 0 && removalStats.totalCredits < SEMESTER_MIN_CREDITS) {
-                        alert(
+                        showCourseActionToast(
                             `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                            `This change would leave you with ${formatCreditsValue(removalStats.totalCredits)} credits.`
+                            `This change would leave you with ${formatCreditsValue(removalStats.totalCredits)} credits.`,
+                            3600
                         );
                         return;
                     }
@@ -5184,11 +6414,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (error) {
                         console.error('Error removing course:', error);
-                        alert('Failed to remove course. Please try again.');
+                        showCourseActionToast('Failed to remove course. Please try again.');
                         return;
                     }
 
-                    alert('Course removed successfully!');
+                    showCourseActionToast('Course removed successfully!');
                     // Update button state after successful removal
                     await updateCourseButtonState(course, newButton);
                 } else {
@@ -5228,17 +6458,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 );
 
                                 if (replacementStats.totalCredits > SEMESTER_MAX_CREDITS) {
-                                    alert(
+                                    showCourseActionToast(
                                         `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
-                                        `This change would bring you to ${formatCreditsValue(replacementStats.totalCredits)} credits.`
+                                        `This change would bring you to ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
+                                        3600
                                     );
                                     return;
                                 }
 
                                 if (replacementStats.selectedCount > 0 && replacementStats.totalCredits < SEMESTER_MIN_CREDITS) {
-                                    alert(
+                                    showCourseActionToast(
                                         `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                                        `This change would leave you with ${formatCreditsValue(replacementStats.totalCredits)} credits.`
+                                        `This change would leave you with ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
+                                        3600
                                     );
                                     return;
                                 }
@@ -5250,7 +6482,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                                 if (error) {
                                     console.error('Error updating courses:', error);
-                                    alert('Failed to update courses. Please try again.');
+                                    showCourseActionToast('Failed to update courses. Please try again.');
                                     return;
                                 }
 
@@ -5258,6 +6490,12 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 await updateButton();
                                 // Also update the button state specifically
                                 await updateCourseButtonState(course, newButton);
+                                emitCourseStatusUpdated({
+                                    action: 'registered',
+                                    courseCode: currentCourseCode,
+                                    year: currentYear,
+                                    term: currentTerm
+                                });
                                 if (window.refreshCalendarComponent) {
                                     window.refreshCalendarComponent();
                                 }
@@ -5289,17 +6527,19 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     );
 
                     if (additionStats.totalCredits > SEMESTER_MAX_CREDITS) {
-                        alert(
+                        showCourseActionToast(
                             `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
-                            `This change would bring you to ${formatCreditsValue(additionStats.totalCredits)} credits.`
+                            `This change would bring you to ${formatCreditsValue(additionStats.totalCredits)} credits.`,
+                            3600
                         );
                         return;
                     }
 
                     if (additionStats.selectedCount > 0 && additionStats.totalCredits < SEMESTER_MIN_CREDITS) {
-                        alert(
+                        showCourseActionToast(
                             `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                            `This change would leave you with ${formatCreditsValue(additionStats.totalCredits)} credits.`
+                            `This change would leave you with ${formatCreditsValue(additionStats.totalCredits)} credits.`,
+                            3600
                         );
                         return;
                     }
@@ -5311,11 +6551,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (error) {
                         console.error('Error adding course:', error);
-                        alert('Failed to add course. Please try again.');
+                        showCourseActionToast('Failed to add course. Please try again.');
                         return;
                     }
 
-                    alert('Course added successfully!');
+                    showCourseActionToast('Course added successfully!');
                 }
 
                 // Update button and refresh calendar
@@ -5325,10 +6565,16 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 if (window.refreshCalendarComponent) {
                     window.refreshCalendarComponent();
                 }
+                emitCourseStatusUpdated({
+                    action: isCurrentlySelected ? 'unregistered' : 'registered',
+                    courseCode: currentCourseCode,
+                    year: currentYear,
+                    term: currentTerm
+                });
 
             } catch (error) {
                 console.error('Error managing course:', error);
-                alert('An error occurred. Please try again.');
+                showCourseActionToast('An error occurred. Please try again.');
             }
         });
     }
@@ -5934,15 +7180,16 @@ function openReviewFormModal({
 
     const bodyHtml = `
         <div class="review-form-grid">
-            <div class="review-form-row">
-                <label>Term taken</label>
-                <div class="review-form-inline">
-                    <select id="review-term${suffix}" class="review-form-select">${buildReviewTermOptions(defaultTerm)}</select>
-                    <select id="course-year${suffix}" class="review-form-select">${buildReviewYearOptions(defaultYear)}</select>
+            <section class="review-form-section review-form-section--meta">
+                <div class="review-form-row">
+                    <label>Term taken</label>
+                    <div class="review-form-inline">
+                        <select id="review-term${suffix}" class="review-form-select">${buildReviewTermOptions(defaultTerm)}</select>
+                        <select id="course-year${suffix}" class="review-form-select">${buildReviewYearOptions(defaultYear)}</select>
+                    </div>
+                    <div class="review-field-error" id="course-year-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
                 </div>
-                <div class="review-field-error" id="course-year-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
-            </div>
-            ${buildStarRatingField({
+                ${buildStarRatingField({
         label: 'Quality rating',
         kind: 'quality',
         selectedRating: initialQualityRating,
@@ -5951,25 +7198,28 @@ function openReviewFormModal({
         hoverName: isEdit ? 'hoverEditQualityRating' : 'hoverQualityRating',
         unhoverName: isEdit ? 'unhoverEditQualityRating' : 'unhoverQualityRating'
     })}
-            ${buildDifficultyRatingField({
+                ${buildDifficultyRatingField({
         selectedRating: initialDifficultyRating,
         errorId: 'difficulty-rating-error',
         setterName: isEdit ? 'setEditDifficultyRating' : 'setDifficultyRating',
         hoverName: isEdit ? 'hoverEditDifficultyRating' : 'hoverDifficultyRating',
         unhoverName: isEdit ? 'unhoverEditDifficultyRating' : 'unhoverDifficultyRating'
     })}
-            <div class="review-form-row">
-                <label for="review-content${suffix}">Written review</label>
-                <textarea id="review-content${suffix}" class="review-form-textarea" maxlength="800" placeholder="Share your experience with this course...">${escapeHtml(content || '')}</textarea>
-                <div class="review-char-count" data-role="review-char-count${suffix}">0/800</div>
-                <div class="review-field-error" id="review-content-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
-            </div>
+            </section>
+            <section class="review-form-section review-form-section--notes">
+                <div class="review-form-row">
+                    <label for="review-content${suffix}">Written review</label>
+                    <textarea id="review-content${suffix}" class="review-form-textarea" maxlength="800" placeholder="Share your experience with this course...">${escapeHtml(content || '')}</textarea>
+                    <div class="review-char-count" data-role="review-char-count${suffix}">0/800</div>
+                    <div class="review-field-error" id="review-content-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
+                </div>
+            </section>
         </div>
     `;
 
     const footerHtml = `
-        <button type="button" class="btn-secondary" data-action="cancel-review-form">Cancel</button>
-        <button type="button" class="btn-primary ${isEdit ? 'update-review' : 'submit-review'}" data-action="${isEdit ? 'update-review-submit' : 'submit-review-submit'}" ${isEdit ? `data-review-id="${escapeHtml(reviewId || '')}"` : ''} data-course-code="${escapeHtml(courseCode || '')}" data-course-year="${escapeHtml(defaultYear || '')}" data-course-term="${escapeHtml(defaultTerm || '')}">${submitLabel}</button>
+        <button type="button" class="btn-secondary review-form-cancel-btn" data-action="cancel-review-form">Cancel</button>
+        <button type="button" class="btn-primary review-form-save-btn ${isEdit ? 'update-review' : 'submit-review'}" data-action="${isEdit ? 'update-review-submit' : 'submit-review-submit'}" ${isEdit ? `data-review-id="${escapeHtml(reviewId || '')}"` : ''} data-course-code="${escapeHtml(courseCode || '')}" data-course-year="${escapeHtml(defaultYear || '')}" data-course-term="${escapeHtml(defaultTerm || '')}">${submitLabel}</button>
     `;
 
     const modalSession = openDsModal({
@@ -5977,7 +7227,8 @@ function openReviewFormModal({
         subtitle: courseTitle || courseCode || '',
         bodyHtml,
         footerHtml,
-        className: 'review-modal-host modal--dialog-mobile-sheet',
+        className: 'review-modal-host review-modal--assignment',
+        mobileSwipe: false,
         onMount: (modal, close) => {
             window.__closeReviewModal = close;
             const readReviewFormState = () => ({
@@ -6015,24 +7266,22 @@ function openReviewFormModal({
             };
             if (isEdit) {
                 const header = modal.querySelector('.modal-header');
-                const closeBtn = header?.querySelector('.modal-close-btn');
-                if (header && closeBtn) {
-                    let actions = header.querySelector('.modal-header-actions');
-                    if (!actions) {
-                        actions = document.createElement('div');
-                        actions.className = 'modal-header-actions';
-                        header.insertBefore(actions, closeBtn);
-                        actions.appendChild(closeBtn);
+                if (header) {
+                    let topActions = modal.querySelector('.review-modal-top-actions');
+                    if (!topActions) {
+                        topActions = document.createElement('div');
+                        topActions.className = 'review-modal-top-actions';
+                        header.insertAdjacentElement('afterend', topActions);
                     }
                     const deleteBtn = document.createElement('button');
                     deleteBtn.type = 'button';
-                    deleteBtn.className = 'btn-destructive review-delete-btn review-delete-btn--header';
+                    deleteBtn.className = 'btn-destructive review-delete-btn review-delete-btn--top';
                     deleteBtn.dataset.action = 'delete-review';
                     deleteBtn.dataset.reviewId = String(reviewId || '');
                     deleteBtn.dataset.defaultText = 'Delete';
                     deleteBtn.setAttribute('aria-label', 'Delete review');
                     deleteBtn.textContent = 'Delete';
-                    actions.insertBefore(deleteBtn, closeBtn);
+                    topActions.replaceChildren(deleteBtn);
                 }
             }
             modal.querySelector('[data-action="cancel-review-form"]')?.addEventListener('click', (event) => {
@@ -6095,7 +7344,7 @@ window.openAddReviewModal = async function (courseCode, academicYear, term, cour
                     window.openAddReviewModal(courseCode, academicYear, term, courseTitle);
                 });
             } else {
-                alert('Please log in to write a review.');
+                showGlobalToast('Please log in to write a review.');
             }
             return;
         }
@@ -6148,7 +7397,7 @@ window.openAddReviewModal = async function (courseCode, academicYear, term, cour
 
     } catch (error) {
         console.error('Error opening review modal:', error);
-        alert('Error opening review form. Please try again.');
+        showGlobalToast('Error opening review form. Please try again.');
     }
 };
 
@@ -6203,7 +7452,7 @@ window.openEditReviewModal = async function (
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-            alert('Please log in to edit your review.');
+            showGlobalToast('Please log in to edit your review.');
             return;
         }
 
@@ -6225,7 +7474,7 @@ window.openEditReviewModal = async function (
 
     } catch (error) {
         console.error('Error opening edit review modal:', error);
-        alert('Error opening edit form. Please try again.');
+        showGlobalToast('Error opening edit form. Please try again.');
     }
 };
 
@@ -6361,7 +7610,7 @@ window.updateReview = async function (reviewId) {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-            alert('Please log in to update your review.');
+            showGlobalToast('Please log in to update your review.');
             return;
         }
 
@@ -6378,30 +7627,46 @@ window.updateReview = async function (reviewId) {
         const selectedTerm = normalizeCourseTerm(termInput?.value || '');
 
         if (!qualityRating) {
-            alert('Please select a quality rating.');
+            showGlobalToast('Please select a quality rating.');
             return;
         }
         if (!difficultyRating) {
-            alert('Please select a difficulty rating.');
+            showGlobalToast('Please select a difficulty rating.');
             return;
         }
 
         if (!selectedYear) {
-            alert('Please select the year when you took this course.');
+            showGlobalToast('Please select the year when you took this course.');
             return;
         }
         if (!selectedTerm) {
-            alert('Please select the term when you took this course.');
+            showGlobalToast('Please select the term when you took this course.');
             return;
         }
         if (content.length > 800) {
-            alert('Review is too long. Please keep it under 800 characters.');
+            showGlobalToast('Review is too long. Please keep it under 800 characters.');
             return;
         }
 
         const updateBtn = document.querySelector('.update-review, [data-action="update-review-submit"]');
-        updateBtn.disabled = true;
-        updateBtn.textContent = 'Saving...';
+        const updateBtnDefaultText = updateBtn?.dataset?.defaultText || updateBtn?.textContent || 'Save changes';
+        if (updateBtn) {
+            updateBtn.dataset.defaultText = updateBtnDefaultText;
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Saving...';
+        }
+        const { course: visibleCourse } = getVisibleCourseInfoCourseContext();
+        const courseCodeForRefresh = String(
+            updateBtn?.dataset?.courseCode ||
+            visibleCourse?.course_code ||
+            ''
+        ).trim();
+        const termForRefresh = normalizeCourseTerm(
+            selectedTerm ||
+            updateBtn?.dataset?.courseTerm ||
+            visibleCourse?.term ||
+            ''
+        );
 
         const dualPayload = buildCourseReviewWritePayload({
             academicYear: selectedYear,
@@ -6432,21 +7697,23 @@ window.updateReview = async function (reviewId) {
 
         if (error) {
             console.error('Error updating review:', error);
-            alert('Error updating review. Please try again.');
-            updateBtn.disabled = false;
-            updateBtn.textContent = 'Save changes';
+            showGlobalToast('Error updating review. Please try again.');
+            if (updateBtn) {
+                updateBtn.disabled = false;
+                updateBtn.textContent = updateBtnDefaultText;
+            }
             return;
         }
 
-        alert('Review updated successfully!');
-        closeReviewModal();
-
-        // Reload the page to show updated review
-        window.location.reload();
+        await finalizeReviewMutationSuccess({
+            message: 'Review updated successfully.',
+            courseCode: courseCodeForRefresh,
+            term: termForRefresh
+        });
 
     } catch (error) {
         console.error('Error updating review:', error);
-        alert('Error updating review. Please try again.');
+        showGlobalToast('Error updating review. Please try again.');
     }
 };
 
@@ -6456,7 +7723,7 @@ window.deleteReview = async function (reviewId) {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session) {
-            alert('Please log in to delete your review.');
+            showGlobalToast('Please log in to delete your review.');
             return;
         }
 
@@ -6484,13 +7751,13 @@ window.deleteReview = async function (reviewId) {
 
         if (error) {
             console.error('Error deleting review:', error);
-            alert('Error deleting review. Please try again.');
+            showGlobalToast('Error deleting review. Please try again.');
             deleteBtn.disabled = false;
             deleteBtn.textContent = deleteBtnDefaultText;
             return;
         }
 
-        alert('Review deleted successfully!');
+        showGlobalToast('Review deleted successfully!');
         closeReviewModal();
 
         // Reload the page to show updated reviews
@@ -6498,7 +7765,7 @@ window.deleteReview = async function (reviewId) {
 
     } catch (error) {
         console.error('Error deleting review:', error);
-        alert('Error deleting review. Please try again.');
+        showGlobalToast('Error deleting review. Please try again.');
     }
 };
 
@@ -6666,7 +7933,7 @@ window.submitReview = async function (courseCode, academicYear, term) {
             if (window.authManager) {
                 authManager.requireAuth('submit a review');
             } else {
-                alert('Please log in to submit a review.');
+                showGlobalToast('Please log in to submit a review.');
             }
             return;
         }
@@ -6706,7 +7973,7 @@ window.submitReview = async function (courseCode, academicYear, term) {
         }
 
         if (!selectedTerm) {
-            alert('Please select the term when you took this course.');
+            showGlobalToast('Please select the term when you took this course.');
             hasErrors = true;
         }
 
@@ -6722,8 +7989,12 @@ window.submitReview = async function (courseCode, academicYear, term) {
         }
 
         const submitBtn = document.querySelector('.submit-review, [data-action="submit-review-submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Submitting...';
+        const submitBtnDefaultText = submitBtn?.dataset?.defaultText || submitBtn?.textContent || 'Submit review';
+        if (submitBtn) {
+            submitBtn.dataset.defaultText = submitBtnDefaultText;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+        }
 
         const dualPayload = buildCourseReviewWritePayload({
             userId: session.user.id,
@@ -6756,21 +8027,23 @@ window.submitReview = async function (courseCode, academicYear, term) {
 
         if (error) {
             console.error('Error submitting review:', error);
-            alert('Error submitting review. Please try again.');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit review';
+            showGlobalToast('Error submitting review. Please try again.');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = submitBtnDefaultText;
+            }
             return;
         }
 
-        alert('Review submitted successfully!');
-        closeReviewModal();
-
-        // Refresh the course info to show updated reviews
-        // You might want to reload the modal content here
+        await finalizeReviewMutationSuccess({
+            message: 'Review submitted successfully.',
+            courseCode,
+            term: selectedTerm || term
+        });
 
     } catch (error) {
         console.error('Error submitting review:', error);
-        alert('Error submitting review. Please try again.');
+        showGlobalToast('Error submitting review. Please try again.');
     }
 };
 
@@ -7145,31 +8418,50 @@ function getCurrentTerm() {
     return currentMonth >= 8 || currentMonth <= 2 ? 'Fall' : 'Spring';
 }
 
-// Check if the currently selected year/term is the current semester
-function isCurrentSemester() {
-    const selectedYear = getCurrentYear();
-    const selectedTerm = getCurrentTerm();
+// Registration lock override is disabled in production and development.
+function shouldForceSemesterActiveForTesting() {
+    return false;
+}
 
-    // Normalize selectedTerm (handle both "Fall" and "秋学期/Fall" formats)
-    const normalizedSelectedTerm = selectedTerm.includes('/') ? selectedTerm.split('/')[1] : selectedTerm;
+function getRegistrationLockDateForSemester(selectedYear, selectedTerm) {
+    const normalizedYear = Number.parseInt(selectedYear, 10);
+    if (!Number.isFinite(normalizedYear)) return null;
 
-    const today = new Date();
-
-    // Calculate semester start and end dates
-    let semesterStart, semesterEnd;
-
-    if (normalizedSelectedTerm === 'Spring') {
-        // Spring: April 1 - July 31
-        semesterStart = new Date(selectedYear, 3, 1); // April 1 (month is 0-indexed)
-        semesterEnd = new Date(selectedYear, 6, 31, 23, 59, 59); // July 31
-    } else {
-        // Fall: October 1 - January 31 (next year)
-        semesterStart = new Date(selectedYear, 9, 1); // October 1
-        semesterEnd = new Date(selectedYear + 1, 1, 28, 23, 59, 59); // January 31 next year
+    const normalizedTerm = normalizeCourseTerm(selectedTerm);
+    if (normalizedTerm === 'Spring') {
+        // Spring registration closes on August 1 (same year).
+        return new Date(normalizedYear, 7, 1, 0, 0, 0, 0);
     }
 
-    // Check if today is within the semester date range
-    return today >= semesterStart && today <= semesterEnd;
+    if (normalizedTerm === 'Fall') {
+        // Fall registration closes on March 1 (next year).
+        return new Date(normalizedYear + 1, 2, 1, 0, 0, 0, 0);
+    }
+
+    return null;
+}
+
+function isCurrentSemester() {
+    if (shouldForceSemesterActiveForTesting()) {
+        return true;
+    }
+
+    const now = new Date();
+    const selectedYear = Number.parseInt(getCurrentYear(), 10);
+    const selectedTerm = getCurrentTerm();
+
+    // Do not allow pre-registering future academic years.
+    if (!Number.isFinite(selectedYear) || selectedYear > now.getFullYear()) {
+        return false;
+    }
+
+    const lockDate = getRegistrationLockDateForSemester(selectedYear, selectedTerm);
+    if (!lockDate) {
+        return false;
+    }
+
+    // Open until the lock date.
+    return now < lockDate;
 }
 
 // Filter courses selection by current year and term
@@ -7187,6 +8479,7 @@ function filterCoursesByCurrentYearTerm(coursesSelection) {
 window.getCurrentYear = getCurrentYear;
 window.getCurrentTerm = getCurrentTerm;
 window.isCurrentSemester = isCurrentSemester;
+window.isCourseRegistrationOpen = isCurrentSemester;
 window.filterCoursesByCurrentYearTerm = filterCoursesByCurrentYearTerm;
 
 // Function to show time conflict modal (similar to search modal)
@@ -7592,6 +8885,8 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const collapsedHeight = 144;
     const velocitySnapThreshold = 0.48;
+    const bodyScrollTopTolerance = 16;
+    const TOUCH_POINTER_ID = -1;
     let currentState = 'half';
     let currentY = window.innerHeight;
     let pointerId = null;
@@ -7773,7 +9068,7 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
     }
 
     function resetDragState() {
-        if (pointerId !== null) {
+        if (pointerId !== null && pointerId >= 0) {
             try {
                 if (modal.hasPointerCapture?.(pointerId)) {
                     modal.releasePointerCapture(pointerId);
@@ -7804,22 +9099,35 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
         return null;
     }
 
+    function beginSheetDrag({ gesturePointerId, target, clientX, clientY }) {
+        const dragTarget = resolveDragTarget(target);
+        if (!dragTarget) return false;
+
+        pointerId = gesturePointerId;
+        dragFromBody = !!dragTarget.fromBody;
+        dragging = false;
+        startX = clientX;
+        startY = clientY;
+        startSheetY = currentY;
+        moveSamples = [{ y: startY, t: performance.now() }];
+
+        if (pointerId >= 0) {
+            modal.setPointerCapture?.(pointerId);
+        }
+        return true;
+    }
+
     function handlePointerDown(event) {
         if (isDestroyed || closing) return;
         if (!isCourseInfoMobileViewport() || modal.classList.contains('course-fullscreen')) return;
+        if (String(event.pointerType || '').toLowerCase() === 'touch') return;
         if (event.button !== undefined && event.button !== 0) return;
-
-        const dragTarget = resolveDragTarget(event.target);
-        if (!dragTarget) return;
-
-        pointerId = event.pointerId;
-        dragFromBody = !!dragTarget.fromBody;
-        dragging = false;
-        startX = event.clientX;
-        startY = event.clientY;
-        startSheetY = currentY;
-        moveSamples = [{ y: startY, t: performance.now() }];
-        modal.setPointerCapture?.(pointerId);
+        beginSheetDrag({
+            gesturePointerId: event.pointerId,
+            target: event.target,
+            clientX: event.clientX,
+            clientY: event.clientY
+        });
     }
 
     function handlePointerMove(event) {
@@ -7831,6 +9139,10 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
         const absDeltaX = Math.abs(deltaX);
         const absDeltaY = Math.abs(deltaY);
         const bodyScroller = modal.querySelector('.courseinfo-body');
+        const bodyScrollTop = Math.max(0, Number(bodyScroller?.scrollTop) || 0);
+        const isNearTop = bodyScrollTop <= bodyScrollTopTolerance;
+        const isExpandingFromHalfOrCollapsed = deltaY < 0 && currentState !== 'full';
+        const isDraggingDown = deltaY > 0;
 
         if (!dragging) {
             if (absDeltaY < SWIPE_START_THRESHOLD) return;
@@ -7840,9 +9152,22 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
             }
 
             if (dragFromBody) {
-                if (!bodyScroller || bodyScroller.scrollTop > 1) {
+                if (!bodyScroller) {
                     resetDragState();
                     return;
+                }
+                let allowSheetDrag = false;
+                if (currentState === 'full') {
+                    allowSheetDrag = isDraggingDown && isNearTop;
+                } else {
+                    allowSheetDrag = isExpandingFromHalfOrCollapsed || isNearTop;
+                }
+                if (!allowSheetDrag) {
+                    resetDragState();
+                    return;
+                }
+                if (isNearTop && bodyScrollTop > 0) {
+                    bodyScroller.scrollTop = 0;
                 }
             }
 
@@ -7852,7 +9177,7 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
             clearSnapTimer();
         }
 
-        if (dragFromBody && bodyScroller && bodyScroller.scrollTop > 1 && deltaY > 0) {
+        if (dragFromBody && bodyScroller && isDraggingDown && bodyScroller.scrollTop > bodyScrollTopTolerance) {
             resetDragState();
             return;
         }
@@ -7901,7 +9226,9 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
 
     function handlePointerUp(event) {
         if (isDestroyed || pointerId === null || event.pointerId !== pointerId) return;
-        modal.releasePointerCapture?.(pointerId);
+        if (pointerId >= 0) {
+            modal.releasePointerCapture?.(pointerId);
+        }
         if (rafId) {
             window.cancelAnimationFrame(rafId);
             rafId = 0;
@@ -7912,11 +9239,63 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
 
     function handlePointerCancel(event) {
         if (isDestroyed || pointerId === null || event.pointerId !== pointerId) return;
-        modal.releasePointerCapture?.(pointerId);
+        if (pointerId >= 0) {
+            modal.releasePointerCapture?.(pointerId);
+        }
         if (dragging) {
             snapTo(findNearestState(currentY, getMetrics()), { animate: true });
         }
         resetDragState();
+    }
+
+    function handleTouchStart(event) {
+        if (isDestroyed || closing) return;
+        if (!isCourseInfoMobileViewport() || modal.classList.contains('course-fullscreen')) return;
+        if (pointerId !== null) return;
+        const touch = getTouchPoint(event);
+        if (!touch) return;
+        beginSheetDrag({
+            gesturePointerId: TOUCH_POINTER_ID,
+            target: event.target,
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+    }
+
+    function handleTouchMove(event) {
+        if (isDestroyed || pointerId !== TOUCH_POINTER_ID) return;
+        const touch = getTouchPoint(event);
+        if (!touch) return;
+        handlePointerMove({
+            pointerId: TOUCH_POINTER_ID,
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            cancelable: event.cancelable,
+            preventDefault: () => {
+                if (event.cancelable) {
+                    event.preventDefault();
+                }
+            }
+        });
+    }
+
+    function handleTouchEnd(event) {
+        if (isDestroyed || pointerId !== TOUCH_POINTER_ID) return;
+        const touch = getTouchPoint(event);
+        if (!touch) {
+            handlePointerCancel({ pointerId: TOUCH_POINTER_ID });
+            return;
+        }
+        handlePointerUp({
+            pointerId: TOUCH_POINTER_ID,
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        });
+    }
+
+    function handleTouchCancel() {
+        if (isDestroyed || pointerId !== TOUCH_POINTER_ID) return;
+        handlePointerCancel({ pointerId: TOUCH_POINTER_ID });
     }
 
     function handleResize() {
@@ -7949,6 +9328,10 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
         modal.removeEventListener('pointermove', handlePointerMove, true);
         modal.removeEventListener('pointerup', handlePointerUp, true);
         modal.removeEventListener('pointercancel', handlePointerCancel, true);
+        modal.removeEventListener('touchstart', handleTouchStart);
+        modal.removeEventListener('touchmove', handleTouchMove);
+        modal.removeEventListener('touchend', handleTouchEnd);
+        modal.removeEventListener('touchcancel', handleTouchCancel);
         window.removeEventListener('resize', handleResize);
         window.removeEventListener('orientationchange', handleOrientationChange);
         modal.classList.remove('is-dragging', 'is-snapping');
@@ -7962,6 +9345,10 @@ function createCourseInfoMobileSheetController(modal, background, options = {}) 
     modal.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
     modal.addEventListener('pointerup', handlePointerUp, true);
     modal.addEventListener('pointercancel', handlePointerCancel, true);
+    modal.addEventListener('touchstart', handleTouchStart, { passive: true });
+    modal.addEventListener('touchmove', handleTouchMove, { passive: false });
+    modal.addEventListener('touchend', handleTouchEnd, { passive: true });
+    modal.addEventListener('touchcancel', handleTouchCancel, { passive: true });
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleOrientationChange);
     refreshStableViewport(true);

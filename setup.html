@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Setup - ILA Companion</title>
+  <link rel="stylesheet" href="css/blaze.css">
+</head>
+<body class="setup-flow-active">
+  <app-navigation></app-navigation>
+  <div class="app-header app-header--title-mode">
+    <div class="app-header-brand">
+      <div class="app-logo"></div>
+      <h1 class="app-mobile-page-title" aria-live="polite">Setup</h1>
+    </div>
+    <div class="app-misc"></div>
+  </div>
+
+  <div id="app-content" class="ui-page">
+    <main id="setup-flow-main" class="setup-flow-page">
+      <section class="setup-card ui-card card-surface">
+        <p class="setup-status-text" role="status" aria-live="polite">Loading setup...</p>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="js/components.js"></script>
+  <script type="module" src="js/shared.js"></script>
+  <script type="module" src="js/router.js"></script>
+  <script type="module" src="js/setup-flow.js"></script>
+</body>
+</html>

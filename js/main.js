@@ -1,9 +1,9 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters } from './shared.js';
+import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters, isCourseGpaAlignedWithCurrentProfessor } from './shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from './shared.js';
 import * as wanakana from 'wanakana';
-import { getCurrentAppPath } from './path-utils.js';
-import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from './preferences.js';
+import { getCurrentAppPath, withBase } from './path-utils.js';
+import { applyPreferredTermToGlobals, normalizeTermValue, resolvePreferredTermForAvailableSemesters, setPreferredTermValue } from './preferences.js';
 import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 import { readSavedCourses, syncSavedCoursesForUser } from './saved-courses.js';
 
@@ -30,6 +30,7 @@ const japaneseNameMapping = {
     '髙橋': 'Takahashi', '高橋': 'Takahashi', '高': 'Taka',
     '八木': 'Yagi', '木': 'Ki',
     '和田': 'Wada', '田': 'Da', '和': 'Wa',
+    '津田': 'Tsuda', '津': 'Tsu',
     '張': 'Chou',
     '趙': 'Chou',
     '仲間': 'Nakama', '間': 'Ma', '仲': 'Naka',
@@ -55,6 +56,8 @@ const japaneseNameMapping = {
     '原田': 'Harada', '原': 'Hara',
     '槇殿': 'Makidono', '槇': 'Maki', '殿': 'Dono',
     '西村': 'Nishimura',
+    '松川': 'Matsukawa',
+    '梶': 'Kaji',
     '林': 'Hayashi',
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
@@ -77,6 +80,8 @@ const japaneseNameMapping = {
     '桂子': 'Keiko', '桂': 'Kei',
     '伸子': 'Nobuko', '伸': 'Nobu',
     '伴子': 'Tomoko', '伴': 'Tomo',
+    '藍子': 'Aiko', '藍': 'Ai',
+    '杏寧': 'Anna', '杏': 'An', '寧': 'Na',
     '勉': 'Tsutomu',
 
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
@@ -113,10 +118,79 @@ const japaneseFullNameMapping = {
     '趙 亮': 'Chou Ryou',
     '鈴木 桂子': 'Suzuki Keiko',
     '陳 依君': 'Chin Ikun',
+    '梶 藍子': 'Kaji Aiko',
+    '松川 杏寧': 'Matsukawa Anna',
+    '津田 太郎': 'Tsuda Taro',
     '髙橋 旬子': 'Takahashi Junko'
 };
 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
+const japaneseNameTokenEntries = Object.entries(japaneseNameMapping)
+    .filter(([token]) => token.length > 1)
+    .sort((left, right) => right[0].length - left[0].length);
+const japaneseFullNameLookup = Object.entries(japaneseFullNameMapping).reduce((lookup, [name, romanized]) => {
+    const normalizedName = String(name || '').replace(/[　\s]+/g, ' ').trim();
+    if (!normalizedName) return lookup;
+    lookup[normalizedName] = romanized;
+    lookup[normalizedName.replace(/\s+/g, '')] = romanized;
+    return lookup;
+}, {});
+
+function normalizeProfessorNameInput(name) {
+    return String(name || '').replace(/[　\s]+/g, ' ').trim();
+}
+
+function romanizeJapaneseNamePart(part) {
+    if (!part || !JAPANESE_CHAR_REGEX.test(part)) return part;
+
+    const mappedWholePart = japaneseNameMapping[part];
+    if (mappedWholePart) return mappedWholePart;
+
+    const wanaKanaResult = wanakana.toRomaji(part);
+    if (wanaKanaResult && !JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
+        return wanaKanaResult;
+    }
+
+    let cursor = 0;
+    let mappedAny = false;
+    let result = '';
+
+    while (cursor < part.length) {
+        let matchedToken = false;
+
+        for (const [token, tokenRomaji] of japaneseNameTokenEntries) {
+            if (part.startsWith(token, cursor)) {
+                result += tokenRomaji;
+                cursor += token.length;
+                mappedAny = true;
+                matchedToken = true;
+                break;
+            }
+        }
+
+        if (matchedToken) continue;
+
+        const char = part[cursor];
+        const mappedChar = japaneseNameMapping[char];
+        if (mappedChar) {
+            result += mappedChar;
+            mappedAny = true;
+            cursor += 1;
+            continue;
+        }
+
+        const charRomaji = wanakana.toRomaji(char);
+        if (charRomaji && !JAPANESE_CHAR_REGEX.test(charRomaji)) {
+            result += charRomaji;
+            mappedAny = true;
+        } else {
+            result += char;
+        }
+        cursor += 1;
+    }
+
+    return mappedAny ? result : part;
+}
 
 // Helper function to refresh calendar component
 function refreshCalendarComponent() {
@@ -144,7 +218,7 @@ romanizedProfessorCache.clear();
 // Helper function to romanize Japanese professor names
 function romanizeProfessorName(name) {
     if (!name) return name;
-    const normalizedInput = String(name).replace(/[　\s]+/g, ' ').trim();
+    const normalizedInput = normalizeProfessorNameInput(name);
     if (!normalizedInput) return name;
 
     // Check cache first
@@ -165,50 +239,15 @@ function romanizeProfessorName(name) {
     let romanized = normalizedInput;
 
     try {
-        const exactNameMatch = japaneseFullNameMapping[normalizedInput];
+        const compactInput = normalizedInput.replace(/\s+/g, '');
+        const exactNameMatch = japaneseFullNameLookup[normalizedInput] || japaneseFullNameLookup[compactInput];
         if (exactNameMatch) {
             romanized = exactNameMatch;
         } else {
-        // Split the name and process each part
-        let parts = normalizedInput.split(/\s+/);
-        let romanizedParts = [];
-
-        for (let part of parts) {
-            let romanizedPart = part;
-
-            // Try exact mapping first
-            if (japaneseNameMapping[part]) {
-                romanizedPart = japaneseNameMapping[part];
-            } else {
-                // Try WanaKana for Hiragana/Katakana conversion
-                const wanaKanaResult = wanakana.toRomaji(part);
-                if (!JAPANESE_CHAR_REGEX.test(wanaKanaResult)) {
-                    romanizedPart = wanaKanaResult;
-                } else {
-                    // Character-by-character mapping, but avoid partial mixed results.
-                    let characterMapped = '';
-                    let fullyMapped = true;
-                    for (let char of part) {
-                        if (japaneseNameMapping[char]) {
-                            characterMapped += japaneseNameMapping[char];
-                        } else {
-                            const charRomaji = wanakana.toRomaji(char);
-                            if (!JAPANESE_CHAR_REGEX.test(charRomaji)) {
-                                characterMapped += charRomaji;
-                            } else {
-                                fullyMapped = false;
-                                break;
-                            }
-                        }
-                    }
-                    romanizedPart = fullyMapped && characterMapped ? characterMapped : part;
-                }
-            }
-
-            romanizedParts.push(romanizedPart);
-        }
-
-        romanized = romanizedParts.join(' ');
+            // Split by spaces and greedily map longest known tokens.
+            const parts = normalizedInput.split(/\s+/);
+            const romanizedParts = parts.map((part) => romanizeJapaneseNamePart(part));
+            romanized = romanizedParts.join(' ');
         }
 
         // Clean up and capitalize properly
@@ -238,7 +277,8 @@ async function preromanizeCourseData(courses) {
 
 // Synchronous function to get romanized professor name from cache
 function getRomanizedProfessorName(name) {
-    return romanizedProfessorCache.get(name) || romanizeProfessorName(name);
+    const normalizedInput = normalizeProfessorNameInput(name);
+    return romanizedProfessorCache.get(normalizedInput) || romanizeProfessorName(normalizedInput);
 }
 
 // Helper function to normalize course titles
@@ -321,7 +361,7 @@ const SORT_METHOD_SHORT_LABELS = {
 };
 const RANKING_TOOLTIP_DETAIL = 'Share of students in the previous class offering who received a letter grade of A.';
 const NEW_PROFESSOR_TOOLTIP_TITLE = 'New Professor';
-const NEW_PROFESSOR_TOOLTIP_DETAIL = 'This professor is new to this course, returning to teach it after a break, or new to the ILA overall.';
+const NEW_PROFESSOR_TOOLTIP_DETAIL = 'Compared with the immediately previous offering of this course, the professor has changed.';
 
 // Global search state
 let currentSearchQuery = null;
@@ -333,7 +373,13 @@ let courseEvalPopoverElement = null;
 let activeCourseEvalPopoverTrigger = null;
 let courseAssessmentLayoutObserver = null;
 let courseAssessmentSeparatorUpdateRaf = 0;
+let courseRankingVisibilityRaf = 0;
 let stickyHeaderObserverCleanup = null;
+let activeCoursePresetId = null;
+let lastLoadedCoursePlanningContext = {
+    statusLookup: new Map(),
+    scheduleSignalLookup: new Map()
+};
 
 // Global course loading state management
 let isLoadingCourses = false;
@@ -342,12 +388,18 @@ let lastLoadedCourses = null; // Cache the last loaded courses data
 let lastLoadedYear = null;
 let lastLoadedTerm = null;
 let lastLoadedProfessorChanges = new Set(); // Cache professor changes
-let lastLoadedStatusLookup = new Map(); // Cache per-course registered/saved status by semester
+let courseStatusSyncListenersBound = false;
+let courseStatusRefreshTimer = null;
 const MAX_COURSE_LOAD_RETRIES = 3;
 const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
 const HOME_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000;
 const COURSE_PAGE_SEARCH_PREFILL_KEY = 'ila_courses_search_prefill';
 const COURSE_PAGE_SEARCH_PREFILL_MAX_AGE_MS = 10 * 60 * 1000;
+const COURSE_PAGE_PRESET_PREFILL_KEY = 'ila_courses_preset_prefill';
+const COURSE_PAGE_PRESET_PREFILL_MAX_AGE_MS = 10 * 60 * 1000;
+const CALENDAR_BUSY_SLOTS_STORAGE_KEY = 'ila_calendar_busy_slots_v1';
+const COURSE_DEFAULT_SLOT_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    .flatMap((day) => [1, 2, 3, 4, 5].map((period) => `${day}-${period}`));
 const HOME_PREFILTER_PERIOD_TO_TIME = {
     1: '09:00',
     2: '10:45',
@@ -359,6 +411,33 @@ const HOME_PREFILTER_TYPE_TO_CONCENTRATION = {
     Core: ['culture', 'economy', 'politics', 'seminar'],
     Foundation: ['academic', 'understanding'],
     Elective: ['special']
+};
+
+const COURSE_SMART_PRESET_CONFIG = {
+    'preset-empty-slots': {
+        id: 'preset-empty-slots',
+        label: 'My empty slots'
+    },
+    'preset-no-conflicts': {
+        id: 'preset-no-conflicts',
+        label: 'No conflicts'
+    },
+    'preset-saved-only': {
+        id: 'preset-saved-only',
+        label: 'Saved only'
+    },
+    'preset-registered-only': {
+        id: 'preset-registered-only',
+        label: 'Registered only'
+    },
+    'preset-has-presentation': {
+        id: 'preset-has-presentation',
+        label: 'Has no presentation'
+    },
+    'preset-has-exam': {
+        id: 'preset-has-exam',
+        label: 'Has no exam'
+    }
 };
 
 function consumeHomeSlotPrefilter() {
@@ -433,6 +512,32 @@ function consumeCoursePageSearchPrefill() {
     }
 }
 
+function consumeCoursePagePresetPrefill() {
+    try {
+        const raw = window.sessionStorage.getItem(COURSE_PAGE_PRESET_PREFILL_KEY);
+        if (!raw) return null;
+        window.sessionStorage.removeItem(COURSE_PAGE_PRESET_PREFILL_KEY);
+
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const createdAt = Number(parsed.createdAt || 0);
+        if (createdAt && (Date.now() - createdAt) > COURSE_PAGE_PRESET_PREFILL_MAX_AGE_MS) {
+            return null;
+        }
+
+        const presetId = String(parsed.presetId || '').trim();
+        if (!getCourseSmartPresetConfig(presetId)) {
+            return null;
+        }
+
+        return { presetId };
+    } catch (error) {
+        console.warn('Unable to consume course-page preset prefill payload:', error);
+        return null;
+    }
+}
+
 function applyCoursePageSearchPrefillInputs(searchQuery) {
     const normalized = String(searchQuery || '').trim();
     if (!normalized) return;
@@ -490,6 +595,10 @@ async function applyHomePrefilterFilters(prefilter) {
     concentrationCheckboxes.forEach((checkbox) => {
         checkbox.checked = false;
     });
+    const assessmentCheckboxes = document.querySelectorAll('#filter-by-assessment .filter-checkbox');
+    assessmentCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+    });
 
     if (Array.isArray(prefilter.typeFilters) && prefilter.typeFilters.length > 0) {
         const mappedValues = new Set(
@@ -501,6 +610,7 @@ async function applyHomePrefilterFilters(prefilter) {
         });
     }
 
+    setActiveCoursePreset(null, { syncOnly: true });
     currentSearchQuery = null;
     updateCourseFilterTriggerCount();
     await applySearchAndFilters(null);
@@ -508,12 +618,38 @@ async function applyHomePrefilterFilters(prefilter) {
 
 function getCourseFilterCheckboxes() {
     return document.querySelectorAll(
-        '#filter-by-days .filter-checkbox, #filter-by-time .filter-checkbox, #filter-by-concentration .filter-checkbox'
+        '#filter-by-days .filter-checkbox, #filter-by-time .filter-checkbox, #filter-by-concentration .filter-checkbox, #filter-by-assessment .filter-checkbox'
     );
 }
 
+function getCourseSmartPresetConfig(presetId) {
+    if (!presetId) return null;
+    return COURSE_SMART_PRESET_CONFIG[presetId] || null;
+}
+
+function syncCoursePresetButtons() {
+    const presetButtons = document.querySelectorAll('[data-course-preset]');
+    presetButtons.forEach((button) => {
+        const presetId = String(button.dataset.coursePreset || '').trim();
+        const isActive = presetId && presetId === activeCoursePresetId;
+        button.classList.toggle('is-active', Boolean(isActive));
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function setActiveCoursePreset(nextPresetId, { syncOnly = false } = {}) {
+    const normalizedPresetId = String(nextPresetId || '').trim();
+    const hasValidPreset = Boolean(getCourseSmartPresetConfig(normalizedPresetId));
+    activeCoursePresetId = hasValidPreset ? normalizedPresetId : null;
+
+    if (syncOnly || !normalizedPresetId || hasValidPreset || normalizedPresetId === '') {
+        syncCoursePresetButtons();
+    }
+}
+
 function getAppliedCourseFilterCount() {
-    return Array.from(getCourseFilterCheckboxes()).filter((checkbox) => checkbox.checked).length;
+    const checkboxCount = Array.from(getCourseFilterCheckboxes()).filter((checkbox) => checkbox.checked).length;
+    return checkboxCount + (activeCoursePresetId ? 1 : 0);
 }
 
 function ensureCourseFilterCountChip(filterBtn) {
@@ -586,6 +722,79 @@ function updateSortStatusDisplay() {
     });
 }
 
+function doesCourseChipNeedWrapping(chipElement) {
+    if (!chipElement || chipElement.hidden) return false;
+
+    const styles = window.getComputedStyle(chipElement);
+    if (styles.display === 'none' || styles.visibility === 'hidden') return false;
+
+    const chipRect = chipElement.getBoundingClientRect();
+    if (chipRect.width <= 1) return false;
+
+    const measureChip = chipElement.cloneNode(true);
+    measureChip.style.position = 'absolute';
+    measureChip.style.left = '-99999px';
+    measureChip.style.top = '-99999px';
+    measureChip.style.visibility = 'hidden';
+    measureChip.style.pointerEvents = 'none';
+    measureChip.style.width = 'auto';
+    measureChip.style.maxWidth = 'none';
+    measureChip.style.minWidth = '0';
+    measureChip.style.whiteSpace = 'nowrap';
+    measureChip.style.height = 'auto';
+    measureChip.style.display = 'inline-flex';
+    document.body.appendChild(measureChip);
+
+    const nowrapWidth = measureChip.getBoundingClientRect().width;
+    measureChip.remove();
+
+    return nowrapWidth > (chipRect.width + 0.5);
+}
+
+function updateCourseCardRankingChipVisibility() {
+    const courseList = document.getElementById('course-list');
+    if (!courseList) return;
+
+    const footerRows = courseList.querySelectorAll('.class-outside .course-footer-row--desktop');
+    footerRows.forEach((row) => {
+        const rankingChip = row.querySelector('.course-footer-right .course-chip-ranking');
+        if (!rankingChip) return;
+
+        const footerLeft = row.querySelector('.course-footer-left');
+        const footerRight = row.querySelector('.course-footer-right');
+        if (!footerLeft || !footerRight) return;
+
+        rankingChip.hidden = false;
+        rankingChip.removeAttribute('aria-hidden');
+
+        if (row.clientWidth <= 0) return;
+
+        const rowStyles = window.getComputedStyle(row);
+        const gapValue = parseFloat(rowStyles.columnGap || rowStyles.gap || '0');
+        const rowGap = Number.isFinite(gapValue) ? gapValue : 0;
+
+        const requiredWidth = footerLeft.scrollWidth + footerRight.scrollWidth + rowGap;
+        const hasHorizontalOverflow = requiredWidth > (row.clientWidth + 0.5);
+
+        const rowChips = Array.from(row.querySelectorAll('.course-chip'))
+            .filter((chip) => chip.closest('.course-footer-row--desktop') === row && !chip.hidden);
+        const hasAnyMultiLineChip = rowChips.some((chip) => doesCourseChipNeedWrapping(chip));
+
+        if (hasHorizontalOverflow || hasAnyMultiLineChip) {
+            rankingChip.hidden = true;
+            rankingChip.setAttribute('aria-hidden', 'true');
+        }
+    });
+}
+
+function requestCourseCardRankingChipVisibilityUpdate() {
+    if (courseRankingVisibilityRaf) return;
+    courseRankingVisibilityRaf = window.requestAnimationFrame(() => {
+        courseRankingVisibilityRaf = 0;
+        updateCourseCardRankingChipVisibility();
+    });
+}
+
 function getTotalVisibleCourseCards() {
     const courseList = document.getElementById('course-list');
     if (!courseList) return 0;
@@ -615,12 +824,24 @@ function getFilterLabelFromCheckbox(checkbox) {
 }
 
 function getAppliedCourseFilters() {
-    return Array.from(getCourseFilterCheckboxes())
+    const checkboxFilters = Array.from(getCourseFilterCheckboxes())
         .filter((checkbox) => checkbox.checked)
         .map((checkbox) => ({
             id: checkbox.id,
-            label: getFilterLabelFromCheckbox(checkbox)
+            label: getFilterLabelFromCheckbox(checkbox),
+            type: 'checkbox'
         }));
+
+    const presetConfig = getCourseSmartPresetConfig(activeCoursePresetId);
+    if (presetConfig) {
+        checkboxFilters.push({
+            id: presetConfig.id,
+            label: presetConfig.label,
+            type: 'preset'
+        });
+    }
+
+    return checkboxFilters;
 }
 
 function updateActiveCourseFilterDisplay() {
@@ -632,22 +853,29 @@ function updateActiveCourseFilterDisplay() {
     if (!filterSummary || !chipsContainer) return;
 
     const activeFilters = getAppliedCourseFilters();
+    const hasActiveSearch = Boolean(String(currentSearchQuery || '').trim());
+    const keepRowForMobileSearchSummary = hasActiveSearch && window.innerWidth <= 1023;
     chipsContainer.innerHTML = '';
 
     if (activeFilters.length === 0) {
         filterSummary.hidden = true;
         if (clearButton) clearButton.hidden = true;
-        if (filterRow) filterRow.hidden = true;
+        if (filterRow) filterRow.hidden = !keepRowForMobileSearchSummary;
         return;
     }
 
     const chipMarkup = activeFilters
-        .map((filter) => `<span class="course-active-filter-chip" data-filter-id="${filter.id}">${escapeCourseMarkup(filter.label)}</span>`)
+        .map((filter) => {
+            const dataAttr = filter.type === 'preset'
+                ? `data-preset-id="${escapeCourseMarkup(filter.id)}"`
+                : `data-filter-id="${escapeCourseMarkup(filter.id)}"`;
+            return `<button type="button" class="course-active-filter-chip" ${dataAttr} aria-label="Remove filter ${escapeCourseMarkup(filter.label)}">${escapeCourseMarkup(filter.label)}<span class="course-active-filter-chip-close" aria-hidden="true">×</span></button>`;
+        })
         .join('');
     chipsContainer.innerHTML = chipMarkup;
 
     filterSummary.hidden = false;
-    if (clearButton) clearButton.hidden = false;
+    if (clearButton) clearButton.hidden = activeFilters.length < 2;
     if (filterRow) filterRow.hidden = false;
 }
 
@@ -662,6 +890,7 @@ function clearCourseFiltersOnlyAndRefresh() {
     getCourseFilterCheckboxes().forEach((checkbox) => {
         checkbox.checked = false;
     });
+    setActiveCoursePreset(null, { syncOnly: true });
 
     hideCourseChipTooltip();
     hideCourseEvalPopover();
@@ -673,6 +902,7 @@ function resetCoursePageFiltersAndSearch() {
     getCourseFilterCheckboxes().forEach((checkbox) => {
         checkbox.checked = false;
     });
+    setActiveCoursePreset(null, { syncOnly: true });
 
     currentSearchQuery = null;
     suggestionsDisplayed = false;
@@ -702,6 +932,236 @@ function resetCoursePageFiltersAndSearch() {
     }
 
     updateCourseFilterTriggerCount();
+}
+
+function mapStartTimeToCoursePeriod(startHour, startMinute) {
+    const numericStart = (Number(startHour) * 100) + Number(startMinute);
+    if (numericStart >= 900 && numericStart < 1030) return 1;
+    if (numericStart >= 1045 && numericStart < 1215) return 2;
+    if (numericStart >= 1310 && numericStart < 1440) return 3;
+    if (numericStart >= 1455 && numericStart < 1625) return 4;
+    if (numericStart >= 1640 && numericStart < 1810) return 5;
+    return null;
+}
+
+function parseCourseMeetingSlots(timeSlot) {
+    const raw = String(timeSlot || '').trim();
+    if (!raw) return [];
+
+    const slots = [];
+    const seen = new Set();
+    const addSlot = (day, period) => {
+        const normalizedDay = String(day || '').trim();
+        const normalizedPeriod = Number(period);
+        if (!normalizedDay || !Number.isFinite(normalizedPeriod)) return;
+        if (normalizedPeriod < 1 || normalizedPeriod > 5) return;
+        const key = `${normalizedDay}-${normalizedPeriod}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        slots.push({ day: normalizedDay, period: normalizedPeriod, key });
+    };
+
+    const jpDayMap = { '月': 'Mon', '火': 'Tue', '水': 'Wed', '木': 'Thu', '金': 'Fri', '土': 'Sat', '日': 'Sun' };
+    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+    let jpMatch = jpRegex.exec(raw);
+    while (jpMatch) {
+        addSlot(jpDayMap[jpMatch[1]], Number(jpMatch[2]));
+        jpMatch = jpRegex.exec(raw);
+    }
+
+    const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})/gi;
+    let enMatch = enRegex.exec(raw);
+    while (enMatch) {
+        const period = mapStartTimeToCoursePeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));
+        addSlot(enMatch[1], period);
+        enMatch = enRegex.exec(raw);
+    }
+
+    return slots;
+}
+
+function getCourseMeetingTimes(courseData) {
+    const slots = parseCourseMeetingSlots(courseData?.time_slot);
+    if (!slots.length) {
+        const fallbackDay = String(courseData?.day || '').trim();
+        const fallbackPeriod = Number(courseData?.period);
+        if (fallbackDay && Number.isFinite(fallbackPeriod)) {
+            return [{ day: fallbackDay, period: fallbackPeriod, key: `${fallbackDay}-${fallbackPeriod}` }];
+        }
+    }
+    return slots;
+}
+
+function formatCourseSlotLabel(slot) {
+    if (!slot || !slot.day || !Number.isFinite(slot.period)) return '';
+    const periodLabelMap = {
+        1: '1st',
+        2: '2nd',
+        3: '3rd',
+        4: '4th',
+        5: '5th'
+    };
+    return `${slot.day} ${periodLabelMap[slot.period] || `${slot.period}th`}`;
+}
+
+function readCalendarBusySlotsForSemester(year, term) {
+    const busySlots = new Set();
+    const normalizedYear = Number(year);
+    const normalizedTerm = normalizeCourseTermLabel(term);
+    if (!Number.isFinite(normalizedYear) || !normalizedTerm) return busySlots;
+
+    const semesterKey = `${Math.trunc(normalizedYear)}-${normalizedTerm}`;
+    try {
+        const raw = window.localStorage.getItem(CALENDAR_BUSY_SLOTS_STORAGE_KEY);
+        if (!raw) return busySlots;
+        const parsed = JSON.parse(raw);
+        const semesterSlots = Array.isArray(parsed?.[semesterKey]) ? parsed[semesterKey] : [];
+        semesterSlots.forEach((value) => {
+            const normalized = String(value || '').trim();
+            if (!normalized) return;
+            busySlots.add(normalized);
+        });
+    } catch (error) {
+        console.warn('Unable to read saved busy slots for courses page:', error);
+    }
+
+    return busySlots;
+}
+
+const PRESENTATION_KEYWORD_PATTERN = /(?:\bpresent(?:ation|ations|ing|ed)\b|発表)/i;
+
+function textMentionsPresentation(value) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return false;
+    return PRESENTATION_KEYWORD_PATTERN.test(normalized);
+}
+
+function isAdvancedSeminarCourse(course) {
+    const normalizedType = String(course?.type || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!normalizedType) return false;
+    if (normalizedType === 'advanced seminars and honors thesis') return true;
+    if (normalizedType === 'advanced seminar and honors thesis') return true;
+    return normalizedType.includes('advanced seminar');
+}
+
+function hasPresentationInEvaluationComponents(components) {
+    if (!Array.isArray(components) || components.length === 0) return false;
+    return components.some((component) => (
+        textMentionsPresentation(component?.name) || textMentionsPresentation(component?.notes)
+    ));
+}
+
+function deriveDeterministicAssessmentFlags(course) {
+    const canonicalTags = new Set();
+    getCourseEvaluationTags(course, 10).forEach((tag) => {
+        const normalized = String(tag || '').trim().toLowerCase();
+        if (normalized) canonicalTags.add(normalized);
+    });
+
+    const components = normalizeEvaluationComponents(course);
+    components.forEach((component) => {
+        const canonical = canonicalEvaluationTagFromName(component?.name);
+        const normalized = String(canonical || '').trim().toLowerCase();
+        if (normalized) canonicalTags.add(normalized);
+    });
+
+    const hasExam = Array.from(canonicalTags).some((tag) => tag.includes('exam') || tag.includes('midterm'));
+    const hasPresentationByTags = Array.from(canonicalTags).some((tag) => tag.includes('presentation'));
+    const hasPresentationByComponents = hasPresentationInEvaluationComponents(components);
+    const hasPresentationByCourseType = isAdvancedSeminarCourse(course);
+    const hasPresentation = hasPresentationByTags || hasPresentationByComponents || hasPresentationByCourseType;
+    const hasPaper = Array.from(canonicalTags).some((tag) => tag.includes('paper'));
+    const hasWeeklyAssignments = Array.from(canonicalTags).some((tag) => tag.includes('weekly'));
+
+    return {
+        hasExam,
+        hasPresentation,
+        hasPaper,
+        hasWeeklyAssignments,
+        noExam: !hasExam,
+        noPresentation: !hasPresentation
+    };
+}
+
+function getSelectedCourseFilterState() {
+    const dayCheckboxes = document.querySelectorAll('#filter-by-days .filter-checkbox');
+    const selectedDays = Array.from(dayCheckboxes)
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
+
+    const timeCheckboxes = document.querySelectorAll('#filter-by-time .filter-checkbox');
+    const selectedTimes = Array.from(timeCheckboxes)
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
+
+    const concentrationCheckboxes = document.querySelectorAll('#filter-by-concentration .filter-checkbox');
+    const selectedConcentrations = Array.from(concentrationCheckboxes)
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value);
+
+    const assessmentCheckboxes = document.querySelectorAll('#filter-by-assessment .filter-checkbox');
+    const selectedAssessmentFilters = Array.from(assessmentCheckboxes)
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.dataset.assessmentFilter)
+        .filter(Boolean);
+
+    return {
+        selectedDays,
+        selectedTimes,
+        selectedConcentrations,
+        selectedAssessmentFilters,
+        activePresetId: activeCoursePresetId,
+        scheduleSmartFilters: {
+            noConflicts: activeCoursePresetId === 'preset-no-conflicts' || undefined,
+            emptySlots: activeCoursePresetId === 'preset-empty-slots' || undefined
+        }
+    };
+}
+
+function doesAssessmentFilterMatch(assessmentFlags, filterId) {
+    if (!assessmentFlags || !filterId) return false;
+    switch (String(filterId)) {
+        case 'has-presentation':
+            return Boolean(assessmentFlags.hasPresentation);
+        case 'has-exam':
+            return Boolean(assessmentFlags.hasExam);
+        case 'has-paper':
+            return Boolean(assessmentFlags.hasPaper);
+        case 'has-weekly':
+            return Boolean(assessmentFlags.hasWeeklyAssignments);
+        case 'no-exam':
+            return Boolean(assessmentFlags.noExam);
+        case 'no-presentation':
+            return Boolean(assessmentFlags.noPresentation);
+        default:
+            return false;
+    }
+}
+
+function doesCourseMatchSmartPreset(courseData, selectedFilterState) {
+    const presetId = selectedFilterState?.activePresetId;
+    if (!presetId) return true;
+
+    const scheduleSignalType = String(courseData?.scheduleSignal?.type || 'none');
+    const stateFlags = courseData?.stateFlags || {};
+    const assessmentFlags = courseData?.assessmentFlags || deriveDeterministicAssessmentFlags(courseData);
+
+    switch (presetId) {
+        case 'preset-empty-slots':
+            return scheduleSignalType === 'empty_slot_match';
+        case 'preset-no-conflicts':
+            return scheduleSignalType !== 'conflict';
+        case 'preset-saved-only':
+            return Boolean(stateFlags.isSaved);
+        case 'preset-registered-only':
+            return Boolean(stateFlags.isRegistered);
+        case 'preset-has-presentation':
+            return !Boolean(assessmentFlags.hasPresentation);
+        case 'preset-has-exam':
+            return !Boolean(assessmentFlags.hasExam);
+        default:
+            return true;
+    }
 }
 
 function getTopGpaChipLabel(course, hasProfessorChanged = false) {
@@ -759,26 +1219,24 @@ function getCourseCreditsBadgeLabel(course) {
 
 function getCreditsChipMarkup(course) {
     const rawCredits = course && course.credits;
-    if (rawCredits === null || rawCredits === undefined || rawCredits === "") {
-        return `<span class="course-chip course-chip-credits">Credits TBA</span>`;
-    }
+    if (rawCredits === null || rawCredits === undefined || rawCredits === "") return '';
 
     const normalizedCredits = String(rawCredits).trim();
-    if (!normalizedCredits) {
-        return `<span class="course-chip course-chip-credits">Credits TBA</span>`;
-    }
+    if (!normalizedCredits) return '';
 
     const parsedCredits = parseFloat(normalizedCredits.replace(/[^0-9.]/g, ""));
-    if (Number.isFinite(parsedCredits) && parsedCredits > 0) {
+    if (Number.isFinite(parsedCredits) && Math.abs(parsedCredits - 1) < 0.0001) {
+        return `<span class="course-chip course-chip-credits">1 Credit</span>`;
+    }
+
+    if (Number.isFinite(parsedCredits) && parsedCredits >= 3) {
         const formattedCredits = Number.isInteger(parsedCredits)
             ? String(parsedCredits)
             : String(parsedCredits).replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
-        const creditUnit = parsedCredits === 1 ? "Credit" : "Credits";
-        return `<span class="course-chip course-chip-credits">${formattedCredits} ${creditUnit}</span>`;
+        return `<span class="course-chip course-chip-credits">${formattedCredits} Credits</span>`;
     }
 
-    const fallbackText = /credit/i.test(normalizedCredits) ? normalizedCredits : `${normalizedCredits} Credits`;
-    return `<span class="course-chip course-chip-credits">${fallbackText}</span>`;
+    return '';
 }
 
 function normalizeCourseTermLabel(termValue) {
@@ -804,11 +1262,17 @@ function buildCourseStatusKey(courseLike = {}, fallbackYear = null, fallbackTerm
 }
 
 async function buildCourseStatusLookup(courses = [], year, term) {
-    const lookup = new Map();
-    if (!Array.isArray(courses) || courses.length === 0) return lookup;
+    const context = {
+        statusLookup: new Map(),
+        scheduleSignalLookup: new Map()
+    };
+    if (!Array.isArray(courses) || courses.length === 0) return context;
 
     const fallbackYear = Number(year);
     const fallbackTerm = normalizeCourseTermLabel(term);
+    if (!Number.isFinite(fallbackYear) || !fallbackTerm) {
+        return context;
+    }
 
     let session = null;
     try {
@@ -818,22 +1282,28 @@ async function buildCourseStatusLookup(courses = [], year, term) {
         console.warn('Unable to read auth session for course status chips:', error);
     }
 
-    let savedCourses = readSavedCourses(Number.POSITIVE_INFINITY);
+    let savedCourseKeys = new Set();
     if (session?.user?.id) {
+        let savedCourses = readSavedCourses(Number.POSITIVE_INFINITY);
         try {
             savedCourses = await syncSavedCoursesForUser(session.user.id);
         } catch (error) {
             console.warn('Unable to sync saved courses for status chips:', error);
         }
+
+        savedCourseKeys = new Set(
+            (Array.isArray(savedCourses) ? savedCourses : [])
+                .map((entry) => buildCourseStatusKey(entry, fallbackYear, fallbackTerm))
+                .filter(Boolean)
+        );
     }
 
-    const savedCourseKeys = new Set(
-        (Array.isArray(savedCourses) ? savedCourses : [])
-            .map((entry) => buildCourseStatusKey(entry, fallbackYear, fallbackTerm))
-            .filter(Boolean)
-    );
-
     const registeredCourseKeys = new Set();
+    const registeredCourseCodes = new Set();
+    const registeredSlots = new Set();
+    const busySlots = readCalendarBusySlotsForSemester(fallbackYear, fallbackTerm);
+    const emptySlots = new Set(COURSE_DEFAULT_SLOT_KEYS.filter((slotKey) => !busySlots.has(slotKey)));
+
     if (session?.user?.id) {
         try {
             const { data: profileData, error: profileError } = await supabase
@@ -849,13 +1319,42 @@ async function buildCourseStatusLookup(courses = [], year, term) {
                 : [];
 
             selectedCourses.forEach((entry) => {
+                const entryYear = Number(entry?.year ?? entry?.academic_year);
+                const entryTerm = normalizeCourseTermLabel(entry?.term || fallbackTerm);
+                const isMatchingSemester = Number.isFinite(entryYear)
+                    && entryYear === fallbackYear
+                    && (!entryTerm || entryTerm === fallbackTerm);
+                if (!isMatchingSemester) return;
+
                 const normalizedEntry = {
                     ...entry,
                     course_code: entry?.course_code || entry?.code || ''
                 };
                 const key = buildCourseStatusKey(normalizedEntry, fallbackYear, fallbackTerm);
                 if (key) registeredCourseKeys.add(key);
+
+                const code = String(entry?.code || entry?.course_code || '').trim().toUpperCase();
+                if (code) registeredCourseCodes.add(code);
             });
+
+            if (registeredCourseCodes.size > 0) {
+                const { data: registeredCoursesData, error: registeredCoursesError } = await supabase
+                    .from('courses')
+                    .select('course_code, time_slot')
+                    .in('course_code', Array.from(registeredCourseCodes))
+                    .eq('academic_year', fallbackYear)
+                    .eq('term', fallbackTerm);
+
+                if (registeredCoursesError) throw registeredCoursesError;
+
+                (Array.isArray(registeredCoursesData) ? registeredCoursesData : []).forEach((registeredCourse) => {
+                    const slots = parseCourseMeetingSlots(registeredCourse?.time_slot);
+                    slots.forEach((slot) => {
+                        registeredSlots.add(slot.key);
+                        emptySlots.delete(slot.key);
+                    });
+                });
+            }
         } catch (error) {
             console.warn('Unable to read registered courses for status chips:', error);
         }
@@ -865,16 +1364,45 @@ async function buildCourseStatusLookup(courses = [], year, term) {
         const key = buildCourseStatusKey(course, fallbackYear, fallbackTerm);
         if (!key) return;
 
+        const code = String(course?.course_code || '').trim().toUpperCase();
+        const isRegistered = registeredCourseKeys.has(key);
+
         if (registeredCourseKeys.has(key)) {
-            lookup.set(key, 'Registered');
-            return;
+            context.statusLookup.set(key, 'Registered');
+        } else if (savedCourseKeys.has(key)) {
+            context.statusLookup.set(key, 'Saved');
         }
-        if (savedCourseKeys.has(key)) {
-            lookup.set(key, 'Saved');
+
+        const slots = getCourseMeetingTimes(course);
+        let scheduleSignal = { type: 'none', label: '' };
+        const hasScheduleBaseline = registeredSlots.size > 0 || busySlots.size > 0;
+
+        if (!isRegistered && slots.length > 0) {
+            const conflictingSlots = slots.filter((slot) => registeredSlots.has(slot.key));
+            if (conflictingSlots.length > 0) {
+                const firstConflict = conflictingSlots[0];
+                scheduleSignal = {
+                    type: 'conflict',
+                    label: `Conflicts with ${formatCourseSlotLabel(firstConflict)}`,
+                    mobileLabel: `Conflicts: ${formatCourseSlotLabel(firstConflict)}`
+                };
+            } else if (hasScheduleBaseline && slots.some((slot) => emptySlots.has(slot.key))) {
+                scheduleSignal = {
+                    type: 'empty_slot_match',
+                    label: 'Fits empty slot',
+                    mobileLabel: 'Fits empty slot'
+                };
+            }
         }
+
+        if (isRegistered && code && registeredCourseCodes.has(code)) {
+            scheduleSignal = { type: 'none', label: '' };
+        }
+
+        context.scheduleSignalLookup.set(key, scheduleSignal);
     });
 
-    return lookup;
+    return context;
 }
 
 function getMobileCourseTypeChipMarkup(courseTypeLabel) {
@@ -883,7 +1411,14 @@ function getMobileCourseTypeChipMarkup(courseTypeLabel) {
     return `<span class="course-chip course-chip-mobile-type">${escapeCourseMarkup(label)}</span>`;
 }
 
-function getCourseStatusChipMarkup(statusLabel) {
+function getRegisteredChipInlineStyle(courseColor) {
+    const normalized = toHexColor(courseColor, '#6A9E7B');
+    const backgroundColor = darkenHexToRgba(normalized, 0.34, 0.94);
+    const borderColor = darkenHexToRgba(normalized, 0.45, 0.98);
+    return ` style="background:${backgroundColor}; border-color:${borderColor}; color:rgba(255, 255, 255, 0.97);"`;
+}
+
+function getCourseStatusChipMarkup(statusLabel, courseColor = '') {
     const label = String(statusLabel || '').trim();
     if (!label) return '';
 
@@ -891,8 +1426,58 @@ function getCourseStatusChipMarkup(statusLabel) {
     const variantClass = lower === 'registered'
         ? 'course-chip-status-registered'
         : 'course-chip-status-saved';
+    const registeredStyle = lower === 'registered' ? getRegisteredChipInlineStyle(courseColor) : '';
 
-    return `<span class="course-chip course-chip-status ${variantClass}">${escapeCourseMarkup(label)}</span>`;
+    return `<span class="course-chip course-chip-status ${variantClass}"${registeredStyle}>${escapeCourseMarkup(label)}</span>`;
+}
+
+function getCourseHelperBadgeMarkup(scheduleSignal = {}, stateFlags = {}) {
+    if (!scheduleSignal || scheduleSignal.type === 'none') return '';
+    if (stateFlags?.isRegistered) return '';
+
+    if (scheduleSignal.type === 'conflict') {
+        const label = scheduleSignal.label || 'Conflicts with your schedule';
+        return `<span class="course-chip course-chip-helper course-chip-helper-conflict">${escapeCourseMarkup(label)}</span>`;
+    }
+    if (scheduleSignal.type === 'empty_slot_match') {
+        const label = scheduleSignal.label || 'Fits empty slot';
+        return `<span class="course-chip course-chip-helper course-chip-helper-fit">${escapeCourseMarkup(label)}</span>`;
+    }
+    return '';
+}
+
+function getMobilePrimarySignalChipMarkup(statusLabel = '', scheduleSignal = {}, courseColor = '') {
+    const normalizedStatus = String(statusLabel || '').trim().toLowerCase();
+
+    if (normalizedStatus === 'registered') {
+        const registeredStyle = getRegisteredChipInlineStyle(courseColor);
+        return `<span class="course-chip course-chip-status course-chip-status-registered course-chip-mobile-signal"${registeredStyle}>Registered</span>`;
+    }
+
+    if (scheduleSignal?.type === 'conflict') {
+        let compactLabel = String(scheduleSignal?.mobileLabel || '').trim();
+        if (!compactLabel) {
+            const fallbackLabel = String(scheduleSignal?.label || '').trim();
+            if (fallbackLabel) {
+                const normalizedFallback = fallbackLabel.replace(/^Conflicts with\s*/i, '').trim();
+                compactLabel = normalizedFallback ? `Conflicts: ${normalizedFallback}` : 'Conflicts';
+            } else {
+                compactLabel = 'Conflicts';
+            }
+        }
+        return `<span class="course-chip course-chip-helper course-chip-helper-conflict course-chip-mobile-signal">${escapeCourseMarkup(compactLabel)}</span>`;
+    }
+
+    if (scheduleSignal?.type === 'empty_slot_match') {
+        const compactLabel = String(scheduleSignal?.mobileLabel || scheduleSignal?.label || 'Fits empty slot').trim();
+        return `<span class="course-chip course-chip-helper course-chip-helper-fit course-chip-mobile-signal">${escapeCourseMarkup(compactLabel)}</span>`;
+    }
+
+    if (normalizedStatus === 'saved') {
+        return '<span class="course-chip course-chip-status course-chip-status-saved course-chip-mobile-signal">Saved</span>';
+    }
+
+    return '';
 }
 
 function escapeCourseMarkup(value) {
@@ -1087,6 +1672,10 @@ function deriveEvaluationTagsFromComponents(components, maxTags = 6) {
         .toLowerCase();
 
     const keywordTags = [
+        ['presentation', 'Presentation'],
+        ['presenting', 'Presentation'],
+        ['presented', 'Presentation'],
+        ['発表', 'Presentation'],
         ['group', 'Group'],
         ['debate', 'Debate'],
         ['paper', 'Paper'],
@@ -1268,7 +1857,7 @@ async function showCourse(year, term) {
     // This handles the case where DOM was replaced but we already have the data
     if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term && !isLoadingCourses) {
         console.log('Using cached course data for rendering');
-        renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedStatusLookup);
+        renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedCoursePlanningContext);
         return;
     }
 
@@ -1278,7 +1867,7 @@ async function showCourse(year, term) {
         // Wait a bit for the loading to complete, then check again
         await new Promise(resolve => setTimeout(resolve, 100));
         if (lastLoadedCourses && lastLoadedYear === year && lastLoadedTerm === term) {
-            renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedStatusLookup);
+            renderCourses(lastLoadedCourses, courseList, year, term, lastLoadedProfessorChanges, lastLoadedCoursePlanningContext);
         }
         return;
     }
@@ -1288,12 +1877,15 @@ async function showCourse(year, term) {
         if (!courses || courses.length === 0) {
             console.warn('No courses returned');
             courseList.innerHTML = `
-                <div class="course-error-state">
-                    <div>
-                        <p>No courses found for ${term} ${year}</p>
+                <div class="course-empty-state no-results">
+                    <h3 class="course-empty-title">No courses in ${escapeCourseMarkup(term)} ${escapeCourseMarkup(year)}</h3>
+                    <p class="course-empty-message">Try selecting a different semester.</p>
+                    <div class="course-empty-actions">
+                        <button type="button" class="course-empty-clear-btn control-surface control-surface--secondary" data-action="change-course-term">Change term</button>
                     </div>
                 </div>
             `;
+            updateCourseFilterParagraph();
             return;
         }
 
@@ -1304,20 +1896,24 @@ async function showCourse(year, term) {
 
         // Fetch professor change data for all courses
         const courseCodes = courses.map(c => c.course_code).filter(Boolean);
-        const professorChanges = await fetchProfessorChanges(courseCodes);
-        const courseStatusLookup = await buildCourseStatusLookup(courses, year, term);
+        const professorChanges = await fetchProfessorChanges(courseCodes, {
+            currentCourses: courses,
+            currentYear: year,
+            currentTerm: term
+        });
+        const coursePlanningContext = await buildCourseStatusLookup(courses, year, term);
 
         // Cache the loaded courses and professor changes
         lastLoadedCourses = courses;
         lastLoadedYear = year;
         lastLoadedTerm = term;
         lastLoadedProfessorChanges = professorChanges;
-        lastLoadedStatusLookup = courseStatusLookup;
+        lastLoadedCoursePlanningContext = coursePlanningContext;
 
         // Re-get courseList in case DOM changed during fetch
         const currentCourseList = document.getElementById("course-list");
         if (currentCourseList) {
-            renderCourses(courses, currentCourseList, year, term, professorChanges, courseStatusLookup);
+            renderCourses(courses, currentCourseList, year, term, professorChanges, coursePlanningContext);
         }
     } catch (error) {
         console.error('Failed to load courses after all retries:', error);
@@ -1326,7 +1922,7 @@ async function showCourse(year, term) {
 }
 
 // Separate function to render courses to the DOM
-function renderCourses(courses, courseList, year, term, professorChanges = new Set(), courseStatusLookup = new Map()) {
+function renderCourses(courses, courseList, year, term, professorChanges = new Set(), coursePlanningContext = {}) {
     const days = {
         "月曜日": "Mon", "月": "Mon",
         "火曜日": "Tue", "火": "Tue",
@@ -1341,6 +1937,12 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
         "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
     };
+    const courseStatusLookup = coursePlanningContext?.statusLookup instanceof Map
+        ? coursePlanningContext.statusLookup
+        : new Map();
+    const courseScheduleSignalLookup = coursePlanningContext?.scheduleSignalLookup instanceof Map
+        ? coursePlanningContext.scheduleSignalLookup
+        : new Map();
 
     let courseHTML = "";
     courses.forEach(function (course) {
@@ -1363,24 +1965,47 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const courseBorderColor = getCourseCardBorderColor(courseColor);
         const courseHoverBorderColor = getCourseCardHoverBorderColor(courseColor);
 
-        // Escape the JSON string for safe HTML attribute embedding
-        const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
-
         // Check if professor has changed across semesters
         const hasProfessorChanged = professorChanges.has(course.course_code);
         const professorDisplay = formatProfessorCardName(course.professor);
         const creditsChip = getCreditsChipMarkup(course);
-        const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
+        const shouldHideGpaForProfessor = hasProfessorChanged || !isCourseGpaAlignedWithCurrentProfessor(course);
+        const gpaSummaryChip = getGpaChipMarkup(course, shouldHideGpaForProfessor);
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
         const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const courseTypeLabel = getCourseTypeLabel(course.type);
-        const mobileTypeChip = getMobileCourseTypeChipMarkup(courseTypeLabel);
         const statusKey = buildCourseStatusKey(course, year, term);
-        const courseStatusLabel = (courseStatusLookup instanceof Map ? courseStatusLookup.get(statusKey) : '') || '';
-        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel);
+        const courseStatusLabel = courseStatusLookup.get(statusKey) || '';
+        const scheduleSignal = courseScheduleSignalLookup.get(statusKey) || { type: 'none', label: '' };
+        const assessmentPreviewTags = getAssessmentPreviewTagItems(course, 6);
+        const assessmentSummary = {
+            primary: assessmentPreviewTags.slice(0, 2).map((item) => item.label),
+            overflowCount: Math.max(0, assessmentPreviewTags.length - 2),
+            workloadLabel: null
+        };
+        const stateFlags = {
+            isRegistered: courseStatusLabel === 'Registered',
+            isSaved: courseStatusLabel === 'Saved',
+            isHidden: false
+        };
+        const assessmentFlags = deriveDeterministicAssessmentFlags(course);
+        const helperBadge = getCourseHelperBadgeMarkup(scheduleSignal, stateFlags);
+        const mobilePrimarySignalChip = getMobilePrimarySignalChipMarkup(courseStatusLabel, scheduleSignal, courseColor);
+        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel, courseColor);
         const normalizedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(displayTimeSlot || '').replace(/ - /g, ' – ');
         const cardAriaLabel = `Open course info for ${normalizedTitle}`.replace(/"/g, '&quot;');
+        const decoratedCourse = {
+            ...course,
+            scheduleSignal,
+            stateFlags,
+            assessmentSummary,
+            assessmentFlags,
+            isHidden: false
+        };
+
+        // Escape the JSON string for safe HTML attribute embedding
+        const escapedCourseJSON = JSON.stringify(decoratedCourse).replace(/'/g, '&#39;');
 
         courseHTML += `
         <div class="class-outside" id="${displayTimeSlot}" data-color='${courseColor}' style="--course-card-border: ${courseBorderColor}; --course-card-border-hover: ${courseHoverBorderColor};" role="button" tabindex="0" aria-label="${cardAriaLabel}">
@@ -1405,10 +2030,13 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                     <h3 id="course-time"><div class="course-time-icon"></div>${timeDisplay}</h3>
                     ${evaluationChipRow}
                 </div>
-                <div class="course-footer-row">
-                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}</div>
+                <div class="course-footer-row course-footer-row--desktop">
+                    <div class="course-footer-left">${creditsChip}${courseStatusChip}${helperBadge}</div>
                     <div class="course-footer-right">${gpaSummaryChip}</div>
                 </div>
+                ${mobilePrimarySignalChip
+                ? `<div class="course-footer-row course-footer-row--mobile"><div class="course-mobile-signal-row">${mobilePrimarySignalChip}</div></div>`
+                : ''}
             </div>
         </div>
         `;
@@ -1428,6 +2056,8 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         .catch((error) => {
             console.warn('Failed to reapply filters after course render:', error);
         });
+
+    requestCourseCardRankingChipVisibilityUpdate();
 
     console.log(`Successfully rendered ${courses.length} courses for ${term} ${year}`);
 }
@@ -1554,114 +2184,129 @@ window.retryLoadCourses = function () {
     }
 };
 
-// Helper function to convert course time slot to container ID format
-function convertTimeSlotToContainerFormat(timeSlot) {
-    const days = {
-        "月曜日": "Mon", "月": "Mon",
-        "火曜日": "Tue", "火": "Tue",
-        "水曜日": "Wed", "水": "Wed",
-        "木曜日": "Thu", "木": "Thu",
-        "金曜日": "Fri", "金": "Fri"
-    };
-    const times = {
-        "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
-        "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
-        "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
-        "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
-        "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
-    };
-
-    // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-    const match = timeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
-    const specialMatch = timeSlot.match(/(月曜日3講時・木曜日3講時)/);
-
-    if (/(集中講義|集中)/.test(timeSlot)) {
-        return "Intensive";
-    } else if (specialMatch) {
-        return "Mon 13:10 - 14:40"; // Just return the first occurrence for filter matching
-    } else if (match) {
-        return `${days[match[1]]} ${times[match[2]]}`;
-    }
-    return timeSlot; // Return as-is if no match
-}
-
-// Helper function to check if a container matches current filters
-function containerMatchesFilters(container, courseData = null) {
-    // Get filter elements dynamically
-    const filterByDays = document.getElementById("filter-by-days");
-    const filterByTime = document.getElementById("filter-by-time");
-    const filterByConcentration = document.getElementById("filter-by-concentration");
-
-    if (!filterByDays || !filterByTime || !filterByConcentration) {
-        // Filter elements not found, show all courses
+function doesCourseMatchConcentrationFilter(courseType, selectedConcentrations) {
+    if (!Array.isArray(selectedConcentrations) || selectedConcentrations.length === 0) {
         return true;
     }
 
-    // Days filter
-    const dayCheckboxes = filterByDays.querySelectorAll(".filter-checkbox");
-    const selectedDays = Array.from(dayCheckboxes)
-        .filter(checkbox => checkbox.checked)
-        .map(checkbox => checkbox.value);
+    const normalizedType = String(courseType || '');
+    return selectedConcentrations.some((filterValue) => {
+        switch (filterValue) {
+            case 'culture':
+                return normalizedType === 'Japanese Society and Global Culture Concentration';
+            case 'economy':
+                return normalizedType === 'Japanese Business and the Global Economy Concentration';
+            case 'politics':
+                return normalizedType === 'Japanese Politics and Global Studies Concentration';
+            case 'seminar':
+                return normalizedType === 'Introductory Seminars'
+                    || normalizedType === 'Intermediate Seminars'
+                    || normalizedType === 'Advanced Seminars and Honors Thesis';
+            case 'academic':
+                return normalizedType === 'Academic and Research Skills';
+            case 'understanding':
+                return normalizedType === 'Understanding Japan and Kyoto';
+            case 'special':
+                return normalizedType === 'Other Elective Courses' || normalizedType === 'Special Lecture Series';
+            default:
+                return false;
+        }
+    });
+}
 
-    // Time filter
-    const timeCheckboxes = filterByTime.querySelectorAll(".filter-checkbox");
-    const selectedTimes = Array.from(timeCheckboxes)
-        .filter(checkbox => checkbox.checked)
-        .map(checkbox => checkbox.value);
-
-    // Concentration/Type filter
-    const concCheckboxes = filterByConcentration.querySelectorAll(".filter-checkbox");
-    const selectedConcentrations = Array.from(concCheckboxes)
-        .filter(checkbox => checkbox.checked)
-        .map(checkbox => checkbox.value);
-
-    // Day logic
-    const timeSlot = container.id;
-    const day = timeSlot ? timeSlot.split(" ")[0] : '';
-
-    // Time logic
-    const time = timeSlot ? timeSlot.split(" ")[1] : '';
-
-    // Check if matches day filter
-    const dayMatch = selectedDays.length === 0 || selectedDays.includes(day);
-
-    // Check if matches time filter
-    const timeMatch = selectedTimes.length === 0 || selectedTimes.includes(time);
-
-    // Concentration/Type filter - match against course.type from database
-    let concMatch = selectedConcentrations.length === 0;
-
-    if (!concMatch && courseData) {
-        const courseType = courseData.type || '';
-
-        // Map filter checkbox values to database type values
-        const typeMatches = selectedConcentrations.some(filterValue => {
-            switch (filterValue) {
-                case 'culture':
-                    return courseType === 'Japanese Society and Global Culture Concentration';
-                case 'economy':
-                    return courseType === 'Japanese Business and the Global Economy Concentration';
-                case 'politics':
-                    return courseType === 'Japanese Politics and Global Studies Concentration';
-                case 'seminar':
-                    return courseType === 'Introductory Seminars' ||
-                        courseType === 'Intermediate Seminars' ||
-                        courseType === 'Advanced Seminars and Honors Thesis';
-                case 'academic':
-                    return courseType === 'Academic and Research Skills';
-                case 'understanding':
-                    return courseType === 'Understanding Japan and Kyoto';
-                case 'special':
-                    return courseType === 'Other Elective Courses';
-                default:
-                    return false;
-            }
-        });
-
-        concMatch = typeMatches;
+function doesCourseMatchAssessmentFilters(courseData, selectedAssessmentFilters) {
+    if (!Array.isArray(selectedAssessmentFilters) || selectedAssessmentFilters.length === 0) {
+        return true;
     }
 
-    return dayMatch && timeMatch && concMatch;
+    const assessmentFlags = courseData?.assessmentFlags || deriveDeterministicAssessmentFlags(courseData);
+    return selectedAssessmentFilters.some((filterId) => doesAssessmentFilterMatch(assessmentFlags, filterId));
+}
+
+// Helper function to check if a container matches current filters
+function containerMatchesFilters(container, courseData = null, selectedFilterState = null) {
+    if (!courseData) return true;
+
+    const state = selectedFilterState || getSelectedCourseFilterState();
+    const selectedDays = Array.isArray(state.selectedDays) ? state.selectedDays : [];
+    const selectedTimes = Array.isArray(state.selectedTimes) ? state.selectedTimes : [];
+    const selectedConcentrations = Array.isArray(state.selectedConcentrations) ? state.selectedConcentrations : [];
+    const selectedAssessmentFilters = Array.isArray(state.selectedAssessmentFilters) ? state.selectedAssessmentFilters : [];
+
+    const slotMeetings = getCourseMeetingTimes(courseData);
+    const meetingDays = slotMeetings.map((slot) => slot.day);
+    const meetingTimes = slotMeetings.map((slot) => HOME_PREFILTER_PERIOD_TO_TIME[slot.period]).filter(Boolean);
+
+    const fallbackId = String(container?.id || '').trim();
+    if (!meetingDays.length && fallbackId) {
+        const fallbackDay = fallbackId.split(' ')[0];
+        if (fallbackDay) meetingDays.push(fallbackDay);
+    }
+    if (!meetingTimes.length && fallbackId) {
+        const fallbackTime = fallbackId.split(' ')[1];
+        if (fallbackTime) meetingTimes.push(fallbackTime);
+    }
+
+    const dayMatch = selectedDays.length === 0 || meetingDays.some((day) => selectedDays.includes(day));
+    const timeMatch = selectedTimes.length === 0 || meetingTimes.some((time) => selectedTimes.includes(time));
+    const concentrationMatch = doesCourseMatchConcentrationFilter(courseData.type, selectedConcentrations);
+    const assessmentMatch = doesCourseMatchAssessmentFilters(courseData, selectedAssessmentFilters);
+    const presetMatch = doesCourseMatchSmartPreset(courseData, state);
+
+    return dayMatch && timeMatch && concentrationMatch && assessmentMatch && presetMatch;
+}
+
+function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
+    const presetId = selectedFilterState?.activePresetId || null;
+    const hasSearch = Boolean(activeSearchQuery && activeSearchQuery.trim());
+    const hasFilterSelections = Boolean(
+        (selectedFilterState?.selectedDays?.length || 0) > 0
+        || (selectedFilterState?.selectedTimes?.length || 0) > 0
+        || (selectedFilterState?.selectedConcentrations?.length || 0) > 0
+        || (selectedFilterState?.selectedAssessmentFilters?.length || 0) > 0
+        || presetId
+    );
+
+    const model = {
+        title: hasSearch
+            ? `No courses match "${activeSearchQuery.trim()}".`
+            : 'No courses match the selected filters.',
+        message: hasSearch
+            ? 'Try a different keyword or remove filters.'
+            : 'Try adjusting filters to widen the results.',
+        actions: [{ action: 'clear-course-filters', label: 'Clear filters' }]
+    };
+
+    if (presetId === 'preset-saved-only') {
+        model.title = 'No saved courses in this term.';
+        model.message = 'Save courses from course details, then return to this preset.';
+        model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
+        return model;
+    }
+
+    if (presetId === 'preset-registered-only') {
+        model.title = 'No registered courses in this term.';
+        model.message = 'Register courses from course details or switch semesters.';
+        model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
+        return model;
+    }
+
+    if (presetId === 'preset-empty-slots') {
+        model.title = 'No courses fit your empty slots.';
+        model.message = 'Try changing slot filters or review your calendar availability.';
+        model.actions = [
+            { action: 'show-all-courses', label: 'Show all courses' },
+            { action: 'open-calendar-empty-slots', label: 'Open timetable' }
+        ];
+        return model;
+    }
+
+    if (hasSearch && !hasFilterSelections) {
+        model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
+        return model;
+    }
+
+    return model;
 }
 
 function applyFilters() {
@@ -1697,6 +2342,7 @@ async function applySearchAndFilters(searchQuery) {
         return;
     }
 
+    const selectedFilterState = getSelectedCourseFilterState();
     let hasResults = false;
 
     // Remove any existing no-results message
@@ -1710,7 +2356,7 @@ async function applySearchAndFilters(searchQuery) {
         const courseData = JSON.parse(container.querySelector('.class-container').dataset.course);
 
         // First check if it matches current filters (pass courseData for type filtering)
-        const filterMatches = containerMatchesFilters(container, courseData);
+        const filterMatches = containerMatchesFilters(container, courseData, selectedFilterState);
 
         // If there's an active search query, also check search criteria
         if (activeSearchQuery && activeSearchQuery.trim()) {
@@ -1745,20 +2391,17 @@ async function applySearchAndFilters(searchQuery) {
 
     // Handle no results case
     if (!hasResults) {
-        const isSearchEmpty = !activeSearchQuery || !activeSearchQuery.trim();
-        const title = isSearchEmpty
-            ? "No courses match the selected filters."
-            : `No courses match "${activeSearchQuery.trim()}".`;
-        const message = isSearchEmpty
-            ? "Try adjusting filters or clear them to view all courses."
-            : "Try a different keyword or clear filters to reset the list.";
+        const emptyStateModel = buildNoResultsStateModel(activeSearchQuery, selectedFilterState);
+        const actionsMarkup = (Array.isArray(emptyStateModel.actions) ? emptyStateModel.actions : [])
+            .map((item) => `<button type="button" class="course-empty-clear-btn control-surface control-surface--secondary" data-action="${escapeCourseMarkup(item.action)}">${escapeCourseMarkup(item.label)}</button>`)
+            .join('');
 
         const emptyState = document.createElement("div");
         emptyState.className = "course-empty-state no-results";
         emptyState.innerHTML = `
-            <h3 class="course-empty-title">${title}</h3>
-            <p class="course-empty-message">${message}</p>
-            <button type="button" class="course-empty-clear-btn control-surface control-surface--secondary" data-action="clear-course-filters">Clear filters</button>
+            <h3 class="course-empty-title">${escapeCourseMarkup(emptyStateModel.title)}</h3>
+            <p class="course-empty-message">${escapeCourseMarkup(emptyStateModel.message)}</p>
+            <div class="course-empty-actions">${actionsMarkup}</div>
         `;
         courseList.appendChild(emptyState);
     }
@@ -1767,6 +2410,7 @@ async function applySearchAndFilters(searchQuery) {
 
     // Update the course filter paragraph after applying filters
     updateCourseFilterParagraph();
+    requestCourseCardRankingChipVisibilityUpdate();
 }
 
 async function updateCoursesAndFilters() {
@@ -1814,6 +2458,55 @@ async function updateCoursesAndFilters() {
         console.error('Error updating courses and filters:', error);
         // Don't show error state here as showCourse already handles it
     }
+}
+
+async function refreshCourseStatusChips() {
+    const courseList = document.getElementById("course-list");
+    if (!courseList || !Array.isArray(lastLoadedCourses) || lastLoadedCourses.length === 0) {
+        return;
+    }
+
+    const yearSelect = document.getElementById("year-select");
+    const termSelect = document.getElementById("term-select");
+    const targetYear = yearSelect?.value || lastLoadedYear;
+    const targetTerm = termSelect?.value || lastLoadedTerm;
+
+    if (!targetYear || !targetTerm || isLoadingCourses) {
+        return;
+    }
+
+    try {
+        const planningContext = await buildCourseStatusLookup(lastLoadedCourses, targetYear, targetTerm);
+        lastLoadedCoursePlanningContext = planningContext;
+        renderCourses(
+            lastLoadedCourses,
+            courseList,
+            targetYear,
+            targetTerm,
+            lastLoadedProfessorChanges,
+            planningContext
+        );
+    } catch (error) {
+        console.warn('Unable to refresh course status chips after status update:', error);
+    }
+}
+
+function scheduleCourseStatusChipRefresh() {
+    if (courseStatusRefreshTimer) {
+        window.clearTimeout(courseStatusRefreshTimer);
+    }
+    courseStatusRefreshTimer = window.setTimeout(() => {
+        courseStatusRefreshTimer = null;
+        refreshCourseStatusChips();
+    }, 80);
+}
+
+function setupCourseStatusSyncListeners() {
+    if (courseStatusSyncListenersBound) return;
+    courseStatusSyncListenersBound = true;
+
+    window.addEventListener('saved-courses:changed', scheduleCourseStatusChipRefresh);
+    document.addEventListener('course-status-updated', scheduleCourseStatusChipRefresh);
 }
 
 function getCourseDataFromCard(cardElement) {
@@ -1963,6 +2656,35 @@ function setupCourseListClickListener() {
             return;
         }
 
+        const showAllCoursesButton = event.target.closest('[data-action="show-all-courses"]');
+        if (showAllCoursesButton) {
+            event.preventDefault();
+            clearCourseFiltersAndSearchAndRefresh();
+            return;
+        }
+
+        const openCalendarButton = event.target.closest('[data-action="open-calendar-empty-slots"]');
+        if (openCalendarButton) {
+            event.preventDefault();
+            if (window.router?.navigate) {
+                window.router.navigate('/timetable');
+            } else {
+                window.location.href = withBase('/timetable');
+            }
+            return;
+        }
+
+        const changeTermButton = event.target.closest('[data-action="change-course-term"]');
+        if (changeTermButton) {
+            event.preventDefault();
+            const semesterTrigger = document.querySelector('#filter-year-term .custom-select-trigger');
+            if (semesterTrigger) {
+                semesterTrigger.focus();
+                semesterTrigger.click();
+            }
+            return;
+        }
+
         const openEvaluationDetailsTrigger = event.target.closest('[data-action="open-evaluation-details"]');
         if (openEvaluationDetailsTrigger) {
             event.preventDefault();
@@ -2036,6 +2758,7 @@ function setupCourseListClickListener() {
     window.addEventListener('resize', () => {
         hideCourseChipTooltip();
         hideCourseEvalPopover();
+        requestCourseCardRankingChipVisibilityUpdate();
     });
     window.addEventListener('scroll', () => {
         if (courseEvalPopoverElement && !courseEvalPopoverElement.hidden && activeCourseEvalPopoverTrigger) {
@@ -2206,7 +2929,7 @@ function setupDashboardEventListeners() {
                 console.log('  → Dropdowns synced');
 
                 // Check if we're on the calendar page
-                const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
+                const isCalendarPage = getCurrentAppPath() === '/timetable' || document.querySelector('calendar-page') !== null;
                 console.log('  → Is calendar page?', isCalendarPage);
                 console.log('  → Current pathname:', getCurrentAppPath());
                 console.log('  → Calendar component exists?', !!document.querySelector('calendar-page'));
@@ -2364,6 +3087,7 @@ function setupDashboardEventListeners() {
     updateCourseFilterTriggerCount();
     updateSortStatusDisplay();
     updateActiveCourseFilterDisplay();
+    syncCoursePresetButtons();
 
     const clearActiveFiltersBtn = document.getElementById('course-clear-active-filters');
     if (clearActiveFiltersBtn && clearActiveFiltersBtn.dataset.listenerAttached !== 'true') {
@@ -2377,16 +3101,41 @@ function setupDashboardEventListeners() {
     if (activeFilterChips && activeFilterChips.dataset.listenerAttached !== 'true') {
         activeFilterChips.dataset.listenerAttached = 'true';
         activeFilterChips.addEventListener('click', async (event) => {
-            const chip = event.target.closest('.course-active-filter-chip[data-filter-id]');
+            const chip = event.target.closest('.course-active-filter-chip');
             if (!chip) return;
 
-            const targetCheckbox = document.getElementById(chip.dataset.filterId);
-            if (!targetCheckbox) return;
+            const filterId = String(chip.dataset.filterId || '').trim();
+            const presetId = String(chip.dataset.presetId || '').trim();
 
-            targetCheckbox.checked = false;
+            if (filterId) {
+                const targetCheckbox = document.getElementById(filterId);
+                if (!targetCheckbox) return;
+                targetCheckbox.checked = false;
+            } else if (presetId && presetId === activeCoursePresetId) {
+                setActiveCoursePreset(null, { syncOnly: true });
+            } else {
+                return;
+            }
+
             await applySearchAndFilters(currentSearchQuery);
         });
     }
+
+    const smartPresetButtons = document.querySelectorAll('[data-course-preset]');
+    smartPresetButtons.forEach((presetButton) => {
+        if (presetButton.dataset.listenerAttached === 'true') return;
+        presetButton.dataset.listenerAttached = 'true';
+        presetButton.addEventListener('click', async () => {
+            const presetId = String(presetButton.dataset.coursePreset || '').trim();
+            if (!getCourseSmartPresetConfig(presetId)) return;
+            if (activeCoursePresetId === presetId) {
+                setActiveCoursePreset(null, { syncOnly: true });
+            } else {
+                setActiveCoursePreset(presetId, { syncOnly: true });
+            }
+            await applySearchAndFilters(currentSearchQuery);
+        });
+    });
 
     // Close filter modal when clicking outside
     if (filterBackground) {
@@ -2452,6 +3201,7 @@ function setupDashboardEventListeners() {
             const filterByDays = document.getElementById("filter-by-days");
             const filterByTime = document.getElementById("filter-by-time");
             const filterByConcentration = document.getElementById("filter-by-concentration");
+            const filterByAssessment = document.getElementById("filter-by-assessment");
 
             // Clear day filters
             if (filterByDays) {
@@ -2476,6 +3226,16 @@ function setupDashboardEventListeners() {
                     checkbox.checked = false;
                 });
             }
+
+            // Clear assessment filters
+            if (filterByAssessment) {
+                const assessmentCheckboxes = filterByAssessment.querySelectorAll("input[type='checkbox']");
+                assessmentCheckboxes.forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            }
+
+            setActiveCoursePreset(null, { syncOnly: true });
 
             // Reset custom dropdowns to default values
             const termSelect = document.getElementById("term-select");
@@ -2946,7 +3706,7 @@ function showDesktopPillAutocomplete(query, autocompleteContainer) {
             desktopHighlightIndex = -1;
 
             // Check if we're on the calendar page
-            const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
+            const isCalendarPage = getCurrentAppPath() === '/timetable' || document.querySelector('calendar-page') !== null;
 
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
@@ -3044,10 +3804,9 @@ async function populateSemesterDropdown() {
     }
 
     const semesterValues = semesters.map((semester) => `${semester.term}-${semester.year}`);
-    const preferredTerm = getPreferredTermValue();
-    const selectedSemesterValue = preferredTerm && semesterValues.includes(preferredTerm)
-        ? preferredTerm
-        : (semesterValues[0] || null);
+    const selectedSemesterValue = resolvePreferredTermForAvailableSemesters(semesterValues)
+        || semesterValues[0]
+        || null;
     const selectedSemester = semesters.find((semester) => `${semester.term}-${semester.year}` === selectedSemesterValue) || semesters[0] || null;
 
     // Populate each semester select (hidden <select> elements)
@@ -3128,6 +3887,66 @@ function initializeCustomSelects() {
 
     console.log('Initializing custom selects:', customSelects.length, 'already initialized:', customSelectsInitialized);
 
+    const isSemesterLikeTarget = (targetId) => {
+        const normalized = String(targetId || '').trim();
+        return normalized === 'semester-select'
+            || normalized === 'semester-select-mobile'
+            || normalized === 'course-page-semester-select'
+            || normalized === 'term-select'
+            || normalized === 'year-select';
+    };
+
+    const bindContainedScroll = (optionsEl) => {
+        if (!optionsEl || optionsEl.dataset.scrollContainBound === 'true') return;
+        optionsEl.dataset.scrollContainBound = 'true';
+
+        const canScroll = () => optionsEl.scrollHeight > (optionsEl.clientHeight + 1);
+        const atTop = () => optionsEl.scrollTop <= 0;
+        const atBottom = () => (optionsEl.scrollTop + optionsEl.clientHeight) >= (optionsEl.scrollHeight - 1);
+        let lastTouchY = null;
+
+        optionsEl.addEventListener('wheel', (event) => {
+            event.stopPropagation();
+            if (!canScroll()) {
+                event.preventDefault();
+                return;
+            }
+            if ((event.deltaY < 0 && atTop()) || (event.deltaY > 0 && atBottom())) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        optionsEl.addEventListener('touchstart', (event) => {
+            if (!event.touches || !event.touches.length) return;
+            lastTouchY = event.touches[0].clientY;
+        }, { passive: true });
+
+        optionsEl.addEventListener('touchmove', (event) => {
+            event.stopPropagation();
+            if (!event.touches || !event.touches.length || lastTouchY === null) return;
+
+            const currentY = event.touches[0].clientY;
+            const deltaY = lastTouchY - currentY;
+            lastTouchY = currentY;
+
+            if (!canScroll()) {
+                event.preventDefault();
+                return;
+            }
+            if ((deltaY < 0 && atTop()) || (deltaY > 0 && atBottom())) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        optionsEl.addEventListener('touchend', () => {
+            lastTouchY = null;
+        }, { passive: true });
+
+        optionsEl.addEventListener('touchcancel', () => {
+            lastTouchY = null;
+        }, { passive: true });
+    };
+
     customSelects.forEach(customSelect => {
         const trigger = customSelect.querySelector('.custom-select-trigger');
         const options = customSelect.querySelector('.custom-select-options');
@@ -3146,6 +3965,9 @@ function initializeCustomSelects() {
         }
 
         console.log('Setting up custom select for:', targetSelectId);
+        if (isSemesterLikeTarget(targetSelectId)) {
+            bindContainedScroll(options);
+        }
 
         // Mark as initialized
         customSelect.dataset.initialized = 'true';
@@ -3233,6 +4055,8 @@ function initializeFilterCheckboxes() {
     const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
 
     filterCheckboxes.forEach(checkbox => {
+        if (checkbox.dataset.listenerAttached === 'true') return;
+        checkbox.dataset.listenerAttached = 'true';
         checkbox.addEventListener('change', async () => {
             // Apply filters when any checkbox changes
             updateCourseFilterTriggerCount();
@@ -3706,7 +4530,7 @@ function showAutocomplete(query, searchAutocomplete) {
             currentHighlightIndex = -1;
 
             // Check if we're on the calendar page
-            const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
+            const isCalendarPage = getCurrentAppPath() === '/timetable' || document.querySelector('calendar-page') !== null;
 
             if (isCalendarPage) {
                 // On calendar page - open course info modal directly without navigation
@@ -3998,6 +4822,12 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
     `;
 
     let coursesHTML = '';
+    const statusLookup = lastLoadedCoursePlanningContext?.statusLookup instanceof Map
+        ? lastLoadedCoursePlanningContext.statusLookup
+        : new Map();
+    const scheduleLookup = lastLoadedCoursePlanningContext?.scheduleSignalLookup instanceof Map
+        ? lastLoadedCoursePlanningContext.scheduleSignalLookup
+        : new Map();
 
     coursesWithRelevance.forEach(function ({ course }) {
         const days = {
@@ -4034,20 +4864,42 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const suggestedCourseHoverBorderColor = getCourseCardHoverBorderColor(suggestedCourseColor);
         const hasProfessorChanged = lastLoadedProfessorChanges.has(course.course_code);
         const creditsChip = getCreditsChipMarkup(course);
-        const gpaSummaryChip = getGpaChipMarkup(course, hasProfessorChanged);
+        const shouldHideGpaForProfessor = hasProfessorChanged || !isCourseGpaAlignedWithCurrentProfessor(course);
+        const gpaSummaryChip = getGpaChipMarkup(course, shouldHideGpaForProfessor);
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
         const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const professorDisplay = formatProfessorCardName(course.professor);
         const courseTypeLabel = getCourseTypeLabel(course.type);
         const mobileTypeChip = getMobileCourseTypeChipMarkup(courseTypeLabel);
         const statusKey = buildCourseStatusKey(course, lastLoadedYear, lastLoadedTerm);
-        const courseStatusLabel = (lastLoadedStatusLookup instanceof Map ? lastLoadedStatusLookup.get(statusKey) : '') || '';
+        const courseStatusLabel = statusLookup.get(statusKey) || '';
+        const scheduleSignal = scheduleLookup.get(statusKey) || { type: 'none', label: '' };
+        const stateFlags = {
+            isRegistered: courseStatusLabel === 'Registered',
+            isSaved: courseStatusLabel === 'Saved',
+            isHidden: false
+        };
         const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel);
+        const helperBadge = getCourseHelperBadgeMarkup(scheduleSignal, stateFlags);
+        const mobilePrimarySignalChip = getMobilePrimarySignalChipMarkup(courseStatusLabel, scheduleSignal);
         const suggestedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(timeSlot || '').replace(/ - /g, ' – ');
         const suggestedCardAriaLabel = `Open course info for ${suggestedTitle}`.replace(/"/g, '&quot;');
+        const suggestedAssessmentPreview = getAssessmentPreviewTagItems(course, 6);
+        const decoratedCourse = {
+            ...course,
+            scheduleSignal,
+            stateFlags,
+            assessmentSummary: {
+                primary: suggestedAssessmentPreview.slice(0, 2).map((item) => item.label),
+                overflowCount: Math.max(0, suggestedAssessmentPreview.length - 2),
+                workloadLabel: null
+            },
+            assessmentFlags: deriveDeterministicAssessmentFlags(course),
+            isHidden: false
+        };
         // Escape the JSON string for safe HTML attribute embedding
-        const escapedCourseJSON = JSON.stringify(course).replace(/'/g, '&#39;');
+        const escapedCourseJSON = JSON.stringify(decoratedCourse).replace(/'/g, '&#39;');
 
         coursesHTML += `
         <div class="class-outside suggested-course" id="${timeSlot}" data-color='${suggestedCourseColor}' style="--course-card-border: ${suggestedCourseBorderColor}; --course-card-border-hover: ${suggestedCourseHoverBorderColor}; opacity: 0.9; border: 2px dashed #BDAAC6; position: relative;" role="button" tabindex="0" aria-label="${suggestedCardAriaLabel}">
@@ -4077,9 +4929,15 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                     <h3 id="course-time"><div class="course-time-icon"></div>${timeDisplay}</h3>
                     ${evaluationChipRow}
                 </div>
-                <div class="course-footer-row">
-                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}</div>
+                <div class="course-footer-row course-footer-row--desktop">
+                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}${helperBadge}</div>
                     <div class="course-footer-right">${gpaSummaryChip}</div>
+                </div>
+                <div class="course-footer-row course-footer-row--mobile">
+                    <div class="course-mobile-meta">
+                        <div class="course-mobile-facts">${mobileTypeChip}${creditsChip}</div>
+                        ${mobilePrimarySignalChip ? `<div class="course-mobile-signal-row">${mobilePrimarySignalChip}</div>` : ''}
+                    </div>
                 </div>
             </div>
         </div>
@@ -4092,7 +4950,7 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
 // Function to perform search
 function performSearch(searchQuery) {
     // Check if we're on the calendar page
-    const isCalendarPage = getCurrentAppPath() === '/calendar' || document.querySelector('calendar-page') !== null;
+    const isCalendarPage = getCurrentAppPath() === '/timetable' || document.querySelector('calendar-page') !== null;
 
     if (!isCalendarPage) {
         // Update the global search state (only on courses page)
@@ -4230,6 +5088,7 @@ export async function initializeDashboard() {
 
     // Initialize sticky observer for filter buttons
     initStickyObserver();
+    setupCourseStatusSyncListeners();
 
     // Reset the custom select initialization flags so they can be reinitialized (for both mobile and desktop)
     const semesterCustomSelects = document.querySelectorAll('.custom-select[data-target^="semester-select"]');
@@ -4272,6 +5131,9 @@ export async function initializeDashboard() {
 
     const pendingHomePrefilter = consumeHomeSlotPrefilter();
     const pendingCoursePageSearchPrefill = !pendingHomePrefilter ? consumeCoursePageSearchPrefill() : null;
+    const pendingCoursePagePresetPrefill = (!pendingHomePrefilter && !pendingCoursePageSearchPrefill)
+        ? consumeCoursePagePresetPrefill()
+        : null;
     if (pendingHomePrefilter) {
         applyHomePrefilterSemester(pendingHomePrefilter);
     } else if (pendingCoursePageSearchPrefill?.term && pendingCoursePageSearchPrefill?.year) {
@@ -4300,6 +5162,9 @@ export async function initializeDashboard() {
     } else if (pendingCoursePageSearchPrefill?.query) {
         applyCoursePageSearchPrefillInputs(pendingCoursePageSearchPrefill.query);
         await performSearch(pendingCoursePageSearchPrefill.query);
+    } else if (pendingCoursePagePresetPrefill?.presetId) {
+        setActiveCoursePreset(pendingCoursePagePresetPrefill.presetId, { syncOnly: true });
+        await applySearchAndFilters(currentSearchQuery);
     }
 
     // Update the course filter paragraph to show current state
@@ -4365,13 +5230,34 @@ function updateCourseFilterParagraph() {
 
     const totalCount = getTotalVisibleCourseCards();
     const visibleCount = getFilteredVisibleCourseCards();
-    const isFiltered = totalCount > 0 && visibleCount !== totalCount;
-    const visibleLabel = `${visibleCount} course${visibleCount === 1 ? '' : 's'}`;
+    const activeFilters = getAppliedCourseFilters();
+    const activeSearch = String(currentSearchQuery || '').trim();
+    const hasQuery = Boolean(activeSearch);
+    const hasFilters = activeFilters.length > 0;
 
-    let message = '';
-    if (!isFiltered) {
-        message = `Showing ${visibleLabel}`;
-    } else {
+    const visibleLabel = `${visibleCount} course${visibleCount === 1 ? '' : 's'}`;
+    let message = `Showing ${visibleLabel}`;
+
+    if (hasQuery || hasFilters) {
+        const detailParts = [];
+        if (hasQuery) {
+            detailParts.push(`"${activeSearch}"`);
+        }
+        if (hasFilters) {
+            const filterLabels = activeFilters
+                .map((filter) => String(filter?.label || '').trim().toLowerCase())
+                .filter(Boolean);
+            const preview = filterLabels.slice(0, 2).join(' + ');
+            const overflowCount = Math.max(0, filterLabels.length - 2);
+            if (preview) {
+                detailParts.push(overflowCount > 0 ? `${preview} +${overflowCount}` : preview);
+            }
+        }
+
+        if (detailParts.length > 0) {
+            message = `${visibleLabel} matching ${detailParts.join(' + ')}`;
+        }
+    } else if (totalCount > 0 && visibleCount !== totalCount) {
         message = `Showing ${visibleLabel} • ${totalCount} total`;
     }
 

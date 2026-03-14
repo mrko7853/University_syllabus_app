@@ -1,7 +1,9 @@
 import { supabase } from "../supabase.js";
-import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName, openConfirmModal } from "./shared.js";
-import { applyPreferredTermToGlobals, getPreferredTermValue, normalizeTermValue, setPreferredTermValue } from "./preferences.js";
+import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName, openConfirmModal, showGlobalToast } from "./shared.js";
+import { applyPreferredTermToGlobals, normalizeTermValue, resolvePreferredTermForAvailableSemesters, setPreferredTermValue } from "./preferences.js";
 import { openSemesterMobileSheet, closeSemesterMobileSheet } from "./semester-mobile-sheet.js";
+
+const OPEN_ASSIGNMENT_INTENT_KEY = 'ila_open_assignment_id';
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -159,6 +161,25 @@ class AssignmentsManager {
         }
     }
 
+    consumeOpenAssignmentIntent() {
+        try {
+            const assignmentId = String(sessionStorage.getItem(OPEN_ASSIGNMENT_INTENT_KEY) || '').trim();
+            if (assignmentId) {
+                sessionStorage.removeItem(OPEN_ASSIGNMENT_INTENT_KEY);
+            }
+            return assignmentId;
+        } catch (error) {
+            console.warn('Unable to read assignment open intent:', error);
+            return '';
+        }
+    }
+
+    hasAssignmentById(assignmentId) {
+        const normalizedId = String(assignmentId || '').trim();
+        if (!normalizedId) return false;
+        return this.assignments.some((item) => String(item?.id || '').trim() === normalizedId);
+    }
+
     readCoursePrefilterFromURL() {
         try {
             const params = new URLSearchParams(window.location.search || '');
@@ -228,6 +249,7 @@ class AssignmentsManager {
         try {
             console.log('Assignments Manager: Starting initialization...');
             const shouldOpenNewAssignment = this.consumeOpenNewAssignmentIntent();
+            const openAssignmentId = this.consumeOpenAssignmentIntent();
 
             // Setup event listeners FIRST - these should always work
             this.setupEventListeners();
@@ -261,7 +283,14 @@ class AssignmentsManager {
 
             // Check for hash URL to open specific assignment
             const handledHashRoute = this.handleHashURL();
-            if (!handledHashRoute && shouldOpenNewAssignment) {
+            const handledOpenAssignmentIntent = !handledHashRoute && this.hasAssignmentById(openAssignmentId);
+            if (handledOpenAssignmentIntent) {
+                await this.openAssignmentById(openAssignmentId);
+            }
+            if (!handledHashRoute && !handledOpenAssignmentIntent && openAssignmentId) {
+                console.warn('Assignment not found for stored home navigation intent:', openAssignmentId);
+            }
+            if (!handledHashRoute && !handledOpenAssignmentIntent && shouldOpenNewAssignment) {
                 await this.openNewAssignmentModal();
             }
         } finally {
@@ -278,23 +307,7 @@ class AssignmentsManager {
             console.log('Looking for assignment with ID:', assignmentId);
             console.log('Available assignments:', this.assignments.map(a => ({ id: a.id, title: a.title })));
 
-            // Find the assignment and open its modal
-            const assignment = this.assignments.find(a => a.id === assignmentId);
-            if (assignment) {
-                console.log('Found assignment, opening modal:', assignment.title);
-                // Larger delay to ensure DOM is fully ready
-                setTimeout(() => {
-                    const overlay = document.getElementById('assignment-modal-overlay');
-                    console.log('Overlay element exists:', !!overlay);
-                    if (overlay) {
-                        this.openAssignmentModal(assignment);
-                    } else {
-                        console.error('Modal overlay not found in DOM');
-                    }
-                }, 500);
-            } else {
-                console.warn('Assignment not found for hash:', assignmentId);
-            }
+            this.openAssignmentById(assignmentId);
 
             // Clear the hash to avoid reopening on refresh (preserve query params, including course prefilter)
             window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
@@ -395,7 +408,7 @@ class AssignmentsManager {
                     window.authManager.showLoginModal('create an assignment');
                     return;
                 }
-                alert('Please log in to create assignments.');
+                showGlobalToast('Please log in to create assignments.');
                 return;
             }
             this.currentUser = session.user;
@@ -557,7 +570,7 @@ class AssignmentsManager {
             return data;
         } catch (error) {
             console.error('Error updating assignment:', error);
-            alert('Failed to update assignment. Please try again.');
+            showGlobalToast('Failed to update assignment. Please try again.');
             return null;
         }
     }
@@ -594,7 +607,7 @@ class AssignmentsManager {
             return true;
         } catch (error) {
             console.error('Error deleting assignment:', error);
-            alert('Failed to delete assignment. Please try again.');
+            showGlobalToast('Failed to delete assignment. Please try again.');
             return false;
         }
     }
@@ -986,15 +999,12 @@ class AssignmentsManager {
         if (semesterSelects.length === 0 || customSelects.length === 0) return;
 
         const semesterValues = semesters.map((semester) => `${semester.term}-${semester.year}`);
-        const preferredTerm = getPreferredTermValue();
         const prefilterSemesterValue = this.coursePrefilter?.term && this.coursePrefilter?.year
             ? `${this.coursePrefilter.term}-${this.coursePrefilter.year}`
             : null;
         const selectedSemesterValue = prefilterSemesterValue && semesterValues.includes(prefilterSemesterValue)
             ? prefilterSemesterValue
-            : preferredTerm && semesterValues.includes(preferredTerm)
-                ? preferredTerm
-                : (semesterValues[0] || null);
+            : (resolvePreferredTermForAvailableSemesters(semesterValues) || semesterValues[0] || null);
         const selectedSemester = semesters.find((semester) => `${semester.term}-${semester.year}` === selectedSemesterValue) || semesters[0] || null;
 
         semesterSelects.forEach(select => {
@@ -1221,6 +1231,66 @@ class AssignmentsManager {
         const customSelects = document.querySelectorAll('.custom-select');
         if (customSelects.length === 0) return;
 
+        const isSemesterLikeTarget = (targetId) => {
+            const normalized = String(targetId || '').trim();
+            return normalized === 'semester-select'
+                || normalized === 'semester-select-mobile'
+                || normalized === 'course-page-semester-select'
+                || normalized === 'term-select'
+                || normalized === 'year-select';
+        };
+
+        const bindContainedScroll = (optionsEl) => {
+            if (!optionsEl || optionsEl.dataset.scrollContainBound === 'true') return;
+            optionsEl.dataset.scrollContainBound = 'true';
+
+            const canScroll = () => optionsEl.scrollHeight > (optionsEl.clientHeight + 1);
+            const atTop = () => optionsEl.scrollTop <= 0;
+            const atBottom = () => (optionsEl.scrollTop + optionsEl.clientHeight) >= (optionsEl.scrollHeight - 1);
+            let lastTouchY = null;
+
+            optionsEl.addEventListener('wheel', (event) => {
+                event.stopPropagation();
+                if (!canScroll()) {
+                    event.preventDefault();
+                    return;
+                }
+                if ((event.deltaY < 0 && atTop()) || (event.deltaY > 0 && atBottom())) {
+                    event.preventDefault();
+                }
+            }, { passive: false });
+
+            optionsEl.addEventListener('touchstart', (event) => {
+                if (!event.touches || !event.touches.length) return;
+                lastTouchY = event.touches[0].clientY;
+            }, { passive: true });
+
+            optionsEl.addEventListener('touchmove', (event) => {
+                event.stopPropagation();
+                if (!event.touches || !event.touches.length || lastTouchY === null) return;
+
+                const currentY = event.touches[0].clientY;
+                const deltaY = lastTouchY - currentY;
+                lastTouchY = currentY;
+
+                if (!canScroll()) {
+                    event.preventDefault();
+                    return;
+                }
+                if ((deltaY < 0 && atTop()) || (deltaY > 0 && atBottom())) {
+                    event.preventDefault();
+                }
+            }, { passive: false });
+
+            optionsEl.addEventListener('touchend', () => {
+                lastTouchY = null;
+            }, { passive: true });
+
+            optionsEl.addEventListener('touchcancel', () => {
+                lastTouchY = null;
+            }, { passive: true });
+        };
+
         customSelects.forEach(customSelect => {
             const trigger = customSelect.querySelector('.custom-select-trigger');
             const options = customSelect.querySelector('.custom-select-options');
@@ -1230,6 +1300,9 @@ class AssignmentsManager {
 
             if (!trigger || !options || !targetSelect) return;
             if (customSelect.dataset.initialized === 'true') return;
+            if (isSemesterLikeTarget(targetSelectId)) {
+                bindContainedScroll(options);
+            }
             customSelect.dataset.initialized = 'true';
 
             const syncFromTargetSelect = () => {
@@ -1552,10 +1625,9 @@ class AssignmentsManager {
             const normalizedStatus = this.getCanonicalStatus(assignment.status);
             const statusInfo = this.getDisplayStatusInfo(assignment);
             const dueLabel = this.formatDueMetaLabel(this.getDueMeta(assignment));
-            const chipTextMaxLength = this.getCourseNameDisplayMaxLength();
             const courseTag = assignment.course_tag_name
-                ? `<span class="assignment-course-chip" style="background-color:${assignment.course_tag_color || '#e8e0ee'}">${this.escapeHtml(this.truncateText(assignment.course_tag_name, chipTextMaxLength))}</span>`
-                : '<span class="assignment-course-chip assignment-course-chip--empty">No course</span>';
+                ? `<span class="assignment-course-chip" style="background-color:${assignment.course_tag_color || '#e8e0ee'}"><span class="assignment-course-chip-text">${this.escapeHtml(assignment.course_tag_name)}</span></span>`
+                : '<span class="assignment-course-chip assignment-course-chip--empty"><span class="assignment-course-chip-text">No course</span></span>';
             const disableProgress = normalizedStatus === 'in_progress' ? 'disabled' : '';
             const disableComplete = normalizedStatus === 'completed' ? 'disabled' : '';
 
@@ -1659,13 +1731,6 @@ class AssignmentsManager {
             const selectedDate = this.parseCalendarDateKey(this.selectedCalendarDate);
             if (isInVisibleMonth(selectedDate)) {
                 return this.getCalendarDateKey(selectedDate);
-            }
-
-            if (selectedDate && selectedDate.getDate() <= totalDays) {
-                const sameDayInNewMonth = new Date(year, month, selectedDate.getDate());
-                if (isInVisibleMonth(sameDayInNewMonth)) {
-                    return this.getCalendarDateKey(sameDayInNewMonth);
-                }
             }
         }
 
@@ -1782,6 +1847,7 @@ class AssignmentsManager {
         const totalWeeks = Math.ceil(totalCells / 7);
         const todayKey = this.getCalendarDateKey(this.getTodayDate());
         const chipLimit = this.getCalendarChipLimit();
+        const useCompactMoreLabel = this.isMobileViewport();
 
         const pipeline = this.getListPipeline();
         const assignmentsToShow = pipeline.sorted;
@@ -1835,7 +1901,7 @@ class AssignmentsManager {
                                     </button>
                                 `;
                             }).join('')}
-                            ${hiddenCount > 0 ? `<button type="button" class="calendar-more-btn" data-date-key="${dateKey}">+${hiddenCount} more</button>` : ''}
+                            ${hiddenCount > 0 ? `<button type="button" class="calendar-more-btn" data-date-key="${dateKey}">+${hiddenCount}${useCompactMoreLabel ? '' : ' more'}</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -2319,6 +2385,7 @@ class AssignmentsManager {
                 ? String(this.currentAssignment.id)
                 : (modalAssignmentId || null);
             const shouldCreate = this.isNewAssignment && !activeAssignmentId;
+            const successMessage = shouldCreate ? 'Assignment created successfully.' : 'Assignment updated successfully.';
 
             if (shouldCreate) {
                 const newAssignment = {
@@ -2341,13 +2408,17 @@ class AssignmentsManager {
                 if (!this.currentAssignment && activeAssignmentId) {
                     this.currentAssignment = this.assignments.find((assignment) => String(assignment?.id) === activeAssignmentId) || null;
                 }
-                await this.updateAssignment(activeAssignmentId, assignmentData);
+                const updatedAssignment = await this.updateAssignment(activeAssignmentId, assignmentData);
+                if (!updatedAssignment) {
+                    return;
+                }
             }
 
             this.closeAssignmentModal();
+            showGlobalToast(successMessage);
         } catch (error) {
             console.error('Error saving assignment:', error);
-            alert('Failed to save assignment. Please try again.');
+            showGlobalToast('Failed to save assignment. Please try again.');
             this.isSaving = false;
             const saveBtn = document.getElementById('assignment-save-btn');
             if (saveBtn) saveBtn.disabled = false;

@@ -8,8 +8,10 @@ const distDir = path.resolve(__dirname, '..', 'dist');
 
 const routeAliases = {
   assignments: 'assignments.html',
-  calendar: 'calendar.html',
+  timetable: 'timetable.html',
   profile: 'profile.html',
+  setup: 'setup.html',
+  'auth/callback': 'auth-callback.html',
   login: 'login.html',
   register: 'register.html',
   home: 'index.html',
@@ -24,6 +26,7 @@ const routeAliases = {
 const nestedRouteFallbacks = {
   course: '/dev/course/',
   courses: '/dev/courses/',
+  'auth/callback': '/dev/auth/callback/',
 };
 
 function buildHtaccessForNestedAlias(rewriteBase) {

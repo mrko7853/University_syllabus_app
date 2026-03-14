@@ -1,63 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Register - ILA Companion</title>
+    <title>ILA Companion | Continue</title>
     <link rel="stylesheet" href="css/blaze.css">
 </head>
 
-<body>
-    <app-navigation></app-navigation>
-
-    <div id="app-content" class="ui-page">
+<body class="auth-page">
+    <section id="auth-main" class="ui-page">
         <div class="ui-page-content auth-container">
-            <div class="ui-card auth-card">
-                <div class="auth-header">
-                    <h1>Create Account</h1>
-                    <p>Join ILA Companion today</p>
-                </div>
-                
-                <div id="message"></div>
-
-                <form id="register-form" class="auth-form">
-                    <div class="form-group">
-                        <label for="register-name">Full Name</label>
-                        <input type="text" id="register-name" name="name" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="register-student-id">Student ID</label>
-                        <input type="text" id="register-student-id" name="student-id" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="register-confirm-password">Confirm Password</label>
-                        <input type="password" id="register-confirm-password" name="confirm-password" required>
-                    </div>
-                    
-                    <button type="submit" class="ui-btn ui-btn--primary btn-primary auth-btn">Create Account</button>
+            <div class="ui-card auth-background">
+                <h1>Continue</h1>
+                <p>Enter your email and password to sign in or create your account.</p>
+                <div id="message" aria-live="polite"></div>
+                <form id="login-form" method="post">
+                    <label for="email">Email</label>
+                    <input type="email" name="email" id="email" autocomplete="email" required>
+                    <label for="password">Password</label>
+                    <input type="password" name="password" id="password" autocomplete="current-password" required>
+                    <button type="submit" class="ui-btn ui-btn--secondary sign-up-btn">Continue</button>
                 </form>
-                
-                <div class="auth-footer">
-                    <p>Already have an account? <a href="login">Sign in</a></p>
-                </div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <script type="module" src="js/components.js"></script>
-    <script type="module" src="js/shared.js"></script>
     <script type="module" src="js/auth.js"></script>
 </body>
 </html>

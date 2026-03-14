@@ -1,32 +1,203 @@
 import { supabase } from "../supabase.js";
 import { withBase } from "./path-utils.js";
 
+const AUTH_SUCCESS_TOAST_KEY = 'ila_auth_success_toast';
+const AUTH_SUCCESS_TOAST_MESSAGE = 'Login successful.';
+
+function queueAuthSuccessToast(message = AUTH_SUCCESS_TOAST_MESSAGE) {
+    try {
+        window.sessionStorage.setItem(AUTH_SUCCESS_TOAST_KEY, String(message || AUTH_SUCCESS_TOAST_MESSAGE));
+    } catch (_) { }
+}
+
+function consumeAuthSuccessToast() {
+    try {
+        const message = window.sessionStorage.getItem(AUTH_SUCCESS_TOAST_KEY);
+        if (!message) return '';
+        window.sessionStorage.removeItem(AUTH_SUCCESS_TOAST_KEY);
+        return message;
+    } catch (_) {
+        return '';
+    }
+}
+
+function showAppToast(message, durationMs = 2200) {
+    const normalized = String(message || '').trim();
+    if (!normalized) return;
+
+    const existingToast = document.getElementById('link-copied-notification');
+    if (existingToast) existingToast.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'link-copied-notification';
+    toast.textContent = normalized;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    window.setTimeout(() => {
+        toast.classList.remove('show');
+        window.setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+    }, durationMs);
+}
+
+function flushPendingAuthSuccessToast() {
+    const pendingMessage = consumeAuthSuccessToast();
+    if (pendingMessage) {
+        showAppToast(pendingMessage);
+    }
+}
+
+function getEmailRedirectTo() {
+    return `${window.location.origin}${withBase('/auth/callback')}`;
+}
+
+function navigateAfterAuthSuccess() {
+    queueAuthSuccessToast();
+    if (window.router) {
+        window.router.navigate('/dashboard');
+        return;
+    }
+    window.location.href = withBase('/');
+}
+
+function getAuthErrorMessage(error, fallback = 'Authentication failed. Please try again.') {
+    const message = String(error?.message || '').trim();
+    return message || fallback;
+}
+
+function isInvalidCredentialsError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('invalid login credentials');
+}
+
+function isEmailNotConfirmedError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('email not confirmed');
+}
+
+function isUserAlreadyRegisteredError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('user already registered');
+}
+
+function setInlineMessage(target, text, kind = 'error') {
+    if (!target) return;
+    target.textContent = text;
+    target.className = kind;
+}
+
+async function handleUnifiedPageAuth(email, password, messageDisplay) {
+    const normalizedEmail = String(email || '').trim();
+    const normalizedPassword = String(password || '');
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: normalizedPassword
+    });
+
+    if (!signInError) {
+        navigateAfterAuthSuccess();
+        return;
+    }
+
+    if (isEmailNotConfirmedError(signInError)) {
+        setInlineMessage(messageDisplay, 'Please check your email and confirm your account before logging in.', 'error');
+        return;
+    }
+
+    if (!isInvalidCredentialsError(signInError)) {
+        setInlineMessage(messageDisplay, getAuthErrorMessage(signInError, 'Could not sign in right now.'), 'error');
+        return;
+    }
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password: normalizedPassword,
+        options: {
+            emailRedirectTo: getEmailRedirectTo()
+        }
+    });
+
+    if (signUpError) {
+        if (isUserAlreadyRegisteredError(signUpError)) {
+            setInlineMessage(messageDisplay, 'Invalid email or password. Please try again.', 'error');
+            return;
+        }
+        setInlineMessage(messageDisplay, getAuthErrorMessage(signUpError, 'Could not create your account right now.'), 'error');
+        return;
+    }
+
+    const identities = Array.isArray(signUpData?.user?.identities) ? signUpData.user.identities : [];
+    const createdNewAccount = identities.length > 0;
+
+    if (createdNewAccount) {
+        setInlineMessage(messageDisplay, 'Account created. Please check your email to verify your account.', 'success');
+        return;
+    }
+
+    // Existing account can return an obfuscated sign-up response.
+    const { error: retrySignInError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: normalizedPassword
+    });
+
+    if (!retrySignInError) {
+        navigateAfterAuthSuccess();
+        return;
+    }
+
+    if (isEmailNotConfirmedError(retrySignInError)) {
+        setInlineMessage(messageDisplay, 'Please check your email and confirm your account before logging in.', 'error');
+        return;
+    }
+
+    setInlineMessage(messageDisplay, 'Invalid email or password. Please try again.', 'error');
+}
+
 // Setup auth form handlers that work with the router
 function setupAuthHandlers() {
-    const loginForm = document.getElementById("login-form");
+    const pageLoginForm = document.getElementById("login-form");
     const registerForm = document.getElementById("register-form");
 
-    if (loginForm) {
-        loginForm.addEventListener("submit", async function(e) {
+    if (pageLoginForm && pageLoginForm.dataset.authBound !== 'true') {
+        pageLoginForm.dataset.authBound = 'true';
+        pageLoginForm.addEventListener("submit", async function(e) {
             e.preventDefault();
 
             const email = document.getElementById("login-email")?.value || document.getElementById("email")?.value;
             const password = document.getElementById("login-password")?.value || document.getElementById("password")?.value;
+            const messageDisplay = document.getElementById("message");
+            const submitButton = pageLoginForm.querySelector('button[type="submit"], input[type="submit"]');
+            const originalSubmitLabel = submitButton ? submitButton.textContent : '';
 
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password,
-            });
+            if (messageDisplay) {
+                messageDisplay.textContent = '';
+                messageDisplay.className = '';
+            }
 
-            if (error) {
-                alert(error.message);
-                console.log(error.message);
-            } else {
-                // Use router if available, otherwise fallback
-                if (window.router) {
-                    window.router.navigate('/dashboard');
-                } else {
-                    window.location.href = withBase('/');
+            if (!email || !password) {
+                setInlineMessage(messageDisplay, 'Email and password are required.', 'error');
+                return;
+            }
+
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Please wait...';
+            }
+
+            try {
+                await handleUnifiedPageAuth(email, password, messageDisplay);
+            } catch (error) {
+                setInlineMessage(messageDisplay, getAuthErrorMessage(error, 'Authentication failed. Please try again.'), 'error');
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalSubmitLabel || 'Continue';
                 }
             }
         });
@@ -43,6 +214,9 @@ function setupAuthHandlers() {
             const { data, error } = await supabase.auth.signUp({
                 email: email,
                 password: password,
+                options: {
+                    emailRedirectTo: getEmailRedirectTo()
+                }
             });
 
             if (error) {
@@ -468,6 +642,7 @@ class AuthManager {
             }
 
             // Login successful
+            queueAuthSuccessToast();
             this.closeCurrentModal();
             
             // Update global session state and UI
@@ -543,7 +718,10 @@ class AuthManager {
         try {
             const { data, error } = await supabase.auth.signUp({
                 email: email,
-                password: password
+                password: password,
+                options: {
+                    emailRedirectTo: getEmailRedirectTo()
+                }
             });
 
             if (error) {
@@ -576,14 +754,22 @@ class AuthManager {
 }
 
 // Initialize auth handlers on page load
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupAuthHandlers);
-} else {
+function initializeAuthPage() {
     setupAuthHandlers();
+    flushPendingAuthSuccessToast();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAuthPage);
+} else {
+    initializeAuthPage();
 }
 
 // Re-initialize when pages are loaded via router
-document.addEventListener('pageLoaded', setupAuthHandlers);
+document.addEventListener('pageLoaded', () => {
+    setupAuthHandlers();
+    flushPendingAuthSuccessToast();
+});
 
 // Global instance - only create if not on dedicated login/register pages
 const loginForm = document.getElementById("login-form");

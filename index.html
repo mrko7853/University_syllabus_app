@@ -58,6 +58,10 @@
                         <button class="ui-btn ui-btn--icon search-btn control-surface control-surface--secondary">
                             <div></div>
                         </button>
+                        <div class="home-guest-auth-actions" aria-label="Guest actions">
+                            <a class="ui-btn ui-btn--secondary control-surface home-guest-auth-link" href="/login">Sign In</a>
+                            <a class="ui-btn ui-btn--secondary control-surface home-guest-auth-link home-guest-auth-link--primary" href="/register">Sign Up</a>
+                        </div>
                     </div>
                 </div>
 
@@ -90,10 +94,7 @@
                                 <div class="home-calendar-summary">
                                     <div class="home-calendar-summary-header">
                                         <h3 class="home-calendar-summary-title">Schedule</h3>
-                                        <a class="home-calendar-link" href="/calendar">Open Calendar</a>
-                                    </div>
-                                    <div class="home-calendar-legend" aria-label="Schedule legend">
-                                        <span class="home-calendar-legend-empty">Loading legend...</span>
+                                        <a class="home-calendar-link" href="/timetable">Open timetable</a>
                                     </div>
                                     <div class="home-planner-hero">
                                         <div class="home-planner-grid-pane">
@@ -118,27 +119,38 @@
                             <div class="main-container home-widget-card home-next-class-container home-next-class-mobile">
                                 <term-box></term-box>
                             </div>
-                            <div class="main-container home-widget-card" id="home-empty-slots-container">
-                                <home-empty-slots-widget></home-empty-slots-widget>
+                            <div class="home-secondary-group home-secondary-group--top">
+                                <div class="main-container home-widget-card" id="home-saved-courses-container">
+                                    <home-saved-courses-widget></home-saved-courses-widget>
+                                </div>
                             </div>
-                            <div class="main-container home-widget-card" id="home-saved-courses-container">
-                                <home-saved-courses-widget></home-saved-courses-widget>
-                            </div>
-                            <div class="main-container home-widget-card home-assignment-container">
-                                <home-due-soon-widget></home-due-soon-widget>
-                            </div>
-                            <div class="main-container" id="home-courses-preview-container">
-                                <latest-courses-preview></latest-courses-preview>
-                            </div>
-                            <div class="main-container" id="home-review-suggestion-container">
-                                <review-suggestion-widget></review-suggestion-widget>
+                            <div class="home-secondary-group home-secondary-group--bottom">
+                                <div class="main-container home-widget-card home-assignment-container">
+                                    <home-due-soon-widget></home-due-soon-widget>
+                                </div>
+                                <div class="main-container home-widget-card" id="home-courses-preview-container">
+                                    <latest-courses-preview></latest-courses-preview>
+                                </div>
+                                <div class="main-container home-widget-card" id="home-review-suggestion-container">
+                                    <review-suggestion-widget></review-suggestion-widget>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div id="guest-home">
-                    <div class="home-desktop-grid guest-home-desktop-grid">
+                    <div id="guest-home-v2">
+                        <section class="main-container home-widget-card guest-v2-teaser-shell" id="guest-v2-teaser-container">
+                            <guest-home-teaser-widget></guest-home-teaser-widget>
+                        </section>
+
+                        <section class="main-container home-widget-card guest-v2-browse-shell" id="guest-v2-browse-container">
+                            <guest-home-browse-widget></guest-home-browse-widget>
+                        </section>
+                    </div>
+
+                    <div class="home-desktop-grid guest-home-desktop-grid guest-home-legacy">
                         <div class="home-col home-col-primary guest-home-top-content">
                             <div class="main-container home-widget-card" id="guest-browse-container">
                                 <div class="total-courses">

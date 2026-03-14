@@ -6,6 +6,13 @@ const COURSE_PAGE_SEARCH_PREFILL_KEY = "ila_courses_search_prefill";
 const COURSE_PAGE_OPEN_REVIEW_INTENT_KEY = "ila_open_review_from_suggestion";
 let hasCoursePageStickyOffsetListeners = false;
 let hasCoursePageFooterDockListeners = false;
+let coursePageStickyOffsetRaf = 0;
+let coursePageStickyOffsetMutationObserver = null;
+let coursePageInitRequestVersion = 0;
+
+function isCourseDetailPath(path = getCurrentAppPath()) {
+  return /^\/courses?\/[^\/]+\/\d{4}\/[^\/]+$/.test(String(path || ""));
+}
 
 function escapeHtml(value) {
   return String(value || "")
@@ -473,12 +480,27 @@ function updateCoursePageStickyOffset() {
     return;
   }
 
+  const appHeader = document.querySelector(".app-header");
   const toolbarShell = document.querySelector(".course-page-toolbar-shell");
-  let stickyTop = 0;
+  const isHeaderVisible = Boolean(
+    appHeader &&
+    !appHeader.classList.contains("app-header--hidden") &&
+    window.getComputedStyle(appHeader).position === "fixed"
+  );
+  const isToolbarVisible = Boolean(
+    toolbarShell &&
+    !toolbarShell.classList.contains("app-mobile-toolbar--hidden") &&
+    window.getComputedStyle(toolbarShell).position === "fixed"
+  );
 
-  if (toolbarShell) {
-    stickyTop += toolbarShell.getBoundingClientRect().height;
-  }
+  const headerHeight = isHeaderVisible
+    ? (appHeader.getBoundingClientRect().height || 0)
+    : 0;
+  const toolbarHeight = isToolbarVisible
+    ? (toolbarShell.getBoundingClientRect().height || 0)
+    : 0;
+  // Subtract the shared divider seam so tabs sit flush under the toolbar stack.
+  const stickyTop = Math.max(0, (headerHeight + toolbarHeight) - 5);
 
   root.style.setProperty("--course-page-sticky-top", `${Math.round(stickyTop)}px`);
 }
@@ -489,15 +511,45 @@ function setupCoursePageStickyOffsetObservers() {
   if (hasCoursePageStickyOffsetListeners) return;
   hasCoursePageStickyOffsetListeners = true;
 
+  const requestStickyOffsetUpdate = () => {
+    if (coursePageStickyOffsetRaf) return;
+    coursePageStickyOffsetRaf = window.requestAnimationFrame(() => {
+      coursePageStickyOffsetRaf = 0;
+      updateCoursePageStickyOffset();
+    });
+  };
+
   const handleResize = () => {
     updateCoursePageStickyOffset();
   };
 
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
+  window.addEventListener("scroll", requestStickyOffsetUpdate, { passive: true });
+  document.addEventListener("scroll", requestStickyOffsetUpdate, { passive: true, capture: true });
+  document.getElementById("app-content")?.addEventListener("scroll", requestStickyOffsetUpdate, { passive: true });
+
+  if (typeof MutationObserver === "function") {
+    coursePageStickyOffsetMutationObserver = new MutationObserver(requestStickyOffsetUpdate);
+    const appHeader = document.querySelector(".app-header");
+    const toolbarShell = document.querySelector(".course-page-toolbar-shell");
+    if (appHeader) {
+      coursePageStickyOffsetMutationObserver.observe(appHeader, {
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+    }
+    if (toolbarShell) {
+      coursePageStickyOffsetMutationObserver.observe(toolbarShell, {
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+    }
+  }
 }
 
 function syncCoursePageFooterDock() {
+  const pageRoot = document.getElementById("course-page");
   const classInfo = document.getElementById("class-info");
   const footer = document.getElementById("course-info-footer");
   const dock = document.getElementById("course-page-footer-dock");
@@ -506,7 +558,9 @@ function syncCoursePageFooterDock() {
 
   const isDedicatedCoursePage = document.body.classList.contains("course-page-mode");
   const isMobileViewport = window.innerWidth <= 1023;
-  const shouldUseDock = isDedicatedCoursePage && isMobileViewport;
+  const isLoading = pageRoot?.classList.contains("is-loading") === true;
+  const hasHydratedFooterLayout = Boolean(footer.querySelector(".course-info-footer-layout"));
+  const shouldUseDock = isDedicatedCoursePage && isMobileViewport && !isLoading && hasHydratedFooterLayout;
 
   if (shouldUseDock) {
     if (footer.parentElement !== dock) {
@@ -536,6 +590,57 @@ function setupCoursePageFooterDock() {
   window.addEventListener("orientationchange", handleDockResize);
 }
 
+function bindContainedScroll(optionsEl) {
+  if (!optionsEl || optionsEl.dataset.scrollContainBound === "true") return;
+  optionsEl.dataset.scrollContainBound = "true";
+
+  const canScroll = () => optionsEl.scrollHeight > (optionsEl.clientHeight + 1);
+  const atTop = () => optionsEl.scrollTop <= 0;
+  const atBottom = () => (optionsEl.scrollTop + optionsEl.clientHeight) >= (optionsEl.scrollHeight - 1);
+  let lastTouchY = null;
+
+  optionsEl.addEventListener("wheel", (event) => {
+    event.stopPropagation();
+    if (!canScroll()) {
+      event.preventDefault();
+      return;
+    }
+    if ((event.deltaY < 0 && atTop()) || (event.deltaY > 0 && atBottom())) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  optionsEl.addEventListener("touchstart", (event) => {
+    if (!event.touches || !event.touches.length) return;
+    lastTouchY = event.touches[0].clientY;
+  }, { passive: true });
+
+  optionsEl.addEventListener("touchmove", (event) => {
+    event.stopPropagation();
+    if (!event.touches || !event.touches.length || lastTouchY === null) return;
+
+    const currentY = event.touches[0].clientY;
+    const deltaY = lastTouchY - currentY;
+    lastTouchY = currentY;
+
+    if (!canScroll()) {
+      event.preventDefault();
+      return;
+    }
+    if ((deltaY < 0 && atTop()) || (deltaY > 0 && atBottom())) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  optionsEl.addEventListener("touchend", () => {
+    lastTouchY = null;
+  }, { passive: true });
+
+  optionsEl.addEventListener("touchcancel", () => {
+    lastTouchY = null;
+  }, { passive: true });
+}
+
 function setupCoursePageCustomSelect(rootEl) {
   if (!rootEl) return;
 
@@ -544,6 +649,7 @@ function setupCoursePageCustomSelect(rootEl) {
   const targetSelectId = rootEl.dataset.target;
   const targetSelect = document.getElementById(targetSelectId);
   if (!trigger || !options || !targetSelect) return;
+  bindContainedScroll(options);
 
   const close = () => rootEl.classList.remove("open");
 
@@ -698,28 +804,51 @@ function toggleCoursePageSkeleton(isLoading) {
   const pageRoot = document.getElementById("course-page");
   const skeleton = document.getElementById("course-page-skeleton");
   const classInfo = document.getElementById("class-info");
+  const shouldShowSkeleton = Boolean(isLoading);
 
   if (pageRoot) {
-    pageRoot.classList.toggle("is-loading", Boolean(isLoading));
+    pageRoot.classList.toggle("is-loading", shouldShowSkeleton);
   }
 
   if (skeleton) {
-    skeleton.hidden = !isLoading;
-    skeleton.setAttribute("aria-hidden", isLoading ? "false" : "true");
+    skeleton.hidden = !shouldShowSkeleton;
+    skeleton.setAttribute("aria-hidden", shouldShowSkeleton ? "false" : "true");
   }
 
   if (classInfo) {
-    classInfo.setAttribute("aria-hidden", isLoading ? "true" : "false");
-    if (isLoading) {
+    classInfo.setAttribute("aria-hidden", shouldShowSkeleton ? "true" : "false");
+    if (shouldShowSkeleton) {
       classInfo.style.display = "none";
       classInfo.classList.remove("show");
     } else {
       classInfo.style.removeProperty("display");
     }
   }
+
+  syncCoursePageFooterDock();
 }
 
 export async function initializeCoursePage() {
+  const initRequestVersion = ++coursePageInitRequestVersion;
+  const initialPath = getCurrentAppPath();
+  const isStaleInitialization = () => {
+    if (initRequestVersion !== coursePageInitRequestVersion) return true;
+    const currentPath = getCurrentAppPath();
+    if (!isCourseDetailPath(initialPath)) return true;
+    if (!isCourseDetailPath(currentPath)) return true;
+    if (currentPath !== initialPath) return true;
+    if (!document.getElementById("course-page")) return true;
+    return false;
+  };
+
+  if (isStaleInitialization()) return;
+
+  // Apply course-page shell classes immediately to avoid first-frame layout snap.
+  document.body.classList.add("course-page-mode");
+  if (window.innerWidth <= 1023) {
+    document.body.classList.add("mobile-page-header-sticky");
+  }
+
   const card = document.getElementById("course-page-card");
   const searchForm = document.getElementById("course-page-search-form");
   const searchInput = document.getElementById("course-page-search-input");
@@ -749,12 +878,15 @@ export async function initializeCoursePage() {
 
   try {
     const courses = await fetchCourseData(year, term);
+    if (isStaleInitialization()) return;
+
     const normalizedCode = normalizeCourseCode(courseCode);
     const course = courses.find(c =>
       String(c.course_code || '') === String(courseCode) ||
       normalizeCourseCode(c.course_code) === normalizedCode
     );
 
+    if (isStaleInitialization()) return;
     if (!course) {
       card.innerHTML = "<div class=\"course-page-error\">Course not found.</div>";
       return;
@@ -804,10 +936,10 @@ export async function initializeCoursePage() {
       currentYear: year,
       currentTerm: term
     });
-
-    document.body.classList.add('course-page-mode');
+    if (isStaleInitialization()) return;
 
     await openCourseInfoMenu(course, false, { presentation: 'page' });
+    if (isStaleInitialization()) return;
     if (maybeConsumeOpenReviewIntent(course, year, term) && typeof window.openAddReviewModal === 'function') {
       await window.openAddReviewModal(
         String(course.course_code || ''),
@@ -816,6 +948,7 @@ export async function initializeCoursePage() {
         String(course.title || '')
       );
     }
+    if (isStaleInitialization()) return;
     syncCoursePageFooterDock();
     updateCoursePageStickyOffset();
 
@@ -835,9 +968,11 @@ export async function initializeCoursePage() {
       console.error('Course page: class-content element missing');
     }
   } catch (error) {
+    if (isStaleInitialization()) return;
     console.error("Error loading course page:", error);
     card.innerHTML = "<div class=\"course-page-error\">Failed to load course.</div>";
   } finally {
+    if (isStaleInitialization()) return;
     if (document.getElementById("class-info")?.classList.contains("show")) return;
     toggleCoursePageSkeleton(false);
   }
