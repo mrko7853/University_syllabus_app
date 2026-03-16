@@ -15,7 +15,7 @@
     <script type="module" src="js/router.js"></script>
 </head>
 
-<body>
+<body class="home-auth-pending">
 
     <app-navigation></app-navigation>
     <div class="app-header">
@@ -145,8 +145,89 @@
                             <guest-home-teaser-widget></guest-home-teaser-widget>
                         </section>
 
-                        <section class="main-container home-widget-card guest-v2-browse-shell" id="guest-v2-browse-container">
-                            <guest-home-browse-widget></guest-home-browse-widget>
+                        <section class="main-container home-widget-card guest-v2-showcase-shell" id="guest-v2-showcase-container" aria-label="Main features">
+                            <div class="guest-v2-showcase">
+                                <article class="guest-v2-feature-row">
+                                    <div class="guest-v2-feature-media">
+                                        <img class="guest-v2-feature-image" src="/assets/screen-feature1.png" alt="Assignment page preview">
+                                    </div>
+                                    <div class="guest-v2-feature-copy">
+                                        <h3 class="guest-v2-feature-title">Stay on top of every assignment</h3>
+                                        <p class="guest-v2-feature-text">View upcoming deadlines, track progress, and update task status in one organized assignment space.</p>
+                                    </div>
+                                </article>
+
+                                <article class="guest-v2-feature-row guest-v2-feature-row--reverse">
+                                    <div class="guest-v2-feature-media">
+                                        <img class="guest-v2-feature-image" src="/assets/screen-feature2.png" alt="Timetable page preview">
+                                    </div>
+                                    <div class="guest-v2-feature-copy">
+                                        <h3 class="guest-v2-feature-title">Plan your week with the timetable</h3>
+                                        <p class="guest-v2-feature-text">See your full class schedule at a glance and quickly understand your busiest periods each day.</p>
+                                    </div>
+                                </article>
+
+                                <article class="guest-v2-feature-row">
+                                    <div class="guest-v2-feature-media">
+                                        <img class="guest-v2-feature-image" src="/assets/screen-feature3.png" alt="Course review page preview">
+                                    </div>
+                                    <div class="guest-v2-feature-copy">
+                                        <h3 class="guest-v2-feature-title">Write and discover course reviews</h3>
+                                        <p class="guest-v2-feature-text">Share your experience, read practical feedback from other students, and choose courses with confidence.</p>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
+
+                        <section class="main-container home-widget-card guest-v2-courses-shell" id="guest-v2-courses-container" aria-label="Course list and footer">
+                            <div class="guest-v2-courses-hero">
+                                <img class="guest-v2-courses-image" src="/assets/screen3.png" alt="Course list page preview">
+                                <div class="guest-v2-courses-fade" aria-hidden="true"></div>
+                                <div class="guest-v2-courses-content">
+                                    <h3 class="guest-v2-courses-title">Available now, free to use</h3>
+                                    <p class="guest-v2-courses-text">Start organizing your semester today with course planning, reviews, and assignment tracking at no cost.</p>
+                                    <a class="home-calendar-link guest-v2-courses-btn" href="/register">Get started</a>
+                                </div>
+                            </div>
+                            <div class="guest-v2-footer-spacer" aria-hidden="true"></div>
+
+                            <footer class="guest-v2-footer" aria-label="Guest footer">
+                                <div class="guest-v2-footer-main">
+                                    <div class="guest-v2-footer-brand">
+                                        <img class="guest-v2-footer-logo" src="/assets/logo.svg" alt="ILA Companion">
+                                        <p class="guest-v2-footer-copy">Your modern academic workspace for timetables, assignments, and confident course choices.</p>
+
+                                        <div class="guest-v2-footer-social" aria-label="Social links">
+                                            <a class="guest-v2-footer-social-link" href="https://instagram.com/pr.ilacomp" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+                                                <img src="/assets/instagram.svg" alt="">
+                                            </a>
+                                            <a class="guest-v2-footer-social-link" href="https://linkedin.com/in/mirkoventi" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                                                <img src="/assets/linkedin.svg" alt="">
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <div class="guest-v2-footer-nav-grid">
+                                        <div class="guest-v2-footer-col">
+                                            <h5 class="guest-v2-footer-col-title">Feature</h5>
+                                            <a class="guest-v2-footer-link" href="/courses">Browse courses</a>
+                                            <a class="guest-v2-footer-link" href="/timetable">Timetable</a>
+                                            <a class="guest-v2-footer-link" href="/assignments">Assignments</a>
+                                        </div>
+                                        <div class="guest-v2-footer-col">
+                                            <h5 class="guest-v2-footer-col-title">Community</h5>
+                                            <a class="guest-v2-footer-link" href="https://instagram.com/pr.ilacomp" target="_blank" rel="noopener noreferrer">Instagram</a>
+                                            <a class="guest-v2-footer-link" href="https://linkedin.com/in/mirkoventi" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                                            <a class="guest-v2-footer-link" href="/login">Sign In</a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="guest-v2-footer-bottom">
+                                    <p class="guest-v2-footer-meta-text">© 2026 ILA Companion. All rights reserved.</p>
+                                    <p class="guest-v2-footer-meta-text">Built for current student workflows.</p>
+                                </div>
+                            </footer>
                         </section>
                     </div>
 
@@ -155,9 +236,9 @@
                             <div class="main-container home-widget-card" id="guest-browse-container">
                                 <div class="total-courses">
                                     <div class="total-courses-container guest-card-content">
-                                        <h3 class="home-calendar-summary-title">Browse Courses</h3>
+                                        <h3 class="home-calendar-summary-title">Browse courses</h3>
                                         <p class="total-upcoming guest-card-copy">Search by term, period, and review trends.</p>
-                                        <a class="home-calendar-link guest-card-link" href="/courses">Browse Courses</a>
+                                        <a class="home-calendar-link guest-card-link" href="/courses">Browse courses</a>
                                     </div>
                                 </div>
                             </div>

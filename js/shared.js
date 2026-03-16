@@ -884,6 +884,9 @@ let activeCourseInfoTabController = null;
 let courseInfoOpenRequestVersion = 0;
 let courseInfoBodyLockSnapshot = null;
 let courseInfoBodyLockScrollY = 0;
+let dsModalBodyLockDepth = 0;
+let dsModalBodyLockSnapshot = null;
+let dsModalBodyLockScrollY = 0;
 
 function isCourseInfoMobileViewport() {
     return window.innerWidth <= COURSE_INFO_MOBILE_BREAKPOINT;
@@ -941,17 +944,14 @@ function getVisibleCourseInfoCourseContext() {
     };
 }
 
-async function refreshVisibleCourseInfoReviewsAfterMutation({ courseCode = '', term = '' } = {}) {
+async function refreshVisibleCourseInfoReviewsAfterMutation({ courseCode = '' } = {}) {
     const { classInfo, course } = getVisibleCourseInfoCourseContext();
     if (!classInfo || !course) return false;
 
     const activeCourseCode = String(course?.course_code || '').trim();
-    const activeCourseTerm = normalizeCourseTerm(course?.term || '');
     const normalizedTargetCode = String(courseCode || '').trim();
-    const normalizedTargetTerm = normalizeCourseTerm(term || '');
 
     if (normalizedTargetCode && activeCourseCode && normalizedTargetCode !== activeCourseCode) return false;
-    if (normalizedTargetTerm && activeCourseTerm && normalizedTargetTerm !== activeCourseTerm) return false;
 
     const previousSheetState = String(classInfo.dataset.sheetState || '').trim();
     await openCourseInfoMenu(course, false, { initialTab: 'reviews' });
@@ -969,7 +969,7 @@ async function refreshVisibleCourseInfoReviewsAfterMutation({ courseCode = '', t
     return true;
 }
 
-async function finalizeReviewMutationSuccess({ message, courseCode = '', term = '' } = {}) {
+async function finalizeReviewMutationSuccess({ message, courseCode = '' } = {}) {
     if (typeof window.closeReviewModal === 'function') {
         window.closeReviewModal();
     } else {
@@ -977,7 +977,7 @@ async function finalizeReviewMutationSuccess({ message, courseCode = '', term = 
     }
 
     await new Promise((resolve) => window.setTimeout(resolve, 240));
-    await refreshVisibleCourseInfoReviewsAfterMutation({ courseCode, term });
+    await refreshVisibleCourseInfoReviewsAfterMutation({ courseCode });
     showGlobalToast(message || 'Saved.');
 }
 
@@ -1097,6 +1097,55 @@ function unlockBodyScrollForCourseInfoSheet() {
     }
 }
 
+function lockBodyScrollForDsModal() {
+    const body = document.body;
+    dsModalBodyLockDepth += 1;
+
+    if (dsModalBodyLockDepth === 1) {
+        const bodyAlreadyLocked = courseInfoBodyLockSnapshot || body.style.position === 'fixed';
+        if (!bodyAlreadyLocked) {
+            dsModalBodyLockScrollY = window.scrollY || window.pageYOffset || 0;
+            dsModalBodyLockSnapshot = {
+                overflow: body.style.overflow,
+                position: body.style.position,
+                top: body.style.top,
+                width: body.style.width
+            };
+            body.style.overflow = 'hidden';
+            body.style.position = 'fixed';
+            body.style.top = `-${dsModalBodyLockScrollY}px`;
+            body.style.width = '100%';
+        } else {
+            dsModalBodyLockSnapshot = null;
+            dsModalBodyLockScrollY = 0;
+        }
+    }
+
+    body.classList.add('modal-open');
+}
+
+function unlockBodyScrollForDsModal() {
+    if (dsModalBodyLockDepth <= 0) return;
+
+    dsModalBodyLockDepth -= 1;
+    if (dsModalBodyLockDepth > 0) return;
+
+    const body = document.body;
+    if (dsModalBodyLockSnapshot) {
+        const previousSnapshot = dsModalBodyLockSnapshot;
+        const previousScrollY = dsModalBodyLockScrollY;
+        body.style.overflow = previousSnapshot.overflow;
+        body.style.position = previousSnapshot.position;
+        body.style.top = previousSnapshot.top;
+        body.style.width = previousSnapshot.width;
+        window.scrollTo(0, previousScrollY);
+    }
+
+    dsModalBodyLockSnapshot = null;
+    dsModalBodyLockScrollY = 0;
+    syncModalOpenClass();
+}
+
 function syncModalOpenClass() {
     const hasOpenModal = Boolean(document.querySelector(
         '.profile-modal.profile-modal--swipe.show,' +
@@ -1104,7 +1153,7 @@ function syncModalOpenClass() {
         ' .search-modal.show,' +
         ' .filter-popup.show,' +
         ' .class-info:not(.course-fullscreen).show,' +
-        ' .modal.modal--mobile-swipe:not(.hidden),' +
+        ' .modal:not(.hidden),' +
         ' .conflict-container:not(.hidden)'
     ));
 
@@ -1690,7 +1739,14 @@ function openDsModal({
     mobileSwipe = null
 }) {
     const existing = document.querySelector(`.modal[data-modal-kind="${modalKind}"]`);
-    if (existing) existing.remove();
+    if (existing) {
+        if (typeof existing.__closeModal === 'function') {
+            existing.__closeModal({ immediate: true });
+        } else {
+            existing.remove();
+            unlockBodyScrollForDsModal();
+        }
+    }
 
     const modal = document.createElement('div');
     modal.className = `modal ${className}`.trim();
@@ -1749,13 +1805,9 @@ function openDsModal({
                 dialog?._swipeCleanup?.();
             } catch (_) { }
             modal.remove();
-            if (enableMobileSwipeSheet) {
-                syncModalOpenClass();
-            }
+            unlockBodyScrollForDsModal();
             if (typeof onClose === 'function') {
                 onClose();
-            } else {
-                document.body.style.overflow = document.body.classList.contains('modal-open') ? 'hidden' : 'auto';
             }
         };
 
@@ -1783,14 +1835,13 @@ function openDsModal({
         }
     });
 
+    modal.__closeModal = close;
     document.body.appendChild(modal);
+    lockBodyScrollForDsModal();
     if (enableMobileSwipeSheet) {
-        document.body.classList.add('modal-open');
         requestAnimationFrame(() => {
             dialog?.style.setProperty('--modal-translate-y', '0px');
         });
-    } else {
-        document.body.style.overflow = 'hidden';
     }
 
     focusTrapCleanup = createFocusTrap(dialog, { onEscape: requestClose });
@@ -1887,6 +1938,145 @@ function normalizeCourseTerm(term) {
     if (lowerTerm.includes('spring') || rawTerm.includes('春')) return 'Spring';
 
     return rawTerm;
+}
+
+function normalizeCourseCodeForReview(codeValue) {
+    return String(codeValue || '').trim().toUpperCase();
+}
+
+function getCourseCodeFamily(codeValue) {
+    const normalizedCode = normalizeCourseCodeForReview(codeValue);
+    if (!normalizedCode) return '';
+    const sectionMatch = normalizedCode.match(/^(.+)-([0-9]{2,4})$/);
+    return sectionMatch ? String(sectionMatch[1] || '').trim() : normalizedCode;
+}
+
+function normalizeCourseTitleForReview(titleValue) {
+    return String(titleValue || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function isSectionSpecificCourseForReviews({ courseTitle = '' } = {}) {
+    const normalizedTitle = normalizeCourseTitleForReview(courseTitle);
+    if (!normalizedTitle) return false;
+    return /\bseminar\b/.test(normalizedTitle) || /\bthesis\b/.test(normalizedTitle);
+}
+
+function sanitizeCourseCodeFilterToken(value) {
+    return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_.-]/g, '');
+}
+
+function addEquivalentCourseCodesFromRows(codeSet, rows) {
+    if (!codeSet || !(codeSet instanceof Set) || !Array.isArray(rows)) return;
+    rows.forEach((row) => {
+        const normalizedCode = normalizeCourseCodeForReview(row?.course_code);
+        if (!normalizedCode) return;
+        codeSet.add(normalizedCode);
+        const family = getCourseCodeFamily(normalizedCode);
+        if (family) codeSet.add(family);
+    });
+}
+
+const courseReviewEquivalentCodeCache = new Map();
+
+async function resolveEquivalentCourseCodesForReviews({ courseCode = '', courseTitle = '' } = {}) {
+    const normalizedCode = normalizeCourseCodeForReview(courseCode);
+    const codeFamily = getCourseCodeFamily(normalizedCode);
+    const normalizedTitle = normalizeCourseTitleForReview(courseTitle);
+    const sectionSpecificCourse = isSectionSpecificCourseForReviews({ courseTitle });
+    const cacheKey = `${codeFamily}::${normalizedTitle}`;
+    if (cacheKey && courseReviewEquivalentCodeCache.has(cacheKey)) {
+        return [...courseReviewEquivalentCodeCache.get(cacheKey)];
+    }
+
+    if (sectionSpecificCourse) {
+        const exactCodeOnly = normalizedCode ? [normalizedCode] : [];
+        if (cacheKey) {
+            courseReviewEquivalentCodeCache.set(cacheKey, exactCodeOnly);
+        }
+        return exactCodeOnly;
+    }
+
+    const equivalentCodes = new Set();
+    if (normalizedCode) equivalentCodes.add(normalizedCode);
+    if (codeFamily) equivalentCodes.add(codeFamily);
+
+    const familyFilterToken = sanitizeCourseCodeFilterToken(codeFamily);
+    const titleFilterValue = String(courseTitle || '').trim().replace(/\s+/g, ' ');
+
+    if (familyFilterToken) {
+        try {
+            const { data: familyOfferings, error: familyOfferingsError } = await supabase
+                .from('courses')
+                .select('course_code')
+                .or(`course_code.eq.${familyFilterToken},course_code.ilike.${familyFilterToken}-%`)
+                .limit(500);
+            if (familyOfferingsError) {
+                console.warn('Unable to resolve equivalent course codes by family:', familyOfferingsError);
+            } else {
+                addEquivalentCourseCodesFromRows(equivalentCodes, familyOfferings);
+            }
+        } catch (error) {
+            console.warn('Error resolving equivalent course codes by family:', error);
+        }
+    }
+
+    if (titleFilterValue) {
+        try {
+            const { data: titleOfferings, error: titleOfferingsError } = await supabase
+                .from('courses')
+                .select('course_code')
+                .ilike('title', titleFilterValue)
+                .limit(500);
+            if (titleOfferingsError) {
+                console.warn('Unable to resolve equivalent course codes by title:', titleOfferingsError);
+            } else {
+                addEquivalentCourseCodesFromRows(equivalentCodes, titleOfferings);
+            }
+        } catch (error) {
+            console.warn('Error resolving equivalent course codes by title:', error);
+        }
+    }
+
+    if (familyFilterToken && equivalentCodes.size <= 2) {
+        try {
+            const { data: reviewedVariants, error: reviewedVariantsError } = await supabase
+                .from('course_reviews')
+                .select('course_code')
+                .or(`course_code.eq.${familyFilterToken},course_code.ilike.${familyFilterToken}-%`)
+                .limit(500);
+            if (!reviewedVariantsError) {
+                addEquivalentCourseCodesFromRows(equivalentCodes, reviewedVariants);
+            }
+        } catch (_) {
+            // Ignore fallback lookup errors and continue with known course codes.
+        }
+    }
+
+    const resolvedCodes = [...equivalentCodes].filter(Boolean);
+    if (cacheKey) {
+        courseReviewEquivalentCodeCache.set(cacheKey, resolvedCodes);
+    }
+    return resolvedCodes;
+}
+
+function applyCourseReviewCodeFilter(query, equivalentCodes, fallbackCourseCode = '') {
+    const normalizedCodes = [...new Set((equivalentCodes || [])
+        .map((code) => normalizeCourseCodeForReview(code))
+        .filter(Boolean))];
+
+    if (normalizedCodes.length === 0) {
+        const fallbackCode = normalizeCourseCodeForReview(fallbackCourseCode);
+        if (fallbackCode) {
+            return query.eq('course_code', fallbackCode);
+        }
+        return query;
+    }
+
+    if (normalizedCodes.length === 1) {
+        return query.eq('course_code', normalizedCodes[0]);
+    }
+
+    return query.in('course_code', normalizedCodes);
 }
 
 function hasAnyGpaSignal(course) {
@@ -3895,14 +4085,21 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     }
 
     // Function to load course reviews
-    async function loadCourseReviews(courseCode, academicYear, term) {
+    async function loadCourseReviews(courseCode, academicYear, courseTitle = '') {
         try {
+            const equivalentCourseCodes = await resolveEquivalentCourseCodesForReviews({
+                courseCode,
+                courseTitle
+            });
+
             // Build the query - if academicYear is null, get reviews from all years
-            let query = supabase
+            let query = applyCourseReviewCodeFilter(
+                supabase
                 .from('course_reviews')
-                .select('*')
-                .eq('course_code', courseCode)
-                .eq('term', term)
+                .select('*'),
+                equivalentCourseCodes,
+                courseCode
+            )
                 .order('created_at', { ascending: false });
 
             // Only filter by academic year if it's provided
@@ -4111,7 +4308,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         const safeCourseTermLabel = `${review.term?.includes('/') ? review.term.split('/')[1] : review.term || 'Term'} ${review.academic_year || ''}`.trim();
         const safeDate = formatDate(review.created_at);
         const hasWrittenContent = rawContent.trim().length > 0;
-        const shouldClampText = hasWrittenContent && (rawContent.trim().length > 180 || rawContent.includes('\n'));
+        const isGuestViewer = !currentUserId;
+        const shouldClampText = !isGuestViewer && hasWrittenContent && (rawContent.trim().length > 180 || rawContent.includes('\n'));
         const reviewId = String(review.id || '');
         const escapedCourseTitle = String(course.title || '').replace(/'/g, "\\'");
         const escapedContentForEdit = rawContent.replace(/'/g, "\\'");
@@ -4139,8 +4337,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 </div>
                 <div class="review-note-row${hasWrittenContent ? '' : ' review-note-row--empty'}">
                     ${hasWrittenContent ? `
-                        <p class="course-review-text-excerpt is-own-review${shouldClampText ? ' is-clamped' : ''}">${safeContent}</p>
-                        ${shouldClampText ? '<button type="button" class="course-review-inline-action" data-action="review-show-more" aria-expanded="false">Show More</button>' : ''}
+                        <p class="course-review-text-excerpt is-own-review">${safeContent}</p>
                     ` : `
                         <p class="course-review-text-empty">No written review provided.</p>
                         <button type="button" class="course-review-inline-action course-review-inline-action--pill" data-action="review-add-note">Write Review</button>
@@ -4222,7 +4419,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         const rawContent = String(review.content || '');
         const safeContent = escapeHtml(rawContent).replace(/\n/g, '<br>');
         const hasWrittenContent = rawContent.trim().length > 0;
-        const shouldClampText = hasWrittenContent && (rawContent.trim().length > 180 || rawContent.includes('\n'));
         const ratingRows = `
             <div class="review-rating-lines course-review-card-ratings course-review-card-ratings--compact" aria-label="Your review ratings">
                 <div class="review-rating-line review-rating-line--quality" aria-label="Quality rating ${qualityRating} out of 5">
@@ -4256,8 +4452,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 ${ratingRows}
                 ${hasWrittenContent ? `
                     <div class="your-review-text-wrap">
-                        <p class="your-review-text course-review-text-excerpt${shouldClampText ? ' is-clamped' : ''}">${safeContent}</p>
-                        ${shouldClampText ? '<button type="button" class="course-review-inline-action" data-action="your-review-show-more" aria-expanded="false">Read More</button>' : ''}
+                        <p class="your-review-text course-review-text-excerpt">${safeContent}</p>
                     </div>
                 ` : `
                     <div class="your-review-empty-state">
@@ -4269,8 +4464,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         `;
     }
 
-    // Load reviews for this course (from all years, just matching course code and term)
-    const allReviews = await loadCourseReviews(course.course_code, null, course.term);
+    // Load reviews for this course from all terms/years.
+    const allReviews = await loadCourseReviews(course.course_code, null, String(course.title || ''));
     if (isStaleRequest()) return;
 
     // Get current user ID for edit functionality (using session already declared above)
@@ -6274,6 +6469,26 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             return raw.replace(/\s*-\s*/g, '\u2013');
         }
 
+        function getConflictReplacementToast(conflictingCourses, timeSlot) {
+            const safeConflictingCourses = Array.isArray(conflictingCourses) ? conflictingCourses : [];
+            const hasSectionConflict = safeConflictingCourses.some((courseEntry) => (
+                String(courseEntry?.conflict_type || '') === 'same-course-section'
+            ));
+            const hasTimeConflict = safeConflictingCourses.some((courseEntry) => (
+                String(courseEntry?.conflict_type || '') !== 'same-course-section'
+            ));
+
+            if (hasSectionConflict && hasTimeConflict) {
+                return 'Replaced conflicting course and duplicate section.';
+            }
+
+            if (hasSectionConflict) {
+                return 'Replaced duplicate course section.';
+            }
+
+            return `Replaced course in ${formatConflictSlotForToast(timeSlot)}.`;
+        }
+
         // Simple function to check if course is selected
         async function isCourseSelected(courseCode, year) {
             const { data: { session } } = await supabase.auth.getSession();
@@ -6486,7 +6701,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                     return;
                                 }
 
-                                showCourseActionToast(`Replaced course in ${formatConflictSlotForToast(course.time_slot)}.`);
+                                showCourseActionToast(getConflictReplacementToast(conflictingCourses, course.time_slot));
                                 await updateButton();
                                 // Also update the button state specifically
                                 await updateCourseButtonState(course, newButton);
@@ -6590,12 +6805,25 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 // Global function to load more reviews
 window.loadMoreReviews = async function (courseCode, academicYear, term, currentlyShowing) {
     try {
+        const { course: visibleCourse } = getVisibleCourseInfoCourseContext();
+        const requestedFamily = getCourseCodeFamily(courseCode);
+        const visibleFamily = getCourseCodeFamily(visibleCourse?.course_code || '');
+        const titleForMatching = requestedFamily && visibleFamily && requestedFamily === visibleFamily
+            ? String(visibleCourse?.title || '')
+            : '';
+        const equivalentCourseCodes = await resolveEquivalentCourseCodesForReviews({
+            courseCode,
+            courseTitle: titleForMatching
+        });
+
         // Build the query - if academicYear is null, get reviews from all years
-        let query = supabase
+        let query = applyCourseReviewCodeFilter(
+            supabase
             .from('course_reviews')
-            .select('*')
-            .eq('course_code', courseCode)
-            .eq('term', term)
+            .select('*'),
+            equivalentCourseCodes,
+            courseCode
+        )
             .order('created_at', { ascending: false });
 
         // Only filter by academic year if it's provided
@@ -7351,13 +7579,21 @@ window.openAddReviewModal = async function (courseCode, academicYear, term, cour
 
         ensureCourseInfoReviewsTabActive({ scrollTop: true });
 
-        // Check if user has already reviewed this course (same code and term, any year)
-        const { data: existingReviews, error } = await supabase
-            .from('course_reviews')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .eq('course_code', courseCode)
-            .eq('term', term);
+        // Check if user has already reviewed this course regardless of term/year.
+        const equivalentCourseCodes = await resolveEquivalentCourseCodesForReviews({
+            courseCode,
+            courseTitle
+        });
+        const existingReviewQuery = applyCourseReviewCodeFilter(
+            supabase
+                .from('course_reviews')
+                .select('*')
+                .eq('user_id', session.user.id),
+            equivalentCourseCodes,
+            courseCode
+        );
+        const { data: existingReviews, error } = await existingReviewQuery
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error('Error checking existing reviews:', error);
@@ -7661,13 +7897,6 @@ window.updateReview = async function (reviewId) {
             visibleCourse?.course_code ||
             ''
         ).trim();
-        const termForRefresh = normalizeCourseTerm(
-            selectedTerm ||
-            updateBtn?.dataset?.courseTerm ||
-            visibleCourse?.term ||
-            ''
-        );
-
         const dualPayload = buildCourseReviewWritePayload({
             academicYear: selectedYear,
             term: selectedTerm,
@@ -7707,8 +7936,7 @@ window.updateReview = async function (reviewId) {
 
         await finalizeReviewMutationSuccess({
             message: 'Review updated successfully.',
-            courseCode: courseCodeForRefresh,
-            term: termForRefresh
+            courseCode: courseCodeForRefresh
         });
 
     } catch (error) {
@@ -8037,8 +8265,7 @@ window.submitReview = async function (courseCode, academicYear, term) {
 
         await finalizeReviewMutationSuccess({
             message: 'Review submitted successfully.',
-            courseCode,
-            term: selectedTerm || term
+            courseCode
         });
 
     } catch (error) {
@@ -8265,6 +8492,17 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                         return false;
                     }
 
+                    // Same base course code (different section) is also a conflict at ILA.
+                    const existingCode = String(courseData.course_code || '').trim();
+                    const newCode = String(courseCode || '').trim();
+                    const existingFamily = getCourseCodeFamily(existingCode);
+                    const newFamily = getCourseCodeFamily(newCode);
+                    if (existingFamily && newFamily && existingFamily === newFamily) {
+                        console.log('❌ Same-course section conflict detected:', { existingCode, newCode, family: newFamily });
+                        courseData.conflict_type = 'same-course-section';
+                        return true;
+                    }
+
                     const existingTimeSlot = parseTimeSlot(courseData.time_slot);
                     console.log('Parsed existing time slot:', JSON.stringify(existingTimeSlot));
                     console.log('Parsed new time slot:', JSON.stringify(newTimeSlot));
@@ -8287,6 +8525,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                                 const isConflict = newPeriod === existingPeriod;
                                 console.log('Period conflict result:', isConflict ? '❌ CONFLICT!' : '✓ No conflict');
                                 if (isConflict) {
+                                    courseData.conflict_type = 'time-overlap';
                                     console.log('🔍 CONFLICT DETAILS:');
                                     console.log('  - Existing course:', courseData.title, '(' + courseData.course_code + ')');
                                     console.log('  - Period:', existingPeriod);
@@ -8297,6 +8536,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                             // If both have time ranges, they conflict (same day)
                             if (newTimeSlot.timeRange && existingTimeSlot.timeRange) {
                                 console.log('❌ Both have time ranges, conflict detected');
+                                courseData.conflict_type = 'time-overlap';
                                 return true;
                             }
                             // If one has period and one has time range, we need to convert to compare
@@ -8333,6 +8573,9 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
                                 if (newPeriod && existingPeriod) {
                                     const isConflict = newPeriod === existingPeriod;
                                     console.log('Mixed format conflict result:', isConflict ? '❌ CONFLICT!' : '✓ No conflict');
+                                    if (isConflict) {
+                                        courseData.conflict_type = 'time-overlap';
+                                    }
                                     return isConflict;
                                 } else {
                                     console.log('⚠️ Could not convert time formats, assuming no conflict');
@@ -8482,17 +8725,26 @@ window.isCurrentSemester = isCurrentSemester;
 window.isCourseRegistrationOpen = isCurrentSemester;
 window.filterCoursesByCurrentYearTerm = filterCoursesByCurrentYearTerm;
 
-// Function to show time conflict modal (similar to search modal)
+// Function to show time conflict modal in the shared app modal system.
 export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) {
-    // Remove any existing conflict modal
-    const existingModal = document.querySelector('.conflict-container');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    document.body.classList.remove('modal-open');
     const previousFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
     const safeConflictingCourses = Array.isArray(conflictingCourses) ? conflictingCourses : [];
+
+    const hasSectionConflict = safeConflictingCourses.some((courseEntry) => (
+        String(courseEntry?.conflict_type || '') === 'same-course-section'
+    ));
+    const hasTimeConflict = safeConflictingCourses.some((courseEntry) => (
+        String(courseEntry?.conflict_type || '') !== 'same-course-section'
+    ));
+
+    const introCopy = hasSectionConflict && hasTimeConflict
+        ? 'This selection overlaps your schedule and also duplicates a section of a class you already registered for.'
+        : (hasSectionConflict
+            ? 'This selection is another section of a class you already registered for. You can keep only one section.'
+            : 'This course conflicts with a course you already registered for.');
+    const questionCopy = hasSectionConflict
+        ? 'Choose which course section to keep in your schedule.'
+        : 'Choose what to keep for this time slot.';
 
     const escapeHtml = (value) => String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -8521,7 +8773,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     const toDisplayCredits = (courseEntry) => {
         const raw = courseEntry?.credits;
         if (raw === null || raw === undefined || raw === '') {
-            return `<span class="conflict-empty-value">Not listed</span>`;
+            return '<span class="conflict-empty-value">Not listed</span>';
         }
 
         if (typeof raw === 'number' && Number.isFinite(raw)) {
@@ -8602,15 +8854,6 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         return escapeHtml(raw);
     };
 
-    const toDisplayTerm = (courseEntry) => {
-        const term = String(courseEntry?.term || '').trim();
-        const year = String(courseEntry?.academic_year || '').trim();
-        if (term && year) return `${escapeHtml(term)} ${escapeHtml(year)}`;
-        if (term) return escapeHtml(term);
-        if (year) return escapeHtml(year);
-        return '<span class="conflict-empty-value">Current semester</span>';
-    };
-
     const toHexColor = (value, fallback = '#E0E0E0') => {
         const color = String(value || '').trim();
         return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color) ? color : fallback;
@@ -8627,7 +8870,14 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
         return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
     };
 
-    const buildCourseCardMarkup = (courseEntry, badge, modifierClass) => {
+    const buildCourseCardMarkup = (courseEntry, badge, modifierClass, options = {}) => {
+        const emphasisMode = options.emphasisMode === 'code' ? 'code' : 'time';
+        const timeRowClass = emphasisMode === 'time'
+            ? 'conflict-course-card-meta-row conflict-course-card-meta-row--emphasis conflict-meta-primary'
+            : 'conflict-course-card-meta-row conflict-meta-primary';
+        const codeRowClass = emphasisMode === 'code'
+            ? 'conflict-course-card-meta-row conflict-course-card-meta-row--emphasis conflict-meta-secondary'
+            : 'conflict-course-card-meta-row conflict-meta-secondary';
         const accentHex = toHexColor(getCourseColorByType(courseEntry?.type));
         const accentBorder = hexToRgba(accentHex, 0.38);
         return `
@@ -8637,7 +8887,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
                 <span class="conflict-course-card-badge">${escapeHtml(badge)}</span>
             </div>
             <dl class="conflict-course-card-meta">
-                <div class="conflict-course-card-meta-row conflict-course-card-meta-row--time conflict-meta-primary">
+                <div class="${timeRowClass}">
                     <dt>Time</dt>
                     <dd>${toDisplayTimeSlot(courseEntry)}</dd>
                 </div>
@@ -8652,7 +8902,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             </dl>
             <div class="conflict-card-details">
                 <div class="conflict-meta-secondary-wrap">
-                    <div class="conflict-course-card-meta-row conflict-meta-secondary">
+                    <div class="${codeRowClass}">
                         <dt>Code</dt>
                         <dd>${toDisplayText(courseEntry?.course_code, 'N/A')}</dd>
                     </div>
@@ -8667,157 +8917,98 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     `;
     };
 
-    // Create modal container
-    const modalContainer = document.createElement('div');
-    modalContainer.className = 'conflict-container hidden';
-
-    modalContainer.innerHTML = `
-        <div class="conflict-backdrop">
-            <div class="conflict-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="conflict-modal-title">
-                <div class="conflict-modal-head">
-                    <h2 class="conflict-modal-title" id="conflict-modal-title">
-                        <span class="conflict-modal-heading-icon" aria-hidden="true"></span>
-                        Schedule Conflict
-                    </h2>
-                    <button class="assignment-modal-close conflict-modal-close" type="button" aria-label="Close conflict modal"></button>
-                </div>
-                <div class="conflict-content">
-                    <p class="conflict-intro">This course conflicts with a course you already registered for.
-                    </p>
-                    <div class="conflict-comparison-grid">
-                        <section class="conflict-comparison-column">
-                            <h3 class="conflict-column-title">Currently registered</h3>
-                            <div class="conflict-course-stack">
-                                ${safeConflictingCourses.length
+    const bodyHtml = `
+        <div class="conflict-content">
+            <p class="conflict-intro">${escapeHtml(introCopy)}</p>
+            <div class="conflict-comparison-grid">
+                <section class="conflict-comparison-column">
+                    <h3 class="conflict-column-title">Currently registered</h3>
+                    <div class="conflict-course-stack">
+                        ${safeConflictingCourses.length
             ? safeConflictingCourses
-                .map((courseEntry) => buildCourseCardMarkup(courseEntry, 'Registered', 'conflict-course-card--existing'))
+                .map((courseEntry) => {
+                    const isSectionConflict = String(courseEntry?.conflict_type || '') === 'same-course-section';
+                    return buildCourseCardMarkup(
+                        courseEntry,
+                        'Registered',
+                        'conflict-course-card--existing',
+                        { emphasisMode: isSectionConflict ? 'code' : 'time' }
+                    );
+                })
                 .join('')
             : '<p class="conflict-empty">No registered course details found.</p>'}
-                            </div>
-                        </section>
-                        <section class="conflict-comparison-column">
-                            <h3 class="conflict-column-title">New selection</h3>
-                            <div class="conflict-course-stack">
-                                ${buildCourseCardMarkup(newCourse || {}, 'Selected', 'conflict-course-card--new')}
-                            </div>
-                        </section>
                     </div>
-                    <div class="conflict-question">
-                        <p>Choose what to keep for this time slot.</p>
+                </section>
+                <section class="conflict-comparison-column">
+                    <h3 class="conflict-column-title">New selection</h3>
+                    <div class="conflict-course-stack">
+                        ${buildCourseCardMarkup(
+                            newCourse || {},
+                            'Selected',
+                            'conflict-course-card--new',
+                            { emphasisMode: hasSectionConflict && !hasTimeConflict ? 'code' : 'time' }
+                        )}
                     </div>
-                </div>
-                <div class="conflict-actions">
-                    <button class="conflict-cancel" type="button">Keep Registered Course</button>
-                    <button class="conflict-replace" type="button">Replace & Register</button>
-                </div>
+                </section>
+            </div>
+            <div class="conflict-question">
+                <p>${escapeHtml(questionCopy)}</p>
             </div>
         </div>
     `;
 
-    const modalDialog = modalContainer.querySelector('.conflict-modal-dialog');
-    const isConflictMobileSheet = isMobileSheet();
-    if (isConflictMobileSheet && modalDialog) {
-        modalDialog.classList.add('mobile-swipe-sheet');
-        if (!modalDialog.querySelector('.swipe-indicator')) {
-            const indicator = document.createElement('div');
-            indicator.className = 'swipe-indicator ui-swipe-sheet__handle';
-            indicator.setAttribute('aria-hidden', 'true');
-            modalDialog.insertBefore(indicator, modalDialog.firstChild);
-        }
-        modalDialog.style.setProperty('--modal-translate-y', '100vh');
-    }
+    const footerHtml = `
+        <button type="button" class="btn-secondary conflict-cancel" data-action="conflict-keep">Keep Registered Course</button>
+        <button type="button" class="btn-primary conflict-replace" data-action="conflict-replace">Replace & Register</button>
+    `;
 
-    // Add to body
-    document.body.appendChild(modalContainer);
-    document.body.classList.add('modal-open');
-
-    // Add event listeners
-    const cancelBtn = modalContainer.querySelector('.conflict-cancel');
-    const replaceBtn = modalContainer.querySelector('.conflict-replace');
-    const closeBtn = modalContainer.querySelector('.conflict-modal-close');
-    const background = modalContainer.querySelector('.conflict-backdrop');
-    const detailsToggleButtons = modalContainer.querySelectorAll('.conflict-more-details');
     let resolved = false;
-
-    const handleEscape = (event) => {
-        if (event.key === 'Escape') {
-            resolveConflict(false, 'dismiss');
+    const settle = (shouldReplace, actionType = 'dismiss') => {
+        if (resolved) return;
+        resolved = true;
+        if (typeof onResolve === 'function') {
+            onResolve(Boolean(shouldReplace), safeConflictingCourses, actionType);
         }
     };
 
-    function closeModal({ immediate = false } = {}) {
-        const finalizeClose = () => {
-            modalContainer.remove();
+    openDsModal({
+        title: 'Schedule Conflict',
+        bodyHtml,
+        footerHtml,
+        className: 'modal--conflict',
+        modalKind: 'conflict',
+        mobileSwipe: isMobileSheet(),
+        onMount: (root, close) => {
+            const dialog = root.querySelector('.modal-dialog');
+            dialog?.classList.add('conflict-modal-dialog');
+
+            root.querySelector('[data-action="conflict-keep"]')?.addEventListener('click', () => {
+                settle(false, 'keep');
+                close();
+            });
+            root.querySelector('[data-action="conflict-replace"]')?.addEventListener('click', () => {
+                settle(true, 'replace');
+                close();
+            });
+
+            root.querySelectorAll('.conflict-more-details').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const parentCard = button.closest('.conflict-course-card');
+                    if (!parentCard) return;
+                    const isExpanded = parentCard.classList.toggle('is-expanded');
+                    button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                    button.textContent = isExpanded ? 'Hide details' : 'More details';
+                });
+            });
+        },
+        onClose: () => {
+            settle(false, 'dismiss');
             if (previousFocusedElement && typeof previousFocusedElement.focus === 'function') {
                 previousFocusedElement.focus();
             }
-        };
-
-        if (immediate) {
-            finalizeClose();
-            syncModalOpenClass();
-            return;
-        }
-
-        modalContainer.classList.remove('show');
-        modalContainer.classList.add('hidden');
-        syncModalOpenClass();
-        if (isConflictMobileSheet && modalDialog) {
-            modalDialog.style.setProperty('--modal-translate-y', '100vh');
-            if (background) {
-                background.style.opacity = '0';
-            }
-        }
-        setTimeout(finalizeClose, isConflictMobileSheet ? (SWIPE_CLOSE_DURATION_MS + 20) : 300);
-    }
-
-    function resolveConflict(shouldReplace, actionType = 'dismiss', closeOptions = undefined) {
-        if (resolved) return;
-        resolved = true;
-        document.removeEventListener('keydown', handleEscape);
-        closeModal(closeOptions);
-        if (onResolve) {
-            onResolve(Boolean(shouldReplace), safeConflictingCourses, actionType);
-        }
-    }
-
-    cancelBtn.addEventListener('click', () => resolveConflict(false, 'keep'));
-    replaceBtn.addEventListener('click', () => resolveConflict(true, 'replace'));
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => resolveConflict(false, 'dismiss'));
-    }
-    detailsToggleButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            const parentCard = button.closest('.conflict-course-card');
-            if (!parentCard) return;
-
-            const isExpanded = parentCard.classList.toggle('is-expanded');
-            button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-            button.textContent = isExpanded ? 'Hide details' : 'More details';
-        });
-    });
-    background.addEventListener('click', (e) => {
-        if (e.target === background) {
-            resolveConflict(false, 'dismiss');
+            document.body.style.overflow = document.body.classList.contains('modal-open') ? 'hidden' : 'auto';
         }
     });
-    document.addEventListener('keydown', handleEscape);
-
-    requestAnimationFrame(() => {
-        modalContainer.classList.remove('hidden');
-        if (isConflictMobileSheet && modalDialog) {
-            modalDialog.style.setProperty('--modal-translate-y', '0px');
-        }
-        if (closeBtn) {
-            closeBtn.focus();
-        }
-    });
-
-    if (isConflictMobileSheet && modalDialog && background && typeof window.addSwipeToCloseSimple === 'function') {
-        window.addSwipeToCloseSimple(modalDialog, background, () => {
-            resolveConflict(false, 'dismiss', { immediate: true });
-        });
-    }
 }
 
 const MOBILE_SHEET_BREAKPOINT = 1023;

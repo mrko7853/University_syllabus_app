@@ -12,7 +12,6 @@ import {
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 import { readSavedCourses, syncSavedCoursesForUser } from "./saved-courses.js";
 import guestScreen2 from "../assets/screen2.png";
-import guestMobileScreen from "../assets/mobilescreen.png";
 function bootstrapStoredPreferences() {
   const applyBootPreferences = () => {
     applyStoredPreferences();
@@ -2926,7 +2925,7 @@ class GuestHomeBrowseWidget extends HTMLElement {
       <div class="guest-v2-browse">
         <div class="guest-v2-browse-header">
           <div class="guest-v2-browse-copy">
-            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <h3 class="home-calendar-summary-title">Browse courses</h3>
             <p class="guest-v2-browse-subtitle">Loading the current semester preview...</p>
           </div>
           <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
@@ -2942,7 +2941,7 @@ class GuestHomeBrowseWidget extends HTMLElement {
       <div class="guest-v2-browse">
         <div class="guest-v2-browse-header">
           <div class="guest-v2-browse-copy">
-            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <h3 class="home-calendar-summary-title">Browse courses</h3>
             <p class="guest-v2-browse-subtitle">${escapeHtml(semesterLabel)} preview</p>
           </div>
           <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
@@ -2984,7 +2983,7 @@ class GuestHomeBrowseWidget extends HTMLElement {
       <div class="guest-v2-browse">
         <div class="guest-v2-browse-header">
           <div class="guest-v2-browse-copy">
-            <h3 class="home-calendar-summary-title">Browse Courses</h3>
+            <h3 class="home-calendar-summary-title">Browse courses</h3>
             <p class="guest-v2-browse-subtitle">${picksLabel} randomized picks from ${safeSemesterLabel}</p>
           </div>
           <button type="button" class="home-calendar-link guest-v2-browse-link" data-action="browse-courses">Browse courses</button>
@@ -3125,13 +3124,12 @@ class GuestHomeTeaserWidget extends HTMLElement {
     return Array.from(new Set(candidates));
   }
   getMockVariants() {
-    const isMobile = this.isMobileViewport();
     return [
       {
-        id: isMobile ? 'mobilescreen' : 'screen2',
-        label: isMobile ? 'Feature preview mobile screen' : 'Feature preview screen 2',
-        imageSrc: isMobile ? guestMobileScreen : guestScreen2,
-        imageFile: isMobile ? 'mobilescreen.png' : 'screen2.png'
+        id: 'screen2',
+        label: 'Feature preview screen 2',
+        imageSrc: guestScreen2,
+        imageFile: 'screen2.png'
       }
     ];
   }
@@ -3158,8 +3156,8 @@ class GuestHomeTeaserWidget extends HTMLElement {
           <h3 class="guest-v2-teaser-title">Build your semester in one personal workspace.</h3>
           <p class="guest-v2-teaser-subtitle">Save courses, track assignments, and keep your timetable organized so every week is easier to manage.</p>
           <div class="guest-v2-teaser-actions">
-            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--primary" href="/register">Create Free Account</a>
-            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--secondary" href="/login">Sign In</a>
+            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--primary" href="/register">Get started</a>
+            <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--secondary" href="/courses">Browse courses</a>
           </div>
         </div>
       </div>
@@ -3318,6 +3316,20 @@ class ReviewSuggestionWidget extends HTMLElement {
   normalizeCourseCode(codeValue) {
     return String(codeValue || '').trim().toUpperCase();
   }
+  getCourseCodeFamily(codeValue) {
+    const normalizedCode = this.normalizeCourseCode(codeValue);
+    if (!normalizedCode) return '';
+    const sectionMatch = normalizedCode.match(/^(.+)-([0-9]{2,4})$/);
+    return sectionMatch ? String(sectionMatch[1] || '').trim() : normalizedCode;
+  }
+  isSectionSpecificCourseTitle(titleValue) {
+    const normalizedTitle = String(titleValue || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!normalizedTitle) return false;
+    return /\bseminar\b/.test(normalizedTitle) || /\bthesis\b/.test(normalizedTitle);
+  }
+  isSectionSpecificCourse(course) {
+    return this.isSectionSpecificCourseTitle(course?.title || '');
+  }
   getCourseSuggestionKey(course) {
     if (!course) return '';
     const code = this.normalizeCourseCode(course.code);
@@ -3326,7 +3338,7 @@ class ReviewSuggestionWidget extends HTMLElement {
     return `${code}|${year}|${term}`;
   }
   getReviewedCourseKey(code, termValue) {
-    const normalizedCode = this.normalizeCourseCode(code);
+    const normalizedCode = this.getCourseCodeFamily(code);
     const normalizedTerm = this.normalizeTerm(termValue || '');
     return `${normalizedCode}|${normalizedTerm}`;
   }
@@ -3377,8 +3389,8 @@ class ReviewSuggestionWidget extends HTMLElement {
       const uniqueSelectedCourses = [...new Map(
         selectedCourses.map((course) => [this.getCourseSuggestionKey(course), course])
       ).values()];
-      let reviewedCourseKeys = new Set();
       let reviewedCourseCodes = new Set();
+      let reviewedCourseFamilies = new Set();
       try {
         const { data: reviewedCourses, error: reviewedCoursesError } = await supabase
           .from('course_reviews')
@@ -3387,20 +3399,23 @@ class ReviewSuggestionWidget extends HTMLElement {
         if (reviewedCoursesError) {
           throw reviewedCoursesError;
         }
-        reviewedCourseKeys = new Set((reviewedCourses || []).map((review) => (
-          this.getReviewedCourseKey(review.course_code, review.term)
-        )));
         reviewedCourseCodes = new Set((reviewedCourses || []).map((review) => (
           this.normalizeCourseCode(review.course_code)
+        )));
+        reviewedCourseFamilies = new Set((reviewedCourses || []).map((review) => (
+          this.getCourseCodeFamily(review.course_code)
         )));
       } catch (error) {
         console.error('Error loading reviewed courses for suggestion widget:', error);
       }
       const availableCourses = uniqueSelectedCourses.filter((course) => {
         const normalizedCode = this.normalizeCourseCode(course.code);
-        const reviewedKey = this.getReviewedCourseKey(course.code, course.term);
-        if (reviewedCourseKeys.has(reviewedKey)) return false;
-        if (reviewedCourseCodes.has(normalizedCode)) return false;
+        const normalizedFamily = this.getCourseCodeFamily(course.code);
+        if (this.isSectionSpecificCourse(course)) {
+          if (reviewedCourseCodes.has(normalizedCode)) return false;
+          return true;
+        }
+        if (reviewedCourseFamilies.has(normalizedFamily)) return false;
         return true;
       });
       if (availableCourses.length === 0) {
