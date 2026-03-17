@@ -3,6 +3,7 @@ import * as wanakana from 'wanakana';
 import { getCurrentAppPath, stripBase, toAppUrl, withBase } from './path-utils.js';
 import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 import { isCourseSaved, readSavedCourses, syncSavedCoursesForUser, toggleSavedCourse } from './saved-courses.js';
+import { inferCurrentSemesterValue } from './preferences.js';
 
 // Course type to color mapping
 const courseTypeColors = {
@@ -15,6 +16,7 @@ const courseTypeColors = {
     'Japanese Business and the Global Economy Concentration': '#EFDC8F', // Placeholder - Moccasin
     'Japanese Politics and Global Studies Concentration': '#E6A4AE', // Placeholder - Light Pink
     'Other Elective Courses': '#CCCCFF',                             // Placeholder - Light Gray
+    'Graduate courses': '#E8CFA2',                                   // Warm Sand
 };
 
 // Default color for unknown types
@@ -29,7 +31,7 @@ const SLOT_PERIOD_TO_TIME = {
     5: '16:40'
 };
 const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
-const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective']);
+const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective', 'Graduate']);
 const SLOT_ALLOWED_TIMES = new Set(Object.values(SLOT_PERIOD_TO_TIME));
 let courseEvalTooltipElement = null;
 let activeCourseEvalTooltipTarget = null;
@@ -317,7 +319,12 @@ const japaneseFullNameMapping = {
     '梶 藍子': 'Kaji Aiko',
     '松川 杏寧': 'Matsukawa Anna',
     '津田 太郎': 'Tsuda Taro',
-    '髙橋 旬子': 'Takahashi Junko'
+    '髙橋 旬子': 'Takahashi Junko',
+    '三牧 聖子': 'Mimaki Seiko',
+    '中西 久枝': 'Nakanishi Hisae',
+    '南川 文里': 'Minamikawa Fumisato',
+    '秋林 こずえ': 'Akibayashi Kozue',
+    '菅野 優香': 'Kanno Yuka'
 };
 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
@@ -533,6 +540,150 @@ function formatCourseTermYearLabel(course) {
     return 'Current semester';
 }
 
+function formatOrdinalYearLabel(yearLevel) {
+    const normalized = Number.parseInt(yearLevel, 10);
+    if (!Number.isFinite(normalized) || normalized <= 0) return '';
+    if (normalized === 1) return '1st';
+    if (normalized === 2) return '2nd';
+    if (normalized === 3) return '3rd';
+    return `${normalized}th`;
+}
+
+function isGraduateCourse(courseLike) {
+    const typeLabel = String(courseLike?.type || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (typeLabel === 'graduate courses' || typeLabel === 'graduate course' || typeLabel === 'graduate') return true;
+    if (typeLabel.includes('graduate')) return true;
+
+    const tags = Array.isArray(courseLike?.evaluation_tags) ? courseLike.evaluation_tags : [];
+    return tags.some((tag) => String(tag || '').trim().toLowerCase() === 'graduate_course');
+}
+
+function isAdvancedSeminarCourse(courseLike) {
+    const normalizedType = String(courseLike?.type || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (normalizedType === 'advanced seminars and honors thesis') return true;
+    if (normalizedType === 'advanced seminar and honors thesis') return true;
+    if (normalizedType.includes('advanced seminar')) return true;
+    return false;
+}
+
+function isGraduateJapaneseTaughtCourse(courseLike) {
+    if (!isGraduateCourse(courseLike)) return false;
+    return String(courseLike?.class_number || '').trim().toUpperCase() === 'J';
+}
+
+function getGraduateRequiredYearOverride(courseLike) {
+    if (!isGraduateCourse(courseLike)) return null;
+    return 3;
+}
+
+function getAdvancedSeminarRequiredYearOverride(courseLike) {
+    if (!isAdvancedSeminarCourse(courseLike)) return null;
+    return 4;
+}
+
+export function parseRequiredYearMinimum(requiredYearValue) {
+    const raw = String(requiredYearValue ?? '').trim();
+    if (!raw) return null;
+
+    const match = raw.match(/[1-9]/);
+    if (!match) return null;
+
+    const parsed = Number.parseInt(match[0], 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function formatRequiredYearLabel(requiredYearValue, { fallbackLabel = 'Not specified' } = {}) {
+    const requiredYearMin = parseRequiredYearMinimum(requiredYearValue);
+    if (!requiredYearMin) return fallbackLabel;
+    const ordinal = formatOrdinalYearLabel(requiredYearMin);
+    return ordinal ? `${ordinal} year+` : fallbackLabel;
+}
+
+export function parseProfileCurrentYearLevel(profileRow) {
+    if (!profileRow || typeof profileRow !== 'object') return null;
+    if (profileRow?.year_opt_out === true) return null;
+
+    const candidateValues = [
+        profileRow?.current_year,
+        profileRow?.year_level,
+        profileRow?.year,
+        profileRow?.program_year
+    ];
+
+    for (const candidate of candidateValues) {
+        if (candidate === null || candidate === undefined || candidate === '') continue;
+
+        if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+            return Math.trunc(candidate);
+        }
+
+        const raw = String(candidate).trim();
+        if (!raw) continue;
+
+        const lowered = raw.toLowerCase();
+        if (lowered.includes('prefer not to answer')) continue;
+
+        const match = lowered.match(/[1-9]/);
+        if (!match) continue;
+
+        const parsed = Number.parseInt(match[0], 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+
+    return null;
+}
+
+export function getCourseRequiredYearMeta(courseLike, userYearLevel = null) {
+    const requiredYearRaw = courseLike?.required_year ?? courseLike?.requiredYear ?? null;
+    const overrideCandidates = [
+        getGraduateRequiredYearOverride(courseLike),
+        getAdvancedSeminarRequiredYearOverride(courseLike)
+    ].filter((value) => Number.isFinite(value) && value > 0);
+    const requiredYearOverride = overrideCandidates.length > 0
+        ? Math.max(...overrideCandidates)
+        : null;
+    const parsedRequiredYear = parseRequiredYearMinimum(requiredYearRaw);
+    const requiredYearMin = Number.isFinite(requiredYearOverride) && requiredYearOverride > 0
+        ? requiredYearOverride
+        : parsedRequiredYear;
+    const hasRequiredYear = Number.isFinite(requiredYearMin) && requiredYearMin > 0;
+    const requiredYearLabelValue = hasRequiredYear
+        ? `${formatOrdinalYearLabel(requiredYearMin)} year+`
+        : '';
+    const requiredYearLabel = hasRequiredYear
+        ? requiredYearLabelValue
+        : 'Open to all years';
+
+    const normalizedUserYear = Number.isFinite(Number(userYearLevel)) && Number(userYearLevel) > 0
+        ? Math.trunc(Number(userYearLevel))
+        : null;
+    const hasKnownUserYear = Number.isFinite(normalizedUserYear);
+    const eligibilityKnown = hasRequiredYear && hasKnownUserYear;
+    const meetsRequirement = !eligibilityKnown || normalizedUserYear >= requiredYearMin;
+    const isBelowRequirement = eligibilityKnown && normalizedUserYear < requiredYearMin;
+    const userYearLabel = hasKnownUserYear
+        ? `${formatOrdinalYearLabel(normalizedUserYear)} year`
+        : '';
+
+    return {
+        requiredYearRaw,
+        requiredYearMin: hasRequiredYear ? requiredYearMin : null,
+        hasRequiredYear,
+        requiredYearLabel,
+        requiredYearBadgeLabel: hasRequiredYear ? `Req: ${requiredYearLabel}` : 'Open to all years',
+        requiredYearBucketId: hasRequiredYear ? `required-year-${requiredYearMin}` : '',
+        userYearLevel: hasKnownUserYear ? normalizedUserYear : null,
+        userYearLabel,
+        hasKnownUserYear,
+        eligibilityKnown,
+        meetsRequirement,
+        isBelowRequirement,
+        isEligibleForRegistration: !hasRequiredYear || !hasKnownUserYear || meetsRequirement
+    };
+}
+
 function formatCourseTimeCompactLabel(rawTimeSlot) {
     const raw = String(rawTimeSlot || '').trim();
     if (!raw) return 'TBA';
@@ -572,6 +723,57 @@ function parseEvaluationCriteriaJson(value) {
     } catch (_) {
         return null;
     }
+}
+
+const GRADUATE_EVALUATION_LABEL_TRANSLATIONS = {
+    '平常点': 'Class Participation',
+    'プレゼンテーション': 'Presentation',
+    '授業への参加': 'Class Participation',
+    '中間レポート': 'Midterm Report',
+    '期末レポート': 'Final Report',
+    '平常点(出席，クラス参加)': 'Attendance and Class Participation',
+    '小レポート': 'Short Report',
+    '平常点(クラス参加，グループ作業の成果等)': 'Class Participation and Group Work',
+    '平常点(クラス参加，グループ作業の成果等': 'Class Participation and Group Work',
+    '出席と参加': 'Attendance and Participation',
+    '平常点(出席，クラス参加，グループ作業の成果等)': 'Attendance, Class Participation, and Group Work',
+    '平常点(出席，クラス参加，グループ作業の': 'Attendance, Class Participation, and Group Work',
+    'クラスへの貢献度': 'Contribution to Class',
+    '提出物': 'Submitted Work',
+    'クラスで発表など': 'Class Presentation',
+    '中間レポート試験': 'Midterm Report and Exam',
+    '期末レポート試験・論文': 'Final Report, Exam, and Paper',
+    'レポート': 'Report'
+};
+
+const GRADUATE_EVALUATION_NOTE_TRANSLATIONS = {
+    'ジェンダーの視点から平和あるいは平和をめぐる諸問題についての議論': 'Discussion of peace-related issues from a gender perspective',
+    'テキストを読み込み，疑問点を明確にした上で参加し，積極的に授業に参加することが求められる。': 'Prepare readings, clarify key questions, and participate actively in class',
+    'プレゼンテーション資料も評価対象。': 'Presentation materials are also evaluated',
+    '平和研究におけるジェンダー分析の重要性に対する理解': 'Understanding the importance of gender analysis in peace studies',
+    '授業内での議論への積極的な参加': 'Active participation in in-class discussion',
+    '授業参加，発表，レスポンスの提出など': 'Class participation, presentations, and response submissions',
+    '教育をジェンダー分析する意味についての理解': 'Understanding why education should be analyzed through a gender lens',
+    '自身が関心を持つ教育とジェンダーに関連する課題の理解': 'Understanding education and gender issues related to your interests',
+    '議論への積極的な参加': 'Active participation in discussions'
+};
+
+function translateGraduateEvaluationLabel(label) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return GRADUATE_EVALUATION_LABEL_TRANSLATIONS[normalized] || normalized;
+}
+
+function translateGraduateEvaluationNote(note) {
+    const normalized = String(note || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return GRADUATE_EVALUATION_NOTE_TRANSLATIONS[normalized] || normalized;
+}
+
+function translateGraduateEvaluationTag(tag) {
+    const normalized = String(tag || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return translateGraduateEvaluationLabel(normalized);
 }
 
 function truncateEvaluationChipLabel(label, maxLength = 20) {
@@ -678,13 +880,20 @@ function canonicalEvaluationTagFromName(name) {
 function normalizeCourseEvaluationComponents(course) {
     const parsed = parseEvaluationCriteriaJson(course?.evaluation_criteria_json);
     const components = Array.isArray(parsed?.components) ? parsed.components : [];
+    const graduateCourse = isGraduateCourse(course);
     return components
         .map((component) => {
-            const name = correctEvaluationLabelTypos(component?.name);
+            const translatedName = graduateCourse
+                ? translateGraduateEvaluationLabel(component?.name)
+                : component?.name;
+            const name = correctEvaluationLabelTypos(translatedName);
             if (!name) return null;
             const weightValue = Number(component?.weight);
             const hasWeight = Number.isFinite(weightValue);
-            const notes = normalizeAssessmentDescriptionText(component?.notes);
+            const noteSource = graduateCourse
+                ? translateGraduateEvaluationNote(component?.notes)
+                : component?.notes;
+            const notes = normalizeAssessmentDescriptionText(noteSource);
             return {
                 name,
                 weight: hasWeight ? weightValue : null,
@@ -759,8 +968,11 @@ function formatEvaluationWeight(weight) {
 
 function getCourseEvaluationMeta(course) {
     const maxStoredTags = 12;
+    const graduateCourse = isGraduateCourse(course);
     const dbTags = Array.isArray(course?.evaluation_tags)
         ? course.evaluation_tags
+            .filter((tag) => String(tag || '').trim().toLowerCase() !== 'graduate_course')
+            .map((tag) => graduateCourse ? translateGraduateEvaluationTag(tag) : tag)
             .map((tag) => normalizeEvaluationLabelPrefix(tag))
             .filter(Boolean)
         : [];
@@ -793,6 +1005,78 @@ function getCourseEvaluationMeta(course) {
     };
 }
 
+function extractGraduateRequirementsText(courseLike) {
+    const raw = String(courseLike?.evaluation_criteria_raw || '').trim();
+    if (!raw) return '';
+
+    const lines = raw.split(/\r?\n/).map((line) => String(line || '').trim()).filter(Boolean);
+    const requirementLine = lines.find(
+        (line) => /^registration requirements:/i.test(line) || /^graduate requirements:/i.test(line)
+    );
+    if (!requirementLine) return '';
+
+    const normalized = requirementLine.replace(/\s+/g, ' ').trim();
+    const normalizedPrefix = normalized.replace(/^graduate requirements:/i, 'Registration requirements:');
+    return normalizedPrefix.replace(/[.。]\s*$/g, '');
+}
+
+function extractGraduateRegistrationWindowText(courseLike) {
+    const fromColumn = String(courseLike?.graduate_registration_window || '').replace(/\s+/g, ' ').trim();
+    if (fromColumn) return fromColumn;
+
+    const raw = String(courseLike?.evaluation_criteria_raw || '').trim();
+    if (!raw) return '';
+
+    const lines = raw.split(/\r?\n/).map((line) => String(line || '').trim()).filter(Boolean);
+    const registrationLine = lines.find((line) => /^registration window:/i.test(line));
+    if (!registrationLine) return '';
+
+    return registrationLine.replace(/^registration window:/i, '').replace(/\s+/g, ' ').trim();
+}
+
+function extractGraduateRegistrationMethodText(courseLike) {
+    const normalizeMethodText = (value) => {
+        const normalizedMethod = String(value || '')
+            .replace(/^how to register:/i, '')
+            .replace(/^how to apply:/i, '')
+            .replace(/\bforms\b/gi, 'form')
+            .replace(/[.。]\s*$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return normalizedMethod || '';
+    };
+
+    const fromColumn = String(courseLike?.graduate_registration_method || '').replace(/\s+/g, ' ').trim();
+    if (fromColumn) return normalizeMethodText(fromColumn);
+
+    const raw = String(courseLike?.evaluation_criteria_raw || '').trim();
+    if (!raw) return '';
+
+    const lines = raw.split(/\r?\n/).map((line) => String(line || '').trim()).filter(Boolean);
+    const methodLine = lines.find((line) => /^how to register:/i.test(line) || /^how to apply:/i.test(line));
+    if (!methodLine) return '';
+
+    return normalizeMethodText(methodLine);
+}
+
+function extractGraduateRegistrationUrl(courseLike) {
+    const fromColumn = String(courseLike?.graduate_registration_url || '').trim();
+    const safeFromColumn = /^https?:\/\//i.test(fromColumn) ? fromColumn : '';
+    if (safeFromColumn) return safeFromColumn;
+
+    const raw = String(courseLike?.evaluation_criteria_raw || '').trim();
+    if (!raw) return '';
+
+    const line = raw
+        .split(/\r?\n/)
+        .map((value) => String(value || '').trim())
+        .find((value) => /^registration form:/i.test(value));
+
+    const urlMatch = String(line || '').match(/https?:\/\/[^\s)]+/i);
+    return urlMatch ? urlMatch[0].trim() : '';
+}
+
 function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
     const expanded = !!options.expanded;
     const raw = String(rawTimeSlot || '').trim();
@@ -817,12 +1101,12 @@ function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
         Saturday: 'Sat',
         Sunday: 'Sun'
     };
-    const periodWords = {
-        '1': 'first',
-        '2': 'second',
-        '3': 'third',
-        '4': 'fourth',
-        '5': 'fifth'
+    const periodOrdinals = {
+        '1': '1st',
+        '2': '2nd',
+        '3': '3rd',
+        '4': '4th',
+        '5': '5th'
     };
     const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5' };
     const timeMap = {
@@ -836,9 +1120,9 @@ function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
     const buildLabel = (dayAbbr, period, timeRange) => {
         if (expanded) {
             const fullDay = dayMapAbbrToFull[dayAbbr] || dayAbbr;
-            const periodWord = period ? periodWords[period] : '';
-            if (periodWord && timeRange) return `${fullDay} ${periodWord} period · ${timeRange}`;
-            if (periodWord) return `${fullDay} ${periodWord} period`;
+            const periodOrdinal = period ? periodOrdinals[period] : '';
+            if (periodOrdinal && timeRange) return `${fullDay} ${periodOrdinal} period · ${timeRange}`;
+            if (periodOrdinal) return `${fullDay} ${periodOrdinal} period`;
             if (timeRange) return `${fullDay} · ${timeRange}`;
             return fullDay;
         }
@@ -1433,6 +1717,7 @@ function bindAssessmentBreakdownAccordionAnimations(classContent) {
         const summary = accordion.querySelector('.course-assessment-breakdown-summary');
         const panel = accordion.querySelector('.course-assessment-breakdown-panel');
         if (!summary || !panel) return;
+        const warningContainer = accordion.closest('.course-info-inline-warning--expandable');
 
         accordion.open = false;
         accordion.classList.remove('is-expanded');
@@ -1517,9 +1802,29 @@ function bindAssessmentBreakdownAccordionAnimations(classContent) {
 
         summary.addEventListener('click', summaryClickHandler);
 
+        const warningContainerClickHandler = (event) => {
+            if (!warningContainer) return;
+            if (isAnimating) return;
+            if (accordion.classList.contains('is-expanded')) return;
+
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (summary.contains(target)) return;
+            if (target.closest('a, button, input, textarea, select, label')) return;
+
+            openAccordion();
+        };
+
+        if (warningContainer) {
+            warningContainer.addEventListener('click', warningContainerClickHandler);
+        }
+
         cleanupFns.push(() => {
             clearTransitionHandler();
             summary.removeEventListener('click', summaryClickHandler);
+            if (warningContainer) {
+                warningContainer.removeEventListener('click', warningContainerClickHandler);
+            }
             panel.style.height = accordion.classList.contains('is-expanded') ? 'auto' : '0px';
         });
     });
@@ -1531,10 +1836,59 @@ function bindAssessmentBreakdownAccordionAnimations(classContent) {
 
 function CourseInfoContent(model, options = {}) {
     const isMobile = options.isMobile === true;
-    const placeConflictInsideTimeRowOnMobile = options.placeConflictInsideTimeRowOnMobile === true;
     const badges = Array.isArray(model?.badges) ? model.badges : [];
     const detailRows = Array.isArray(model?.detailRows) ? model.detailRows : [];
     const heroActions = Array.isArray(model?.heroActions) ? model.heroActions : [];
+    const inlineWarnings = Array.isArray(model?.inlineWarnings) ? model.inlineWarnings : [];
+    const inlineWarningsMarkup = inlineWarnings
+        .map((warning) => {
+            const kind = String(warning?.kind || 'warning').trim().toLowerCase();
+            const normalizedKind = kind === 'error' ? 'error' : 'warning';
+            const expandable = warning?.expandable === true;
+
+            if (expandable) {
+                const title = String(warning?.title || 'Registration details').trim();
+                const items = Array.isArray(warning?.items)
+                    ? warning.items.map((item) => String(item || '').trim()).filter(Boolean)
+                    : [];
+                const linkHrefRaw = String(warning?.link?.href || '').trim();
+                const linkLabel = String(warning?.link?.label || 'Open registration form').trim() || 'Open registration form';
+                const safeLinkHref = /^https?:\/\//i.test(linkHrefRaw) ? linkHrefRaw : '';
+
+                if (!title && items.length === 0 && !safeLinkHref) return '';
+
+                const itemMarkup = items
+                    .map((item) => `<div class="course-info-warning-disclosure-item">${escapeHtml(item)}</div>`)
+                    .join('');
+                const linkMarkup = safeLinkHref
+                    ? `<div class="course-info-warning-disclosure-link"><span>Registration form:</span> <a href="${escapeHtml(safeLinkHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(linkLabel)}</a></div>`
+                    : '';
+
+                return `
+                    <div class="course-info-inline-warning course-info-inline-warning--${normalizedKind} course-info-inline-warning--expandable">
+                        <details class="course-info-warning-disclosure course-assessment-breakdown-accordion">
+                            <summary class="course-info-warning-disclosure-summary course-assessment-breakdown-summary">
+                                <div class="course-assessment-breakdown-main">
+                                    <span class="course-info-warning-disclosure-title course-assessment-breakdown-name">${escapeHtml(title)}</span>
+                                </div>
+                                <span class="course-info-warning-disclosure-chevron course-assessment-breakdown-chevron" aria-hidden="true"></span>
+                            </summary>
+                            <div class="course-info-warning-disclosure-panel course-assessment-breakdown-panel">
+                                <div class="course-info-warning-disclosure-content">
+                                    ${itemMarkup}
+                                    ${linkMarkup}
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                `;
+            }
+
+            const text = String(warning?.text || '').trim();
+            if (!text) return '';
+            return `<div class="course-info-inline-warning course-info-inline-warning--${normalizedKind}">${escapeHtml(text)}</div>`;
+        })
+        .join('');
     const evaluationComponents = Array.isArray(model?.evaluation?.components) ? model.evaluation.components : [];
     const assessmentBreakdownSection = evaluationComponents.length
         ? `
@@ -1570,8 +1924,9 @@ function CourseInfoContent(model, options = {}) {
             </section>
         `
         : '';
-    const placeConflictInsideTimeRow = (isMobile || placeConflictInsideTimeRowOnMobile) &&
-        detailRows.some((row) => String(row?.label || '').trim().toLowerCase() === 'time');
+    const conflictPreviewMarkup = model?.conflictPreview
+        ? `<div class="course-info-inline-warning" id="course-conflict-preview">${escapeHtml(model.conflictPreview)}</div>`
+        : '<div class="course-info-inline-warning" id="course-conflict-preview" style="display:none;"></div>';
 
     return `
         <div class="course-info-stack">
@@ -1599,6 +1954,8 @@ function CourseInfoContent(model, options = {}) {
                     </div>
                 </section>
             `}
+            ${inlineWarningsMarkup ? `<div class="course-info-inline-warnings">${inlineWarningsMarkup}</div>` : ''}
+            ${conflictPreviewMarkup}
 
             <section class="ds-card">
                 <div class="ds-card-header">
@@ -1613,19 +1970,9 @@ function CourseInfoContent(model, options = {}) {
                                 ${row.helper ? `<div class="course-detail-helper">${escapeHtml(row.helper)}</div>` : ''}
                             </div>
                             <div class="ds-row-value course-detail-value ${row.subtle ? 'ds-row-subtle' : ''} ${row.pill ? 'course-detail-value--pill' : ''}">${row.html ?? escapeHtml(row.value || '—')}</div>
-                            ${(placeConflictInsideTimeRow && String(row?.label || '').trim().toLowerCase() === 'time')
-            ? (model?.conflictPreview
-                ? `<div class="course-info-inline-warning" id="course-conflict-preview">${escapeHtml(model.conflictPreview)}</div>`
-                : '<div class="course-info-inline-warning" id="course-conflict-preview" style="display:none;"></div>')
-            : ''}
                         </div>
                     `).join('')}
                     </div>
-                    ${placeConflictInsideTimeRow
-            ? ''
-            : (model?.conflictPreview
-                ? `<div class="course-info-inline-warning" id="course-conflict-preview">${escapeHtml(model.conflictPreview)}</div>`
-                : '<div class="course-info-inline-warning" id="course-conflict-preview" style="display:none;"></div>')}
                 </div>
             </section>
 
@@ -3700,21 +4047,42 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const courseColor = getCourseColorByType(course.type);
 
     // Use the type directly from the database
-    const courseType = course.type || 'General';
+    const courseType = isGraduateCourse(course)
+        ? 'Graduate'
+        : (course.type || 'General');
 
     // Check if course is already selected by user (for time slot background color)
     let isAlreadySelected = false;
     let savedCoursesList = [];
     let isSavedForLater = false;
+    let profileData = null;
+    let currentUserYearLevel = null;
+    let requiredYearMeta = getCourseRequiredYearMeta(course, null);
+    let shouldBlockRegistrationByYear = false;
+    let shouldWarnUnknownYear = false;
+    const hasMissingProfileColumnError = (error) => {
+        const code = String(error?.code || '').toUpperCase();
+        const message = String(error?.message || '').toLowerCase();
+        return code === '42703' || (message.includes('column') && message.includes('does not exist'));
+    };
     const { data: { session } } = await supabase.auth.getSession();
     if (isStaleRequest()) return;
     if (session) {
         savedCoursesList = readSavedCourses(Number.POSITIVE_INFINITY);
-        const { data: profileData } = await supabase
+        let profileResponse = await supabase
             .from('profiles')
-            .select('courses_selection, saved_courses')
+            .select('courses_selection, saved_courses, current_year, year_opt_out, year')
             .eq('id', session.user.id)
             .single();
+        if (profileResponse.error && hasMissingProfileColumnError(profileResponse.error)) {
+            profileResponse = await supabase
+                .from('profiles')
+                .select('courses_selection, saved_courses')
+                .eq('id', session.user.id)
+                .single();
+        }
+
+        profileData = profileResponse?.data || null;
         if (isStaleRequest()) return;
 
         if (profileData?.courses_selection) {
@@ -3724,6 +4092,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 selected.code === course.course_code
             );
         }
+
+        currentUserYearLevel = parseProfileCurrentYearLevel(profileData);
+        requiredYearMeta = getCourseRequiredYearMeta(course, currentUserYearLevel);
+        shouldBlockRegistrationByYear = requiredYearMeta.hasRequiredYear
+            && requiredYearMeta.hasKnownUserYear
+            && !requiredYearMeta.meetsRequirement;
+        shouldWarnUnknownYear = requiredYearMeta.hasRequiredYear && !requiredYearMeta.hasKnownUserYear;
 
         try {
             savedCoursesList = await syncSavedCoursesForUser(session.user.id);
@@ -3748,7 +4123,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         if (!button) return;
 
         button.classList.add('control-surface', 'class-info-course-action');
-        button.classList.remove('is-add', 'is-remove', 'is-locked');
+        button.classList.remove('is-add', 'is-remove', 'is-locked', 'is-ineligible');
         button.style.background = '';
         button.style.color = '';
         button.style.cursor = '';
@@ -3756,6 +4131,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         if (state === 'locked') {
             button.textContent = "Registration Closed";
             button.classList.add('is-locked');
+            button.disabled = true;
+            button.style.cursor = "not-allowed";
+            return;
+        }
+
+        if (state === 'ineligible') {
+            button.textContent = "Ineligible";
+            button.classList.add('is-ineligible');
             button.disabled = true;
             button.style.cursor = "not-allowed";
             return;
@@ -3779,13 +4162,28 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) return;
 
-            const { data: profile } = await supabase
+            let profileResponse = await supabase
                 .from('profiles')
-                .select('courses_selection')
+                .select('courses_selection, current_year, year_opt_out, year')
                 .eq('id', session.user.id)
                 .single();
+            if (profileResponse.error && hasMissingProfileColumnError(profileResponse.error)) {
+                profileResponse = await supabase
+                    .from('profiles')
+                    .select('courses_selection')
+                    .eq('id', session.user.id)
+                    .single();
+            }
+            const profile = profileResponse?.data || null;
 
             const currentSelection = profile?.courses_selection || [];
+            currentUserYearLevel = parseProfileCurrentYearLevel(profile);
+            requiredYearMeta = getCourseRequiredYearMeta(course, currentUserYearLevel);
+            shouldBlockRegistrationByYear = requiredYearMeta.hasRequiredYear
+                && requiredYearMeta.hasKnownUserYear
+                && !requiredYearMeta.meetsRequirement;
+            shouldWarnUnknownYear = requiredYearMeta.hasRequiredYear && !requiredYearMeta.hasKnownUserYear;
+
             const currentYearCourses = filterCoursesByCurrentYearTerm(currentSelection);
             const isCurrentlySelected = currentYearCourses.some(selected =>
                 selected.code === course.course_code
@@ -3797,6 +4195,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 applyClassInfoCourseActionButtonState(button, 'locked');
             } else if (isCurrentlySelected) {
                 applyClassInfoCourseActionButtonState(button, 'remove');
+            } else if (shouldBlockRegistrationByYear) {
+                applyClassInfoCourseActionButtonState(button, 'ineligible');
             } else {
                 applyClassInfoCourseActionButtonState(button, 'add');
             }
@@ -3813,12 +4213,67 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     const courseCodeValue = String(course.course_code || '').trim() || 'N/A';
     const timeDetailLabel = fullTimeLabel || compactTimeLabel || 'TBA';
     const evaluationMeta = getCourseEvaluationMeta(course);
+    const courseInfoInlineWarnings = [];
+    const graduateRequirementsText = extractGraduateRequirementsText(course);
+    const graduateRegistrationMethod = extractGraduateRegistrationMethodText(course);
+    const graduateRegistrationWindow = extractGraduateRegistrationWindowText(course);
+    const graduateRegistrationUrl = extractGraduateRegistrationUrl(course);
+    const graduateRegistrationDetails = [
+        graduateRequirementsText,
+        graduateRegistrationMethod ? `How to register: ${graduateRegistrationMethod}` : '',
+        graduateRegistrationWindow ? `Registration window: ${graduateRegistrationWindow}` : ''
+    ].filter(Boolean);
+    if (graduateRegistrationDetails.length > 0) {
+        courseInfoInlineWarnings.push({
+            kind: 'warning',
+            expandable: true,
+            title: 'Class Registration Details',
+            items: graduateRegistrationDetails,
+            link: graduateRegistrationUrl
+                ? {
+                    href: graduateRegistrationUrl,
+                    label: 'Open registration form'
+                }
+                : null
+        });
+    }
+    if (session && requiredYearMeta.hasRequiredYear && requiredYearMeta.hasKnownUserYear && !requiredYearMeta.meetsRequirement) {
+        if (isAlreadySelected) {
+            courseInfoInlineWarnings.push({
+                kind: 'error',
+                text: `Your profile is set to ${requiredYearMeta.userYearLabel}, but this course requires ${requiredYearMeta.requiredYearLabel} for new registrations.`
+            });
+        } else {
+            courseInfoInlineWarnings.push({
+                kind: 'error',
+                text: `Your profile is set to ${requiredYearMeta.userYearLabel}, but this course requires ${requiredYearMeta.requiredYearLabel}`
+            });
+        }
+    } else if (session && shouldWarnUnknownYear) {
+        courseInfoInlineWarnings.push({
+            kind: 'warning',
+            text: `We could not verify your current year. You can still register, but this course requires ${requiredYearMeta.requiredYearLabel}`
+        });
+    }
     const visibleBadges = [
         ...(session ? [{
             label: isAlreadySelected ? 'Registered' : 'Not registered',
             variant: isAlreadySelected ? 'success' : 'muted',
             role: 'registration-status'
         }] : []),
+        ...(requiredYearMeta.hasRequiredYear
+            ? [{
+                label: `Required: ${requiredYearMeta.requiredYearLabel}`,
+                variant: (session && requiredYearMeta.hasKnownUserYear)
+                    ? (requiredYearMeta.meetsRequirement ? 'success' : 'muted')
+                    : 'default',
+                role: 'required-year-status'
+            }]
+            : [{
+                label: 'Open to all years',
+                variant: 'default',
+                role: 'required-year-status'
+            }]),
         ...(isMobileCourseInfo
             ? (isSavedForLater ? [{ label: 'Saved', variant: 'success', role: 'saved-status' }] : [])
             : (session ? [{
@@ -3845,11 +4300,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             { label: 'Professor', value: formatProfessorDisplayName(course.professor) },
             { label: 'Course Code', value: courseCodeValue },
             { label: 'Course Type', value: courseType },
+            ...(isGraduateJapaneseTaughtCourse(course) ? [{ label: 'Language', value: 'Japanese' }] : []),
+            { label: 'Required year', value: requiredYearMeta.requiredYearLabel },
             ...(course.credits ? [{ label: 'Credits', value: formatCourseCreditsLabel(course.credits) }] : []),
             { label: 'Time', value: timeDetailLabel },
             { label: 'Term', value: formatCourseTermYearLabel(course) },
             ...(locationValue ? [{ label: 'Location', value: locationValue }] : [])
-        ]
+        ],
+        inlineWarnings: courseInfoInlineWarnings
     };
     if (isStaleRequest()) return;
     syncCourseInfoHeaderPresentation(classInfo, courseInfoModel, { isMobile: isMobileCourseInfo && !isDedicatedCoursePage });
@@ -6339,8 +6797,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     firstConflict?.time_slot || course.time_slot,
                     { expanded: !isCourseInfoMobileViewport() }
                 );
-                previewTarget.textContent = `Conflicts with ${timeText} course.`;
-                previewTarget.style.display = 'block';
+                const [slotTextRaw, timeRangeRaw = ''] = String(timeText || '').split(/\s*·\s*/, 2);
+                const slotText = String(slotTextRaw || '').trim() || 'this timeslot';
+                const timeRange = String(timeRangeRaw || '').trim();
+                previewTarget.textContent = timeRange
+                    ? `Conflicts with ${slotText} course (${timeRange})`
+                    : `Conflicts with ${slotText} course`;
+                previewTarget.style.display = 'flex';
             } catch (previewError) {
                 console.warn('Unable to load course conflict preview:', previewError);
             }
@@ -6489,27 +6952,57 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             return `Replaced course in ${formatConflictSlotForToast(timeSlot)}.`;
         }
 
+        async function fetchRegistrationProfile(userId) {
+            let profileResponse = await supabase
+                .from('profiles')
+                .select('courses_selection, current_year, year_opt_out, year')
+                .eq('id', userId)
+                .single();
+
+            if (profileResponse.error && hasMissingProfileColumnError(profileResponse.error)) {
+                profileResponse = await supabase
+                    .from('profiles')
+                    .select('courses_selection')
+                    .eq('id', userId)
+                    .single();
+            }
+
+            return profileResponse?.data || null;
+        }
+
+        function syncRequiredYearEligibilityFromProfile(profileRow) {
+            currentUserYearLevel = parseProfileCurrentYearLevel(profileRow);
+            requiredYearMeta = getCourseRequiredYearMeta(course, currentUserYearLevel);
+            shouldBlockRegistrationByYear = requiredYearMeta.hasRequiredYear
+                && requiredYearMeta.hasKnownUserYear
+                && !requiredYearMeta.meetsRequirement;
+            shouldWarnUnknownYear = requiredYearMeta.hasRequiredYear && !requiredYearMeta.hasKnownUserYear;
+        }
+
         // Simple function to check if course is selected
         async function isCourseSelected(courseCode, year) {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return false;
+            if (!session) return { selected: false, profile: null };
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('courses_selection')
-                .eq('id', session.user.id)
-                .single();
+            const profile = await fetchRegistrationProfile(session.user.id);
+            syncRequiredYearEligibilityFromProfile(profile);
 
-            if (!profile?.courses_selection) return false;
+            if (!profile?.courses_selection) {
+                return { selected: false, profile };
+            }
 
             // Filter by current year and term, then check for the course
             const currentYearCourses = filterCoursesByCurrentYearTerm(profile.courses_selection);
-            return currentYearCourses.some(selected => selected.code === courseCode);
+            return {
+                selected: currentYearCourses.some(selected => selected.code === courseCode),
+                profile
+            };
         }
 
         // Simple function to update button appearance
         async function updateButton() {
-            const isSelected = await isCourseSelected(course.course_code, course.academic_year);
+            const selectionState = await isCourseSelected(course.course_code, course.academic_year);
+            const isSelected = Boolean(selectionState?.selected);
             const canModify = isCurrentSemester();
             isAlreadySelected = isSelected;
             updateFooterActionLayout(isSelected);
@@ -6518,6 +7011,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 applyClassInfoCourseActionButtonState(newButton, 'locked');
             } else if (isSelected) {
                 applyClassInfoCourseActionButtonState(newButton, 'remove');
+            } else if (shouldBlockRegistrationByYear) {
+                applyClassInfoCourseActionButtonState(newButton, 'ineligible');
             } else {
                 applyClassInfoCourseActionButtonState(newButton, 'add');
             }
@@ -6555,11 +7050,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
             try {
                 // Get current profile
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('courses_selection')
-                    .eq('id', session.user.id)
-                    .single();
+                const profile = await fetchRegistrationProfile(session.user.id);
+                syncRequiredYearEligibilityFromProfile(profile);
 
                 const currentSelection = profile?.courses_selection || [];
                 const currentYear = getCurrentYear();
@@ -6585,6 +7077,30 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     isCourseSelectionInSemester(selected, currentYear, currentTerm) &&
                     String(selected.code || '').trim() === currentCourseCode
                 );
+                let didShowUnknownYearWarning = false;
+                const enforceRequiredYearEligibility = ({ showUnknownWarning = false } = {}) => {
+                    if (requiredYearMeta.hasRequiredYear && requiredYearMeta.hasKnownUserYear && !requiredYearMeta.meetsRequirement) {
+                        showCourseActionToast(
+                            `This course requires ${requiredYearMeta.requiredYearLabel}. Your profile is set to ${requiredYearMeta.userYearLabel}.`,
+                            3600
+                        );
+                        return false;
+                    }
+
+                    if (
+                        showUnknownWarning &&
+                        shouldWarnUnknownYear &&
+                        !didShowUnknownYearWarning
+                    ) {
+                        didShowUnknownYearWarning = true;
+                        showCourseActionToast(
+                            `We could not verify your current year. Registration is allowed, but this course requires ${requiredYearMeta.requiredYearLabel}.`,
+                            3600
+                        );
+                    }
+
+                    return true;
+                };
 
                 if (isCurrentlySelected) {
                     const shouldRemove = await openConfirmModal({
@@ -6637,6 +7153,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     // Update button state after successful removal
                     await updateCourseButtonState(course, newButton);
                 } else {
+                    if (!enforceRequiredYearEligibility({ showUnknownWarning: true })) {
+                        return;
+                    }
+
                     // Check for conflicts first
                     console.log('Checking for conflicts for course:', course.course_code, 'time:', course.time_slot);
                     const conflictResult = await checkTimeConflictForModal(course.time_slot, course.course_code, course.academic_year);
@@ -6646,6 +7166,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         console.log('Conflict detected, showing modal');
                         showTimeConflictModal(conflictResult.conflictingCourses, course, async (shouldReplace, conflictingCourses, actionType = 'dismiss') => {
                             if (shouldReplace) {
+                                if (!enforceRequiredYearEligibility()) {
+                                    return;
+                                }
+
                                 // Remove conflicting courses and add new one
                                 let updatedSelection = currentSelection.filter(selected => {
                                     return !conflictingCourses.some(conflict => {
@@ -6690,6 +7214,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                     return;
                                 }
 
+                                // TODO(back-end): move registration mutations to a validated RPC
+                                // that enforces required_year on the server side.
                                 const { error } = await supabase
                                     .from('profiles')
                                     .update({ courses_selection: updatedSelection })
@@ -6721,6 +7247,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 showCourseActionToast('Kept current course.');
                             }
                         });
+                        return;
+                    }
+
+                    if (!enforceRequiredYearEligibility()) {
                         return;
                     }
 
@@ -6759,6 +7289,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         return;
                     }
 
+                    // TODO(back-end): move registration mutations to a validated RPC
+                    // that enforces required_year on the server side.
                     const { error } = await supabase
                         .from('profiles')
                         .update({ courses_selection: updatedSelection })
@@ -8468,7 +9000,7 @@ export async function checkTimeConflict(timeSlot, courseCode, academicYear) {
             console.log('Fetching course data for conflict check...');
             const { data: coursesData } = await supabase
                 .from('courses')
-                .select('course_code, title, time_slot, professor, academic_year, term, type, credits')
+                .select('course_code, title, time_slot, professor, academic_year, term, type, class_number, credits')
                 .in('course_code', selectedCourseCodes)
                 .eq('academic_year', currentYear)
                 .eq('term', currentTerm);
@@ -8635,8 +9167,8 @@ function getCurrentYear() {
         return window.globalCurrentYear;
     }
 
-    // Final fallback to current year
-    return new Date().getFullYear();
+    // Final fallback to inferred active semester year
+    return inferCurrentSemesterValue().year;
 }
 
 function getCurrentTerm() {
@@ -8656,9 +9188,8 @@ function getCurrentTerm() {
         return window.globalCurrentTerm;
     }
 
-    // Final fallback to current term logic
-    const currentMonth = new Date().getMonth() + 1;
-    return currentMonth >= 8 || currentMonth <= 2 ? 'Fall' : 'Spring';
+    // Final fallback to inferred active semester term
+    return inferCurrentSemesterValue().term;
 }
 
 // Registration lock override is disabled in production and development.

@@ -180,8 +180,16 @@ export function parseTermValue(rawValue: unknown): { term: string; year: number 
 export function inferCurrentTermValue(now = new Date()): { term: string; year: number } {
   const month = now.getUTCMonth() + 1;
   const year = now.getUTCFullYear();
-  const term = month >= 8 || month <= 2 ? "Fall" : "Spring";
-  return { term, year };
+
+  if (month >= 8) {
+    return { term: "Fall", year };
+  }
+
+  if (month <= 2) {
+    return { term: "Fall", year: year - 1 };
+  }
+
+  return { term: "Spring", year };
 }
 
 export function getTermDateRange(term: string, year: number): { startDate: Date; endDate: Date } {

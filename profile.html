@@ -21,13 +21,20 @@
 
     <div id="app-content" class="ui-page">
         <main id="profile-main" class="page profile-page">
-            <div class="page-inner ui-page-content">
-                <section class="profile-section" id="profile-identity"></section>
-                <section class="profile-section" id="profile-academic"></section>
-                <section class="profile-section" id="profile-preferences"></section>
-                <section class="profile-section" id="profile-integrations"></section>
-                <section class="profile-section" id="profile-data-privacy"></section>
-                <section class="profile-section" id="profile-auth"></section>
+            <div class="profile-layout">
+                <aside class="profile-sidebar" aria-label="Profile sections">
+                    <nav class="profile-sidebar-nav" id="profile-sidebar-nav" aria-label="Profile sections"></nav>
+                </aside>
+                <div class="profile-content-shell">
+                    <nav class="profile-mobile-sections" id="profile-mobile-sections" aria-label="Profile sections"></nav>
+                    <div class="page-inner ui-page-content" id="profile-sections-content">
+                        <section class="profile-section" id="profile-identity"></section>
+                        <section class="profile-section" id="profile-academic"></section>
+                        <section class="profile-section" id="profile-preferences"></section>
+                        <section class="profile-section" id="profile-data-privacy"></section>
+                        <section class="profile-section" id="profile-auth"></section>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

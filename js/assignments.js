@@ -3696,6 +3696,68 @@ class AssignmentsManager {
         return window.innerWidth <= 1023;
     }
 
+    captureMobileSheetScrollSnapshot() {
+        const appContent = document.getElementById('app-content');
+        const windowScrollY = window.scrollY || window.pageYOffset || 0;
+        const rootScrollY = document.documentElement?.scrollTop || 0;
+        const bodyScrollY = document.body?.scrollTop || 0;
+        const lockScrollY = Math.max(windowScrollY, rootScrollY, bodyScrollY);
+        return {
+            lockScrollY,
+            appContentScrollTop: appContent ? appContent.scrollTop : 0,
+            useAppContentFixedLock: Boolean(appContent && appContent.scrollTop > 0 && lockScrollY === 0),
+            appContentInlineStyle: appContent
+                ? {
+                    position: appContent.style.position,
+                    top: appContent.style.top,
+                    left: appContent.style.left,
+                    right: appContent.style.right,
+                    width: appContent.style.width,
+                    overflow: appContent.style.overflow
+                }
+                : null
+        };
+    }
+
+    applyMobileSheetScrollLock(snapshot) {
+        if (!snapshot) return;
+        document.body.style.setProperty('top', `-${snapshot.lockScrollY}px`, 'important');
+        if (snapshot.useAppContentFixedLock) {
+            const appContent = document.getElementById('app-content');
+            if (!appContent) return;
+            appContent.style.setProperty('position', 'fixed', 'important');
+            appContent.style.setProperty('top', `-${snapshot.appContentScrollTop || 0}px`, 'important');
+            appContent.style.setProperty('left', '0', 'important');
+            appContent.style.setProperty('right', '0', 'important');
+            appContent.style.setProperty('width', '100%', 'important');
+            appContent.style.setProperty('overflow', 'hidden', 'important');
+        }
+    }
+
+    releaseMobileSheetScrollLock(snapshot) {
+        if (!snapshot) return;
+        const appContent = document.getElementById('app-content');
+        document.body.style.removeProperty('top');
+        window.scrollTo(0, snapshot.lockScrollY || 0);
+        if (document.documentElement) {
+            document.documentElement.scrollTop = snapshot.lockScrollY || 0;
+        }
+        if (document.body) {
+            document.body.scrollTop = snapshot.lockScrollY || 0;
+        }
+        if (appContent) {
+            if (snapshot.useAppContentFixedLock && snapshot.appContentInlineStyle) {
+                appContent.style.position = snapshot.appContentInlineStyle.position;
+                appContent.style.top = snapshot.appContentInlineStyle.top;
+                appContent.style.left = snapshot.appContentInlineStyle.left;
+                appContent.style.right = snapshot.appContentInlineStyle.right;
+                appContent.style.width = snapshot.appContentInlineStyle.width;
+                appContent.style.overflow = snapshot.appContentInlineStyle.overflow;
+            }
+            appContent.scrollTop = snapshot.appContentScrollTop || 0;
+        }
+    }
+
     openCalendarDayDetailSheet(selectedDateKey) {
         if (!this.isMobileViewport()) return false;
         const selectedDate = this.parseCalendarDateKey(selectedDateKey);
@@ -3849,10 +3911,6 @@ class AssignmentsManager {
             sheet.classList.add('show');
         });
 
-        window.setTimeout(() => {
-            cancelButton.focus({ preventScroll: true });
-        }, 20);
-
         return true;
     }
 
@@ -3985,6 +4043,10 @@ class AssignmentsManager {
         };
 
         const hadModalOpenClass = document.body.classList.contains('modal-open');
+        const scrollSnapshot = hadModalOpenClass ? null : this.captureMobileSheetScrollSnapshot();
+        if (scrollSnapshot) {
+            this.applyMobileSheetScrollLock(scrollSnapshot);
+        }
         this.assignmentActionsSheetState = {
             assignmentId: String(assignmentId),
             layer,
@@ -3993,7 +4055,8 @@ class AssignmentsManager {
             onKeyDown,
             onResize,
             closeTimer: null,
-            hadModalOpenClass
+            hadModalOpenClass,
+            scrollSnapshot
         };
 
         layer.addEventListener('click', async (event) => {
@@ -4030,10 +4093,6 @@ class AssignmentsManager {
             sheet.classList.add('show');
         });
 
-        window.setTimeout(() => {
-            cancelButton.focus({ preventScroll: true });
-        }, 20);
-
         return true;
     }
 
@@ -4047,7 +4106,8 @@ class AssignmentsManager {
             triggerElement,
             onKeyDown,
             onResize,
-            hadModalOpenClass
+            hadModalOpenClass,
+            scrollSnapshot
         } = state;
 
         if (state.closeTimer) {
@@ -4060,6 +4120,7 @@ class AssignmentsManager {
 
         if (!hadModalOpenClass) {
             document.body.classList.remove('modal-open');
+            this.releaseMobileSheetScrollLock(scrollSnapshot);
         }
 
         if (immediate) {

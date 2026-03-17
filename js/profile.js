@@ -2,17 +2,11 @@ import { supabase } from "../supabase.js";
 import { fetchAvailableSemesters } from "./shared.js";
 import { getCurrentAppPath, withBase } from "./path-utils.js";
 import {
-  buildProviderLinks,
-  disconnectAllCalendarFeeds,
-  ensureCalendarFeeds,
-  fetchCalendarIntegrationState,
-  rotateCalendarFeeds
-} from "./calendar-integrations.js";
-import {
   PREFERENCE_KEYS,
   DEFAULT_PREFERENCES,
   applyPreferencesToDocument,
   applyPreferredTermToGlobals,
+  inferCurrentSemesterValue,
   getPreferredTermValue,
   getStoredPreferences,
   parseTermValue,
@@ -35,8 +29,18 @@ const PROFILE_ROUTES = new Set(["/profile", "/settings"]);
 const AUTH_PROMPT_KEY = "ila_profile_auth_prompt";
 const AUTH_LOGOUT_TOAST_KEY = "ila_auth_logout_toast";
 const PROFILE_MODAL_LAYER_ID = "profile-modal-layer";
+const PROFILE_HEADER_BACK_BUTTON_ID = "profile-header-back-btn";
+const PROFILE_SECTION_CONFIG = [
+  { id: "profile-identity", label: "Identity", iconClass: "profile-section-icon--identity" },
+  { id: "profile-academic", label: "Academic", iconClass: "profile-section-icon--academic" },
+  { id: "profile-preferences", label: "Preferences", iconClass: "profile-section-icon--preferences" },
+  { id: "profile-data-privacy", label: "Data & Privacy", iconClass: "profile-section-icon--privacy" },
+  { id: "profile-auth", label: "Sign Out", iconClass: "profile-section-icon--signout" }
+];
 let profileCustomSelectDocumentHandler = null;
 let profileHeaderScrollCleanup = null;
+let profileSectionResizeHandler = null;
+let profileSectionEnterAnimationTimer = null;
 
 const state = {
   isAuthenticated: false,
@@ -44,63 +48,13 @@ const state = {
   user: null,
   profile: null,
   settings: null,
-  calendarIntegrationState: null,
-  calendarIntegrationError: null,
   semesters: [],
+  mobileSectionView: "list",
+  activeSectionId: "profile-identity",
   userSettingsTableAvailable: true,
   profileProgramYearColumnsAvailable: true,
   profileSetupColumnsAvailable: true
 };
-
-function getDefaultCalendarIntegrationState() {
-  return {
-    status: "not_connected",
-    settings: {
-      feedMode: "separate",
-      timezone: "Asia/Tokyo",
-      scope: "selected_term",
-      assignmentsRule: "incomplete_only"
-    },
-    feeds: []
-  };
-}
-
-function normalizeCalendarIntegrationState(payload) {
-  if (!payload || typeof payload !== "object") {
-    return getDefaultCalendarIntegrationState();
-  }
-
-  const rawSettings = payload.settings && typeof payload.settings === "object" ? payload.settings : {};
-  const feedMode = String(rawSettings.feedMode || "").toLowerCase() === "combined" ? "combined" : "separate";
-
-  const normalizedFeeds = Array.isArray(payload.feeds)
-    ? payload.feeds
-      .map((feed) => {
-        const kindRaw = String(feed?.kind || "").toLowerCase();
-        const kind = ["courses", "assignments", "combined"].includes(kindRaw) ? kindRaw : null;
-        const httpsUrl = String(feed?.httpsUrl || "").trim();
-        if (!kind || !httpsUrl) return null;
-        return {
-          kind,
-          httpsUrl,
-          webcalUrl: String(feed?.webcalUrl || "").trim(),
-          googleSubscribeUrl: String(feed?.googleSubscribeUrl || "").trim()
-        };
-      })
-      .filter(Boolean)
-    : [];
-
-  return {
-    status: normalizedFeeds.length > 0 ? "connected" : "not_connected",
-    settings: {
-      feedMode,
-      timezone: String(rawSettings.timezone || "Asia/Tokyo"),
-      scope: "selected_term",
-      assignmentsRule: "incomplete_only"
-    },
-    feeds: normalizedFeeds
-  };
-}
 
 function getRoot() {
   return document.getElementById("profile-main");
@@ -113,6 +67,271 @@ function getCurrentRouteForProfile() {
 
 function isMobileViewport() {
   return window.innerWidth <= 1023;
+}
+
+function getProfileSectionsInDom() {
+  return PROFILE_SECTION_CONFIG.filter(({ id }) => Boolean(document.getElementById(id)));
+}
+
+function getDefaultProfileSectionId() {
+  return getProfileSectionsInDom()[0]?.id || PROFILE_SECTION_CONFIG[0].id;
+}
+
+function resolveProfileSectionId(sectionId) {
+  const sections = getProfileSectionsInDom();
+  if (sections.length === 0) return PROFILE_SECTION_CONFIG[0].id;
+  const requested = String(sectionId || "").trim();
+  const match = sections.find((section) => section.id === requested);
+  return match ? match.id : sections[0].id;
+}
+
+function setActiveProfileSection(sectionId) {
+  const resolvedSectionId = resolveProfileSectionId(sectionId);
+  state.activeSectionId = resolvedSectionId;
+
+  document.querySelectorAll("[data-profile-section-target]").forEach((node) => {
+    const target = node.getAttribute("data-profile-section-target");
+    node.classList.toggle("is-active", target === resolvedSectionId);
+    if (target === resolvedSectionId) {
+      node.setAttribute("aria-current", "true");
+    } else {
+      node.removeAttribute("aria-current");
+    }
+  });
+}
+
+function ensureProfileHeaderBackButton() {
+  const headerBrand = document.querySelector(".app-header .app-header-brand");
+  if (!headerBrand) return null;
+
+  let button = headerBrand.querySelector(`#${PROFILE_HEADER_BACK_BUTTON_ID}`);
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.id = PROFILE_HEADER_BACK_BUTTON_ID;
+    button.className = "ui-btn ui-btn--icon control-surface control-surface--secondary profile-header-back-btn";
+    button.setAttribute("aria-label", "Back to profile sections");
+    button.innerHTML = '<span class="profile-header-back-btn-icon" aria-hidden="true"></span>';
+    button.addEventListener("click", () => {
+      state.mobileSectionView = "list";
+      applyProfileSectionState({ scrollToTop: true });
+    });
+  }
+
+  const titleNode = headerBrand.querySelector(".app-mobile-page-title");
+  if (titleNode && button.parentElement !== headerBrand) {
+    headerBrand.insertBefore(button, titleNode);
+  }
+
+  return button;
+}
+
+function removeProfileHeaderBackButton() {
+  const button = document.getElementById(PROFILE_HEADER_BACK_BUTTON_ID);
+  button?.remove();
+}
+
+function updateProfileHeaderBackButton() {
+  const button = ensureProfileHeaderBackButton();
+  if (!button) return;
+  const shouldShow = isMobileViewport() && state.mobileSectionView === "detail";
+  button.hidden = !shouldShow;
+  button.classList.toggle("is-visible", shouldShow);
+  button.style.display = shouldShow ? "inline-flex" : "none";
+}
+
+function applyProfileSectionState({ scrollToTop = false } = {}) {
+  const root = getRoot();
+  if (!root) return;
+
+  const sectionContainer = document.getElementById("profile-sections-content");
+  const isMobile = isMobileViewport();
+  const resolvedSectionId = resolveProfileSectionId(state.activeSectionId);
+  const showDetail = !isMobile || state.mobileSectionView === "detail";
+
+  root.classList.toggle("profile-mobile-list", isMobile && !showDetail);
+  root.classList.toggle("profile-mobile-detail", isMobile && showDetail);
+
+  if (sectionContainer) {
+    sectionContainer.hidden = isMobile && !showDetail;
+  }
+
+  getProfileSectionsInDom().forEach(({ id }) => {
+    const sectionNode = document.getElementById(id);
+    if (!sectionNode) return;
+    if (!showDetail) {
+      sectionNode.hidden = true;
+      return;
+    }
+    sectionNode.hidden = id !== resolvedSectionId;
+  });
+
+  setActiveProfileSection(resolvedSectionId);
+  updateProfileHeaderBackButton();
+
+  if (profileSectionEnterAnimationTimer) {
+    window.clearTimeout(profileSectionEnterAnimationTimer);
+    profileSectionEnterAnimationTimer = null;
+  }
+
+  const reducedMotion = document.body.classList.contains("reduced-motion")
+    || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const activeSectionNode = showDetail ? document.getElementById(resolvedSectionId) : null;
+  if (activeSectionNode && !reducedMotion) {
+    activeSectionNode.classList.remove("profile-section-enter");
+    // Restart animation each time the active section changes.
+    void activeSectionNode.offsetWidth;
+    activeSectionNode.classList.add("profile-section-enter");
+    profileSectionEnterAnimationTimer = window.setTimeout(() => {
+      activeSectionNode.classList.remove("profile-section-enter");
+      profileSectionEnterAnimationTimer = null;
+    }, 260);
+  }
+
+  if (scrollToTop) {
+    const appContent = document.getElementById("app-content");
+    appContent?.scrollTo({ top: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+}
+
+function renderProfileSectionNavigation() {
+  const sections = getProfileSectionsInDom();
+  const sidebarNav = document.getElementById("profile-sidebar-nav");
+  const mobileNav = document.getElementById("profile-mobile-sections");
+
+  if (sidebarNav) {
+    sidebarNav.innerHTML = sections
+      .map(
+        (section) => `
+          <button
+            type="button"
+            class="profile-sidebar-link ui-btn ui-btn--secondary control-surface control-surface--secondary"
+            data-profile-section-link="desktop"
+            data-profile-section-target="${escapeHtml(section.id)}"
+            aria-controls="${escapeHtml(section.id)}"
+          >
+            <span class="profile-section-icon ${escapeHtml(section.iconClass)}" aria-hidden="true"></span>
+            <span>${escapeHtml(section.label)}</span>
+          </button>
+        `
+      )
+      .join("");
+  }
+
+  if (mobileNav) {
+    mobileNav.innerHTML = `
+      <div class="profile-mobile-sections-list">
+        ${sections
+          .map(
+            (section) => `
+              <button
+                type="button"
+                class="profile-mobile-section-row"
+                data-profile-section-link="mobile"
+                data-profile-section-target="${escapeHtml(section.id)}"
+                aria-controls="${escapeHtml(section.id)}"
+                aria-label="${escapeHtml(section.label)}"
+              >
+                <span class="profile-mobile-section-row-left">
+                  <span class="profile-section-icon ${escapeHtml(section.iconClass)}" aria-hidden="true"></span>
+                  <span class="profile-mobile-section-label">${escapeHtml(section.label)}</span>
+                </span>
+                <span class="profile-mobile-section-chevron" aria-hidden="true">›</span>
+              </button>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+}
+
+function bindProfileSectionNavigationActions() {
+  document.querySelectorAll("[data-profile-section-link='desktop']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.getAttribute("data-profile-section-target");
+      if (!target) return;
+      state.activeSectionId = resolveProfileSectionId(target);
+      applyProfileSectionState({ scrollToTop: true });
+    });
+  });
+
+  document.querySelectorAll("[data-profile-section-link='mobile']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.getAttribute("data-profile-section-target");
+      if (!target) return;
+      state.mobileSectionView = "detail";
+      state.activeSectionId = resolveProfileSectionId(target);
+      applyProfileSectionState({ scrollToTop: true });
+    });
+  });
+}
+
+function initializeProfileSectionNavigation(route = getCurrentRouteForProfile()) {
+  renderProfileSectionNavigation();
+  bindProfileSectionNavigationActions();
+
+  if (!state.activeSectionId) {
+    state.activeSectionId = getDefaultProfileSectionId();
+  }
+
+  if (route === "/settings") {
+    state.activeSectionId = resolveProfileSectionId("profile-preferences");
+  } else {
+    state.activeSectionId = resolveProfileSectionId(state.activeSectionId);
+  }
+
+  if (isMobileViewport()) {
+    if (route === "/settings") {
+      state.mobileSectionView = "detail";
+    } else if (state.mobileSectionView !== "detail") {
+      state.mobileSectionView = "list";
+    }
+  }
+
+  applyProfileSectionState();
+
+  if (profileSectionResizeHandler) {
+    window.removeEventListener("resize", profileSectionResizeHandler);
+  }
+
+  profileSectionResizeHandler = () => {
+    applyProfileSectionState();
+  };
+
+  window.addEventListener("resize", profileSectionResizeHandler);
+}
+
+function teardownProfileSectionNavigation() {
+  if (profileSectionResizeHandler) {
+    window.removeEventListener("resize", profileSectionResizeHandler);
+    profileSectionResizeHandler = null;
+  }
+
+  if (profileSectionEnterAnimationTimer) {
+    window.clearTimeout(profileSectionEnterAnimationTimer);
+    profileSectionEnterAnimationTimer = null;
+  }
+
+  removeProfileHeaderBackButton();
+
+  const root = getRoot();
+  if (root) {
+    root.classList.remove("profile-mobile-list", "profile-mobile-detail");
+  }
+
+  const sectionContainer = document.getElementById("profile-sections-content");
+  if (sectionContainer) {
+    sectionContainer.hidden = false;
+  }
+
+  getProfileSectionsInDom().forEach(({ id }) => {
+    const sectionNode = document.getElementById(id);
+    if (sectionNode) {
+      sectionNode.hidden = false;
+    }
+  });
 }
 
 function teardownProfileMobileHeaderBehavior() {
@@ -261,10 +480,7 @@ function isMissingColumnError(error, token) {
 }
 
 function getInferredCurrentTerm() {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const term = month >= 8 || month <= 2 ? "Fall" : "Spring";
+  const { term, year } = inferCurrentSemesterValue();
   return `${term}-${year}`;
 }
 
@@ -607,14 +823,12 @@ function getTimeFormatLabel(value) {
   return String(value || "12") === "24" ? "24-hour" : "12-hour";
 }
 
-function getCalendarFeedLabel(kind) {
-  if (kind === "courses") return "Courses";
-  if (kind === "assignments") return "Assignments";
-  return "Courses + Assignments";
-}
+function canUserManagePassword(user = state.user) {
+  const provider = String(user?.app_metadata?.provider || "").toLowerCase();
+  if (provider === "email") return true;
 
-function getKindsForFeedMode(feedMode) {
-  return feedMode === "combined" ? ["combined"] : ["courses", "assignments"];
+  const identities = Array.isArray(user?.identities) ? user.identities : [];
+  return identities.some((identity) => String(identity?.provider || "").toLowerCase() === "email");
 }
 
 function cardTemplate(title, bodyMarkup, actionMarkup = "") {
@@ -629,33 +843,166 @@ function cardTemplate(title, bodyMarkup, actionMarkup = "") {
   `;
 }
 
+function renderProfileNavigationSkeleton() {
+  const sections = getProfileSectionsInDom();
+  const sidebarNav = document.getElementById("profile-sidebar-nav");
+  const mobileNav = document.getElementById("profile-mobile-sections");
+
+  if (sidebarNav) {
+    sidebarNav.innerHTML = sections
+      .map(
+        () => `
+          <div class="profile-sidebar-link ui-btn ui-btn--secondary control-surface control-surface--secondary profile-sidebar-link--skeleton" aria-hidden="true">
+            <span class="profile-skeleton-block profile-skeleton-nav-icon"></span>
+            <span class="profile-skeleton-block profile-skeleton-nav-label"></span>
+          </div>
+        `
+      )
+      .join("");
+  }
+
+  if (mobileNav) {
+    mobileNav.innerHTML = `
+      <div class="profile-mobile-sections-list profile-mobile-sections-list--skeleton">
+        ${sections
+          .map(
+            () => `
+              <div class="profile-mobile-section-row profile-mobile-section-row--skeleton" aria-hidden="true">
+                <span class="profile-mobile-section-row-left">
+                  <span class="profile-skeleton-block profile-skeleton-nav-icon"></span>
+                  <span class="profile-skeleton-block profile-skeleton-mobile-label"></span>
+                </span>
+                <span class="profile-skeleton-block profile-skeleton-chevron"></span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    `;
+  }
+}
+
+function profileSkeletonSettingRow({ shortControl = false } = {}) {
+  return `
+    <div class="profile-skeleton-setting-row">
+      <div class="profile-skeleton-setting-meta">
+        <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--title"></div>
+        <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--desc"></div>
+      </div>
+      <div class="profile-skeleton-block profile-skeleton-control${shortControl ? " profile-skeleton-control--short" : ""}"></div>
+    </div>
+  `;
+}
+
+function buildProfileSectionSkeletonMarkup(sectionId) {
+  const headingMap = {
+    "profile-identity": "profile-skeleton-heading--identity",
+    "profile-academic": "profile-skeleton-heading--academic",
+    "profile-preferences": "profile-skeleton-heading--preferences",
+    "profile-data-privacy": "profile-skeleton-heading--privacy",
+    "profile-auth": "profile-skeleton-heading--auth"
+  };
+
+  if (sectionId === "profile-identity") {
+    return `
+      <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
+        <div class="card-head">
+          <div class="profile-skeleton-block profile-skeleton-heading ${headingMap[sectionId]}"></div>
+          <div class="profile-skeleton-block profile-skeleton-action"></div>
+        </div>
+        <div class="card-body">
+          <div class="profile-skeleton-identity">
+            <div class="profile-skeleton-block profile-skeleton-avatar"></div>
+            <div class="profile-skeleton-identity-meta">
+              <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--name"></div>
+              <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--email"></div>
+              <div class="profile-skeleton-block profile-skeleton-status"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (sectionId === "profile-data-privacy") {
+    return `
+      <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
+        <div class="card-head">
+          <div class="profile-skeleton-block profile-skeleton-heading ${headingMap[sectionId]}"></div>
+        </div>
+        <div class="card-body">
+          ${profileSkeletonSettingRow()}
+          ${profileSkeletonSettingRow({ shortControl: true })}
+          <div class="profile-skeleton-danger-zone">
+            <div class="profile-skeleton-block profile-skeleton-danger-title"></div>
+            <div class="profile-skeleton-danger-row">
+              <div class="profile-skeleton-setting-meta">
+                <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--title"></div>
+                <div class="profile-skeleton-block profile-skeleton-line profile-skeleton-line--desc"></div>
+              </div>
+              <div class="profile-skeleton-block profile-skeleton-danger-btn"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (sectionId === "profile-auth") {
+    return `
+      <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
+        <div class="card-head">
+          <div class="profile-skeleton-block profile-skeleton-heading ${headingMap[sectionId]}"></div>
+        </div>
+        <div class="card-body">
+          ${profileSkeletonSettingRow({ shortControl: true })}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
+      <div class="card-head">
+        <div class="profile-skeleton-block profile-skeleton-heading ${headingMap[sectionId] || ""}"></div>
+      </div>
+      <div class="card-body">
+        ${profileSkeletonSettingRow()}
+        ${profileSkeletonSettingRow()}
+        ${profileSkeletonSettingRow({ shortControl: true })}
+      </div>
+    </div>
+  `;
+}
+
 function renderSignedInSkeleton() {
+  const route = getCurrentRouteForProfile();
+  const isMobile = isMobileViewport();
   const sections = [
     "profile-identity",
     "profile-academic",
     "profile-preferences",
-    "profile-integrations",
     "profile-data-privacy",
     "profile-auth"
   ];
 
+  state.activeSectionId = resolveProfileSectionId(
+    route === "/settings" ? "profile-preferences" : state.activeSectionId
+  );
+
+  if (isMobile) {
+    state.mobileSectionView = route === "/settings" ? "detail" : "list";
+  }
+
+  renderProfileNavigationSkeleton();
+
   sections.forEach((id) => {
     const node = document.getElementById(id);
     if (!node) return;
-
-    node.innerHTML = `
-      <div class="profile-card card-surface ui-card profile-skeleton-card" aria-hidden="true">
-        <div class="card-head">
-          <h2 class="profile-skeleton-line profile-skeleton-title"></h2>
-        </div>
-        <div class="card-body">
-          <div class="profile-skeleton-line"></div>
-          <div class="profile-skeleton-line profile-skeleton-line-short"></div>
-          <div class="profile-skeleton-line"></div>
-        </div>
-      </div>
-    `;
+    node.innerHTML = buildProfileSectionSkeletonMarkup(id);
   });
+
+  applyProfileSectionState();
 }
 
 function renderLoadError(error) {
@@ -672,7 +1019,7 @@ function renderLoadError(error) {
     `
   );
 
-  ["profile-academic", "profile-preferences", "profile-integrations", "profile-data-privacy", "profile-auth"].forEach((id) => {
+  ["profile-academic", "profile-preferences", "profile-data-privacy", "profile-auth"].forEach((id) => {
     const section = document.getElementById(id);
     if (section) section.innerHTML = "";
   });
@@ -748,7 +1095,6 @@ function renderGuestView(route) {
   const identity = document.getElementById("profile-identity");
   const academic = document.getElementById("profile-academic");
   const preferences = document.getElementById("profile-preferences");
-  const integrations = document.getElementById("profile-integrations");
   const dataPrivacy = document.getElementById("profile-data-privacy");
   const auth = document.getElementById("profile-auth");
 
@@ -781,7 +1127,6 @@ function renderGuestView(route) {
   }
 
   if (preferences) preferences.innerHTML = "";
-  if (integrations) integrations.innerHTML = "";
   if (dataPrivacy) dataPrivacy.innerHTML = "";
   if (auth) auth.innerHTML = "";
 
@@ -957,7 +1302,6 @@ function renderSignedInView() {
   const identity = document.getElementById("profile-identity");
   const academic = document.getElementById("profile-academic");
   const preferences = document.getElementById("profile-preferences");
-  const integrations = document.getElementById("profile-integrations");
   const dataPrivacy = document.getElementById("profile-data-privacy");
   const auth = document.getElementById("profile-auth");
 
@@ -970,6 +1314,7 @@ function renderSignedInView() {
   const concentrationLabel = getSetupConcentrationLabel(state.profile);
   const yearLabel = getSetupYearLabel(state.profile);
   const useMobilePicker = isMobileViewport();
+  const canManagePassword = canUserManagePassword(state.user);
 
   if (identity) {
     identity.innerHTML = cardTemplate(
@@ -983,9 +1328,18 @@ function renderSignedInView() {
             <div class="ui-pill status-pill status-pill--signed-in">Signed in</div>
           </div>
         </div>
+        ${
+          canManagePassword
+            ? settingRow(
+                "Password",
+                "Change your account password",
+                '<button class="ui-btn ui-btn--secondary control-surface" id="profile-change-password" type="button">Change Password</button>'
+              )
+            : ""
+        }
       `,
       `
-        <button class="ui-btn ui-btn--secondary profile-action-pill control-surface" id="profile-edit-button" aria-label="Edit profile" type="button">
+        <button class="ui-btn ui-btn--icon filter-btn control-surface control-surface--secondary profile-action-pill" id="profile-edit-button" aria-label="Edit profile" type="button">
           <span class="pill-icon pill-icon--edit" aria-hidden="true"></span>
           <span>Edit</span>
         </button>
@@ -1014,7 +1368,7 @@ function renderSignedInView() {
             hasConcentration
               ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(concentrationLabel)}</span>`
               : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
-          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
+          }<button class="ui-btn ui-btn--icon filter-btn control-surface control-surface--secondary profile-action-pill${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
         ${settingRow(
@@ -1024,7 +1378,7 @@ function renderSignedInView() {
             hasYear
               ? `<span class="ui-pill status-pill status-pill--value">${escapeHtml(yearLabel)}</span>`
               : '<span class="ui-pill status-pill status-pill--not-set">Not Set</span>'
-          }<button class="ui-btn ui-btn--secondary profile-action-pill control-surface${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
+          }<button class="ui-btn ui-btn--icon filter-btn control-surface control-surface--secondary profile-action-pill${setupLabel === "Set Up" ? " profile-action-pill--setup" : ""}" type="button" data-action="setup-academic">${escapeHtml(setupLabel)}</button>`,
           "setting-row--program-year"
         )}
       `
@@ -1061,51 +1415,14 @@ function renderSignedInView() {
     );
   }
 
-  if (integrations) {
-    const integrationState = normalizeCalendarIntegrationState(state.calendarIntegrationState);
-    const isConnected = integrationState.status === "connected";
-    const feedModeLabel = integrationState.settings.feedMode === "combined" ? "Combined feed" : "Separate feeds";
-    const feedCount = integrationState.feeds.length;
-    const statusLabel = isConnected ? "Connected" : "Not connected";
-    const helperText = state.calendarIntegrationError
-      ? "Calendar integration service is temporarily unavailable."
-      : (isConnected
-        ? `${feedModeLabel} active (${feedCount} ${feedCount === 1 ? "feed" : "feeds"}).`
-        : "Subscribe from Google Calendar.");
-
-    integrations.innerHTML = cardTemplate(
-      "Integrations",
-      `
-        ${settingRow(
-          "Calendar access",
-          "Current integration status",
-          `
-            <span class="ui-pill status-pill status-pill--neutral">${escapeHtml(statusLabel)}</span>
-            <button class="ui-btn ui-btn--secondary profile-action-pill profile-action-pill--integration control-surface" id="profile-manage-integrations" type="button">
-              <span class="pill-icon pill-icon--calendar-plus" aria-hidden="true"></span>
-              <span>Manage</span>
-            </button>
-          `,
-          "setting-row--integration"
-        )}
-      `
-    );
-  }
-
   if (dataPrivacy) {
     dataPrivacy.innerHTML = cardTemplate(
       "Data & Privacy",
       `
-        <div class="profile-subblock">
-          <h3 class="profile-subtitle">Utilities</h3>
-          <div class="setting-row-id">${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-clear-cache" type="button">Clear Cache</button>')}</div>
-        </div>
-        <div class="profile-subblock" id="profile-help-subblock">
-          <h3 class="profile-subtitle">App Version</h3>
-          <div class="setting-row-id">${settingRow("Version", "Current application version", `${renderHelpBody()}`)}</div>
-        </div>
+        ${settingRow("Clear cache", "Remove local preferences and temporary data", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-clear-cache" type="button">Clear Cache</button>')}
+        ${settingRow("Version", "Current application version", `${renderHelpBody()}`)}
         <div class="danger-zone">
-          <h3 class="profile-subtitle">Danger Zone</h3>
+          <h3 class="setting-title profile-danger-zone-title">Danger Zone</h3>
           <div class="danger-zone-row">
             <button class="ui-btn ui-btn--destructive danger-action-btn" id="profile-delete-account" type="button">
               <span class="pill-icon pill-icon--trash" aria-hidden="true"></span>
@@ -1124,13 +1441,12 @@ function renderSignedInView() {
   if (auth) {
     auth.innerHTML = cardTemplate(
       "Sign Out",
-      `<div class="profile-subblock">
-          <div class="setting-row-id">${settingRow("Sign out", "End your session and return to the login screen", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-signout" type="button">Sign Out</button>')}</div>
-       </div>`
+      `${settingRow("Sign out", "End your session and return to the login screen", '<button class="ui-btn ui-btn--secondary control-surface" id="profile-signout" type="button">Sign Out</button>')}`
     );
   }
 
   bindSignedInActions();
+  initializeProfileSectionNavigation(getCurrentRouteForProfile());
 }
 
 function bindGuestActions() {
@@ -1152,6 +1468,7 @@ function setToggleUi(button, checked) {
 
 function bindSignedInActions() {
   document.getElementById("profile-edit-button")?.addEventListener("click", openEditProfileModal);
+  document.getElementById("profile-change-password")?.addEventListener("click", openChangePasswordModal);
 
   if (isMobileViewport()) {
     document.querySelectorAll("[data-picker]").forEach((button) => {
@@ -1192,7 +1509,6 @@ function bindSignedInActions() {
     button.addEventListener("click", openAcademicSetupModal);
   });
 
-  document.getElementById("profile-manage-integrations")?.addEventListener("click", openCalendarIntegrationsModal);
   document.getElementById("profile-clear-cache")?.addEventListener("click", openClearCacheModal);
   document.getElementById("profile-delete-account")?.addEventListener("click", openDeleteAccountModal);
   document.getElementById("profile-open-about")?.addEventListener("click", openAboutModal);
@@ -1509,234 +1825,6 @@ function openPreferencePicker(key) {
   }
 }
 
-function getCalendarFeedRowsMarkup(integrationState) {
-  if (!integrationState.feeds.length) {
-    return '<p class="profile-picker-help">No feed links yet. Choose a mode and click Save mode to connect.</p>';
-  }
-
-  return integrationState.feeds
-    .map((feed) => {
-      const links = buildProviderLinks(feed);
-      return `
-        <div class="calendar-integration-feed-card">
-          <div class="calendar-integration-feed-head">
-            <h4>${escapeHtml(getCalendarFeedLabel(feed.kind))}</h4>
-            <span class="ui-pill status-pill status-pill--neutral">Active</span>
-          </div>
-          <div class="calendar-integration-feed-actions">
-            <a class="ui-btn ui-btn--secondary control-surface" href="${escapeHtml(links.googleSubscribeUrl)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
-            <button class="ui-btn ui-btn--secondary control-surface" type="button" data-action="copy-feed-url" data-url="${escapeHtml(links.httpsUrl)}">Copy Subscription URL</button>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function openCalendarIntegrationsModal() {
-  const initialState = normalizeCalendarIntegrationState(state.calendarIntegrationState);
-  const local = {
-    data: initialState,
-    busy: false,
-    error: state.calendarIntegrationError ? "Could not refresh integration state right now." : ""
-  };
-
-  const layer = openModal({
-    title: "Calendar Integrations",
-    bodyMarkup: `
-      <div id="calendar-integrations-modal-content"></div>
-    `,
-    mode: "fullscreen-mobile"
-  });
-
-  const content = layer.querySelector("#calendar-integrations-modal-content");
-  if (!content) return;
-  const useMobileFeedModePicker = isMobileViewport();
-
-  const render = () => {
-    const modeValue = local.data.settings.feedMode === "combined" ? "combined" : "separate";
-    const saveLabel = local.data.status === "connected" ? "Save Mode" : "Connect";
-    const disableAttr = local.busy ? " disabled" : "";
-    const feedModeOptions = [
-      { value: "separate", label: "Separate Calendars" },
-      { value: "combined", label: "Single Combined Calendar" }
-    ];
-    const selectedFeedModeOption = feedModeOptions.find((option) => option.value === modeValue) || feedModeOptions[0];
-    const feedModeControlMarkup = useMobileFeedModePicker
-      ? `
-        <button
-          type="button"
-          id="calendar-feed-mode-picker"
-          class="ui-btn ui-btn--secondary control-surface profile-picker-trigger profile-modal-picker-trigger"
-          aria-haspopup="dialog"
-          ${local.busy ? "disabled" : ""}
-        >
-          <span class="picker-value">${escapeHtml(selectedFeedModeOption.label)}</span>
-          <span class="picker-chevron" aria-hidden="true">›</span>
-        </button>
-        <select id="calendar-feed-mode-select" class="profile-native-select" style="display:none;"${local.busy ? " disabled" : ""}>
-          ${feedModeOptions
-            .map((option) => `<option value="${escapeHtml(option.value)}"${option.value === modeValue ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
-            .join("")}
-        </select>
-      `
-      : renderCustomSelectMarkup("calendar-feed-mode-select", feedModeOptions, modeValue, { disabled: local.busy });
-
-    content.innerHTML = `
-      <p class="profile-picker-help">Create private subscription links for Google Calendar.</p>
-      ${local.error ? `<p class="profile-inline-error">${escapeHtml(local.error)}</p>` : ""}
-      <div class="calendar-integration-mode-row">
-        <label class="profile-modal-label" for="calendar-feed-mode-select">Feed mode</label>
-        <div class="calendar-integration-mode-controls">
-          ${feedModeControlMarkup}
-          <button class="ui-btn ui-btn--secondary control-surface" type="button" id="calendar-feed-mode-save"${disableAttr}>${escapeHtml(saveLabel)}</button>
-        </div>
-      </div>
-      <div class="calendar-integration-feed-list">
-        ${getCalendarFeedRowsMarkup(local.data)}
-      </div>
-      <div class="calendar-integration-security-row">
-        <button class="ui-btn ui-btn--secondary control-surface" type="button" id="calendar-rotate-links"${disableAttr}>Regenerate Links</button>
-        <button class="ui-btn ui-btn--destructive danger-action-btn" type="button" id="calendar-disconnect-links"${disableAttr}>Disconnect</button>
-      </div>
-    `;
-    if (!useMobileFeedModePicker) {
-      initializeProfileCustomSelects();
-    } else {
-      const feedModePickerButton = content.querySelector("#calendar-feed-mode-picker");
-      const feedModeSelect = content.querySelector("#calendar-feed-mode-select");
-
-      feedModePickerButton?.addEventListener("click", () => {
-        if (feedModePickerButton.disabled) return;
-        openNestedChoicePicker({
-          title: "Feed mode",
-          description: "Choose how subscription feeds are grouped.",
-          options: feedModeOptions,
-          selectedValue: String(feedModeSelect?.value || modeValue),
-          onSelect: async (value) => {
-            if (feedModeSelect) {
-              feedModeSelect.value = value;
-              feedModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-
-            const selected = feedModeOptions.find((option) => option.value === value) || feedModeOptions[0];
-            updatePickerLabel("calendar-feed-mode-picker", selected.label);
-          }
-        });
-      });
-    }
-
-    content.querySelector("#calendar-feed-mode-save")?.addEventListener("click", async () => {
-      const select = content.querySelector("#calendar-feed-mode-select");
-      const selectedMode = String(select?.value || local.data.settings.feedMode || "separate").toLowerCase() === "combined"
-        ? "combined"
-        : "separate";
-
-      local.busy = true;
-      local.error = "";
-      render();
-
-      try {
-        const next = await ensureCalendarFeeds(selectedMode);
-        local.data = normalizeCalendarIntegrationState(next);
-        state.calendarIntegrationState = local.data;
-        state.calendarIntegrationError = null;
-        renderSignedInView();
-        showProfileToast("Calendar updated");
-      } catch (error) {
-        console.error("Profile: ensure calendar feeds failed", error);
-        local.error = "Could not save calendar mode.";
-        state.calendarIntegrationError = error;
-      } finally {
-        local.busy = false;
-        render();
-      }
-    });
-
-    content.querySelector("#calendar-rotate-links")?.addEventListener("click", async () => {
-      const feedMode = local.data.settings.feedMode;
-      const fallbackKinds = getKindsForFeedMode(feedMode);
-      const activeKinds = local.data.feeds.map((feed) => feed.kind);
-      const kinds = activeKinds.length > 0 ? activeKinds : fallbackKinds;
-
-      local.busy = true;
-      local.error = "";
-      render();
-
-      try {
-        const next = await rotateCalendarFeeds(kinds);
-        local.data = normalizeCalendarIntegrationState(next);
-        state.calendarIntegrationState = local.data;
-        state.calendarIntegrationError = null;
-        renderSignedInView();
-        showProfileToast("Links regenerated");
-      } catch (error) {
-        console.error("Profile: rotate calendar feeds failed", error);
-        local.error = "Could not regenerate links.";
-        state.calendarIntegrationError = error;
-      } finally {
-        local.busy = false;
-        render();
-      }
-    });
-
-    content.querySelector("#calendar-disconnect-links")?.addEventListener("click", async () => {
-      local.busy = true;
-      local.error = "";
-      render();
-
-      try {
-        const next = await disconnectAllCalendarFeeds();
-        local.data = normalizeCalendarIntegrationState(next);
-        state.calendarIntegrationState = local.data;
-        state.calendarIntegrationError = null;
-        renderSignedInView();
-        showProfileToast("Disconnected");
-      } catch (error) {
-        console.error("Profile: disconnect calendar feeds failed", error);
-        local.error = "Could not disconnect calendar links.";
-        state.calendarIntegrationError = error;
-      } finally {
-        local.busy = false;
-        render();
-      }
-    });
-
-    content.querySelectorAll("[data-action='copy-feed-url']").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const url = button.getAttribute("data-url") || "";
-        if (!url) return;
-
-        try {
-          await navigator.clipboard.writeText(url);
-          showProfileToast("Link copied");
-        } catch (error) {
-          console.warn("Clipboard copy failed", error);
-          window.prompt("Copy subscription URL:", url);
-        }
-      });
-    });
-
-  };
-
-  render();
-
-  fetchCalendarIntegrationState()
-    .then((freshState) => {
-      local.data = normalizeCalendarIntegrationState(freshState);
-      state.calendarIntegrationState = local.data;
-      state.calendarIntegrationError = null;
-      renderSignedInView();
-      render();
-    })
-    .catch((error) => {
-      console.warn("Profile: calendar integration refresh failed", error);
-      local.error = "Using last known data. Some actions may fail.";
-      state.calendarIntegrationError = error;
-      render();
-    });
-}
-
 function openAboutModal() {
   const version = import.meta.env.VITE_APP_VERSION || "1.0.0";
   const build = import.meta.env.MODE || "production";
@@ -1930,6 +2018,113 @@ function openEditProfileModal() {
       if (saveButton) {
         saveButton.disabled = false;
         saveButton.textContent = "Save";
+      }
+    }
+  });
+}
+
+function openChangePasswordModal() {
+  if (!canUserManagePassword(state.user)) {
+    showProfileToast("Password changes are not available for this sign-in method.");
+    return;
+  }
+
+  const layer = openModal({
+    title: "Change Password",
+    bodyMarkup: `
+      <form id="profile-password-form" novalidate>
+        <p class="profile-modal-help">Enter your current password and choose a new one (at least 8 characters).</p>
+        <label class="profile-modal-label" for="profile-old-password">Current password</label>
+        <input class="search-input profile-modal-input" id="profile-old-password" type="password" minlength="1" maxlength="72" autocomplete="current-password" required />
+        <label class="profile-modal-label" for="profile-new-password">New password</label>
+        <input class="search-input profile-modal-input" id="profile-new-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
+        <label class="profile-modal-label" for="profile-confirm-password">Confirm new password</label>
+        <input class="search-input profile-modal-input" id="profile-confirm-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
+        <p class="profile-inline-error" id="profile-password-error"></p>
+      </form>
+    `,
+    footerMarkup: `
+      <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
+      <button type="submit" class="ui-btn ui-btn--secondary control-surface" form="profile-password-form" id="profile-password-save">Update Password</button>
+    `,
+    mode: "dialog",
+    mobileMode: "sheet"
+  });
+
+  const form = layer.querySelector("#profile-password-form");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const oldPasswordInput = layer.querySelector("#profile-old-password");
+    const passwordInput = layer.querySelector("#profile-new-password");
+    const confirmInput = layer.querySelector("#profile-confirm-password");
+    const errorLine = layer.querySelector("#profile-password-error");
+    const saveButton = layer.querySelector("#profile-password-save");
+
+    const oldPassword = String(oldPasswordInput?.value || "");
+    const password = String(passwordInput?.value || "");
+    const confirmPassword = String(confirmInput?.value || "");
+
+    let errorMessage = "";
+    if (oldPassword.length < 1) {
+      errorMessage = "Current password is required.";
+    } else if (!state.user?.email) {
+      errorMessage = "Your account email is unavailable. Please sign out and sign back in.";
+    } else if (password.length < 8) {
+      errorMessage = "Password must be at least 8 characters.";
+    } else if (password.length > 72) {
+      errorMessage = "Password must be 72 characters or fewer.";
+    } else if (password === oldPassword) {
+      errorMessage = "New password must be different from current password.";
+    } else if (password !== confirmPassword) {
+      errorMessage = "Passwords do not match.";
+    }
+
+    if (errorLine) errorLine.textContent = errorMessage;
+    if (errorMessage) return;
+
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "Updating...";
+    }
+
+    try {
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: state.user.email,
+        password: oldPassword
+      });
+      if (verifyError) {
+        const verifyMessage = String(verifyError?.message || "").toLowerCase();
+        if (verifyMessage.includes("invalid login credentials")) {
+          throw new Error("CURRENT_PASSWORD_INVALID");
+        }
+        throw verifyError;
+      }
+
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+
+      closeModal();
+      showProfileToast("Password updated.");
+    } catch (error) {
+      const rawMessage = String(error?.message || "");
+      const isInvalidCurrentPassword = rawMessage === "CURRENT_PASSWORD_INVALID";
+      if (!isInvalidCurrentPassword) {
+        console.error("Profile: password update failed", error);
+      }
+      const message = rawMessage.toLowerCase();
+      if (errorLine) {
+        if (isInvalidCurrentPassword) {
+          errorLine.textContent = "Current password is incorrect.";
+        } else if (message.includes("reauthentication") || message.includes("not fresh")) {
+          errorLine.textContent = "Please sign out and sign back in, then try changing your password again.";
+        } else {
+          errorLine.textContent = "Could not update password right now. Please try again.";
+        }
+      }
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = "Update Password";
       }
     }
   });
@@ -2408,12 +2603,9 @@ async function loadSignedInState() {
   const baseSettings = buildInitialSettings();
   const semesters = await fetchSemestersSafe();
 
-  const [profileRow, settingsRow, integrationResult] = await Promise.all([
+  const [profileRow, settingsRow] = await Promise.all([
     fetchProfileSafe(state.user),
-    fetchUserSettingsSafe(state.user.id),
-    fetchCalendarIntegrationState()
-      .then((data) => ({ data, error: null }))
-      .catch((error) => ({ data: null, error }))
+    fetchUserSettingsSafe(state.user.id)
   ]);
 
   const mergedProfile = {
@@ -2426,8 +2618,6 @@ async function loadSignedInState() {
 
   state.semesters = semesters;
   state.settings = mergeSettings(baseSettings, settingsRow, semesters);
-  state.calendarIntegrationState = normalizeCalendarIntegrationState(integrationResult.data);
-  state.calendarIntegrationError = integrationResult.error;
 
   syncSettingsToLocalStorage(state.settings);
   applyPreferencesToDocument(state.settings);
@@ -2440,10 +2630,12 @@ async function loadSignedInState() {
 async function initializeProfile() {
   const root = getRoot();
   if (!root) {
+    teardownProfileSectionNavigation();
     teardownProfileMobileHeaderBehavior();
     return;
   }
 
+  teardownProfileSectionNavigation();
   initializeProfileMobileHeaderBehavior();
 
   const route = getCurrentRouteForProfile();
@@ -2459,6 +2651,7 @@ async function initializeProfile() {
     closeModal();
 
     if (!state.isAuthenticated) {
+      teardownProfileSectionNavigation();
       navigateTo("/login");
       return;
     }
@@ -2484,6 +2677,7 @@ document.addEventListener("pageLoaded", (event) => {
     window.setTimeout(() => initializeProfile(), 20);
     return;
   }
+  teardownProfileSectionNavigation();
   teardownProfileMobileHeaderBehavior();
 });
 

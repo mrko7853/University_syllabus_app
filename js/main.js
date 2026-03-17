@@ -1,5 +1,13 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, getCourseColorByType, fetchAvailableSemesters, isCourseGpaAlignedWithCurrentProfessor } from './shared.js';
+import {
+    fetchCourseData,
+    getCourseColorByType,
+    fetchAvailableSemesters,
+    isCourseGpaAlignedWithCurrentProfessor,
+    getCourseRequiredYearMeta,
+    parseProfileCurrentYearLevel,
+    showGlobalToast
+} from './shared.js';
 import { openCourseInfoMenu, initializeCourseRouting, checkTimeConflict, showTimeConflictModal } from './shared.js';
 import * as wanakana from 'wanakana';
 import { getCurrentAppPath, withBase } from './path-utils.js';
@@ -121,7 +129,12 @@ const japaneseFullNameMapping = {
     '梶 藍子': 'Kaji Aiko',
     '松川 杏寧': 'Matsukawa Anna',
     '津田 太郎': 'Tsuda Taro',
-    '髙橋 旬子': 'Takahashi Junko'
+    '髙橋 旬子': 'Takahashi Junko',
+    '三牧 聖子': 'Mimaki Seiko',
+    '中西 久枝': 'Nakanishi Hisae',
+    '南川 文里': 'Minamikawa Fumisato',
+    '秋林 こずえ': 'Akibayashi Kozue',
+    '菅野 優香': 'Kanno Yuka'
 };
 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
@@ -378,7 +391,9 @@ let stickyHeaderObserverCleanup = null;
 let activeCoursePresetId = null;
 let lastLoadedCoursePlanningContext = {
     statusLookup: new Map(),
-    scheduleSignalLookup: new Map()
+    scheduleSignalLookup: new Map(),
+    userYearLevel: null,
+    hasKnownUserYear: false
 };
 
 // Global course loading state management
@@ -410,7 +425,8 @@ const HOME_PREFILTER_PERIOD_TO_TIME = {
 const HOME_PREFILTER_TYPE_TO_CONCENTRATION = {
     Core: ['culture', 'economy', 'politics', 'seminar'],
     Foundation: ['academic', 'understanding'],
-    Elective: ['special']
+    Elective: ['special'],
+    Graduate: ['graduate']
 };
 
 const COURSE_SMART_PRESET_CONFIG = {
@@ -437,6 +453,10 @@ const COURSE_SMART_PRESET_CONFIG = {
     'preset-has-exam': {
         id: 'preset-has-exam',
         label: 'Has no exam'
+    },
+    'preset-fits-my-year': {
+        id: 'preset-fits-my-year',
+        label: 'Fits my year'
     }
 };
 
@@ -599,6 +619,10 @@ async function applyHomePrefilterFilters(prefilter) {
     assessmentCheckboxes.forEach((checkbox) => {
         checkbox.checked = false;
     });
+    const requiredYearCheckboxes = document.querySelectorAll('#filter-by-required-year .filter-checkbox');
+    requiredYearCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+    });
 
     if (Array.isArray(prefilter.typeFilters) && prefilter.typeFilters.length > 0) {
         const mappedValues = new Set(
@@ -618,7 +642,7 @@ async function applyHomePrefilterFilters(prefilter) {
 
 function getCourseFilterCheckboxes() {
     return document.querySelectorAll(
-        '#filter-by-days .filter-checkbox, #filter-by-time .filter-checkbox, #filter-by-concentration .filter-checkbox, #filter-by-assessment .filter-checkbox'
+        '#filter-by-days .filter-checkbox, #filter-by-time .filter-checkbox, #filter-by-concentration .filter-checkbox, #filter-by-assessment .filter-checkbox, #filter-by-required-year .filter-checkbox'
     );
 }
 
@@ -757,12 +781,12 @@ function updateCourseCardRankingChipVisibility() {
 
     const footerRows = courseList.querySelectorAll('.class-outside .course-footer-row--desktop');
     footerRows.forEach((row) => {
-        const rankingChip = row.querySelector('.course-footer-right .course-chip-ranking');
+        const rankingChip = row.querySelector('.course-chip-ranking');
         if (!rankingChip) return;
 
         const footerLeft = row.querySelector('.course-footer-left');
         const footerRight = row.querySelector('.course-footer-right');
-        if (!footerLeft || !footerRight) return;
+        if (!footerLeft) return;
 
         rankingChip.hidden = false;
         rankingChip.removeAttribute('aria-hidden');
@@ -773,7 +797,8 @@ function updateCourseCardRankingChipVisibility() {
         const gapValue = parseFloat(rowStyles.columnGap || rowStyles.gap || '0');
         const rowGap = Number.isFinite(gapValue) ? gapValue : 0;
 
-        const requiredWidth = footerLeft.scrollWidth + footerRight.scrollWidth + rowGap;
+        const footerRightWidth = footerRight ? footerRight.scrollWidth : 0;
+        const requiredWidth = footerLeft.scrollWidth + footerRightWidth + (footerRight ? rowGap : 0);
         const hasHorizontalOverflow = requiredWidth > (row.clientWidth + 0.5);
 
         const rowChips = Array.from(row.querySelectorAll('.course-chip'))
@@ -980,6 +1005,12 @@ function parseCourseMeetingSlots(timeSlot) {
     return slots;
 }
 
+function isIntensiveCourseTimeSlot(timeSlot) {
+    const raw = String(timeSlot || '').trim();
+    if (!raw) return false;
+    return /(集中講義|集中|intensive)/i.test(raw);
+}
+
 function getCourseMeetingTimes(courseData) {
     const slots = parseCourseMeetingSlots(courseData?.time_slot);
     if (!slots.length) {
@@ -1104,12 +1135,25 @@ function getSelectedCourseFilterState() {
         .filter((checkbox) => checkbox.checked)
         .map((checkbox) => checkbox.dataset.assessmentFilter)
         .filter(Boolean);
+    const requiredYearCheckboxes = document.querySelectorAll('#filter-by-required-year .filter-checkbox');
+    const selectedRequiredYearMins = Array.from(requiredYearCheckboxes)
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => Number.parseInt(checkbox.value, 10))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    const planningUserYear = Number(lastLoadedCoursePlanningContext?.userYearLevel);
+    const normalizedPlanningUserYear = Number.isFinite(planningUserYear) && planningUserYear > 0
+        ? Math.trunc(planningUserYear)
+        : null;
+    const hasKnownUserYear = Boolean(lastLoadedCoursePlanningContext?.hasKnownUserYear && normalizedPlanningUserYear);
 
     return {
         selectedDays,
         selectedTimes,
         selectedConcentrations,
         selectedAssessmentFilters,
+        selectedRequiredYearMins,
+        userYearLevel: normalizedPlanningUserYear,
+        hasKnownUserYear,
         activePresetId: activeCoursePresetId,
         scheduleSmartFilters: {
             noConflicts: activeCoursePresetId === 'preset-no-conflicts' || undefined,
@@ -1145,6 +1189,10 @@ function doesCourseMatchSmartPreset(courseData, selectedFilterState) {
     const scheduleSignalType = String(courseData?.scheduleSignal?.type || 'none');
     const stateFlags = courseData?.stateFlags || {};
     const assessmentFlags = courseData?.assessmentFlags || deriveDeterministicAssessmentFlags(courseData);
+    const presetUserYearLevel = Number.isFinite(Number(selectedFilterState?.userYearLevel))
+        ? Math.trunc(Number(selectedFilterState.userYearLevel))
+        : null;
+    const requiredYearMeta = getCourseRequiredYearMeta(courseData, presetUserYearLevel);
 
     switch (presetId) {
         case 'preset-empty-slots':
@@ -1159,6 +1207,10 @@ function doesCourseMatchSmartPreset(courseData, selectedFilterState) {
             return !Boolean(assessmentFlags.hasPresentation);
         case 'preset-has-exam':
             return !Boolean(assessmentFlags.hasExam);
+        case 'preset-fits-my-year':
+            if (!requiredYearMeta.hasRequiredYear) return true;
+            if (!requiredYearMeta.hasKnownUserYear) return true;
+            return Boolean(requiredYearMeta.meetsRequirement);
         default:
             return true;
     }
@@ -1239,6 +1291,113 @@ function getCreditsChipMarkup(course) {
     return '';
 }
 
+function resolveCourseRequiredYearMeta(course, coursePlanningContext = {}) {
+    const fallbackUserYear = Number.isFinite(Number(coursePlanningContext?.userYearLevel))
+        ? Math.trunc(Number(coursePlanningContext.userYearLevel))
+        : null;
+    return getCourseRequiredYearMeta(course, fallbackUserYear);
+}
+
+function getRequiredYearChipMarkup(requiredYearMeta, { mobile = false } = {}) {
+    if (!requiredYearMeta?.hasRequiredYear) return '';
+
+    const classes = ['course-chip', 'course-chip-required-year'];
+    if (requiredYearMeta?.hasKnownUserYear && requiredYearMeta?.meetsRequirement) {
+        classes.push('course-chip-required-year-fit');
+    } else if (requiredYearMeta?.hasKnownUserYear && !requiredYearMeta?.meetsRequirement) {
+        classes.push('course-chip-required-year-blocked');
+    }
+    if (mobile) {
+        classes.push('course-chip-mobile-required-year');
+    }
+
+    return `<span class="${classes.join(' ')}">${escapeCourseMarkup(requiredYearMeta.requiredYearLabel || 'Required year')}</span>`;
+}
+
+function isYearAwareCoursePreset(presetId) {
+    return String(presetId || '').trim() === 'preset-fits-my-year';
+}
+
+function showPresetRequiresYearToast() {
+    showGlobalToast('Set your current year in Profile to use "Fits my year".');
+}
+
+async function resolveCurrentUserYearContext() {
+    const cachedYear = Number(lastLoadedCoursePlanningContext?.userYearLevel);
+    if (Number.isFinite(cachedYear) && cachedYear > 0) {
+        const normalized = Math.trunc(cachedYear);
+        lastLoadedCoursePlanningContext = {
+            ...lastLoadedCoursePlanningContext,
+            userYearLevel: normalized,
+            hasKnownUserYear: true
+        };
+        return { userYearLevel: normalized, hasKnownUserYear: true };
+    }
+
+    try {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session || null;
+        if (!session?.user?.id) {
+            lastLoadedCoursePlanningContext = {
+                ...lastLoadedCoursePlanningContext,
+                userYearLevel: null,
+                hasKnownUserYear: false
+            };
+            return { userYearLevel: null, hasKnownUserYear: false };
+        }
+
+        const hasMissingProfileColumnError = (error) => {
+            const code = String(error?.code || '').toUpperCase();
+            const message = String(error?.message || '').toLowerCase();
+            return code === '42703' || (message.includes('column') && message.includes('does not exist'));
+        };
+
+        let profileResponse = await supabase
+            .from('profiles')
+            .select('current_year, year_opt_out, year')
+            .eq('id', session.user.id)
+            .single();
+
+        if (profileResponse.error && hasMissingProfileColumnError(profileResponse.error)) {
+            profileResponse = await supabase
+                .from('profiles')
+                .select('year')
+                .eq('id', session.user.id)
+                .single();
+        }
+
+        const profile = profileResponse?.data || null;
+        const parsedYear = parseProfileCurrentYearLevel(profile);
+        const hasKnownUserYear = Number.isFinite(parsedYear);
+        const userYearLevel = hasKnownUserYear ? Math.trunc(Number(parsedYear)) : null;
+
+        lastLoadedCoursePlanningContext = {
+            ...lastLoadedCoursePlanningContext,
+            userYearLevel,
+            hasKnownUserYear
+        };
+
+        return { userYearLevel, hasKnownUserYear };
+    } catch (error) {
+        console.warn('Unable to resolve profile year for "Fits my year" preset:', error);
+        lastLoadedCoursePlanningContext = {
+            ...lastLoadedCoursePlanningContext,
+            userYearLevel: null,
+            hasKnownUserYear: false
+        };
+        return { userYearLevel: null, hasKnownUserYear: false };
+    }
+}
+
+async function canActivateYearAwarePreset() {
+    const yearContext = await resolveCurrentUserYearContext();
+    if (!yearContext.hasKnownUserYear) {
+        showPresetRequiresYearToast();
+        return false;
+    }
+    return true;
+}
+
 function normalizeCourseTermLabel(termValue) {
     const raw = String(termValue || '').trim();
     if (!raw) return '';
@@ -1264,7 +1423,9 @@ function buildCourseStatusKey(courseLike = {}, fallbackYear = null, fallbackTerm
 async function buildCourseStatusLookup(courses = [], year, term) {
     const context = {
         statusLookup: new Map(),
-        scheduleSignalLookup: new Map()
+        scheduleSignalLookup: new Map(),
+        userYearLevel: null,
+        hasKnownUserYear: false
     };
     if (!Array.isArray(courses) || courses.length === 0) return context;
 
@@ -1306,13 +1467,29 @@ async function buildCourseStatusLookup(courses = [], year, term) {
 
     if (session?.user?.id) {
         try {
-            const { data: profileData, error: profileError } = await supabase
+            const hasMissingProfileColumnError = (error) => {
+                const code = String(error?.code || '').toUpperCase();
+                const message = String(error?.message || '').toLowerCase();
+                return code === '42703' || (message.includes('column') && message.includes('does not exist'));
+            };
+
+            let profileResponse = await supabase
                 .from('profiles')
-                .select('courses_selection')
+                .select('courses_selection, current_year, year_opt_out, year')
                 .eq('id', session.user.id)
                 .single();
+            if (profileResponse.error && hasMissingProfileColumnError(profileResponse.error)) {
+                profileResponse = await supabase
+                    .from('profiles')
+                    .select('courses_selection')
+                    .eq('id', session.user.id)
+                    .single();
+            }
 
-            if (profileError) throw profileError;
+            if (profileResponse.error) throw profileResponse.error;
+            const profileData = profileResponse?.data || null;
+            context.userYearLevel = parseProfileCurrentYearLevel(profileData);
+            context.hasKnownUserYear = Number.isFinite(context.userYearLevel);
 
             const selectedCourses = Array.isArray(profileData?.courses_selection)
                 ? profileData.courses_selection
@@ -1383,8 +1560,8 @@ async function buildCourseStatusLookup(courses = [], year, term) {
                 const firstConflict = conflictingSlots[0];
                 scheduleSignal = {
                     type: 'conflict',
-                    label: `Conflicts with ${formatCourseSlotLabel(firstConflict)}`,
-                    mobileLabel: `Conflicts: ${formatCourseSlotLabel(firstConflict)}`
+                    label: `Conflicts ${formatCourseSlotLabel(firstConflict)}`,
+                    mobileLabel: `Conflicts ${formatCourseSlotLabel(firstConflict)}`
                 };
             } else if (hasScheduleBaseline && slots.some((slot) => emptySlots.has(slot.key))) {
                 scheduleSignal = {
@@ -1436,7 +1613,7 @@ function getCourseHelperBadgeMarkup(scheduleSignal = {}, stateFlags = {}) {
     if (stateFlags?.isRegistered) return '';
 
     if (scheduleSignal.type === 'conflict') {
-        const label = scheduleSignal.label || 'Conflicts with your schedule';
+        const label = scheduleSignal.label || 'Schedule conflict';
         return `<span class="course-chip course-chip-helper course-chip-helper-conflict">${escapeCourseMarkup(label)}</span>`;
     }
     if (scheduleSignal.type === 'empty_slot_match') {
@@ -1459,8 +1636,8 @@ function getMobilePrimarySignalChipMarkup(statusLabel = '', scheduleSignal = {},
         if (!compactLabel) {
             const fallbackLabel = String(scheduleSignal?.label || '').trim();
             if (fallbackLabel) {
-                const normalizedFallback = fallbackLabel.replace(/^Conflicts with\s*/i, '').trim();
-                compactLabel = normalizedFallback ? `Conflicts: ${normalizedFallback}` : 'Conflicts';
+                const normalizedFallback = fallbackLabel.replace(/^Conflicts(?:\s+with)?[:\s]*/i, '').trim();
+                compactLabel = normalizedFallback ? `Conflicts ${normalizedFallback}` : 'Conflicts';
             } else {
                 compactLabel = 'Conflicts';
             }
@@ -1500,6 +1677,79 @@ function formatProfessorCardName(professor) {
     return raw
         .toLowerCase()
         .replace(/\b([a-z])/g, (match) => match.toUpperCase());
+}
+
+function isGraduateCourse(courseLike) {
+    const typeLabel = String(courseLike?.type || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (typeLabel === 'graduate courses' || typeLabel === 'graduate course' || typeLabel === 'graduate') return true;
+    if (typeLabel.includes('graduate')) return true;
+
+    const tags = Array.isArray(courseLike?.evaluation_tags) ? courseLike.evaluation_tags : [];
+    return tags.some((tag) => String(tag || '').trim().toLowerCase() === 'graduate_course');
+}
+
+function isGraduateJapaneseTaughtCourse(courseLike) {
+    if (!isGraduateCourse(courseLike)) return false;
+    return String(courseLike?.class_number || '').trim().toUpperCase() === 'J';
+}
+
+function getGraduateLanguageChipMarkup(courseLike, { mobile = false } = {}) {
+    if (!isGraduateJapaneseTaughtCourse(courseLike)) return '';
+    const className = mobile
+        ? 'course-chip course-chip-language-japanese course-chip-mobile-language'
+        : 'course-chip course-chip-language-japanese';
+    return `<span class="${className}">Japanese</span>`;
+}
+
+const GRADUATE_EVALUATION_LABEL_TRANSLATIONS = {
+    '平常点': 'Class Participation',
+    'プレゼンテーション': 'Presentation',
+    '授業への参加': 'Class Participation',
+    '中間レポート': 'Midterm Report',
+    '期末レポート': 'Final Report',
+    '平常点(出席，クラス参加)': 'Attendance and Class Participation',
+    '小レポート': 'Short Report',
+    '平常点(クラス参加，グループ作業の成果等)': 'Class Participation and Group Work',
+    '平常点(クラス参加，グループ作業の成果等': 'Class Participation and Group Work',
+    '出席と参加': 'Attendance and Participation',
+    '平常点(出席，クラス参加，グループ作業の成果等)': 'Attendance, Class Participation, and Group Work',
+    '平常点(出席，クラス参加，グループ作業の': 'Attendance, Class Participation, and Group Work',
+    'クラスへの貢献度': 'Contribution to Class',
+    '提出物': 'Submitted Work',
+    'クラスで発表など': 'Class Presentation',
+    '中間レポート試験': 'Midterm Report and Exam',
+    '期末レポート試験・論文': 'Final Report, Exam, and Paper',
+    'レポート': 'Report'
+};
+
+const GRADUATE_EVALUATION_NOTE_TRANSLATIONS = {
+    'ジェンダーの視点から平和あるいは平和をめぐる諸問題についての議論': 'Discussion of peace-related issues from a gender perspective',
+    'テキストを読み込み，疑問点を明確にした上で参加し，積極的に授業に参加することが求められる。': 'Prepare readings, clarify key questions, and participate actively in class',
+    'プレゼンテーション資料も評価対象。': 'Presentation materials are also evaluated',
+    '平和研究におけるジェンダー分析の重要性に対する理解': 'Understanding the importance of gender analysis in peace studies',
+    '授業内での議論への積極的な参加': 'Active participation in in-class discussion',
+    '授業参加，発表，レスポンスの提出など': 'Class participation, presentations, and response submissions',
+    '教育をジェンダー分析する意味についての理解': 'Understanding why education should be analyzed through a gender lens',
+    '自身が関心を持つ教育とジェンダーに関連する課題の理解': 'Understanding education and gender issues related to your interests',
+    '議論への積極的な参加': 'Active participation in discussions'
+};
+
+function translateGraduateEvaluationLabel(label) {
+    const normalized = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return GRADUATE_EVALUATION_LABEL_TRANSLATIONS[normalized] || normalized;
+}
+
+function translateGraduateEvaluationNote(note) {
+    const normalized = String(note || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return GRADUATE_EVALUATION_NOTE_TRANSLATIONS[normalized] || normalized;
+}
+
+function translateGraduateEvaluationTag(tag) {
+    const normalized = String(tag || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    return translateGraduateEvaluationLabel(normalized);
 }
 
 function parseEvaluationCriteriaJson(value) {
@@ -1586,14 +1836,21 @@ function normalizeAssessmentDescriptionText(value) {
 function normalizeEvaluationComponents(course) {
     const parsed = parseEvaluationCriteriaJson(course?.evaluation_criteria_json);
     const rawComponents = Array.isArray(parsed?.components) ? parsed.components : [];
+    const graduateCourse = isGraduateCourse(course);
     return rawComponents
         .map((component) => {
-            const name = correctEvaluationLabelTypos(component?.name);
+            const translatedName = graduateCourse
+                ? translateGraduateEvaluationLabel(component?.name)
+                : component?.name;
+            const name = correctEvaluationLabelTypos(translatedName);
             if (!name) return null;
 
             const weightValue = Number(component?.weight);
             const hasWeight = Number.isFinite(weightValue);
-            const notes = normalizeAssessmentDescriptionText(component?.notes);
+            const noteSource = graduateCourse
+                ? translateGraduateEvaluationNote(component?.notes)
+                : component?.notes;
+            const notes = normalizeAssessmentDescriptionText(noteSource);
 
             return {
                 name,
@@ -1694,8 +1951,11 @@ function deriveEvaluationTagsFromComponents(components, maxTags = 6) {
 }
 
 function getCourseEvaluationTags(course, maxTags = 6) {
+    const graduateCourse = isGraduateCourse(course);
     const dbTags = Array.isArray(course?.evaluation_tags)
         ? course.evaluation_tags
+            .filter((tag) => String(tag || '').trim().toLowerCase() !== 'graduate_course')
+            .map((tag) => graduateCourse ? translateGraduateEvaluationTag(tag) : tag)
             .map((tag) => normalizeEvaluationLabelPrefix(tag))
             .filter(Boolean)
         : [];
@@ -1825,7 +2085,9 @@ function getCourseTypeLabel(courseType) {
         "Japanese Society and Global Culture Concentration": "Culture",
         "Japanese Business and the Global Economy Concentration": "Business",
         "Japanese Politics and Global Studies Concentration": "Politics",
-        "Other Elective Courses": "Elective"
+        "Other Elective Courses": "Elective",
+        "Special Lecture Series": "Elective",
+        "Graduate courses": "Graduate"
     };
 
     if (!courseType) return "General";
@@ -1974,6 +2236,11 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const newProfessorChip = getNewProfessorChipMarkup(hasProfessorChanged);
         const evaluationChipRow = getCourseEvaluationChipMarkup(course);
         const courseTypeLabel = getCourseTypeLabel(course.type);
+        const requiredYearMeta = resolveCourseRequiredYearMeta(course, coursePlanningContext);
+        const requiredYearChip = getRequiredYearChipMarkup(requiredYearMeta);
+        const mobileRequiredYearChip = getRequiredYearChipMarkup(requiredYearMeta, { mobile: true });
+        const japaneseLanguageChip = getGraduateLanguageChipMarkup(course);
+        const mobileJapaneseLanguageChip = getGraduateLanguageChipMarkup(course, { mobile: true });
         const statusKey = buildCourseStatusKey(course, year, term);
         const courseStatusLabel = courseStatusLookup.get(statusKey) || '';
         const scheduleSignal = courseScheduleSignalLookup.get(statusKey) || { type: 'none', label: '' };
@@ -1995,12 +2262,20 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         const normalizedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(displayTimeSlot || '').replace(/ - /g, ' – ');
         const cardAriaLabel = `Open course info for ${normalizedTitle}`.replace(/"/g, '&quot;');
+        const hasMobileFooterContent = Boolean(mobileRequiredYearChip || mobileJapaneseLanguageChip || mobilePrimarySignalChip);
         const decoratedCourse = {
             ...course,
             scheduleSignal,
             stateFlags,
             assessmentSummary,
             assessmentFlags,
+            requiredYearMin: requiredYearMeta.requiredYearMin,
+            requiredYearLabel: requiredYearMeta.requiredYearLabel,
+            requiredYearBadgeLabel: requiredYearMeta.requiredYearBadgeLabel,
+            requiredYearBucketId: requiredYearMeta.requiredYearBucketId,
+            hasRequiredYear: requiredYearMeta.hasRequiredYear,
+            hasKnownUserYear: requiredYearMeta.hasKnownUserYear,
+            meetsYearRequirement: requiredYearMeta.meetsRequirement,
             isHidden: false
         };
 
@@ -2031,11 +2306,15 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
                     ${evaluationChipRow}
                 </div>
                 <div class="course-footer-row course-footer-row--desktop">
-                    <div class="course-footer-left">${creditsChip}${courseStatusChip}${helperBadge}</div>
-                    <div class="course-footer-right">${gpaSummaryChip}</div>
+                    <div class="course-footer-left">${creditsChip}${requiredYearChip}${japaneseLanguageChip}${courseStatusChip}${helperBadge}${gpaSummaryChip}</div>
                 </div>
-                ${mobilePrimarySignalChip
-                ? `<div class="course-footer-row course-footer-row--mobile"><div class="course-mobile-signal-row">${mobilePrimarySignalChip}</div></div>`
+                ${hasMobileFooterContent
+                ? `<div class="course-footer-row course-footer-row--mobile">
+                        <div class="course-mobile-meta">
+                            ${(mobileRequiredYearChip || mobileJapaneseLanguageChip) ? `<div class="course-mobile-facts">${mobileRequiredYearChip}${mobileJapaneseLanguageChip}</div>` : ''}
+                            ${mobilePrimarySignalChip ? `<div class="course-mobile-signal-row">${mobilePrimarySignalChip}</div>` : ''}
+                        </div>
+                    </div>`
                 : ''}
             </div>
         </div>
@@ -2208,6 +2487,8 @@ function doesCourseMatchConcentrationFilter(courseType, selectedConcentrations) 
                 return normalizedType === 'Understanding Japan and Kyoto';
             case 'special':
                 return normalizedType === 'Other Elective Courses' || normalizedType === 'Special Lecture Series';
+            case 'graduate':
+                return normalizedType === 'Graduate courses';
             default:
                 return false;
         }
@@ -2220,7 +2501,23 @@ function doesCourseMatchAssessmentFilters(courseData, selectedAssessmentFilters)
     }
 
     const assessmentFlags = courseData?.assessmentFlags || deriveDeterministicAssessmentFlags(courseData);
-    return selectedAssessmentFilters.some((filterId) => doesAssessmentFilterMatch(assessmentFlags, filterId));
+    return selectedAssessmentFilters.every((filterId) => doesAssessmentFilterMatch(assessmentFlags, filterId));
+}
+
+function doesCourseMatchRequiredYearFilters(courseData, selectedRequiredYearMins, selectedFilterState = null) {
+    if (!Array.isArray(selectedRequiredYearMins) || selectedRequiredYearMins.length === 0) {
+        return true;
+    }
+
+    const fallbackUserYear = Number.isFinite(Number(selectedFilterState?.userYearLevel))
+        ? Math.trunc(Number(selectedFilterState.userYearLevel))
+        : null;
+    const requiredYearMeta = getCourseRequiredYearMeta(courseData, fallbackUserYear);
+    if (!requiredYearMeta.hasRequiredYear || !Number.isFinite(requiredYearMeta.requiredYearMin)) {
+        return false;
+    }
+
+    return selectedRequiredYearMins.includes(requiredYearMeta.requiredYearMin);
 }
 
 // Helper function to check if a container matches current filters
@@ -2232,10 +2529,17 @@ function containerMatchesFilters(container, courseData = null, selectedFilterSta
     const selectedTimes = Array.isArray(state.selectedTimes) ? state.selectedTimes : [];
     const selectedConcentrations = Array.isArray(state.selectedConcentrations) ? state.selectedConcentrations : [];
     const selectedAssessmentFilters = Array.isArray(state.selectedAssessmentFilters) ? state.selectedAssessmentFilters : [];
+    const selectedRequiredYearMins = Array.isArray(state.selectedRequiredYearMins) ? state.selectedRequiredYearMins : [];
 
     const slotMeetings = getCourseMeetingTimes(courseData);
     const meetingDays = slotMeetings.map((slot) => slot.day);
     const meetingTimes = slotMeetings.map((slot) => HOME_PREFILTER_PERIOD_TO_TIME[slot.period]).filter(Boolean);
+    const isIntensiveCourse = isIntensiveCourseTimeSlot(courseData?.time_slot);
+
+    if (isIntensiveCourse) {
+        meetingDays.push('Intensive');
+        meetingTimes.push('Intensive');
+    }
 
     const fallbackId = String(container?.id || '').trim();
     if (!meetingDays.length && fallbackId) {
@@ -2251,9 +2555,10 @@ function containerMatchesFilters(container, courseData = null, selectedFilterSta
     const timeMatch = selectedTimes.length === 0 || meetingTimes.some((time) => selectedTimes.includes(time));
     const concentrationMatch = doesCourseMatchConcentrationFilter(courseData.type, selectedConcentrations);
     const assessmentMatch = doesCourseMatchAssessmentFilters(courseData, selectedAssessmentFilters);
+    const requiredYearMatch = doesCourseMatchRequiredYearFilters(courseData, selectedRequiredYearMins, state);
     const presetMatch = doesCourseMatchSmartPreset(courseData, state);
 
-    return dayMatch && timeMatch && concentrationMatch && assessmentMatch && presetMatch;
+    return dayMatch && timeMatch && concentrationMatch && assessmentMatch && requiredYearMatch && presetMatch;
 }
 
 function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
@@ -2264,6 +2569,7 @@ function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
         || (selectedFilterState?.selectedTimes?.length || 0) > 0
         || (selectedFilterState?.selectedConcentrations?.length || 0) > 0
         || (selectedFilterState?.selectedAssessmentFilters?.length || 0) > 0
+        || (selectedFilterState?.selectedRequiredYearMins?.length || 0) > 0
         || presetId
     );
 
@@ -2298,6 +2604,13 @@ function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
             { action: 'show-all-courses', label: 'Show all courses' },
             { action: 'open-calendar-empty-slots', label: 'Open timetable' }
         ];
+        return model;
+    }
+
+    if (presetId === 'preset-fits-my-year') {
+        model.title = 'No courses fit your current year.';
+        model.message = 'Try clearing this preset or switching semesters.';
+        model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
         return model;
     }
 
@@ -3131,6 +3444,10 @@ function setupDashboardEventListeners() {
             if (activeCoursePresetId === presetId) {
                 setActiveCoursePreset(null, { syncOnly: true });
             } else {
+                if (isYearAwareCoursePreset(presetId)) {
+                    const canActivate = await canActivateYearAwarePreset();
+                    if (!canActivate) return;
+                }
                 setActiveCoursePreset(presetId, { syncOnly: true });
             }
             await applySearchAndFilters(currentSearchQuery);
@@ -3202,6 +3519,7 @@ function setupDashboardEventListeners() {
             const filterByTime = document.getElementById("filter-by-time");
             const filterByConcentration = document.getElementById("filter-by-concentration");
             const filterByAssessment = document.getElementById("filter-by-assessment");
+            const filterByRequiredYear = document.getElementById("filter-by-required-year");
 
             // Clear day filters
             if (filterByDays) {
@@ -3231,6 +3549,14 @@ function setupDashboardEventListeners() {
             if (filterByAssessment) {
                 const assessmentCheckboxes = filterByAssessment.querySelectorAll("input[type='checkbox']");
                 assessmentCheckboxes.forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            }
+
+            // Clear required year filters
+            if (filterByRequiredYear) {
+                const requiredYearCheckboxes = filterByRequiredYear.querySelectorAll("input[type='checkbox']");
+                requiredYearCheckboxes.forEach((checkbox) => {
                     checkbox.checked = false;
                 });
             }
@@ -4871,6 +5197,11 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const professorDisplay = formatProfessorCardName(course.professor);
         const courseTypeLabel = getCourseTypeLabel(course.type);
         const mobileTypeChip = getMobileCourseTypeChipMarkup(courseTypeLabel);
+        const requiredYearMeta = resolveCourseRequiredYearMeta(course, lastLoadedCoursePlanningContext);
+        const requiredYearChip = getRequiredYearChipMarkup(requiredYearMeta);
+        const mobileRequiredYearChip = getRequiredYearChipMarkup(requiredYearMeta, { mobile: true });
+        const japaneseLanguageChip = getGraduateLanguageChipMarkup(course);
+        const mobileJapaneseLanguageChip = getGraduateLanguageChipMarkup(course, { mobile: true });
         const statusKey = buildCourseStatusKey(course, lastLoadedYear, lastLoadedTerm);
         const courseStatusLabel = statusLookup.get(statusKey) || '';
         const scheduleSignal = scheduleLookup.get(statusKey) || { type: 'none', label: '' };
@@ -4879,9 +5210,9 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
             isSaved: courseStatusLabel === 'Saved',
             isHidden: false
         };
-        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel);
+        const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel, suggestedCourseColor);
         const helperBadge = getCourseHelperBadgeMarkup(scheduleSignal, stateFlags);
-        const mobilePrimarySignalChip = getMobilePrimarySignalChipMarkup(courseStatusLabel, scheduleSignal);
+        const mobilePrimarySignalChip = getMobilePrimarySignalChipMarkup(courseStatusLabel, scheduleSignal, suggestedCourseColor);
         const suggestedTitle = normalizeCourseTitle(course.title);
         const timeDisplay = String(timeSlot || '').replace(/ - /g, ' – ');
         const suggestedCardAriaLabel = `Open course info for ${suggestedTitle}`.replace(/"/g, '&quot;');
@@ -4896,6 +5227,13 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                 workloadLabel: null
             },
             assessmentFlags: deriveDeterministicAssessmentFlags(course),
+            requiredYearMin: requiredYearMeta.requiredYearMin,
+            requiredYearLabel: requiredYearMeta.requiredYearLabel,
+            requiredYearBadgeLabel: requiredYearMeta.requiredYearBadgeLabel,
+            requiredYearBucketId: requiredYearMeta.requiredYearBucketId,
+            hasRequiredYear: requiredYearMeta.hasRequiredYear,
+            hasKnownUserYear: requiredYearMeta.hasKnownUserYear,
+            meetsYearRequirement: requiredYearMeta.meetsRequirement,
             isHidden: false
         };
         // Escape the JSON string for safe HTML attribute embedding
@@ -4930,12 +5268,11 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
                     ${evaluationChipRow}
                 </div>
                 <div class="course-footer-row course-footer-row--desktop">
-                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${courseStatusChip}${helperBadge}</div>
-                    <div class="course-footer-right">${gpaSummaryChip}</div>
+                    <div class="course-footer-left">${mobileTypeChip}${creditsChip}${requiredYearChip}${japaneseLanguageChip}${courseStatusChip}${helperBadge}${gpaSummaryChip}</div>
                 </div>
                 <div class="course-footer-row course-footer-row--mobile">
                     <div class="course-mobile-meta">
-                        <div class="course-mobile-facts">${mobileTypeChip}${creditsChip}</div>
+                        <div class="course-mobile-facts">${mobileTypeChip}${creditsChip}${mobileRequiredYearChip}${mobileJapaneseLanguageChip}</div>
                         ${mobilePrimarySignalChip ? `<div class="course-mobile-signal-row">${mobilePrimarySignalChip}</div>` : ''}
                     </div>
                 </div>
@@ -5163,8 +5500,18 @@ export async function initializeDashboard() {
         applyCoursePageSearchPrefillInputs(pendingCoursePageSearchPrefill.query);
         await performSearch(pendingCoursePageSearchPrefill.query);
     } else if (pendingCoursePagePresetPrefill?.presetId) {
-        setActiveCoursePreset(pendingCoursePagePresetPrefill.presetId, { syncOnly: true });
-        await applySearchAndFilters(currentSearchQuery);
+        let shouldApplyPresetPrefill = true;
+        if (isYearAwareCoursePreset(pendingCoursePagePresetPrefill.presetId)) {
+            const canActivate = await canActivateYearAwarePreset();
+            if (!canActivate) {
+                console.info('Skipped year-aware preset prefill because profile year is unknown.');
+                shouldApplyPresetPrefill = false;
+            }
+        }
+        if (shouldApplyPresetPrefill) {
+            setActiveCoursePreset(pendingCoursePagePresetPrefill.presetId, { syncOnly: true });
+            await applySearchAndFilters(currentSearchQuery);
+        }
     }
 
     // Update the course filter paragraph to show current state

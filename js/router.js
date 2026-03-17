@@ -3,7 +3,7 @@
  * Ensures all components work properly on every navigation
  */
 import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
-import { applyPreferredTermToGlobals, normalizeTermValue, setPreferredTermValue } from './preferences.js'
+import { applyPreferredTermToGlobals, inferCurrentSemesterValue, normalizeTermValue, setPreferredTermValue } from './preferences.js'
 import { isSetupCompleteFromProfile, isSetupSchemaMissingError, normalizeSetupProfile } from './setup-status.js'
 import * as wanakana from 'wanakana'
 
@@ -103,9 +103,9 @@ class SimpleRouter {
     }
 
     // Set default global year/term values
-    const currentMonth = new Date().getMonth() + 1
-    window.globalCurrentYear = new Date().getFullYear()
-    window.globalCurrentTerm = currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring"
+    const inferred = inferCurrentSemesterValue()
+    window.globalCurrentYear = inferred.year
+    window.globalCurrentTerm = inferred.term
   }
 
   init() {
@@ -1484,9 +1484,9 @@ class SimpleRouter {
         }
         // Or if it has a showCourse method, call it
         else if (calendarComponent.showCourse) {
-          const currentYear = window.globalCurrentYear || new Date().getFullYear()
-          const currentMonth = new Date().getMonth() + 1
-          const inferredTerm = (currentMonth >= 8 || currentMonth <= 2) ? "Fall" : "Spring"
+          const inferred = inferCurrentSemesterValue()
+          const currentYear = window.globalCurrentYear || inferred.year
+          const inferredTerm = inferred.term
           const currentTerm = window.globalCurrentTerm || inferredTerm
           calendarComponent.showCourse(currentYear, currentTerm)
         }
@@ -3337,7 +3337,10 @@ window.getCurrentYear = () => {
     return window.globalCurrentYear
   }
   // Return stored global year or default to current year
-  return window.globalCurrentYear || new Date().getFullYear()
+  if (window.globalCurrentYear) {
+    return window.globalCurrentYear
+  }
+  return inferCurrentSemesterValue().year
 }
 
 window.getCurrentTerm = () => {
@@ -3351,8 +3354,7 @@ window.getCurrentTerm = () => {
   if (window.globalCurrentTerm) {
     return window.globalCurrentTerm
   }
-  const currentMonth = new Date().getMonth() + 1
-  return currentMonth >= 8 || currentMonth <= 2 ? "秋学期/Fall" : "春学期/Spring"
+  return inferCurrentSemesterValue().term
 }
 
 // Initialize router

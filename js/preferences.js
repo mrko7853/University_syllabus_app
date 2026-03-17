@@ -1,6 +1,7 @@
 export const PREFERENCE_KEYS = {
   currentTerm: 'ila_current_term',
   latestAvailableTerm: 'ila_latest_available_term',
+  lastInferredTerm: 'ila_last_inferred_term',
   language: 'ila_lang',
   timeFormat: 'ila_timefmt',
   weekStart: 'ila_weekstart',
@@ -106,6 +107,66 @@ export function parseTermValue(value) {
   }
 }
 
+export function inferCurrentSemesterValue(now = new Date()) {
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+
+  if (month >= 8) {
+    return {
+      term: 'Fall',
+      year,
+      value: `Fall-${year}`
+    }
+  }
+
+  if (month <= 2) {
+    const fallYear = year - 1
+    return {
+      term: 'Fall',
+      year: fallYear,
+      value: `Fall-${fallYear}`
+    }
+  }
+
+  return {
+    term: 'Spring',
+    year,
+    value: `Spring-${year}`
+  }
+}
+
+function findClosestSemesterForInferredTarget(semesterValues, inferred) {
+  if (!Array.isArray(semesterValues) || !semesterValues.length || !inferred?.term || !Number.isFinite(inferred?.year)) {
+    return null
+  }
+
+  if (semesterValues.includes(inferred.value)) {
+    return inferred.value
+  }
+
+  let closestMatch = null
+
+  semesterValues.forEach((value) => {
+    const parsed = parseTermValue(value)
+    if (parsed.term !== inferred.term || !Number.isFinite(parsed.year)) return
+
+    const distance = Math.abs(parsed.year - inferred.year)
+    if (
+      !closestMatch
+      || distance < closestMatch.distance
+      || (distance === closestMatch.distance && parsed.year > closestMatch.year)
+    ) {
+      closestMatch = {
+        value,
+        year: parsed.year,
+        distance
+      }
+    }
+  })
+
+  return closestMatch?.value || null
+}
+
 export function getPreferredTermValue() {
   return normalizeTermValue(readStorage(PREFERENCE_KEYS.currentTerm))
 }
@@ -185,24 +246,29 @@ export function resolvePreferredTermForAvailableSemesters(semesterValues = []) {
 
   if (!normalizedValues.length) return null
 
-  const latestAvailable = normalizedValues[0]
+  const inferredCurrent = inferCurrentSemesterValue()
   const preferred = getPreferredTermValue()
-  const previousLatest = normalizeTermValue(readStorage(PREFERENCE_KEYS.latestAvailableTerm))
-  const hasNewSemester = Boolean(previousLatest && previousLatest !== latestAvailable)
+  const previousInferred = normalizeTermValue(readStorage(PREFERENCE_KEYS.lastInferredTerm))
+  const hasSemesterTransition = Boolean(previousInferred && previousInferred !== inferredCurrent.value)
+  const resolvedCurrent = findClosestSemesterForInferredTarget(normalizedValues, inferredCurrent)
 
-  if (previousLatest !== latestAvailable) {
-    writeStorage(PREFERENCE_KEYS.latestAvailableTerm, latestAvailable)
+  if (previousInferred !== inferredCurrent.value) {
+    writeStorage(PREFERENCE_KEYS.lastInferredTerm, inferredCurrent.value)
   }
 
-  if (hasNewSemester) {
-    return latestAvailable
+  if (hasSemesterTransition && resolvedCurrent) {
+    return resolvedCurrent
   }
 
   if (preferred && normalizedValues.includes(preferred)) {
     return preferred
   }
 
-  return latestAvailable
+  if (resolvedCurrent) {
+    return resolvedCurrent
+  }
+
+  return normalizedValues[0]
 }
 
 export function getStoredPreferences() {

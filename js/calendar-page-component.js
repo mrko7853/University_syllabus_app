@@ -66,10 +66,13 @@ class CalendarPageComponent extends HTMLElement {
     this.mobileCourseLookup = new Map();
     this.desktopCourseLookup = new Map();
     this.listCourseLookup = new Map();
+    this.weekIntensiveCourseLookup = new Map();
     this.courseDueAssignmentCounts = new Map();
+    this.visibleIntensiveCourses = [];
     this.expandedMobilePeriodByDay = {};
     this.selectedMobileDayIndex = this.getDefaultMobileDayIndex();
     this.expandedListDayCodes = new Set([this.getDefaultListExpandedDayCode()]);
+    this.isListIntensiveExpanded = false;
 
     this.touchStartX = 0;
     this.touchStartY = 0;
@@ -129,6 +132,10 @@ class CalendarPageComponent extends HTMLElement {
                 </tbody>
               </table>
             </div>
+            <section class="calendar-intensive-week-section" data-role="week-intensive" hidden>
+              <h3 class="calendar-intensive-week-heading">Intensive</h3>
+              <div class="calendar-intensive-week-cards" data-role="week-intensive-cards"></div>
+            </section>
           </div>
 
           <div class="calendar-mobile-view calendar-day-view" style="display: none;" aria-label="Day agenda">
@@ -187,6 +194,8 @@ class CalendarPageComponent extends HTMLElement {
 
     this.calendarWrapper = this.querySelector(".calendar-wrapper");
     this.calendarGridScroll = this.querySelector("#calendar-grid-scroll");
+    this.weekIntensiveSection = this.querySelector("[data-role='week-intensive']");
+    this.weekIntensiveCards = this.querySelector("[data-role='week-intensive-cards']");
     this.mobileView = this.querySelector(".calendar-mobile-view");
     this.dayHeaderTitle = this.querySelector("[data-role='day-title']");
     this.mobileDayTabs = this.querySelector("[data-role='day-tabs']");
@@ -217,6 +226,7 @@ class CalendarPageComponent extends HTMLElement {
     this.boundCalendarPointerOver = this.handleCalendarPointerOver.bind(this);
     this.boundCalendarPointerMove = this.handleCalendarPointerMove.bind(this);
     this.boundCalendarPointerLeave = this.handleCalendarPointerLeave.bind(this);
+    this.boundCalendarWrapperClickHandler = this.handleCalendarWrapperClick.bind(this);
     this.boundMobileClickHandler = this.handleMobileViewClick.bind(this);
     this.boundMobileKeydownHandler = this.handleMobileViewKeydown.bind(this);
     this.boundListViewClickHandler = this.handleListViewClick.bind(this);
@@ -240,6 +250,7 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.addEventListener("mouseover", this.boundCalendarPointerOver);
     this.calendar.addEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.addEventListener("mouseleave", this.boundCalendarPointerLeave);
+    this.calendarWrapper?.addEventListener("click", this.boundCalendarWrapperClickHandler);
 
     this.mobileView?.addEventListener("click", this.boundMobileClickHandler);
     this.mobileView?.addEventListener("keydown", this.boundMobileKeydownHandler);
@@ -267,6 +278,7 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.removeEventListener("mouseover", this.boundCalendarPointerOver);
     this.calendar.removeEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.removeEventListener("mouseleave", this.boundCalendarPointerLeave);
+    this.calendarWrapper?.removeEventListener("click", this.boundCalendarWrapperClickHandler);
 
     this.mobileView?.removeEventListener("click", this.boundMobileClickHandler);
     this.mobileView?.removeEventListener("keydown", this.boundMobileKeydownHandler);
@@ -382,15 +394,26 @@ class CalendarPageComponent extends HTMLElement {
     const normalized = this.normalizeCalendarView(view);
     if (!normalized) return;
 
+    const previousEffectiveView = this.resolveEffectiveViewForViewport(this.currentView, this.isMobile);
+
     if (persist) {
       this.savedViewPreference = normalized;
       this.writeSavedViewPreference(normalized);
     }
 
     const effectiveView = this.resolveEffectiveViewForViewport(normalized, this.isMobile);
+    const isSwitchingIntoListView = effectiveView === VIEW_LIST && previousEffectiveView !== VIEW_LIST;
+    if (isSwitchingIntoListView) {
+      this.isListIntensiveExpanded = false;
+    }
+
     this.currentView = effectiveView;
     this.syncViewToggleButtons();
     this.applyViewVisibility();
+
+    if (isSwitchingIntoListView) {
+      this.applyListIntensiveExpansionState();
+    }
   }
 
   syncViewToggleButtons() {
@@ -577,6 +600,7 @@ class CalendarPageComponent extends HTMLElement {
     const typeEconomy = document.getElementById("calendar-type-economy");
     const typePolitics = document.getElementById("calendar-type-politics");
     const typeSpecial = document.getElementById("calendar-type-special");
+    const typeGraduate = document.getElementById("calendar-type-graduate");
     const typeUnderstandingKyoto = document.getElementById("calendar-type-understanding-kyoto");
     const typeAcademicSkills = document.getElementById("calendar-type-academic-skills");
     const typeSeminarHonor = document.getElementById("calendar-type-seminar-honor");
@@ -663,7 +687,7 @@ class CalendarPageComponent extends HTMLElement {
       this.applyActiveFiltersAndRender();
     };
 
-    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showEmpty].forEach((checkbox) => {
+    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeGraduate, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showEmpty].forEach((checkbox) => {
       if (!checkbox) return;
       checkbox.addEventListener("change", onFilterChange);
       this.toolbarCleanupFns.push(() => checkbox.removeEventListener("change", onFilterChange));
@@ -795,6 +819,7 @@ class CalendarPageComponent extends HTMLElement {
     const economy = document.getElementById("calendar-type-economy")?.checked;
     const politics = document.getElementById("calendar-type-politics")?.checked;
     const special = document.getElementById("calendar-type-special")?.checked;
+    const graduate = document.getElementById("calendar-type-graduate")?.checked;
     const understandingKyoto = document.getElementById("calendar-type-understanding-kyoto")?.checked;
     const academicSkills = document.getElementById("calendar-type-academic-skills")?.checked;
     const seminarHonor = document.getElementById("calendar-type-seminar-honor")?.checked;
@@ -805,6 +830,7 @@ class CalendarPageComponent extends HTMLElement {
     if (economy) selected.add("Economy");
     if (politics) selected.add("Politics");
     if (special) selected.add("Special");
+    if (graduate) selected.add("Graduate");
     if (understandingKyoto) selected.add("UnderstandingJapanKyoto");
     if (academicSkills) selected.add("AcademicSkills");
     if (seminarHonor) selected.add("SeminarHonorThesis");
@@ -825,6 +851,7 @@ class CalendarPageComponent extends HTMLElement {
       "calendar-type-economy",
       "calendar-type-politics",
       "calendar-type-special",
+      "calendar-type-graduate",
       "calendar-type-understanding-kyoto",
       "calendar-type-academic-skills",
       "calendar-type-seminar-honor"
@@ -877,6 +904,10 @@ class CalendarPageComponent extends HTMLElement {
         <input type="checkbox" id="calendar-type-special" class="filter-checkbox">
         <label for="calendar-type-special">Special Lecture Series</label>
       </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-graduate" class="filter-checkbox">
+        <label for="calendar-type-graduate">Graduate Classes</label>
+      </div>
     `;
 
     const syncChecked = (id, key) => {
@@ -888,6 +919,7 @@ class CalendarPageComponent extends HTMLElement {
     syncChecked("calendar-type-economy", "Economy");
     syncChecked("calendar-type-politics", "Politics");
     syncChecked("calendar-type-special", "Special");
+    syncChecked("calendar-type-graduate", "Graduate");
     syncChecked("calendar-type-understanding-kyoto", "UnderstandingJapanKyoto");
     syncChecked("calendar-type-academic-skills", "AcademicSkills");
     syncChecked("calendar-type-seminar-honor", "SeminarHonorThesis");
@@ -900,6 +932,7 @@ class CalendarPageComponent extends HTMLElement {
     if (document.getElementById("calendar-type-economy")?.checked) selected.add("Economy");
     if (document.getElementById("calendar-type-politics")?.checked) selected.add("Politics");
     if (document.getElementById("calendar-type-special")?.checked) selected.add("Special");
+    if (document.getElementById("calendar-type-graduate")?.checked) selected.add("Graduate");
     if (document.getElementById("calendar-type-understanding-kyoto")?.checked) selected.add("UnderstandingJapanKyoto");
     if (document.getElementById("calendar-type-academic-skills")?.checked) selected.add("AcademicSkills");
     if (document.getElementById("calendar-type-seminar-honor")?.checked) selected.add("SeminarHonorThesis");
@@ -1356,6 +1389,11 @@ class CalendarPageComponent extends HTMLElement {
     this.applyListDayExpansionState({ animate: true, changedDayCode: dayCode });
   }
 
+  toggleListIntensive() {
+    this.isListIntensiveExpanded = !this.isListIntensiveExpanded;
+    this.applyListIntensiveExpansionState({ animate: true });
+  }
+
   applyListDayExpansionState({ animate = false, changedDayCode = null } = {}) {
     if (!this.listContent) return;
 
@@ -1371,6 +1409,20 @@ class CalendarPageComponent extends HTMLElement {
         toggleButton.setAttribute("aria-expanded", isExpanded ? "true" : "false");
       }
     });
+  }
+
+  applyListIntensiveExpansionState({ animate = false } = {}) {
+    if (!this.listContent) return;
+
+    const group = this.listContent.querySelector(".calendar-list-intensive-group");
+    if (!group) return;
+
+    this.setListDayGroupExpanded(group, this.isListIntensiveExpanded, { animate });
+
+    const toggleButton = group.querySelector(".calendar-list-day-toggle");
+    if (toggleButton) {
+      toggleButton.setAttribute("aria-expanded", this.isListIntensiveExpanded ? "true" : "false");
+    }
   }
 
   clearListDayTransition(itemsContainer) {
@@ -1886,6 +1938,12 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
+    const intensiveToggleButton = event.target.closest("[data-action='list-toggle-intensive']");
+    if (intensiveToggleButton) {
+      this.toggleListIntensive();
+      return;
+    }
+
     const row = event.target.closest(".calendar-list-item");
     if (!row) return;
 
@@ -1893,6 +1951,17 @@ class CalendarPageComponent extends HTMLElement {
     if (!courseKey) return;
 
     const course = this.listCourseLookup.get(courseKey);
+    if (course) openCourseInfoMenu(course);
+  }
+
+  handleCalendarWrapperClick(event) {
+    const intensiveCard = event.target.closest(".calendar-intensive-week-card");
+    if (!intensiveCard || !this.calendarWrapper?.contains(intensiveCard)) return;
+
+    const courseKey = intensiveCard.dataset.courseKey;
+    if (!courseKey) return;
+
+    const course = this.weekIntensiveCourseLookup.get(courseKey);
     if (course) openCourseInfoMenu(course);
   }
 
@@ -2106,6 +2175,8 @@ class CalendarPageComponent extends HTMLElement {
     this.filterState.typeFilters.forEach((typeFilter) => {
       if (typeFilter === "UnderstandingJapanKyoto" || typeFilter === "AcademicSkills") {
         mappedGroups.add("Foundation");
+      } else if (typeFilter === "Graduate") {
+        mappedGroups.add("Graduate");
       } else if (typeFilter === "Special" || typeFilter === "SeminarHonorThesis") {
         mappedGroups.add("Elective");
       } else {
@@ -2458,10 +2529,13 @@ class CalendarPageComponent extends HTMLElement {
         let itemDay = String(item?.day || "").trim();
         let itemPeriod = Number(item?.period);
         if ((!itemDay || !Number.isFinite(itemPeriod)) && item?.time_slot) {
-          const parsed = this.parseCourseSchedule({ time_slot: String(item.time_slot) });
-          if (parsed) {
-            itemDay = parsed.dayEN;
-            itemPeriod = parsed.period;
+          const parsedSlots = this.parseCourseScheduleSlots({ time_slot: String(item.time_slot) });
+          const matchForSlot = parsedSlots.find(
+            (parsedSlot) => parsedSlot.dayEN === normalizedDay && parsedSlot.period === normalizedPeriod
+          );
+          if (matchForSlot) {
+            itemDay = matchForSlot.dayEN;
+            itemPeriod = matchForSlot.period;
           }
         }
         if (itemDay !== normalizedDay) return false;
@@ -2828,7 +2902,67 @@ class CalendarPageComponent extends HTMLElement {
       fragment.appendChild(row);
     });
 
+    this.appendDayIntensiveSection(fragment, { interactive });
     return fragment;
+  }
+
+  appendDayIntensiveSection(fragment, { interactive = true } = {}) {
+    if (!(fragment instanceof DocumentFragment)) return;
+
+    const intensiveCourses = Array.isArray(this.visibleIntensiveCourses) ? this.visibleIntensiveCourses : [];
+    if (intensiveCourses.length === 0) return;
+
+    const section = document.createElement("section");
+    section.className = "calendar-day-intensive-section";
+
+    const heading = document.createElement("h3");
+    heading.className = "calendar-day-intensive-heading";
+    heading.textContent = "Intensive";
+    section.appendChild(heading);
+
+    const list = document.createElement("div");
+    list.className = "calendar-day-intensive-list";
+
+    intensiveCourses.forEach((course, index) => {
+      const courseKey = `intensive-day-${this.normalizeCourseCodeKey(course?.course_code || course?.code) || index}`;
+      if (interactive) {
+        this.mobileCourseLookup.set(courseKey, course);
+      }
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "calendar-day-intensive-card";
+      card.dataset.action = "day-course-view";
+      card.dataset.courseKey = courseKey;
+      card.style.backgroundColor = this.getCalendarCourseColor(course?.type);
+      if (!interactive) {
+        card.setAttribute("tabindex", "-1");
+      }
+
+      const title = document.createElement("p");
+      title.className = "calendar-day-preview-title";
+      title.textContent = this.getDetailedTitle(course);
+
+      const professor = document.createElement("p");
+      professor.className = "calendar-day-preview-professor";
+      professor.textContent = formatProfessorDisplayName(course?.professor);
+
+      const meta = document.createElement("p");
+      meta.className = "calendar-day-preview-meta";
+      meta.textContent = "Intensive";
+
+      const badges = this.createIntensiveCourseBadges(course);
+      badges.classList.add("calendar-day-intensive-badges");
+
+      card.appendChild(title);
+      card.appendChild(meta);
+      card.appendChild(professor);
+      card.appendChild(badges);
+      list.appendChild(card);
+    });
+
+    section.appendChild(list);
+    fragment.appendChild(section);
   }
 
   renderMobileSchedule({ animate = false, direction = null } = {}) {
@@ -2852,6 +2986,104 @@ class CalendarPageComponent extends HTMLElement {
     if (animate) {
       this.applyDayAgendaSwipeAnimation(direction);
     }
+  }
+
+  createListCourseRow(course, courseKey, metaText) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "calendar-list-item";
+    row.dataset.courseKey = courseKey;
+    const courseColor = this.getCalendarCourseColor(course?.type);
+    row.style.setProperty("--calendar-list-item-bg", courseColor);
+
+    const title = document.createElement("p");
+    title.className = "calendar-list-item-title";
+    title.textContent = this.getDetailedTitle(course);
+
+    const meta = document.createElement("p");
+    meta.className = "calendar-list-item-meta";
+    meta.textContent = metaText;
+
+    const professor = document.createElement("p");
+    professor.className = "calendar-list-item-professor";
+    professor.textContent = formatProfessorDisplayName(course?.professor);
+
+    const badges = document.createElement("div");
+    badges.className = "calendar-list-item-badges";
+
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "calendar-list-type-badge";
+    typeBadge.textContent = this.getLegendLabelForCourse(course?.type) || String(course?.type || "Course");
+
+    const creditsLabel = this.getCourseCreditsLabel(course);
+    const creditsBadge = document.createElement("span");
+    creditsBadge.className = "calendar-list-credits-badge";
+    creditsBadge.textContent = creditsLabel || "Credits TBA";
+
+    badges.appendChild(typeBadge);
+    badges.appendChild(creditsBadge);
+
+    const dueAssignmentsCount = this.getCourseDueAssignmentsCount(course);
+    if (dueAssignmentsCount > 0) {
+      const dueBadge = document.createElement("span");
+      dueBadge.className = "calendar-list-due-badge";
+      dueBadge.textContent = this.formatDueAssignmentsLabel(dueAssignmentsCount, { compact: true });
+      badges.appendChild(dueBadge);
+    }
+
+    row.appendChild(title);
+    row.appendChild(meta);
+    row.appendChild(professor);
+    row.appendChild(badges);
+    return row;
+  }
+
+  appendListIntensiveSection(fragment) {
+    const intensiveCourses = Array.isArray(this.visibleIntensiveCourses) ? this.visibleIntensiveCourses : [];
+    if (intensiveCourses.length === 0) return false;
+
+    const section = document.createElement("section");
+    section.className = "calendar-list-day-group calendar-list-intensive-group";
+
+    const heading = document.createElement("h3");
+    heading.className = "calendar-list-day-heading";
+
+    const toggleButton = document.createElement("button");
+    toggleButton.type = "button";
+    toggleButton.className = "calendar-list-day-toggle";
+    toggleButton.dataset.action = "list-toggle-intensive";
+    toggleButton.setAttribute("aria-expanded", "false");
+    toggleButton.setAttribute("aria-label", "Toggle Intensive");
+
+    const headingLabel = document.createElement("span");
+    headingLabel.className = "calendar-list-day-toggle-label";
+    headingLabel.textContent = "Intensive";
+
+    const headingChevron = document.createElement("span");
+    headingChevron.className = "calendar-list-day-toggle-chevron";
+    headingChevron.setAttribute("aria-hidden", "true");
+
+    toggleButton.appendChild(headingLabel);
+    toggleButton.appendChild(headingChevron);
+    heading.appendChild(toggleButton);
+    section.appendChild(heading);
+
+    const panel = document.createElement("div");
+    panel.className = "calendar-list-day-panel calendar-list-intensive-panel";
+    const list = document.createElement("div");
+    list.className = "calendar-list-day-items";
+    panel.appendChild(list);
+
+    intensiveCourses.forEach((course, index) => {
+      const courseKey = `intensive-list-${this.normalizeCourseCodeKey(course?.course_code || course?.code) || index}`;
+      this.listCourseLookup.set(courseKey, course);
+      const row = this.createListCourseRow(course, courseKey, "Intensive");
+      list.appendChild(row);
+    });
+
+    section.appendChild(panel);
+    fragment.appendChild(section);
+    return true;
   }
 
   renderListSchedule() {
@@ -2909,53 +3141,8 @@ class CalendarPageComponent extends HTMLElement {
           hasVisibleCourses = true;
           const courseKey = `${dayCode}-${periodDef.number}-${course.course_code || "course"}-${courseIndex}-list`;
           this.listCourseLookup.set(courseKey, course);
-
-          const row = document.createElement("button");
-          row.type = "button";
-          row.className = "calendar-list-item";
-          row.dataset.courseKey = courseKey;
-          const courseColor = this.getCalendarCourseColor(course.type);
-          row.style.setProperty("--calendar-list-item-bg", courseColor);
-
-          const title = document.createElement("p");
-          title.className = "calendar-list-item-title";
-          title.textContent = this.getDetailedTitle(course);
-
-          const meta = document.createElement("p");
-          meta.className = "calendar-list-item-meta";
-          meta.textContent = `${this.dayLongNames[dayCode]} • Period ${periodDef.number} • ${periodDef.timeRange}`;
-
-          const professor = document.createElement("p");
-          professor.className = "calendar-list-item-professor";
-          professor.textContent = formatProfessorDisplayName(course.professor);
-
-          const badges = document.createElement("div");
-          badges.className = "calendar-list-item-badges";
-
-          const typeBadge = document.createElement("span");
-          typeBadge.className = "calendar-list-type-badge";
-          typeBadge.textContent = this.getLegendLabelForCourse(course.type) || String(course.type || "Course");
-
-          const creditsLabel = this.getCourseCreditsLabel(course);
-          const creditsBadge = document.createElement("span");
-          creditsBadge.className = "calendar-list-credits-badge";
-          creditsBadge.textContent = creditsLabel || "Credits TBA";
-
-          badges.appendChild(typeBadge);
-          badges.appendChild(creditsBadge);
-
-          const dueAssignmentsCount = this.getCourseDueAssignmentsCount(course);
-          if (dueAssignmentsCount > 0) {
-            const dueBadge = document.createElement("span");
-            dueBadge.className = "calendar-list-due-badge";
-            dueBadge.textContent = this.formatDueAssignmentsLabel(dueAssignmentsCount, { compact: true });
-            badges.appendChild(dueBadge);
-          }
-
-          row.appendChild(title);
-          row.appendChild(meta);
-          row.appendChild(professor);
-          row.appendChild(badges);
+          const metaText = `${this.dayLongNames[dayCode]} • Period ${periodDef.number} • ${periodDef.timeRange}`;
+          const row = this.createListCourseRow(course, courseKey, metaText);
           list.appendChild(row);
         });
       });
@@ -2966,6 +3153,11 @@ class CalendarPageComponent extends HTMLElement {
         availableDayCodes.push(dayCode);
       }
     });
+
+    const hasIntensiveCourses = this.appendListIntensiveSection(fragment);
+    if (hasIntensiveCourses) {
+      hasVisibleCourses = true;
+    }
 
     if (!hasRegisteredCourses) {
       const emptyState = document.createElement("div");
@@ -2986,6 +3178,7 @@ class CalendarPageComponent extends HTMLElement {
     this.listContent.appendChild(fragment);
     this.ensureExpandedListDay(availableDayCodes);
     this.applyListDayExpansionState();
+    this.applyListIntensiveExpansionState();
   }
 
   getCompactTitle(course) {
@@ -3194,37 +3387,132 @@ class CalendarPageComponent extends HTMLElement {
     return rawTerm;
   }
 
-  parseCourseSchedule(course) {
-    if (!course?.time_slot) return null;
+  mapStartTimeToPeriod(startHour, startMinute) {
+    const numericStart = (Number(startHour) * 100) + Number(startMinute);
+    if (numericStart >= 900 && numericStart < 1030) return 1;
+    if (numericStart >= 1045 && numericStart < 1215) return 2;
+    if (numericStart >= 1310 && numericStart < 1440) return 3;
+    if (numericStart >= 1455 && numericStart < 1625) return 4;
+    if (numericStart >= 1640 && numericStart < 1810) return 5;
+    return null;
+  }
 
-    let dayEN = null;
-    let period = null;
+  normalizeDayToken(dayToken) {
+    const raw = String(dayToken || "").trim();
+    if (!raw) return null;
 
-    const jpMatch = course.time_slot.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
+    const jpMatch = raw.match(/[月火水木金土日]/);
     if (jpMatch) {
       const dayMap = { "月": "Mon", "火": "Tue", "水": "Wed", "木": "Thu", "金": "Fri", "土": "Sat", "日": "Sun" };
-      dayEN = dayMap[jpMatch[1]];
-      period = parseInt(jpMatch[2], 10);
-    } else {
-      const enMatch = course.time_slot.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
-      if (enMatch) {
-        dayEN = enMatch[1];
-        const startHour = parseInt(enMatch[2], 10);
-        const startMinute = parseInt(enMatch[3], 10);
-        const numericStart = startHour * 100 + startMinute;
+      return dayMap[jpMatch[0]] || null;
+    }
 
-        if (numericStart >= 900 && numericStart < 1030) period = 1;
-        else if (numericStart >= 1045 && numericStart < 1215) period = 2;
-        else if (numericStart >= 1310 && numericStart < 1440) period = 3;
-        else if (numericStart >= 1455 && numericStart < 1625) period = 4;
-        else if (numericStart >= 1640 && numericStart < 1810) period = 5;
+    const lowered = raw.replace(/\./g, "").toLowerCase();
+    if (lowered.startsWith("mon")) return "Mon";
+    if (lowered.startsWith("tue")) return "Tue";
+    if (lowered.startsWith("wed")) return "Wed";
+    if (lowered.startsWith("thu")) return "Thu";
+    if (lowered.startsWith("fri")) return "Fri";
+    if (lowered.startsWith("sat")) return "Sat";
+    if (lowered.startsWith("sun")) return "Sun";
+    return null;
+  }
+
+  parseCourseScheduleSlots(course) {
+    const raw = String(course?.time_slot || "").trim();
+    const slots = [];
+    const seen = new Set();
+    const addSlot = (dayToken, periodValue) => {
+      const dayEN = this.normalizeDayToken(dayToken);
+      const period = Number(periodValue);
+      if (!dayEN || !this.dayIdByEN[dayEN]) return;
+      if (!Number.isFinite(period) || period < 1 || period > 5) return;
+      const key = `${dayEN}-${period}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      slots.push({ dayEN, period, key });
+    };
+
+    if (raw) {
+      const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+      let jpMatch = jpRegex.exec(raw);
+      while (jpMatch) {
+        addSlot(jpMatch[1], Number(jpMatch[2]));
+        jpMatch = jpRegex.exec(raw);
+      }
+
+      const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})/gi;
+      let enMatch = enRegex.exec(raw);
+      while (enMatch) {
+        const period = this.mapStartTimeToPeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));
+        addSlot(enMatch[1], period);
+        enMatch = enRegex.exec(raw);
       }
     }
 
-    if (!dayEN || !this.dayIdByEN[dayEN]) return null;
-    if (!Number.isFinite(period) || period < 1 || period > 5) return null;
+    if (slots.length === 0) {
+      addSlot(course?.day, course?.period);
+    }
 
-    return { dayEN, period };
+    return slots;
+  }
+
+  parseCourseSchedule(course) {
+    const slots = this.parseCourseScheduleSlots(course);
+    return slots.length > 0 ? slots[0] : null;
+  }
+
+  isIntensiveCourse(course) {
+    const timeSlot = String(course?.time_slot || "").trim();
+    if (!timeSlot) return false;
+    return /(集中講義|集中|intensive)/i.test(timeSlot);
+  }
+
+  getUniqueSortedIntensiveCourses(courses = []) {
+    if (!Array.isArray(courses) || courses.length === 0) return [];
+
+    const uniqueByCode = new Map();
+    const noCodeCourses = [];
+    courses.forEach((course) => {
+      const code = this.normalizeCourseCodeKey(course?.course_code || course?.code);
+      if (code) {
+        if (!uniqueByCode.has(code)) {
+          uniqueByCode.set(code, course);
+        }
+        return;
+      }
+      noCodeCourses.push(course);
+    });
+
+    const merged = [...uniqueByCode.values(), ...noCodeCourses];
+    merged.sort((left, right) => this.getDetailedTitle(left).localeCompare(this.getDetailedTitle(right)));
+    return merged;
+  }
+
+  createIntensiveCourseBadges(course) {
+    const badges = document.createElement("div");
+    badges.className = "calendar-course-badge-row";
+
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "calendar-course-badge calendar-intensive-badge";
+    typeBadge.textContent = this.getLegendLabelForCourse(course?.type) || String(course?.type || "Course");
+    badges.appendChild(typeBadge);
+
+    const creditsLabel = this.getCourseCreditsLabel(course);
+    const creditsBadge = document.createElement("span");
+    creditsBadge.className = "calendar-course-badge calendar-intensive-badge";
+    creditsBadge.textContent = creditsLabel || "Credits TBA";
+    badges.appendChild(creditsBadge);
+
+    const dueAssignmentsCount = this.getCourseDueAssignmentsCount(course);
+    if (dueAssignmentsCount > 0) {
+      const dueBadge = document.createElement("span");
+      dueBadge.className = "calendar-course-badge calendar-course-due-badge";
+      dueBadge.textContent = this.formatDueAssignmentsLabel(dueAssignmentsCount, { compact: true });
+      badges.appendChild(dueBadge);
+    }
+
+    return badges;
   }
 
   getTypeGroupForCourse(typeLabel) {
@@ -3237,6 +3525,7 @@ class CalendarPageComponent extends HTMLElement {
     if (raw === "Understanding Japan and Kyoto") return "UnderstandingJapanKyoto";
     if (raw === "Academic and Research Skills") return "AcademicSkills";
     if (raw === "Other Elective Courses" || raw === "Special Lecture Series") return "Special";
+    if (raw === "Graduate courses") return "Graduate";
 
     if (
       raw === "Introductory Seminars"
@@ -3259,7 +3548,8 @@ class CalendarPageComponent extends HTMLElement {
       "Special Lecture Series": "#BDA7F2",
       "Other Elective Courses": "#BDA7F2",
       "Understanding Japan and Kyoto": "#AED3F2",
-      "Academic and Research Skills": "#A0BEE8"
+      "Academic and Research Skills": "#A0BEE8",
+      "Graduate courses": "#E8CFA2"
     };
 
     return calendarTypeColors[raw] || getCourseColorByType(typeLabel);
@@ -3275,6 +3565,7 @@ class CalendarPageComponent extends HTMLElement {
     if (raw === "Understanding Japan and Kyoto") return "Understanding Japan and Kyoto";
     if (raw === "Academic and Research Skills") return "Academic Skills";
     if (raw === "Other Elective Courses" || raw === "Special Lecture Series") return "Special Lecture Series";
+    if (raw === "Graduate courses") return "Graduate";
     if (
       raw === "Introductory Seminars"
       || raw === "Intermediate Seminars"
@@ -3302,17 +3593,25 @@ class CalendarPageComponent extends HTMLElement {
 
     visibleCourses = visibleCourses.filter((course) => this.passesTypeFilters(course));
 
+    this.visibleIntensiveCourses = this.getUniqueSortedIntensiveCourses(
+      visibleCourses.filter((course) => this.isIntensiveCourse(course))
+    );
+    const slotBasedCourses = visibleCourses.filter((course) => !this.isIntensiveCourse(course));
+
     this.mobileCoursesBySlot.clear();
     this.desktopCourseLookup.clear();
     this.listCourseLookup.clear();
+    this.weekIntensiveCourseLookup.clear();
 
-    visibleCourses.forEach((course) => {
-      const parsed = this.parseCourseSchedule(course);
-      if (!parsed) return;
-      const key = this.getSlotKey(parsed.dayEN, parsed.period);
-      const slotCourses = this.mobileCoursesBySlot.get(key) || [];
-      slotCourses.push(course);
-      this.mobileCoursesBySlot.set(key, slotCourses);
+    slotBasedCourses.forEach((course) => {
+      const parsedSlots = this.parseCourseScheduleSlots(course);
+      if (parsedSlots.length === 0) return;
+      parsedSlots.forEach((parsed) => {
+        const key = this.getSlotKey(parsed.dayEN, parsed.period);
+        const slotCourses = this.mobileCoursesBySlot.get(key) || [];
+        slotCourses.push(course);
+        this.mobileCoursesBySlot.set(key, slotCourses);
+      });
     });
 
     this.renderDesktopSchedule();
@@ -3395,11 +3694,13 @@ class CalendarPageComponent extends HTMLElement {
 
   showEmptyCalendar() {
     this.allRegisteredCourses = [];
+    this.visibleIntensiveCourses = [];
     this.courseDueAssignmentCounts.clear();
     this.mobileCoursesBySlot.clear();
     this.mobileCourseLookup.clear();
     this.desktopCourseLookup.clear();
     this.listCourseLookup.clear();
+    this.weekIntensiveCourseLookup.clear();
     this.renderDesktopSchedule();
     this.renderMobileSchedule();
     this.renderListSchedule();
@@ -3429,6 +3730,7 @@ class CalendarPageComponent extends HTMLElement {
 
   renderDesktopSchedule() {
     this.clearDesktopSlots();
+    this.weekIntensiveCourseLookup.clear();
 
     this.dayOrder.forEach((dayCode) => {
       this.periodDefinitions.forEach((periodDef) => {
@@ -3516,6 +3818,65 @@ class CalendarPageComponent extends HTMLElement {
         }
       });
     });
+
+    this.renderWeekIntensiveSection();
+  }
+
+  renderWeekIntensiveSection() {
+    if (!this.weekIntensiveSection || !this.weekIntensiveCards) return;
+
+    this.weekIntensiveCards.innerHTML = "";
+    this.weekIntensiveCourseLookup.clear();
+
+    const intensiveCourses = Array.isArray(this.visibleIntensiveCourses) ? this.visibleIntensiveCourses : [];
+    if (intensiveCourses.length === 0) {
+      this.weekIntensiveSection.hidden = true;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    intensiveCourses.forEach((course, index) => {
+      const courseKey = `intensive-week-${this.normalizeCourseCodeKey(course?.course_code || course?.code) || index}`;
+      this.weekIntensiveCourseLookup.set(courseKey, course);
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "calendar-intensive-week-card";
+      card.dataset.courseKey = courseKey;
+      card.style.backgroundColor = this.getCalendarCourseColor(course?.type);
+
+      const title = document.createElement("p");
+      title.className = "calendar-course-title";
+      title.textContent = this.getDetailedTitle(course);
+
+      const timeText = document.createElement("p");
+      timeText.className = "calendar-course-time";
+      timeText.textContent = "Intensive";
+
+      const professorText = document.createElement("p");
+      professorText.className = "calendar-course-professor";
+      professorText.textContent = formatProfessorDisplayName(course?.professor);
+
+      const badges = document.createElement("div");
+      badges.className = "calendar-course-badge-row";
+
+      const dueAssignmentsCount = this.getCourseDueAssignmentsCount(course);
+      if (dueAssignmentsCount > 0) {
+        const dueBadge = document.createElement("span");
+        dueBadge.className = "calendar-course-badge calendar-course-due-badge";
+        dueBadge.textContent = this.formatDueAssignmentsLabel(dueAssignmentsCount, { compact: true });
+        badges.appendChild(dueBadge);
+      }
+
+      card.appendChild(title);
+      card.appendChild(timeText);
+      card.appendChild(professorText);
+      card.appendChild(badges);
+      fragment.appendChild(card);
+    });
+
+    this.weekIntensiveCards.appendChild(fragment);
+    this.weekIntensiveSection.hidden = false;
   }
 
   highlightDay(dayShort) {
@@ -3654,8 +4015,10 @@ class CalendarPageComponent extends HTMLElement {
     const tooltip = this.ensureTooltipElement();
     if (!tooltip) return;
 
-    const schedule = this.parseCourseSchedule(course);
-    const slotLabel = schedule ? this.getSlotSubtitle(schedule.dayEN, schedule.period) : String(course.time_slot || "");
+    const schedules = this.parseCourseScheduleSlots(course);
+    const slotLabel = schedules.length > 0
+      ? schedules.map((schedule) => this.getSlotSubtitle(schedule.dayEN, schedule.period)).join(" • ")
+      : String(course.time_slot || "");
     const credits = course.credits ? `${course.credits} credits` : "Credits TBA";
     const professorName = formatProfessorDisplayName(course.professor);
     const professor = `Professor ${professorName}`;

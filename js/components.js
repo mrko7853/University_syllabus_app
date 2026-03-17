@@ -4,6 +4,7 @@ import { withBase } from "./path-utils.js";
 import {
   applyPreferredTermToGlobals,
   applyStoredPreferences,
+  inferCurrentSemesterValue,
   getPreferredTermValue,
   normalizeTermValue,
   resolvePreferredTermForAvailableSemesters,
@@ -12,6 +13,7 @@ import {
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
 import { readSavedCourses, syncSavedCoursesForUser } from "./saved-courses.js";
 import guestScreen2 from "../assets/screen2.png";
+import guestScreenCtaMobile from "../assets/screen-cta-mobile.png";
 function bootstrapStoredPreferences() {
   const applyBootPreferences = () => {
     applyStoredPreferences();
@@ -175,10 +177,15 @@ function formatSemesterValue(term, year) {
   return normalizeTermValue(`${normalizeTermName(term)}-${year}`);
 }
 function getCurrentHomeSemesterContext() {
-  const yearValue = window.getCurrentYear ? window.getCurrentYear() : parseInt(document.getElementById('year-select')?.value || new Date().getFullYear(), 10);
-  const termValue = window.getCurrentTerm ? window.getCurrentTerm() : document.getElementById('term-select')?.value || 'Fall';
+  const inferred = inferCurrentSemesterValue();
+  const yearValue = window.getCurrentYear
+    ? window.getCurrentYear()
+    : parseInt(document.getElementById('year-select')?.value || inferred.year, 10);
+  const termValue = window.getCurrentTerm
+    ? window.getCurrentTerm()
+    : document.getElementById('term-select')?.value || inferred.term;
   return {
-    year: Number.isFinite(Number(yearValue)) ? Number(yearValue) : new Date().getFullYear(),
+    year: Number.isFinite(Number(yearValue)) ? Number(yearValue) : inferred.year,
     term: normalizeTermName(termValue)
   };
 }
@@ -210,28 +217,86 @@ function formatPeriodWindow(period) {
   const meta = getPeriodMeta(period);
   return meta ? `${meta.start} - ${meta.end}` : '';
 }
-function parseCourseTimeSlot(timeSlot) {
-  if (!timeSlot) return null;
-  let match = String(timeSlot).match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
-  if (match) {
-    const dayJP = match[1];
-    const dayMap = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri' };
-    const period = parseInt(match[2], 10);
-    const day = dayMap[dayJP];
-    if (!day || !HOME_PERIOD_BY_NUMBER[period]) return null;
-    return { day, period, timeLabel: formatPeriodWindow(period) };
-  }
-  match = String(timeSlot).match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
-  if (match) {
-    const day = match[1];
-    const startHour = parseInt(match[2], 10);
-    const startMin = parseInt(match[3], 10);
-    const startLabel = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`;
-    const period = HOME_PERIODS.find((slot) => slot.filterValue === startLabel)?.period;
-    if (!period) return null;
-    return { day, period, timeLabel: `${match[2]}:${match[3]} - ${match[4]}:${match[5]}` };
-  }
+function mapStartTimeToHomePeriod(startHour, startMinute) {
+  const numericStart = (Number(startHour) * 100) + Number(startMinute);
+  if (numericStart >= 900 && numericStart < 1030) return 1;
+  if (numericStart >= 1045 && numericStart < 1215) return 2;
+  if (numericStart >= 1310 && numericStart < 1440) return 3;
+  if (numericStart >= 1455 && numericStart < 1625) return 4;
+  if (numericStart >= 1640 && numericStart < 1810) return 5;
   return null;
+}
+function normalizeCourseDayToken(dayToken) {
+  const raw = String(dayToken || '').trim();
+  if (!raw) return null;
+  const jpMatch = raw.match(/[月火水木金土日]/);
+  if (jpMatch) {
+    const dayMap = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri', 土: 'Sat', 日: 'Sun' };
+    return dayMap[jpMatch[0]] || null;
+  }
+  const lowered = raw.replace(/\./g, '').toLowerCase();
+  if (lowered.startsWith('mon')) return 'Mon';
+  if (lowered.startsWith('tue')) return 'Tue';
+  if (lowered.startsWith('wed')) return 'Wed';
+  if (lowered.startsWith('thu')) return 'Thu';
+  if (lowered.startsWith('fri')) return 'Fri';
+  if (lowered.startsWith('sat')) return 'Sat';
+  if (lowered.startsWith('sun')) return 'Sun';
+  return null;
+}
+function parseCourseMeetingSlots(timeSlot, fallbackDay = null, fallbackPeriod = null) {
+  const raw = String(timeSlot || '').trim();
+  const slots = [];
+  const seen = new Set();
+  const addSlot = (dayToken, periodValue, explicitTimeLabel = '') => {
+    const day = normalizeCourseDayToken(dayToken);
+    const period = Number(periodValue);
+    if (!day || !Number.isFinite(period) || period < 1 || period > 5) return;
+    const key = `${day}-${period}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    slots.push({
+      day,
+      period,
+      key,
+      timeLabel: explicitTimeLabel || formatPeriodWindow(period)
+    });
+  };
+  if (raw) {
+    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+    let jpMatch = jpRegex.exec(raw);
+    while (jpMatch) {
+      addSlot(jpMatch[1], Number(jpMatch[2]));
+      jpMatch = jpRegex.exec(raw);
+    }
+    const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})(?:\s*-\s*(\d{1,2}):(\d{2}))?/gi;
+    let enMatch = enRegex.exec(raw);
+    while (enMatch) {
+      const period = mapStartTimeToHomePeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));
+      const hasEnd = enMatch[4] !== undefined && enMatch[5] !== undefined;
+      const timeLabel = hasEnd
+        ? `${String(enMatch[2]).padStart(2, '0')}:${String(enMatch[3]).padStart(2, '0')} - ${String(enMatch[4]).padStart(2, '0')}:${String(enMatch[5]).padStart(2, '0')}`
+        : '';
+      addSlot(enMatch[1], period, timeLabel);
+      enMatch = enRegex.exec(raw);
+    }
+  }
+  if (
+    slots.length === 0
+    && fallbackDay !== null
+    && fallbackDay !== undefined
+    && fallbackPeriod !== null
+    && fallbackPeriod !== undefined
+  ) {
+    addSlot(fallbackDay, fallbackPeriod);
+  }
+  return slots;
+}
+function parseCourseTimeSlot(timeSlot, fallbackDay = null, fallbackPeriod = null) {
+  const slots = parseCourseMeetingSlots(timeSlot, fallbackDay, fallbackPeriod);
+  if (slots.length === 0) return null;
+  const first = slots[0];
+  return { day: first.day, period: first.period, timeLabel: first.timeLabel };
 }
 function formatDueDateLabel(dateValue) {
   const date = new Date(dateValue);
@@ -373,12 +438,14 @@ async function fetchHomePlannerData() {
   }
   const slotMap = new Map();
   userCourses.forEach((course) => {
-    const slot = parseCourseTimeSlot(course?.time_slot);
-    if (!slot || !HOME_DAY_ORDER.includes(slot.day) || !HOME_PERIOD_BY_NUMBER[slot.period]) return;
-    const key = `${slot.day}-${slot.period}`;
-    const existing = slotMap.get(key) || [];
-    existing.push(course);
-    slotMap.set(key, existing);
+    const slots = parseCourseMeetingSlots(course?.time_slot, course?.day, course?.period);
+    slots.forEach((slot) => {
+      if (!HOME_DAY_ORDER.includes(slot.day) || !HOME_PERIOD_BY_NUMBER[slot.period]) return;
+      const key = `${slot.day}-${slot.period}`;
+      const existing = slotMap.get(key) || [];
+      existing.push(course);
+      slotMap.set(key, existing);
+    });
   });
   const emptySlots = [];
   HOME_DAY_ORDER.forEach((day) => {
@@ -1190,10 +1257,13 @@ function initializeHomeMobileStickyHeaderBehavior() {
   let ticking = false;
   const applyScrollState = () => {
     ticking = false;
+    const guestHeaderOnly = document.body.classList.contains('guest-dashboard');
     const currentScrollY = getCurrentScrollY();
     if (currentScrollY <= MOBILE_HEADER_TOP_REVEAL_THRESHOLD) {
       header.classList.remove('app-header--hidden');
-      homeToolbar.classList.remove('home-toolbar--hidden');
+      if (!guestHeaderOnly) {
+        homeToolbar.classList.remove('home-toolbar--hidden');
+      }
       lastScrollY = currentScrollY;
       return;
     }
@@ -1201,10 +1271,14 @@ function initializeHomeMobileStickyHeaderBehavior() {
     if (Math.abs(deltaY) <= MOBILE_HEADER_SCROLL_THRESHOLD) return;
     if (deltaY > 0) {
       header.classList.add('app-header--hidden');
-      homeToolbar.classList.add('home-toolbar--hidden');
+      if (!guestHeaderOnly) {
+        homeToolbar.classList.add('home-toolbar--hidden');
+      }
     } else {
       header.classList.remove('app-header--hidden');
-      homeToolbar.classList.remove('home-toolbar--hidden');
+      if (!guestHeaderOnly) {
+        homeToolbar.classList.remove('home-toolbar--hidden');
+      }
     }
     lastScrollY = currentScrollY;
   };
@@ -2039,16 +2113,16 @@ class TermBox extends HTMLElement {
     };
     const scheduledClasses = [];
     courses.forEach(course => {
-      const parsed = this.parseTimeSlot(course.time_slot);
-      if (!parsed) return;
-      const { day, startTime, endTime } = parsed;
-      const dayNum = dayMap[day];
-      if (!dayNum) return;
-      scheduledClasses.push({
-        course,
-        dayNum,
-        startTime,
-        endTime
+      const parsedSlots = this.parseTimeSlots(course.time_slot, course.day, course.period);
+      parsedSlots.forEach(({ day, startTime, endTime }) => {
+        const dayNum = dayMap[day];
+        if (!dayNum) return;
+        scheduledClasses.push({
+          course,
+          dayNum,
+          startTime,
+          endTime
+        });
       });
     });
     if (scheduledClasses.length === 0) return null;
@@ -2098,43 +2172,28 @@ class TermBox extends HTMLElement {
       timeRemaining: this.formatHumanizedTimeRemaining(minDiff)
     };
   }
-  parseTimeSlot(timeSlot) {
-    if (!timeSlot) return null;
-    // Try Japanese format: (月1講時) or (月曜日1講時)
-    let match = timeSlot.match(/\(?([月火水木金])(?:曜日)?(\d+)(?:講時)?\)?/);
-    if (match) {
-      const dayJP = match[1];
-      const period = parseInt(match[2], 10);
-      const timeSlots = {
-        1: { start: 9 * 60, end: 10 * 60 + 30 },      // 09:00-10:30
-        2: { start: 10 * 60 + 45, end: 12 * 60 + 15 }, // 10:45-12:15
-        3: { start: 13 * 60 + 10, end: 14 * 60 + 40 }, // 13:10-14:40
-        4: { start: 14 * 60 + 55, end: 16 * 60 + 25 }, // 14:55-16:25
-        5: { start: 16 * 60 + 40, end: 18 * 60 + 10 }  // 16:40-18:10
-      };
-      const slot = timeSlots[period];
-      if (!slot) return null;
-      return {
-        day: dayJP,
-        startTime: slot.start,
-        endTime: slot.end
-      };
-    }
-    // Try English format: "Mon 09:00 - 10:30"
-    const engMatch = timeSlot.match(/^(Mon|Tue|Wed|Thu|Fri)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
-    if (engMatch) {
-      const day = engMatch[1];
-      const startHour = parseInt(engMatch[2], 10);
-      const startMin = parseInt(engMatch[3], 10);
-      const endHour = parseInt(engMatch[4], 10);
-      const endMin = parseInt(engMatch[5], 10);
-      return {
-        day,
-        startTime: startHour * 60 + startMin,
-        endTime: endHour * 60 + endMin
-      };
-    }
-    return null;
+  parseTimeSlots(timeSlot, fallbackDay = null, fallbackPeriod = null) {
+    return parseCourseMeetingSlots(timeSlot, fallbackDay, fallbackPeriod)
+      .map((slot) => {
+        const periodMeta = getPeriodMeta(slot.period);
+        if (!periodMeta) return null;
+        const [startHour, startMinute] = String(periodMeta.start || '').split(':').map((value) => parseInt(value, 10));
+        const [endHour, endMinute] = String(periodMeta.end || '').split(':').map((value) => parseInt(value, 10));
+        if (
+          !Number.isFinite(startHour)
+          || !Number.isFinite(startMinute)
+          || !Number.isFinite(endHour)
+          || !Number.isFinite(endMinute)
+        ) {
+          return null;
+        }
+        return {
+          day: slot.day,
+          startTime: startHour * 60 + startMinute,
+          endTime: endHour * 60 + endMinute
+        };
+      })
+      .filter(Boolean);
   }
   getSemesterEnd(year, term) {
     // Spring semester lock: August 1 (same year)
@@ -2157,6 +2216,7 @@ class CourseCalendar extends HTMLElement {
     this.renderRequestId = 0;
     this.tooltipElement = null;
     this.activeTooltipCell = null;
+    this.intensiveCourseLookup = new Map();
     this.handleCalendarClickBound = this.handleCalendarClick.bind(this);
     this.handleCalendarKeyDownBound = this.handleCalendarKeyDown.bind(this);
     this.handleCalendarPointerOverBound = this.handleCalendarPointerOver.bind(this);
@@ -2223,13 +2283,20 @@ class CourseCalendar extends HTMLElement {
               </tr>
             </tbody>
           </table>
+          <section class="home-calendar-intensive" data-role="home-intensive" hidden>
+            <h4 class="home-calendar-intensive-heading">Intensive</h4>
+            <div class="home-calendar-intensive-list" data-role="home-intensive-list"></div>
+          </section>
         </div>
       </div>
     `;
     this.shadow = this;
     this.calendar = this.querySelector("#calendar-main");
+    this.calendarWrapper = this.querySelector(".calendar-wrapper");
     this.calendarHeader = this.calendar.querySelectorAll("thead th");
     this.loadingIndicator = this.querySelector("#loading-indicator");
+    this.homeIntensiveSection = this.querySelector('[data-role="home-intensive"]');
+    this.homeIntensiveList = this.querySelector('[data-role="home-intensive-list"]');
     this.initializeDayHeaderInteractions();
     this.displayedYear = null;
     this.displayedTerm = null;
@@ -2240,7 +2307,7 @@ class CourseCalendar extends HTMLElement {
       Thu: 'calendar-thursday',
       Fri: 'calendar-friday'
     };
-    this.calendar.addEventListener("click", this.handleCalendarClickBound);
+    this.calendarWrapper?.addEventListener("click", this.handleCalendarClickBound);
     this.calendar.addEventListener("keydown", this.handleCalendarKeyDownBound);
     this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
@@ -2257,6 +2324,17 @@ class CourseCalendar extends HTMLElement {
     });
   }
   connectedCallback() {
+    this.calendarWrapper?.removeEventListener("click", this.handleCalendarClickBound);
+    this.calendar.removeEventListener("keydown", this.handleCalendarKeyDownBound);
+    this.calendar.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.calendar.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.calendar.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+    this.calendarWrapper?.addEventListener("click", this.handleCalendarClickBound);
+    this.calendar.addEventListener("keydown", this.handleCalendarKeyDownBound);
+    this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+
     // Only initialize if not already done
     if (!this.isInitialized) {
       this.initializeCalendar();
@@ -2271,6 +2349,11 @@ class CourseCalendar extends HTMLElement {
     }
   }
   disconnectedCallback() {
+    this.calendarWrapper?.removeEventListener("click", this.handleCalendarClickBound);
+    this.calendar.removeEventListener("keydown", this.handleCalendarKeyDownBound);
+    this.calendar.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.calendar.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.calendar.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
     document.removeEventListener('pageLoaded', this.handleCalendarPageLoaded);
     document.removeEventListener('change', this.handleCalendarSelectionChange);
     document.removeEventListener('homeSemesterChanged', this.handleCalendarSelectionChange);
@@ -2371,6 +2454,77 @@ class CourseCalendar extends HTMLElement {
       cell.textContent = '';
     });
   }
+  isIntensiveCourse(course) {
+    const rawTimeSlot = String(course?.time_slot || '').trim();
+    if (!rawTimeSlot) return false;
+    return /(集中講義|集中|intensive)/i.test(rawTimeSlot);
+  }
+  getUniqueSortedIntensiveCourses(courses) {
+    if (!Array.isArray(courses) || courses.length === 0) return [];
+    const uniqueByCode = new Map();
+    const noCode = [];
+    courses.forEach((course) => {
+      const code = String(course?.course_code || '').trim().toUpperCase();
+      if (!code) {
+        noCode.push(course);
+        return;
+      }
+      if (!uniqueByCode.has(code)) {
+        uniqueByCode.set(code, course);
+      }
+    });
+    const merged = [...uniqueByCode.values(), ...noCode];
+    merged.sort((left, right) => normalizeCourseTitle(left?.title || left?.course_code || 'Course').localeCompare(
+      normalizeCourseTitle(right?.title || right?.course_code || 'Course')
+    ));
+    return merged;
+  }
+  renderHomeIntensiveCourses(courses) {
+    if (!this.homeIntensiveSection || !this.homeIntensiveList) return;
+
+    this.homeIntensiveList.innerHTML = '';
+    this.intensiveCourseLookup.clear();
+
+    const intensiveCourses = this.getUniqueSortedIntensiveCourses(courses);
+    if (!intensiveCourses.length) {
+      this.homeIntensiveSection.hidden = true;
+      this.calendarWrapper?.classList.remove('has-home-intensive');
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    intensiveCourses.forEach((course, index) => {
+      const courseKey = String(course?.course_code || '').trim().toUpperCase() || `intensive-${index}`;
+      this.intensiveCourseLookup.set(courseKey, course);
+
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'home-calendar-intensive-card';
+      card.dataset.courseKey = courseKey;
+      card.style.backgroundColor = getCourseColorByType(course?.type);
+
+      const title = document.createElement('p');
+      title.className = 'home-calendar-intensive-title';
+      title.textContent = normalizeCourseTitle(course?.title || course?.course_code || 'Course');
+
+      const professor = document.createElement('p');
+      professor.className = 'home-calendar-intensive-professor';
+      professor.textContent = formatProfessorDisplayName(course?.professor);
+
+      const meta = document.createElement('p');
+      meta.className = 'home-calendar-intensive-meta';
+      meta.textContent = 'Intensive';
+
+      card.appendChild(title);
+      card.appendChild(professor);
+      card.appendChild(meta);
+      fragment.appendChild(card);
+    });
+
+    this.homeIntensiveList.appendChild(fragment);
+    this.homeIntensiveSection.hidden = false;
+    this.calendarWrapper?.classList.add('has-home-intensive');
+  }
   populateEmptyPlaceholders() {
     const rows = this.calendar.querySelectorAll('tbody tr');
     rows.forEach((row, rowIndex) => {
@@ -2394,6 +2548,7 @@ class CourseCalendar extends HTMLElement {
   showEmptyCalendar() {
     this.clearCourseCells();
     this.populateEmptyPlaceholders();
+    this.renderHomeIntensiveCourses([]);
     this.renderLegendFromCourses([]);
     this.hideTooltip();
   }
@@ -2415,6 +2570,12 @@ class CourseCalendar extends HTMLElement {
         return {
           label: 'Seminar and Honor Thesis',
           color: getCourseColorByType('Advanced Seminars and Honors Thesis')
+        };
+      }
+      if (typeLabel === 'Graduate courses') {
+        return {
+          label: 'Graduate',
+          color: getCourseColorByType('Graduate courses')
         };
       }
       return {
@@ -2535,100 +2696,83 @@ class CourseCalendar extends HTMLElement {
           profileCourse.code === course.course_code
         )
       );
+      const intensiveCourses = this.getUniqueSortedIntensiveCourses(
+        coursesToShow.filter((course) => this.isIntensiveCourse(course))
+      );
+      const slotBasedCourses = coursesToShow.filter((course) => !this.isIntensiveCourse(course));
       this.renderLegendFromCourses(coursesToShow);
       console.log('Mini calendar: Courses to show:', coursesToShow.length);
       console.log('Mini calendar: Course details:', coursesToShow.map(c => ({ code: c.course_code, time: c.time_slot })));
       this.clearCourseCells();
-      for (const course of coursesToShow) {
+      for (const course of slotBasedCourses) {
         if (this.isRenderRequestStale(requestId)) return;
-        // Try Japanese format first: (月曜日1講時) or (月1講時) or (木4講時)
-        let match = course.time_slot?.match(/\(?([月火水木金土日])(?:曜日)?(\d+)(?:講時)?\)?/);
-        let dayEN, period;
-        if (match) {
-          // Japanese format
-          const dayJP = match[1];
-          period = parseInt(match[2], 10);
-          const dayMap = { "月": "Mon", "火": "Tue", "水": "Wed", "木": "Thu", "金": "Fri", "土": "Sat", "日": "Sun" };
-          dayEN = dayMap[dayJP];
-        } else {
-          // Try English format: "Mon 10:45 - 12:15", "Wed 09:00 - 10:30", etc.
-          const englishMatch = course.time_slot?.match(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})$/);
-          if (englishMatch) {
-            dayEN = englishMatch[1];
-            const startHour = parseInt(englishMatch[2], 10);
-            const startMin = parseInt(englishMatch[3], 10);
-            // Map time to period based on start time
-            const timeToSlot = startHour * 100 + startMin;
-            if (timeToSlot >= 900 && timeToSlot < 1030) period = 1;
-            else if (timeToSlot >= 1045 && timeToSlot < 1215) period = 2;
-            else if (timeToSlot >= 1310 && timeToSlot < 1440) period = 3;
-            else if (timeToSlot >= 1455 && timeToSlot < 1625) period = 4;
-            else if (timeToSlot >= 1640 && timeToSlot < 1810) period = 5;
-            else period = -1; // Invalid time slot
+        const meetingSlots = parseCourseMeetingSlots(course.time_slot, course.day, course.period)
+          .filter((slot) => Boolean(this.dayIdByEN[slot.day]));
+        if (meetingSlots.length === 0) continue;
+        for (const meetingSlot of meetingSlots) {
+          const dayEN = meetingSlot.day;
+          const period = meetingSlot.period;
+          const colIndex = this.getColIndexByDayEN(dayEN);
+          if (colIndex === -1) {
+            console.log('Invalid column index for day:', dayEN);
+            continue;
           }
+          const rowIndex = Number.isFinite(period) ? (period - 1) : -1;
+          if (rowIndex < 0 || rowIndex >= 5) {
+            console.log('Invalid row index for period:', period, 'rowIndex:', rowIndex);
+            continue;
+          }
+          const cell = this.calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
+          if (!cell) {
+            console.log('Cell not found for position:', { rowIndex: rowIndex + 1, colIndex: colIndex + 1 });
+            continue;
+          }
+          console.log('Rendering course in cell:', { course: course.course_code, dayEN, period, colIndex, rowIndex });
+          const div = document.createElement("div");
+          const div_title = document.createElement("div");
+          const div_box = document.createElement("div");
+          const div_classroom = document.createElement("div");
+          div.classList.add("course-cell-main");
+          div_box.classList.add("course-cell-box");
+          div_title.classList.add("course-title");
+          div_classroom.classList.add("course-classroom");
+          // Set the course content
+          // div_title.textContent = course.short_title || course.title || course.course_code;
+          // div_classroom.textContent = course.classroom || '';
+          //if (div_classroom.textContent === "") {
+          //  div_classroom.classList.add("empty-classroom");
+          //  div_title.classList.add("empty-classroom-title");
+          //}
+          const title = normalizeCourseTitle(course.title || course.course_code || 'Course');
+          const creditsValue = parseCreditsValue(course.credits);
+          const creditsLabel = creditsValue > 0
+            ? `${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`
+            : '';
+          const typeLabel = String(course.type || 'General').trim() || 'General';
+          div_box.style.backgroundColor = getCourseColorByType(course.type);
+          div.dataset.courseIdentifier = course.course_code;
+          div.dataset.courseCode = String(course.course_code || '');
+          div.dataset.courseTitle = title;
+          div.dataset.courseType = typeLabel;
+          div.dataset.day = dayEN;
+          div.dataset.period = String(period);
+          div.dataset.slotLabel = formatSlotLabel(dayEN, period);
+          div.dataset.timeLabel = meetingSlot.timeLabel || formatPeriodWindow(period) || String(course.time_slot || '');
+          div.dataset.creditsLabel = creditsLabel;
+          div.setAttribute(
+            'aria-label',
+            `${title} ${formatSlotLabel(dayEN, period)} ${div.dataset.timeLabel}`.trim()
+          );
+          cell.appendChild(div);
+          div.appendChild(div_box);
+          div.appendChild(div_title);
+          div.appendChild(div_classroom);
         }
-        if (!dayEN || !this.dayIdByEN[dayEN] || !period || period < 1) {
-          continue;
-        }
-        const colIndex = this.getColIndexByDayEN(dayEN);
-        if (colIndex === -1) {
-          console.log('Invalid column index for day:', dayEN);
-          continue;
-        }
-        const rowIndex = Number.isFinite(period) ? (period - 1) : -1;
-        if (rowIndex < 0 || rowIndex >= 5) {
-          console.log('Invalid row index for period:', period, 'rowIndex:', rowIndex);
-          continue;
-        }
-        const cell = this.calendar.querySelector(`tbody tr:nth-child(${rowIndex + 1}) td:nth-child(${colIndex + 1})`);
-        if (!cell) {
-          console.log('Cell not found for position:', { rowIndex: rowIndex + 1, colIndex: colIndex + 1 });
-          continue;
-        }
-        console.log('Rendering course in cell:', { course: course.course_code, dayEN, period, colIndex, rowIndex });
-        const div = document.createElement("div");
-        const div_title = document.createElement("div");
-        const div_box = document.createElement("div");
-        const div_classroom = document.createElement("div");
-        div.classList.add("course-cell-main");
-        div_box.classList.add("course-cell-box");
-        div_title.classList.add("course-title");
-        div_classroom.classList.add("course-classroom");
-        // Set the course content
-        // div_title.textContent = course.short_title || course.title || course.course_code;
-        // div_classroom.textContent = course.classroom || '';
-        //if (div_classroom.textContent === "") {
-        //  div_classroom.classList.add("empty-classroom");
-        //  div_title.classList.add("empty-classroom-title");
-        //}
-        const title = normalizeCourseTitle(course.title || course.course_code || 'Course');
-        const creditsValue = parseCreditsValue(course.credits);
-        const creditsLabel = creditsValue > 0
-          ? `${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`
-          : '';
-        const typeLabel = String(course.type || 'General').trim() || 'General';
-        div_box.style.backgroundColor = getCourseColorByType(course.type);
-        div.dataset.courseIdentifier = course.course_code;
-        div.dataset.courseCode = String(course.course_code || '');
-        div.dataset.courseTitle = title;
-        div.dataset.courseType = typeLabel;
-        div.dataset.day = dayEN;
-        div.dataset.period = String(period);
-        div.dataset.slotLabel = formatSlotLabel(dayEN, period);
-        div.dataset.timeLabel = formatPeriodWindow(period) || String(course.time_slot || '');
-        div.dataset.creditsLabel = creditsLabel;
-        div.setAttribute(
-          'aria-label',
-          `${title} ${formatSlotLabel(dayEN, period)} ${div.dataset.timeLabel}`.trim()
-        );
-        cell.appendChild(div);
-        div.appendChild(div_box);
-        div.appendChild(div_title);
-        div.appendChild(div_classroom);
       }
       // Fill remaining empty cells with placeholders
       if (this.isRenderRequestStale(requestId)) return;
       this.populateEmptyPlaceholders();
+      this.renderHomeIntensiveCourses(intensiveCourses);
       this.hideTooltip();
     } catch (error) {
       console.error('An unexpected error occurred while showing courses:', error);
@@ -2741,6 +2885,16 @@ class CourseCalendar extends HTMLElement {
       this.navigateToDayFromHeader(selectedDay);
       return;
     }
+    const intensiveCard = event.target.closest('.home-calendar-intensive-card');
+    if (intensiveCard) {
+      const courseKey = String(intensiveCard.dataset.courseKey || '').trim();
+      if (!courseKey) return;
+      const intensiveCourse = this.intensiveCourseLookup.get(courseKey);
+      if (intensiveCourse) {
+        openCourseInfoMenu(intensiveCourse);
+      }
+      return;
+    }
     const clickedCell = event.target.closest("div.course-cell-main");
     if (!clickedCell) return;
     if (clickedCell.dataset.emptySlot === 'true') {
@@ -2771,11 +2925,9 @@ class CourseCalendar extends HTMLElement {
       return this.initializeCalendar();
     }
     // Use utility functions to get current year and term from selectors
-    const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
-    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
-      const currentMonth = new Date().getMonth() + 1;
-      return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
-    })();
+    const inferred = inferCurrentSemesterValue();
+    const currentYear = window.getCurrentYear ? window.getCurrentYear() : inferred.year;
+    const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : inferred.term;
     await this.showCourseWithRetry(currentYear, currentTerm);
   }
   // Public method to show specific term
@@ -2995,10 +3147,7 @@ class GuestHomeBrowseWidget extends HTMLElement {
     `;
   }
   getCurrentSemesterTarget() {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const term = month >= 8 || month <= 2 ? 'Fall' : 'Spring';
-    const year = now.getFullYear();
+    const { term, year } = inferCurrentSemesterValue();
     return { term, year };
   }
   async refreshCoursePreview() {
@@ -3129,7 +3278,9 @@ class GuestHomeTeaserWidget extends HTMLElement {
         id: 'screen2',
         label: 'Feature preview screen 2',
         imageSrc: guestScreen2,
-        imageFile: 'screen2.png'
+        imageFile: 'screen2.png',
+        mobileImageSrc: guestScreenCtaMobile,
+        mobileImageFile: 'screen-cta-mobile.png'
       }
     ];
   }
@@ -3164,7 +3315,11 @@ class GuestHomeTeaserWidget extends HTMLElement {
     `;
     const previewImage = this.querySelector('.guest-v2-teaser-image');
     if (!previewImage) return;
-    const imageCandidates = this.getImageCandidates(selectedVariant.imageSrc, selectedVariant.imageFile);
+    const mobileViewport = this.isMobileViewport();
+    const imageCandidates = this.getImageCandidates(
+      mobileViewport ? (selectedVariant.mobileImageSrc || selectedVariant.imageSrc) : selectedVariant.imageSrc,
+      mobileViewport ? (selectedVariant.mobileImageFile || selectedVariant.imageFile) : selectedVariant.imageFile
+    );
     if (!imageCandidates.length) {
       previewImage.style.visibility = 'hidden';
       this.classList.add('guest-v2-teaser-image-error');
@@ -4241,11 +4396,9 @@ class WeeklyCalendar extends HTMLElement {
         return;
       }
       // Get current year and term from global state
-      const currentYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
-      const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : (() => {
-        const currentMonth = new Date().getMonth() + 1;
-        return currentMonth >= 8 || currentMonth <= 2 ? "Fall" : "Spring";
-      })();
+      const inferred = inferCurrentSemesterValue();
+      const currentYear = window.getCurrentYear ? window.getCurrentYear() : inferred.year;
+      const currentTerm = window.getCurrentTerm ? window.getCurrentTerm() : inferred.term;
       console.log(`Loading courses for weekly calendar: ${currentYear} ${currentTerm} for user ${user.id}`);
       const courses = await fetchCourseData(currentYear, currentTerm);
       console.log('Courses fetched for weekly calendar:', courses);
@@ -4281,16 +4434,20 @@ class WeeklyCalendar extends HTMLElement {
       'Fri': 5, 'Friday': 5, '金': 5
     };
     courses.forEach(course => {
-      if (!course.day || !course.period) return;
-      const dayIndex = dayMap[course.day];
-      if (!dayIndex) return;
-      const period = parseInt(course.period);
-      if (isNaN(period) || period < 1 || period > 5) return;
-      // Find the cell (row = period, column = day)
+      const meetingSlots = parseCourseMeetingSlots(course?.time_slot, course?.day, course?.period);
+      if (meetingSlots.length === 0) return;
       const table = this.querySelector('#calendar tbody');
-      const row = table.rows[period - 1]; // 0-indexed
-      const cell = row.cells[dayIndex]; // day index is already 1-based, so this works
-      if (cell) {
+      if (!table) return;
+      meetingSlots.forEach((meetingSlot) => {
+        const dayIndex = dayMap[meetingSlot.day];
+        if (!dayIndex) return;
+        const period = parseInt(meetingSlot.period, 10);
+        if (!Number.isFinite(period) || period < 1 || period > 5) return;
+        // Find the cell (row = period, column = day)
+        const row = table.rows[period - 1]; // 0-indexed
+        if (!row) return;
+        const cell = row.cells[dayIndex]; // day index is already 1-based, so this works
+        if (!cell) return;
         // Create course element
         const courseElement = document.createElement('div');
         courseElement.className = 'course-cell-main';
@@ -4304,7 +4461,7 @@ class WeeklyCalendar extends HTMLElement {
           openCourseInfoMenu(course);
         });
         cell.appendChild(courseElement);
-      }
+      });
     });
   }
   clearCalendar() {
