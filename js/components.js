@@ -114,7 +114,8 @@ const HOME_PERIODS = [
   { period: 2, start: '10:45', end: '12:15', filterValue: '10:45' },
   { period: 3, start: '13:10', end: '14:40', filterValue: '13:10' },
   { period: 4, start: '14:55', end: '16:25', filterValue: '14:55' },
-  { period: 5, start: '16:40', end: '18:10', filterValue: '16:40' }
+  { period: 5, start: '16:40', end: '18:10', filterValue: '16:40' },
+  { period: 6, start: '18:25', end: '19:55', filterValue: '18:25' }
 ];
 const HOME_PERIOD_BY_NUMBER = HOME_PERIODS.reduce((acc, slot) => {
   acc[slot.period] = slot;
@@ -224,6 +225,7 @@ function mapStartTimeToHomePeriod(startHour, startMinute) {
   if (numericStart >= 1310 && numericStart < 1440) return 3;
   if (numericStart >= 1455 && numericStart < 1625) return 4;
   if (numericStart >= 1640 && numericStart < 1810) return 5;
+  if (numericStart >= 1825 && numericStart < 1955) return 6;
   return null;
 }
 function normalizeCourseDayToken(dayToken) {
@@ -251,7 +253,7 @@ function parseCourseMeetingSlots(timeSlot, fallbackDay = null, fallbackPeriod = 
   const addSlot = (dayToken, periodValue, explicitTimeLabel = '') => {
     const day = normalizeCourseDayToken(dayToken);
     const period = Number(periodValue);
-    if (!day || !Number.isFinite(period) || period < 1 || period > 5) return;
+    if (!day || !Number.isFinite(period) || period < 1 || period > 6) return;
     const key = `${day}-${period}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -263,7 +265,7 @@ function parseCourseMeetingSlots(timeSlot, fallbackDay = null, fallbackPeriod = 
     });
   };
   if (raw) {
-    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-6])(?:講時)?/g;
     let jpMatch = jpRegex.exec(raw);
     while (jpMatch) {
       addSlot(jpMatch[1], Number(jpMatch[2]));
@@ -1847,6 +1849,21 @@ class TermBox extends HTMLElement {
       }
     };
   }
+  setNextClassCardInteractive(isInteractive) {
+    const nextClassContainer = this.querySelector('.total-courses-container');
+    if (!nextClassContainer) return;
+    if (isInteractive) {
+      nextClassContainer.setAttribute('role', 'button');
+      nextClassContainer.setAttribute('tabindex', '0');
+      nextClassContainer.removeAttribute('aria-disabled');
+      nextClassContainer.style.cursor = 'pointer';
+      return;
+    }
+    nextClassContainer.removeAttribute('role');
+    nextClassContainer.removeAttribute('tabindex');
+    nextClassContainer.setAttribute('aria-disabled', 'true');
+    nextClassContainer.style.cursor = 'default';
+  }
   connectedCallback() {
     // ====================================================================
     // ENABLE NEXT CLASS FEATURE BY CHANGING enableNextClass to true
@@ -1872,11 +1889,10 @@ class TermBox extends HTMLElement {
     document.addEventListener('pageLoaded', this.handleNextClassPageLoaded);
     const nextClassContainer = this.querySelector('.total-courses-container');
     if (nextClassContainer) {
-      nextClassContainer.setAttribute('role', 'button');
-      nextClassContainer.setAttribute('tabindex', '0');
       nextClassContainer.addEventListener('click', this.handleNextClassCardClick);
       nextClassContainer.addEventListener('keydown', this.handleNextClassCardKeyDown);
     }
+    this.setNextClassCardInteractive(false);
   }
   disconnectedCallback() {
     if (this.updateInterval) {
@@ -1893,6 +1909,7 @@ class TermBox extends HTMLElement {
       nextClassContainer.removeEventListener('click', this.handleNextClassCardClick);
       nextClassContainer.removeEventListener('keydown', this.handleNextClassCardKeyDown);
     }
+    this.setNextClassCardInteractive(false);
   }
   // ====================================================================
   // OLD TERM DISPLAY (temporary for styling)
@@ -1942,6 +1959,7 @@ class TermBox extends HTMLElement {
     if (!labelEl || !nameEl || !timeEl) return;
     this.currentNextClassCourse = null;
     if (actionCueEl) actionCueEl.hidden = true;
+    this.setNextClassCardInteractive(false);
     const toSoftAccentColor = (colorValue, alpha = 0.34) => {
       const raw = String(colorValue || '').trim();
       if (!raw) return null;
@@ -2005,21 +2023,34 @@ class TermBox extends HTMLElement {
         return;
       }
       // Get selected semester
-      const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
-      const termRaw = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
-      const term = termRaw.includes('/') ? termRaw.split('/')[1] : termRaw;
+      const selectedYear = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+      const selectedTerm = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+      const year = Number.parseInt(selectedYear, 10);
+      const term = normalizeTermName(selectedTerm);
+      if (!Number.isFinite(year) || !term) {
+        resetTitleAccent();
+        labelEl.textContent = 'Next Class';
+        nameEl.textContent = 'No classes scheduled';
+        timeEl.textContent = '';
+        timeEl.style.display = 'none';
+        if (actionCueEl) actionCueEl.hidden = true;
+        return;
+      }
       // Get user's selected courses
       const { data: profile } = await supabase
         .from('profiles')
         .select('courses_selection')
         .eq('id', session.user.id)
         .single();
-      const selectedCourses = profile?.courses_selection || [];
-      const normalizedTerm = term.trim();
+      const selectedCourses = Array.isArray(profile?.courses_selection)
+        ? profile.courses_selection
+        : [];
       // Filter for current semester
       const semesterCourses = selectedCourses.filter(course => {
-        const courseTerm = course.term ? (course.term.includes('/') ? course.term.split('/')[1] : course.term) : null;
-        return course.year === parseInt(year) && (!courseTerm || courseTerm === normalizedTerm);
+        const courseYear = Number.parseInt(course?.year, 10);
+        const rawTerm = course?.term || course?.course_term || '';
+        const courseTerm = rawTerm ? normalizeTermName(rawTerm) : null;
+        return courseYear === year && (!courseTerm || courseTerm === term);
       });
       if (semesterCourses.length === 0) {
         resetTitleAccent();
@@ -2032,8 +2063,13 @@ class TermBox extends HTMLElement {
       }
       // Fetch full course data
       const allCoursesInSemester = await fetchCourseData(year, term);
+      const selectionCodes = new Set(
+        semesterCourses
+          .map((course) => String(course?.code || course?.course_code || '').trim().toUpperCase())
+          .filter(Boolean)
+      );
       const userCourses = allCoursesInSemester.filter(course =>
-        semesterCourses.some(sc => sc.code === course.course_code)
+        selectionCodes.has(String(course?.course_code || '').trim().toUpperCase())
       );
       // Find next class
       const nextClass = this.findNextClass(userCourses, year, term);
@@ -2059,6 +2095,7 @@ class TermBox extends HTMLElement {
         timeEl.textContent = '';
         timeEl.style.display = 'none';
         this.currentNextClassCourse = nextClass.course;
+        this.setNextClassCardInteractive(true);
         if (actionCueEl) actionCueEl.hidden = false;
       } else {
         applyTitleAccent(nextClass.course?.type);
@@ -2067,6 +2104,7 @@ class TermBox extends HTMLElement {
         timeEl.textContent = nextClass.timeRemaining;
         timeEl.style.display = nextClass.timeRemaining ? 'block' : 'none';
         this.currentNextClassCourse = nextClass.course;
+        this.setNextClassCardInteractive(true);
         if (actionCueEl) actionCueEl.hidden = false;
       }
     } catch (error) {
@@ -2109,14 +2147,15 @@ class TermBox extends HTMLElement {
     */
     const dayMap = {
       'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5,
-      '月': 1, '火': 2, '水': 3, '木': 4, '金': 5
+      'Sat': 6, 'Sun': 0,
+      '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0
     };
     const scheduledClasses = [];
     courses.forEach(course => {
       const parsedSlots = this.parseTimeSlots(course.time_slot, course.day, course.period);
       parsedSlots.forEach(({ day, startTime, endTime }) => {
         const dayNum = dayMap[day];
-        if (!dayNum) return;
+        if (dayNum === undefined || dayNum === null) return;
         scheduledClasses.push({
           course,
           dayNum,
@@ -2146,7 +2185,6 @@ class TermBox extends HTMLElement {
       const targetDate = new Date(now);
       targetDate.setDate(targetDate.getDate() + daysAhead);
       const targetDay = targetDate.getDay();
-      if (targetDay === 0 || targetDay === 6) continue; // Skip weekends
       scheduledClasses.forEach(cls => {
         if (cls.dayNum !== targetDay) return;
         let timeDiff;
@@ -2278,6 +2316,12 @@ class CourseCalendar extends HTMLElement {
               <tr>
                 <td id="calendar-period-5">
                   <span class="period-index">5</span>
+                </td>
+                <td></td><td></td><td></td><td></td><td></td>
+              </tr>
+              <tr>
+                <td id="calendar-period-6">
+                  <span class="period-index">6</span>
                 </td>
                 <td></td><td></td><td></td><td></td><td></td>
               </tr>
@@ -2639,7 +2683,8 @@ class CourseCalendar extends HTMLElement {
       { start: 10 * 60 + 45, end: 12 * 60 + 15, row: 1 }, // 10:45-12:15 (period 2)
       { start: 13 * 60 + 10, end: 14 * 60 + 40, row: 2 }, // 13:10-14:40 (period 3)
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 }, // 14:55-16:25 (period 4)
-      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }  // 16:40-18:10 (period 5)
+      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }, // 16:40-18:10 (period 5)
+      { start: 18 * 60 + 25, end: 19 * 60 + 55, row: 5 }  // 18:25-19:55 (period 6)
     ];
     // Find current period
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
@@ -4241,6 +4286,14 @@ class WeeklyCalendar extends HTMLElement {
             <td></td>
             <td></td>
           </tr>
+          <tr>
+            <td><p id="smaller-text">period 6</p><p>18:25<span class="mobile-time"></span>19:55</p></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
         </tbody>
       </table>
     `;
@@ -4355,7 +4408,8 @@ class WeeklyCalendar extends HTMLElement {
       { start: 10 * 60 + 45, end: 12 * 60 + 15, row: 1 },
       { start: 13 * 60 + 10, end: 14 * 60 + 40, row: 2 },
       { start: 14 * 60 + 55, end: 16 * 60 + 25, row: 3 },
-      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 }
+      { start: 16 * 60 + 40, end: 18 * 60 + 10, row: 4 },
+      { start: 18 * 60 + 25, end: 19 * 60 + 55, row: 5 }
     ];
     const currentPeriod = periods.find(p => currentTime >= p.start && currentTime <= p.end);
     if (!currentPeriod) return;
@@ -4442,7 +4496,7 @@ class WeeklyCalendar extends HTMLElement {
         const dayIndex = dayMap[meetingSlot.day];
         if (!dayIndex) return;
         const period = parseInt(meetingSlot.period, 10);
-        if (!Number.isFinite(period) || period < 1 || period > 5) return;
+        if (!Number.isFinite(period) || period < 1 || period > 6) return;
         // Find the cell (row = period, column = day)
         const row = table.rows[period - 1]; // 0-indexed
         if (!row) return;

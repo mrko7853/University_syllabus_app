@@ -414,13 +414,14 @@ const COURSE_PAGE_PRESET_PREFILL_KEY = 'ila_courses_preset_prefill';
 const COURSE_PAGE_PRESET_PREFILL_MAX_AGE_MS = 10 * 60 * 1000;
 const CALENDAR_BUSY_SLOTS_STORAGE_KEY = 'ila_calendar_busy_slots_v1';
 const COURSE_DEFAULT_SLOT_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-    .flatMap((day) => [1, 2, 3, 4, 5].map((period) => `${day}-${period}`));
+    .flatMap((day) => [1, 2, 3, 4, 5, 6].map((period) => `${day}-${period}`));
 const HOME_PREFILTER_PERIOD_TO_TIME = {
     1: '09:00',
     2: '10:45',
     3: '13:10',
     4: '14:55',
-    5: '16:40'
+    5: '16:40',
+    6: '18:25'
 };
 const HOME_PREFILTER_TYPE_TO_CONCENTRATION = {
     Core: ['culture', 'economy', 'politics', 'seminar'],
@@ -457,6 +458,10 @@ const COURSE_SMART_PRESET_CONFIG = {
     'preset-fits-my-year': {
         id: 'preset-fits-my-year',
         label: 'Fits my year'
+    },
+    'preset-nonila-only': {
+        id: 'preset-nonila-only',
+        label: 'Non-ILA classes'
     }
 };
 
@@ -746,69 +751,24 @@ function updateSortStatusDisplay() {
     });
 }
 
-function doesCourseChipNeedWrapping(chipElement) {
-    if (!chipElement || chipElement.hidden) return false;
-
-    const styles = window.getComputedStyle(chipElement);
-    if (styles.display === 'none' || styles.visibility === 'hidden') return false;
-
-    const chipRect = chipElement.getBoundingClientRect();
-    if (chipRect.width <= 1) return false;
-
-    const measureChip = chipElement.cloneNode(true);
-    measureChip.style.position = 'absolute';
-    measureChip.style.left = '-99999px';
-    measureChip.style.top = '-99999px';
-    measureChip.style.visibility = 'hidden';
-    measureChip.style.pointerEvents = 'none';
-    measureChip.style.width = 'auto';
-    measureChip.style.maxWidth = 'none';
-    measureChip.style.minWidth = '0';
-    measureChip.style.whiteSpace = 'nowrap';
-    measureChip.style.height = 'auto';
-    measureChip.style.display = 'inline-flex';
-    document.body.appendChild(measureChip);
-
-    const nowrapWidth = measureChip.getBoundingClientRect().width;
-    measureChip.remove();
-
-    return nowrapWidth > (chipRect.width + 0.5);
-}
-
 function updateCourseCardRankingChipVisibility() {
     const courseList = document.getElementById('course-list');
     if (!courseList) return;
 
     const footerRows = courseList.querySelectorAll('.class-outside .course-footer-row--desktop');
     footerRows.forEach((row) => {
+        if (window.innerWidth >= 1024) {
+            const hasHorizontalOverflow = row.scrollWidth > (row.clientWidth + 0.5);
+            row.classList.toggle('course-footer-row--scrollable', hasHorizontalOverflow);
+        } else {
+            row.classList.remove('course-footer-row--scrollable', 'is-grabbing');
+        }
+
         const rankingChip = row.querySelector('.course-chip-ranking');
         if (!rankingChip) return;
 
-        const footerLeft = row.querySelector('.course-footer-left');
-        const footerRight = row.querySelector('.course-footer-right');
-        if (!footerLeft) return;
-
         rankingChip.hidden = false;
         rankingChip.removeAttribute('aria-hidden');
-
-        if (row.clientWidth <= 0) return;
-
-        const rowStyles = window.getComputedStyle(row);
-        const gapValue = parseFloat(rowStyles.columnGap || rowStyles.gap || '0');
-        const rowGap = Number.isFinite(gapValue) ? gapValue : 0;
-
-        const footerRightWidth = footerRight ? footerRight.scrollWidth : 0;
-        const requiredWidth = footerLeft.scrollWidth + footerRightWidth + (footerRight ? rowGap : 0);
-        const hasHorizontalOverflow = requiredWidth > (row.clientWidth + 0.5);
-
-        const rowChips = Array.from(row.querySelectorAll('.course-chip'))
-            .filter((chip) => chip.closest('.course-footer-row--desktop') === row && !chip.hidden);
-        const hasAnyMultiLineChip = rowChips.some((chip) => doesCourseChipNeedWrapping(chip));
-
-        if (hasHorizontalOverflow || hasAnyMultiLineChip) {
-            rankingChip.hidden = true;
-            rankingChip.setAttribute('aria-hidden', 'true');
-        }
     });
 }
 
@@ -966,7 +926,30 @@ function mapStartTimeToCoursePeriod(startHour, startMinute) {
     if (numericStart >= 1310 && numericStart < 1440) return 3;
     if (numericStart >= 1455 && numericStart < 1625) return 4;
     if (numericStart >= 1640 && numericStart < 1810) return 5;
+    if (numericStart >= 1825 && numericStart < 1955) return 6;
     return null;
+}
+
+function normalizeCourseMeetingDayToken(dayToken) {
+    const raw = String(dayToken || '').trim();
+    if (!raw) return '';
+
+    const jpMatch = raw.match(/[月火水木金土日]/);
+    if (jpMatch) {
+        const jpDayMap = { '月': 'Mon', '火': 'Tue', '水': 'Wed', '木': 'Thu', '金': 'Fri', '土': 'Sat', '日': 'Sun' };
+        return jpDayMap[jpMatch[0]] || '';
+    }
+
+    const normalized = raw.replace(/\./g, '').toLowerCase();
+    if (normalized.startsWith('mon')) return 'Mon';
+    if (normalized.startsWith('tue')) return 'Tue';
+    if (normalized.startsWith('wed')) return 'Wed';
+    if (normalized.startsWith('thu')) return 'Thu';
+    if (normalized.startsWith('fri')) return 'Fri';
+    if (normalized.startsWith('sat')) return 'Sat';
+    if (normalized.startsWith('sun')) return 'Sun';
+
+    return raw;
 }
 
 function parseCourseMeetingSlots(timeSlot) {
@@ -976,25 +959,24 @@ function parseCourseMeetingSlots(timeSlot) {
     const slots = [];
     const seen = new Set();
     const addSlot = (day, period) => {
-        const normalizedDay = String(day || '').trim();
+        const normalizedDay = normalizeCourseMeetingDayToken(day);
         const normalizedPeriod = Number(period);
         if (!normalizedDay || !Number.isFinite(normalizedPeriod)) return;
-        if (normalizedPeriod < 1 || normalizedPeriod > 5) return;
+        if (normalizedPeriod < 1 || normalizedPeriod > 9) return;
         const key = `${normalizedDay}-${normalizedPeriod}`;
         if (seen.has(key)) return;
         seen.add(key);
         slots.push({ day: normalizedDay, period: normalizedPeriod, key });
     };
 
-    const jpDayMap = { '月': 'Mon', '火': 'Tue', '水': 'Wed', '木': 'Thu', '金': 'Fri', '土': 'Sat', '日': 'Sun' };
-    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+    const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/g;
     let jpMatch = jpRegex.exec(raw);
     while (jpMatch) {
-        addSlot(jpDayMap[jpMatch[1]], Number(jpMatch[2]));
+        addSlot(jpMatch[1], Number(jpMatch[2]));
         jpMatch = jpRegex.exec(raw);
     }
 
-    const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})/gi;
+    const enRegex = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b\s+(\d{1,2}):(\d{2})/gi;
     let enMatch = enRegex.exec(raw);
     while (enMatch) {
         const period = mapStartTimeToCoursePeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));
@@ -1014,7 +996,7 @@ function isIntensiveCourseTimeSlot(timeSlot) {
 function getCourseMeetingTimes(courseData) {
     const slots = parseCourseMeetingSlots(courseData?.time_slot);
     if (!slots.length) {
-        const fallbackDay = String(courseData?.day || '').trim();
+        const fallbackDay = normalizeCourseMeetingDayToken(courseData?.day);
         const fallbackPeriod = Number(courseData?.period);
         if (fallbackDay && Number.isFinite(fallbackPeriod)) {
             return [{ day: fallbackDay, period: fallbackPeriod, key: `${fallbackDay}-${fallbackPeriod}` }];
@@ -1030,7 +1012,8 @@ function formatCourseSlotLabel(slot) {
         2: '2nd',
         3: '3rd',
         4: '4th',
-        5: '5th'
+        5: '5th',
+        6: '6th'
     };
     return `${slot.day} ${periodLabelMap[slot.period] || `${slot.period}th`}`;
 }
@@ -1211,6 +1194,8 @@ function doesCourseMatchSmartPreset(courseData, selectedFilterState) {
             if (!requiredYearMeta.hasRequiredYear) return true;
             if (!requiredYearMeta.hasKnownUserYear) return true;
             return Boolean(requiredYearMeta.meetsRequirement);
+        case 'preset-nonila-only':
+            return doesCourseMatchConcentrationFilter(courseData?.type, ['nonila']);
         default:
             return true;
     }
@@ -1515,22 +1500,63 @@ async function buildCourseStatusLookup(courses = [], year, term) {
             });
 
             if (registeredCourseCodes.size > 0) {
-                const { data: registeredCoursesData, error: registeredCoursesError } = await supabase
-                    .from('courses')
-                    .select('course_code, time_slot')
-                    .in('course_code', Array.from(registeredCourseCodes))
-                    .eq('academic_year', fallbackYear)
-                    .eq('term', fallbackTerm);
-
-                if (registeredCoursesError) throw registeredCoursesError;
-
-                (Array.isArray(registeredCoursesData) ? registeredCoursesData : []).forEach((registeredCourse) => {
-                    const slots = parseCourseMeetingSlots(registeredCourse?.time_slot);
+                const unresolvedRegisteredCodes = new Set(registeredCourseCodes);
+                const addRegisteredSlots = (courseLike) => {
+                    const slots = parseCourseMeetingSlots(
+                        courseLike?.time_slot,
+                        courseLike?.day,
+                        courseLike?.period
+                    );
                     slots.forEach((slot) => {
                         registeredSlots.add(slot.key);
                         emptySlots.delete(slot.key);
                     });
+                };
+
+                // First, resolve slots from the currently loaded merged catalog data.
+                (Array.isArray(courses) ? courses : []).forEach((course) => {
+                    const code = String(course?.course_code || '').trim().toUpperCase();
+                    if (!code || !unresolvedRegisteredCodes.has(code)) return;
+                    addRegisteredSlots(course);
+                    unresolvedRegisteredCodes.delete(code);
                 });
+
+                // Fallback to DB for any registered courses not present in loaded catalog data.
+                if (unresolvedRegisteredCodes.size > 0) {
+                    const lookupCodes = Array.from(unresolvedRegisteredCodes);
+                    const [ilaLookup, nonIlaLookup] = await Promise.all([
+                        supabase
+                            .from('courses')
+                            .select('course_code, time_slot, day, period')
+                            .in('course_code', lookupCodes)
+                            .eq('academic_year', fallbackYear)
+                            .eq('term', fallbackTerm),
+                        supabase
+                            .from('courses_nonila')
+                            .select('course_code, time_slot, day, period')
+                            .in('course_code', lookupCodes)
+                            .eq('academic_year', fallbackYear)
+                            .eq('term', fallbackTerm)
+                    ]);
+
+                    if (ilaLookup.error) {
+                        console.warn('Unable to read registered ILA courses for schedule signals:', ilaLookup.error);
+                    }
+                    if (nonIlaLookup.error) {
+                        console.warn('Unable to read registered non-ILA courses for schedule signals:', nonIlaLookup.error);
+                    }
+
+                    const combinedRegisteredCourses = [
+                        ...(Array.isArray(ilaLookup.data) ? ilaLookup.data : []),
+                        ...(Array.isArray(nonIlaLookup.data) ? nonIlaLookup.data : [])
+                    ];
+
+                    combinedRegisteredCourses.forEach((course) => {
+                        addRegisteredSlots(course);
+                        const code = String(course?.course_code || '').trim().toUpperCase();
+                        if (code) unresolvedRegisteredCodes.delete(code);
+                    });
+                }
             }
         } catch (error) {
             console.warn('Unable to read registered courses for status chips:', error);
@@ -1674,9 +1700,15 @@ function formatProfessorCardName(professor) {
     const looksAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
     if (!looksAllCaps) return raw;
 
-    return raw
+    const titleCased = raw
         .toLowerCase()
         .replace(/\b([a-z])/g, (match) => match.toUpperCase());
+
+    // Preserve common generational roman numeral suffixes (e.g. III).
+    return titleCased.replace(
+        /\b(Ii|Iii|Iv|Vi|Vii|Viii|Ix|Xi|Xii|Xiii|Xiv|Xv|Xvi|Xvii|Xviii|Xix|Xx)\b/g,
+        (token) => token.toUpperCase()
+    );
 }
 
 function isGraduateCourse(courseLike) {
@@ -2087,7 +2119,9 @@ function getCourseTypeLabel(courseType) {
         "Japanese Politics and Global Studies Concentration": "Politics",
         "Other Elective Courses": "Elective",
         "Special Lecture Series": "Elective",
-        "Graduate courses": "Graduate"
+        "Graduate courses": "Graduate",
+        "Non-ILA Classes": "Non-ILA",
+        "Non-ILA English": "Non-ILA"
     };
 
     if (!courseType) return "General";
@@ -2190,14 +2224,17 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
         "火曜日": "Tue", "火": "Tue",
         "水曜日": "Wed", "水": "Wed",
         "木曜日": "Thu", "木": "Thu",
-        "金曜日": "Fri", "金": "Fri"
+        "金曜日": "Fri", "金": "Fri",
+        "土曜日": "Sat", "土": "Sat",
+        "日曜日": "Sun", "日": "Sun"
     };
     const times = {
         "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
         "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
         "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
         "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
-        "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
+        "5講時": "16:40 - 18:10", "5": "16:40 - 18:10",
+        "6講時": "18:25 - 19:55", "6": "18:25 - 19:55"
     };
     const courseStatusLookup = coursePlanningContext?.statusLookup instanceof Map
         ? coursePlanningContext.statusLookup
@@ -2210,7 +2247,7 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
     courses.forEach(function (course) {
         const rawTimeSlot = course.time_slot || "";
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-9](?:講時)?)\)?/);
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         let displayTimeSlot = rawTimeSlot;
@@ -2222,7 +2259,6 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             displayTimeSlot = `${days[match[1]]} ${times[match[2]]}`;
         }
 
-        // Get color based on course type
         const courseColor = getCourseColorByType(course.type);
         const courseBorderColor = getCourseCardBorderColor(courseColor);
         const courseHoverBorderColor = getCourseCardHoverBorderColor(courseColor);
@@ -2489,6 +2525,8 @@ function doesCourseMatchConcentrationFilter(courseType, selectedConcentrations) 
                 return normalizedType === 'Other Elective Courses' || normalizedType === 'Special Lecture Series';
             case 'graduate':
                 return normalizedType === 'Graduate courses';
+            case 'nonila':
+                return normalizedType === 'Non-ILA Classes' || normalizedType === 'Non-ILA English';
             default:
                 return false;
         }
@@ -2543,7 +2581,7 @@ function containerMatchesFilters(container, courseData = null, selectedFilterSta
 
     const fallbackId = String(container?.id || '').trim();
     if (!meetingDays.length && fallbackId) {
-        const fallbackDay = fallbackId.split(' ')[0];
+        const fallbackDay = normalizeCourseMeetingDayToken(fallbackId.split(' ')[0]);
         if (fallbackDay) meetingDays.push(fallbackDay);
     }
     if (!meetingTimes.length && fallbackId) {
@@ -2960,8 +2998,92 @@ function setupCourseListClickListener() {
     if (!courseList || courseList.dataset.interactionsAttached === 'true') return;
 
     courseList.dataset.interactionsAttached = 'true';
+    let activeFooterDrag = null;
+    let suppressCourseCardOpenUntil = 0;
+
+    const clearCourseFooterDragState = (pointerId = null) => {
+        if (!activeFooterDrag) return;
+        if (pointerId !== null && activeFooterDrag.pointerId !== pointerId) return;
+
+        const { row, moved, pointerId: activePointerId } = activeFooterDrag;
+        if (row) {
+            row.classList.remove('is-grabbing');
+            if (row.hasPointerCapture && row.hasPointerCapture(activePointerId)) {
+                try {
+                    row.releasePointerCapture(activePointerId);
+                } catch {
+                    // No-op: capture can already be released by the browser.
+                }
+            }
+        }
+
+        if (moved) {
+            suppressCourseCardOpenUntil = Date.now() + 260;
+        }
+
+        activeFooterDrag = null;
+    };
+
+    courseList.addEventListener('pointerdown', (event) => {
+        if (window.innerWidth < 1024) return;
+        if (event.pointerType !== 'mouse' || event.button !== 0) return;
+
+        const row = event.target.closest('.course-footer-row--desktop.course-footer-row--scrollable');
+        if (!row || !courseList.contains(row)) return;
+        if (row.scrollWidth <= (row.clientWidth + 0.5)) return;
+
+        activeFooterDrag = {
+            row,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startScrollLeft: row.scrollLeft,
+            moved: false
+        };
+
+        row.classList.add('is-grabbing');
+        hideCourseChipTooltip();
+
+        if (row.setPointerCapture) {
+            try {
+                row.setPointerCapture(event.pointerId);
+            } catch {
+                // No-op: pointer capture may fail in older browsers.
+            }
+        }
+
+        event.preventDefault();
+    });
+
+    courseList.addEventListener('pointermove', (event) => {
+        if (!activeFooterDrag || activeFooterDrag.pointerId !== event.pointerId) return;
+
+        const dragDistance = event.clientX - activeFooterDrag.startX;
+        if (!activeFooterDrag.moved && Math.abs(dragDistance) > 4) {
+            activeFooterDrag.moved = true;
+        }
+
+        activeFooterDrag.row.scrollLeft = activeFooterDrag.startScrollLeft - dragDistance;
+        if (activeFooterDrag.moved) {
+            event.preventDefault();
+        }
+    });
+
+    courseList.addEventListener('pointerup', (event) => {
+        clearCourseFooterDragState(event.pointerId);
+    });
+
+    courseList.addEventListener('pointercancel', (event) => {
+        clearCourseFooterDragState(event.pointerId);
+    });
 
     courseList.addEventListener("click", function (event) {
+        const clickedFooterRow = event.target.closest('.course-footer-row--desktop');
+        if (clickedFooterRow && courseList.contains(clickedFooterRow) && Date.now() < suppressCourseCardOpenUntil) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
         const clearFiltersButton = event.target.closest('[data-action="clear-course-filters"]');
         if (clearFiltersButton) {
             event.preventDefault();
@@ -3069,6 +3191,7 @@ function setupCourseListClickListener() {
     });
 
     window.addEventListener('resize', () => {
+        clearCourseFooterDragState();
         hideCourseChipTooltip();
         hideCourseEvalPopover();
         requestCourseCardRankingChipVisibilityUpdate();
@@ -4113,7 +4236,26 @@ function syncSemesterDropdowns(value) {
 
 // Function to populate the semester dropdown dynamically from the database
 async function populateSemesterDropdown() {
-    const semesters = await fetchAvailableSemesters();
+    let semesters = await fetchAvailableSemesters();
+    if (!Array.isArray(semesters)) {
+        semesters = [];
+    }
+
+    if (semesters.length === 0) {
+        const termSelectFallback = document.getElementById('term-select');
+        const yearSelectFallback = document.getElementById('year-select');
+        const fallbackTermRaw = String(termSelectFallback?.value || 'Fall').toLowerCase();
+        const fallbackTerm = fallbackTermRaw.includes('spring') ? 'Spring' : 'Fall';
+        const fallbackYearValue = Number.parseInt(yearSelectFallback?.value, 10);
+        const fallbackYear = Number.isFinite(fallbackYearValue) ? fallbackYearValue : new Date().getFullYear();
+
+        semesters = [{
+            term: fallbackTerm,
+            year: fallbackYear,
+            label: `${fallbackTerm} ${fallbackYear}`
+        }];
+    }
+
     console.log('Populating semester dropdown with semesters:', semesters);
 
     // Get all semester selects (mobile and desktop)
@@ -5161,20 +5303,23 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
             "火曜日": "Tue", "火": "Tue",
             "水曜日": "Wed", "水": "Wed",
             "木曜日": "Thu", "木": "Thu",
-            "金曜日": "Fri", "金": "Fri"
+            "金曜日": "Fri", "金": "Fri",
+            "土曜日": "Sat", "土": "Sat",
+            "日曜日": "Sun", "日": "Sun"
         };
         const times = {
             "1講時": "09:00 - 10:30", "1": "09:00 - 10:30",
             "2講時": "10:45 - 12:15", "2": "10:45 - 12:15",
             "3講時": "13:10 - 14:40", "3": "13:10 - 14:40",
             "4講時": "14:55 - 16:25", "4": "14:55 - 16:25",
-            "5講時": "16:40 - 18:10", "5": "16:40 - 18:10"
+            "5講時": "16:40 - 18:10", "5": "16:40 - 18:10",
+            "6講時": "18:25 - 19:55", "6": "18:25 - 19:55"
         };
 
         const rawTimeSlot = course.time_slot || "";
         let timeSlot = rawTimeSlot;
         // Match both full and short Japanese formats: (月曜日1講時) or (木4講時)
-        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-5](?:講時)?)\)?/);
+        const match = rawTimeSlot.match(/\(?([月火水木金土日](?:曜日)?)([1-9](?:講時)?)\)?/);
         const specialMatch = rawTimeSlot.match(/(月曜日3講時・木曜日3講時)/);
 
         if (/(集中講義|集中)/.test(rawTimeSlot)) {

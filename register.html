@@ -7,22 +7,15 @@
 </head>
 
 <body class="auth-page">
-    <section id="auth-main" class="ui-page">
-        <div class="ui-page-content auth-container">
-            <div class="ui-card auth-background">
-                <h1>Continue</h1>
-                <p>Enter your email and password to sign in or create your account.</p>
-                <div id="message" aria-live="polite"></div>
-                <form id="login-form" method="post">
-                    <label for="email">Email</label>
-                    <input type="email" name="email" id="email" autocomplete="email" required>
-                    <label for="password">Password</label>
-                    <input type="password" name="password" id="password" autocomplete="current-password" required>
-                    <button type="submit" class="ui-btn ui-btn--secondary sign-up-btn">Continue</button>
-                </form>
+    <div id="app-content" class="ui-page">
+        <section id="auth-main">
+            <div class="ui-page-content auth-container">
+                <div class="ui-card auth-background">
+                    <div id="auth-page-root" data-auth-page></div>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
+    </div>
 
     <script type="module" src="js/auth.js"></script>
 </body>

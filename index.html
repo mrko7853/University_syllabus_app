@@ -59,8 +59,20 @@
                             <div></div>
                         </button>
                         <div class="home-guest-auth-actions" aria-label="Guest actions">
-                            <a class="ui-btn ui-btn--secondary control-surface home-guest-auth-link" href="/login">Sign In</a>
-                            <a class="ui-btn ui-btn--secondary control-surface home-guest-auth-link home-guest-auth-link--primary" href="/register">Sign Up</a>
+                            <a
+                                class="ui-btn ui-btn--secondary control-surface home-guest-auth-link"
+                                href="/login"
+                                data-auth-open="signin"
+                                data-auth-action="continue"
+                                data-auth-source="home-desktop-header"
+                            >Sign In</a>
+                            <a
+                                class="ui-btn ui-btn--secondary control-surface home-guest-auth-link home-guest-auth-link--primary"
+                                href="/register"
+                                data-auth-open="signup"
+                                data-auth-action="create your account"
+                                data-auth-source="home-desktop-header"
+                            >Sign Up</a>
                         </div>
                     </div>
                 </div>

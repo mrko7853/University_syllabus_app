@@ -1,0 +1,17 @@
+<svg width="1200" height="680" viewBox="0 0 1200 680" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Timetable teaser placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9B3F2"/>
+      <stop offset="1" stop-color="#9BC8F7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="680" rx="28" fill="url(#bg)"/>
+  <rect x="88" y="116" width="1024" height="448" rx="22" fill="rgba(255,255,255,0.78)"/>
+  <rect x="132" y="176" width="236" height="24" rx="12" fill="#DBE6F4"/>
+  <rect x="132" y="226" width="936" height="18" rx="9" fill="#CCD9EB"/>
+  <rect x="132" y="264" width="936" height="18" rx="9" fill="#CCD9EB"/>
+  <rect x="132" y="302" width="936" height="18" rx="9" fill="#CCD9EB"/>
+  <rect x="132" y="340" width="936" height="18" rx="9" fill="#CCD9EB"/>
+  <rect x="132" y="378" width="936" height="18" rx="9" fill="#CCD9EB"/>
+  <text x="132" y="488" fill="#4A5A73" font-family="Geist, sans-serif" font-size="34" font-weight="600">Placeholder image · Timetable preview</text>
+</svg>

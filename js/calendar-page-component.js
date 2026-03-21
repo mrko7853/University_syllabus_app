@@ -4,6 +4,11 @@ import { supabase } from "../supabase.js";
 
 const CALENDAR_VIEW_STORAGE_KEY = "ila_calendar_view_mode";
 const CALENDAR_BUSY_SLOTS_STORAGE_KEY = "ila_calendar_busy_slots_v1";
+const CALENDAR_WEEK_ZOOM_STORAGE_KEY = "ila_calendar_week_zoom_v1";
+const CALENDAR_WEEK_ZOOM_DEFAULT = 100;
+const CALENDAR_WEEK_ZOOM_MIN = 70;
+const CALENDAR_WEEK_ZOOM_MAX = 100;
+const CALENDAR_WEEK_ZOOM_STEP = 5;
 const VIEW_WEEK = "week";
 const VIEW_DAY = "day";
 const VIEW_LIST = "list";
@@ -21,6 +26,7 @@ class CalendarPageComponent extends HTMLElement {
     this.savedViewPreference = this.readSavedViewPreference();
     const initialPreferredView = this.savedViewPreference || this.resolveDefaultViewForViewport(this.isMobile);
     this.currentView = this.resolveEffectiveViewForViewport(initialPreferredView, this.isMobile);
+    this.weekZoomLevel = this.readSavedWeekZoomPreference() ?? CALENDAR_WEEK_ZOOM_DEFAULT;
 
     this.dayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     this.dayLongNames = {
@@ -43,7 +49,8 @@ class CalendarPageComponent extends HTMLElement {
       { number: 2, label: "period 2", timeRange: "10:45 - 12:15", start: 10 * 60 + 45, end: 12 * 60 + 15, filterValue: "10:45" },
       { number: 3, label: "period 3", timeRange: "13:10 - 14:40", start: 13 * 60 + 10, end: 14 * 60 + 40, filterValue: "13:10" },
       { number: 4, label: "period 4", timeRange: "14:55 - 16:25", start: 14 * 60 + 55, end: 16 * 60 + 25, filterValue: "14:55" },
-      { number: 5, label: "period 5", timeRange: "16:40 - 18:10", start: 16 * 60 + 40, end: 18 * 60 + 10, filterValue: "16:40" }
+      { number: 5, label: "period 5", timeRange: "16:40 - 18:10", start: 16 * 60 + 40, end: 18 * 60 + 10, filterValue: "16:40" },
+      { number: 6, label: "period 6", timeRange: "18:25 - 19:55", start: 18 * 60 + 25, end: 19 * 60 + 55, filterValue: "18:25" }
     ];
 
     this.dayIdByEN = {
@@ -96,6 +103,12 @@ class CalendarPageComponent extends HTMLElement {
     this.toolbarCleanupFns = [];
     this.stickyToolbarObserverCleanup = null;
     this.filterCloseTimer = null;
+    this.zoomControlsContainer = null;
+    this.zoomOutButton = null;
+    this.zoomResetButton = null;
+    this.zoomInButton = null;
+    this.weekZoomScopeElement = null;
+    this.weekIntensiveLayoutRafId = 0;
 
     this.innerHTML = `
       <div class="calendar-page-wrapper">
@@ -309,6 +322,11 @@ class CalendarPageComponent extends HTMLElement {
       clearTimeout(this.daySwipeSettleTimer);
       this.daySwipeSettleTimer = null;
     }
+    if (this.weekIntensiveLayoutRafId) {
+      window.cancelAnimationFrame(this.weekIntensiveLayoutRafId);
+      this.weekIntensiveLayoutRafId = 0;
+    }
+    this.getCalendarPageRoot()?.classList.remove("calendar-week-intensive-inline");
     this.cleanupDaySwipePreview();
   }
 
@@ -365,6 +383,226 @@ class CalendarPageComponent extends HTMLElement {
     } catch (error) {
       console.warn("Unable to persist calendar view preference:", error);
     }
+  }
+
+  normalizeWeekZoomLevel(value) {
+    const numericValue = Number.parseInt(value, 10);
+    if (!Number.isFinite(numericValue)) return null;
+
+    const steppedValue = Math.round(numericValue / CALENDAR_WEEK_ZOOM_STEP) * CALENDAR_WEEK_ZOOM_STEP;
+    return Math.min(CALENDAR_WEEK_ZOOM_MAX, Math.max(CALENDAR_WEEK_ZOOM_MIN, steppedValue));
+  }
+
+  readSavedWeekZoomPreference() {
+    try {
+      const stored = window.localStorage.getItem(CALENDAR_WEEK_ZOOM_STORAGE_KEY);
+      return this.normalizeWeekZoomLevel(stored);
+    } catch (error) {
+      console.warn("Unable to read calendar zoom preference:", error);
+      return null;
+    }
+  }
+
+  writeSavedWeekZoomPreference(level) {
+    const normalized = this.normalizeWeekZoomLevel(level);
+    if (!Number.isFinite(normalized)) return;
+
+    try {
+      window.localStorage.setItem(CALENDAR_WEEK_ZOOM_STORAGE_KEY, String(normalized));
+    } catch (error) {
+      console.warn("Unable to persist calendar zoom preference:", error);
+    }
+  }
+
+  getCalendarPageRoot() {
+    return this.closest("#course-summary") || document.getElementById("course-summary");
+  }
+
+  isWeekZoomActive() {
+    const effectiveView = this.resolveEffectiveViewForViewport(this.currentView, this.isMobile);
+    return !this.isMobile && effectiveView === VIEW_WEEK;
+  }
+
+  applyWeekZoomStyles() {
+    const root = this.getCalendarPageRoot();
+    if (!root) return;
+
+    const normalized = this.normalizeWeekZoomLevel(this.weekZoomLevel) ?? CALENDAR_WEEK_ZOOM_DEFAULT;
+    this.weekZoomLevel = normalized;
+
+    const zoomScale = (normalized / 100).toFixed(2);
+    root.style.setProperty("--calendar-week-zoom-scale", zoomScale);
+    root.style.setProperty("--calendar-week-zoom-percent", `${normalized}%`);
+  }
+
+  setWeekZoomLevel(nextLevel, { persist = true } = {}) {
+    const normalized = this.normalizeWeekZoomLevel(nextLevel);
+    if (!Number.isFinite(normalized)) return false;
+
+    this.weekZoomLevel = normalized;
+    this.applyWeekZoomStyles();
+    this.syncWeekZoomControls();
+    this.scheduleWeekIntensiveInlineStateSync();
+
+    if (persist) {
+      this.writeSavedWeekZoomPreference(normalized);
+    }
+
+    return true;
+  }
+
+  adjustWeekZoom(delta) {
+    const nextLevel = (this.weekZoomLevel || CALENDAR_WEEK_ZOOM_DEFAULT) + delta;
+    return this.setWeekZoomLevel(nextLevel);
+  }
+
+  handleWeekZoomAction(action) {
+    if (!this.isWeekZoomActive()) return;
+
+    if (action === "out") {
+      this.adjustWeekZoom(-CALENDAR_WEEK_ZOOM_STEP);
+      return;
+    }
+
+    if (action === "in") {
+      this.adjustWeekZoom(CALENDAR_WEEK_ZOOM_STEP);
+      return;
+    }
+
+    if (action === "reset") {
+      this.setWeekZoomLevel(CALENDAR_WEEK_ZOOM_DEFAULT);
+    }
+  }
+
+  getWeekZoomScopeElement() {
+    const root = this.getCalendarPageRoot();
+    if (!root) return null;
+    return root.querySelector(".ui-page-content.main-content") || root.querySelector(".main-content");
+  }
+
+  isWeekZoomEventInsideScope(event) {
+    const scope = this.weekZoomScopeElement || this.getWeekZoomScopeElement() || this.calendarGridScroll;
+    if (!scope) return false;
+
+    if (event?.target instanceof Node && scope.contains(event.target)) {
+      return true;
+    }
+
+    return document.activeElement instanceof Node && scope.contains(document.activeElement);
+  }
+
+  isEditableTarget(element) {
+    if (!(element instanceof Element)) return false;
+    return Boolean(element.closest("input, textarea, select, [contenteditable='true']"));
+  }
+
+  shouldHandleWeekZoomShortcut(event, { requireScope = true } = {}) {
+    if (!this.isWeekZoomActive()) return false;
+    if (!(event.ctrlKey || event.metaKey)) return false;
+    if (requireScope && !this.isWeekZoomEventInsideScope(event)) return false;
+
+    const targetElement = event.target instanceof Element ? event.target : document.activeElement;
+    if (this.isEditableTarget(targetElement)) return false;
+
+    return true;
+  }
+
+  handleWeekZoomWheel(event) {
+    if (!this.shouldHandleWeekZoomShortcut(event)) return;
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+
+    event.preventDefault();
+    if (event.deltaY > 0) {
+      this.adjustWeekZoom(-CALENDAR_WEEK_ZOOM_STEP);
+      return;
+    }
+
+    this.adjustWeekZoom(CALENDAR_WEEK_ZOOM_STEP);
+  }
+
+  handleWeekZoomKeydown(event) {
+    if (!this.shouldHandleWeekZoomShortcut(event, { requireScope: false })) return;
+    if (event.altKey) return;
+
+    const key = String(event.key || "");
+    const isZoomInKey = key === "+" || key === "=" || key === "Add";
+    const isZoomOutKey = key === "-" || key === "_" || key === "Subtract";
+    if (!isZoomInKey && !isZoomOutKey) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isZoomInKey) {
+      this.adjustWeekZoom(CALENDAR_WEEK_ZOOM_STEP);
+      return;
+    }
+
+    this.adjustWeekZoom(-CALENDAR_WEEK_ZOOM_STEP);
+  }
+
+  syncWeekZoomControls() {
+    if (!this.zoomControlsContainer) return;
+
+    const isActive = this.isWeekZoomActive();
+    this.zoomControlsContainer.hidden = !isActive;
+    this.zoomControlsContainer.setAttribute("aria-hidden", isActive ? "false" : "true");
+
+    const zoomLabel = `${this.weekZoomLevel || CALENDAR_WEEK_ZOOM_DEFAULT}%`;
+    if (this.zoomResetButton) {
+      this.zoomResetButton.textContent = zoomLabel;
+      this.zoomResetButton.setAttribute("aria-label", `Reset zoom to ${CALENDAR_WEEK_ZOOM_DEFAULT}%`);
+    }
+
+    const disableAll = !isActive;
+    const atMinimum = (this.weekZoomLevel || CALENDAR_WEEK_ZOOM_DEFAULT) <= CALENDAR_WEEK_ZOOM_MIN;
+    const atMaximum = (this.weekZoomLevel || CALENDAR_WEEK_ZOOM_DEFAULT) >= CALENDAR_WEEK_ZOOM_MAX;
+    const atDefault = (this.weekZoomLevel || CALENDAR_WEEK_ZOOM_DEFAULT) === CALENDAR_WEEK_ZOOM_DEFAULT;
+
+    if (this.zoomOutButton) {
+      this.zoomOutButton.disabled = disableAll || atMinimum;
+      this.zoomOutButton.setAttribute("aria-disabled", this.zoomOutButton.disabled ? "true" : "false");
+    }
+
+    if (this.zoomInButton) {
+      this.zoomInButton.disabled = disableAll || atMaximum;
+      this.zoomInButton.setAttribute("aria-disabled", this.zoomInButton.disabled ? "true" : "false");
+    }
+
+    if (this.zoomResetButton) {
+      this.zoomResetButton.disabled = disableAll || atDefault;
+      this.zoomResetButton.setAttribute("aria-disabled", this.zoomResetButton.disabled ? "true" : "false");
+    }
+  }
+
+  scheduleWeekIntensiveInlineStateSync() {
+    if (this.weekIntensiveLayoutRafId) {
+      window.cancelAnimationFrame(this.weekIntensiveLayoutRafId);
+      this.weekIntensiveLayoutRafId = 0;
+    }
+
+    this.weekIntensiveLayoutRafId = window.requestAnimationFrame(() => {
+      this.weekIntensiveLayoutRafId = 0;
+      this.syncWeekIntensiveInlineState();
+    });
+  }
+
+  syncWeekIntensiveInlineState() {
+    const root = this.getCalendarPageRoot();
+    if (!root) return;
+
+    const isWeekDesktop = this.isWeekZoomActive();
+    const intensiveSection = this.weekIntensiveSection;
+    const gridScroll = this.calendarGridScroll;
+
+    if (!isWeekDesktop || !intensiveSection || intensiveSection.hidden || !gridScroll) {
+      root.classList.remove("calendar-week-intensive-inline");
+      return;
+    }
+
+    const gridRect = gridScroll.getBoundingClientRect();
+    const intensiveRect = intensiveSection.getBoundingClientRect();
+    const sameRow = Math.abs(intensiveRect.top - gridRect.top) <= 8;
+    root.classList.toggle("calendar-week-intensive-inline", sameRow);
   }
 
   resolveDefaultViewForViewport(isMobile) {
@@ -461,10 +699,14 @@ class CalendarPageComponent extends HTMLElement {
       this.closeSlotPopover(false);
       this.hideTooltip();
     }
+
+    this.applyWeekZoomStyles();
+    this.syncWeekZoomControls();
+    this.scheduleWeekIntensiveInlineStateSync();
   }
 
   syncRootViewStateClasses(showWeek, showDay, showList) {
-    const root = this.closest("#course-summary") || document.getElementById("course-summary");
+    const root = this.getCalendarPageRoot();
     if (!root) return;
 
     root.classList.toggle("calendar-view-week-active", Boolean(showWeek));
@@ -565,6 +807,7 @@ class CalendarPageComponent extends HTMLElement {
   setupToolbarControls() {
     this.cleanupToolbarControls();
     this.ensureCalendarFilterMarkup();
+    this.ensureWeekZoomControlsMarkup();
     this.setupStickyToolbarObserver();
 
     const filterTriggerDesktop = document.getElementById("calendar-filter-trigger");
@@ -574,6 +817,10 @@ class CalendarPageComponent extends HTMLElement {
     const filterSeeResults = document.getElementById("calendar-filter-see-results");
     const filterClearAll = document.getElementById("calendar-filter-clear-all");
     const filterPopupPanel = filterPopover?.querySelector(".filter-popup");
+    const zoomControlsContainer = document.getElementById("calendar-zoom-controls");
+    const zoomOutButton = document.getElementById("calendar-zoom-out");
+    const zoomResetButton = document.getElementById("calendar-zoom-reset");
+    const zoomInButton = document.getElementById("calendar-zoom-in");
 
     const viewButtonDefs = [
       { id: "calendar-view-week", view: VIEW_WEEK },
@@ -612,6 +859,11 @@ class CalendarPageComponent extends HTMLElement {
     this.filterPopoverPanel = filterPopupPanel || null;
     this.filterTriggerDesktop = filterTriggerDesktop || null;
     this.filterTriggerMobile = filterTriggerMobile || null;
+    this.zoomControlsContainer = zoomControlsContainer || null;
+    this.zoomOutButton = zoomOutButton || null;
+    this.zoomResetButton = zoomResetButton || null;
+    this.zoomInButton = zoomInButton || null;
+    this.weekZoomScopeElement = this.getWeekZoomScopeElement();
 
     viewButtons.forEach((button) => {
       button.removeAttribute("disabled");
@@ -628,6 +880,30 @@ class CalendarPageComponent extends HTMLElement {
       button.addEventListener("click", onClick);
       this.toolbarCleanupFns.push(() => button.removeEventListener("click", onClick));
     });
+
+    [zoomOutButton, zoomResetButton, zoomInButton].forEach((button) => {
+      if (!button) return;
+
+      const onClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.handleWeekZoomAction(button.dataset.calendarZoomAction);
+      };
+
+      button.addEventListener("click", onClick);
+      this.toolbarCleanupFns.push(() => button.removeEventListener("click", onClick));
+    });
+
+    const zoomWheelScope = this.weekZoomScopeElement || this.calendarGridScroll;
+    if (zoomWheelScope) {
+      const onWheel = (event) => this.handleWeekZoomWheel(event);
+      zoomWheelScope.addEventListener("wheel", onWheel, { passive: false });
+      this.toolbarCleanupFns.push(() => zoomWheelScope.removeEventListener("wheel", onWheel));
+    }
+
+    const onZoomKeydown = (event) => this.handleWeekZoomKeydown(event);
+    document.addEventListener("keydown", onZoomKeydown);
+    this.toolbarCleanupFns.push(() => document.removeEventListener("keydown", onZoomKeydown));
 
     const openFromTrigger = (trigger) => {
       if (!trigger || !this.filterPopoverElement) return;
@@ -695,6 +971,46 @@ class CalendarPageComponent extends HTMLElement {
 
     this.syncFilterStateFromControls();
     this.syncViewToggleButtons();
+    this.applyWeekZoomStyles();
+    this.syncWeekZoomControls();
+  }
+
+  ensureWeekZoomControlsMarkup() {
+    const desktopToolbarRight = document.querySelector("#course-summary.calendar-page-modern .container-above-desktop .calendar-toolbar-right");
+    if (!desktopToolbarRight) return;
+
+    let controls = document.getElementById("calendar-zoom-controls");
+    if (!controls) {
+      controls = document.createElement("div");
+      controls.className = "ui-segment calendar-zoom-controls";
+      controls.id = "calendar-zoom-controls";
+      controls.setAttribute("aria-label", "Week zoom controls");
+      controls.innerHTML = `
+        <button type="button" id="calendar-zoom-out"
+          class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--step"
+          data-calendar-zoom-action="out" aria-label="Zoom out">
+          <span aria-hidden="true">-</span>
+        </button>
+        <button type="button" id="calendar-zoom-reset"
+          class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--readout"
+          data-calendar-zoom-action="reset" aria-label="Reset zoom to 100%">
+          100%
+        </button>
+        <button type="button" id="calendar-zoom-in"
+          class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--step"
+          data-calendar-zoom-action="in" aria-label="Zoom in">
+          <span aria-hidden="true">+</span>
+        </button>
+      `;
+    }
+
+    const filterButton = document.getElementById("calendar-filter-trigger");
+    if (filterButton && filterButton.parentElement === desktopToolbarRight) {
+      desktopToolbarRight.insertBefore(controls, filterButton);
+      return;
+    }
+
+    desktopToolbarRight.prepend(controls);
   }
 
   cleanupToolbarControls() {
@@ -706,6 +1022,11 @@ class CalendarPageComponent extends HTMLElement {
       }
     });
     this.toolbarCleanupFns = [];
+    this.zoomControlsContainer = null;
+    this.zoomOutButton = null;
+    this.zoomResetButton = null;
+    this.zoomInButton = null;
+    this.weekZoomScopeElement = null;
     this.cleanupStickyToolbarObserver();
   }
 
@@ -1210,6 +1531,8 @@ class CalendarPageComponent extends HTMLElement {
       this.filterPopoverElement.style.top = `${Math.round(rect.bottom + 8)}px`;
       this.filterPopoverElement.style.left = `${Math.round(rect.right - this.filterPopoverElement.offsetWidth)}px`;
     }
+
+    this.scheduleWeekIntensiveInlineStateSync();
   }
 
   checkMobile() {
@@ -3394,6 +3717,7 @@ class CalendarPageComponent extends HTMLElement {
     if (numericStart >= 1310 && numericStart < 1440) return 3;
     if (numericStart >= 1455 && numericStart < 1625) return 4;
     if (numericStart >= 1640 && numericStart < 1810) return 5;
+    if (numericStart >= 1825 && numericStart < 1955) return 6;
     return null;
   }
 
@@ -3426,7 +3750,7 @@ class CalendarPageComponent extends HTMLElement {
       const dayEN = this.normalizeDayToken(dayToken);
       const period = Number(periodValue);
       if (!dayEN || !this.dayIdByEN[dayEN]) return;
-      if (!Number.isFinite(period) || period < 1 || period > 5) return;
+      if (!Number.isFinite(period) || period < 1 || period > 6) return;
       const key = `${dayEN}-${period}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -3434,7 +3758,7 @@ class CalendarPageComponent extends HTMLElement {
     };
 
     if (raw) {
-      const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g;
+      const jpRegex = /([月火水木金土日])(?:曜日)?\s*([1-6])(?:講時)?/g;
       let jpMatch = jpRegex.exec(raw);
       while (jpMatch) {
         addSlot(jpMatch[1], Number(jpMatch[2]));
@@ -3759,10 +4083,6 @@ class CalendarPageComponent extends HTMLElement {
           timeText.className = "calendar-course-time";
           timeText.textContent = periodDef.timeRange;
 
-          const professorText = document.createElement("p");
-          professorText.className = "calendar-course-professor";
-          professorText.textContent = formatProfessorDisplayName(primaryCourse.professor);
-
           const badges = document.createElement("div");
           badges.className = "calendar-course-badge-row";
 
@@ -3776,7 +4096,6 @@ class CalendarPageComponent extends HTMLElement {
 
           courseButton.appendChild(title);
           courseButton.appendChild(timeText);
-          courseButton.appendChild(professorText);
           courseButton.appendChild(badges);
 
           if (slotCourses.length > 1) {
@@ -3831,6 +4150,7 @@ class CalendarPageComponent extends HTMLElement {
     const intensiveCourses = Array.isArray(this.visibleIntensiveCourses) ? this.visibleIntensiveCourses : [];
     if (intensiveCourses.length === 0) {
       this.weekIntensiveSection.hidden = true;
+      this.scheduleWeekIntensiveInlineStateSync();
       return;
     }
 
@@ -3853,10 +4173,6 @@ class CalendarPageComponent extends HTMLElement {
       timeText.className = "calendar-course-time";
       timeText.textContent = "Intensive";
 
-      const professorText = document.createElement("p");
-      professorText.className = "calendar-course-professor";
-      professorText.textContent = formatProfessorDisplayName(course?.professor);
-
       const badges = document.createElement("div");
       badges.className = "calendar-course-badge-row";
 
@@ -3870,13 +4186,13 @@ class CalendarPageComponent extends HTMLElement {
 
       card.appendChild(title);
       card.appendChild(timeText);
-      card.appendChild(professorText);
       card.appendChild(badges);
       fragment.appendChild(card);
     });
 
     this.weekIntensiveCards.appendChild(fragment);
     this.weekIntensiveSection.hidden = false;
+    this.scheduleWeekIntensiveInlineStateSync();
   }
 
   highlightDay(dayShort) {

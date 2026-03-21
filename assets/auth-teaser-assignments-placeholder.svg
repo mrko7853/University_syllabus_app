@@ -1,0 +1,20 @@
+<svg width="1200" height="680" viewBox="0 0 1200 680" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Assignments teaser placeholder">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1200" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D4C4E0"/>
+      <stop offset="1" stop-color="#B8C9E2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="680" rx="28" fill="url(#bg2)"/>
+  <rect x="88" y="116" width="1024" height="448" rx="22" fill="rgba(255,255,255,0.8)"/>
+  <rect x="132" y="178" width="936" height="64" rx="16" fill="#FFFFFF"/>
+  <rect x="132" y="262" width="936" height="64" rx="16" fill="#FFFFFF"/>
+  <rect x="132" y="346" width="936" height="64" rx="16" fill="#FFFFFF"/>
+  <circle cx="176" cy="210" r="16" fill="#EAD89C"/>
+  <circle cx="176" cy="294" r="16" fill="#B6D5A7"/>
+  <circle cx="176" cy="378" r="16" fill="#EBA4A2"/>
+  <rect x="212" y="198" width="310" height="24" rx="12" fill="#D8DCEA"/>
+  <rect x="212" y="282" width="372" height="24" rx="12" fill="#D8DCEA"/>
+  <rect x="212" y="366" width="344" height="24" rx="12" fill="#D8DCEA"/>
+  <text x="132" y="488" fill="#4A5A73" font-family="Geist, sans-serif" font-size="34" font-weight="600">Placeholder image · Assignments preview</text>
+</svg>

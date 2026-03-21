@@ -83,6 +83,23 @@
           </div>
 
           <div class="calendar-toolbar-right">
+            <div class="ui-segment calendar-zoom-controls" id="calendar-zoom-controls" aria-label="Week zoom controls">
+              <button type="button" id="calendar-zoom-out"
+                class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--step"
+                data-calendar-zoom-action="out" aria-label="Zoom out">
+                <span aria-hidden="true">-</span>
+              </button>
+              <button type="button" id="calendar-zoom-reset"
+                class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--readout"
+                data-calendar-zoom-action="reset" aria-label="Reset zoom to 100%">
+                100%
+              </button>
+              <button type="button" id="calendar-zoom-in"
+                class="ui-segment__item ui-pill ui-pill--filter calendar-zoom-btn calendar-zoom-btn--step"
+                data-calendar-zoom-action="in" aria-label="Zoom in">
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
             <button type="button" id="calendar-filter-trigger" class="ui-btn ui-btn--secondary calendar-filter-trigger control-surface control-surface--secondary"
               aria-haspopup="dialog" aria-expanded="false">
               <span class="calendar-filter-trigger-icon" aria-hidden="true"></span>

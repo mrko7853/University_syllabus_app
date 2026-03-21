@@ -12,6 +12,7 @@ const HOME_SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter'
 const HOME_SLOT_PREFILTER_MAX_AGE_MS = 10 * 60 * 1000
 const SETUP_BYPASS_ROUTES = new Set(['/setup', '/auth/callback', '/profile', '/settings', '/help'])
 const AUTH_LOGOUT_TOAST_KEY = 'ila_auth_logout_toast'
+const ROUTE_TOAST_QUEUE_KEY = 'ila_route_toast'
 
 class SimpleRouter {
   constructor() {
@@ -50,6 +51,7 @@ class SimpleRouter {
     this.pageCache = new Map()
     this.pageCacheInitialized = new Map()
     this.sharedModulePromise = null
+    this.authModulePromise = null
     this.mobileHeaderProfileBadgeCache = {
       userId: null,
       initials: '',
@@ -122,7 +124,44 @@ class SimpleRouter {
     // Handle navigation clicks
     document.addEventListener('click', (e) => {
       const link = e.target.closest('a[href]')
+      if (link && link.dataset?.authOpen) {
+        e.preventDefault()
+        const preferredMode = String(link.dataset.authOpen).toLowerCase() === 'signup' ? 'signup' : 'signin'
+        const action = String(link.dataset.authAction || 'continue').trim() || 'continue'
+        const source = String(link.dataset.authSource || 'link-auth-trigger').trim() || 'link-auth-trigger'
+        void this.openAuthModal({ preferredMode, action, source }).then((opened) => {
+          if (!opened) {
+            this.navigate(link.href)
+          }
+        })
+        return
+      }
+
       if (link && this.shouldIntercept(link)) {
+        const linkHref = String(link.getAttribute('href') || link.href || '').trim()
+        const baseTarget = this.extractBasePath(stripBase(linkHref))
+        if (this.isProtectedRoute(baseTarget)) {
+          e.preventDefault()
+          void this.checkAuthentication().then(async (isAuthenticated) => {
+            if (isAuthenticated) {
+              this.navigate(linkHref)
+              return
+            }
+
+            const opened = await this.openAuthModal({
+              preferredMode: 'signin',
+              action: this.getProtectedRouteAuthAction(baseTarget),
+              source: 'protected-route-link',
+              onSuccess: () => this.navigate(baseTarget)
+            })
+
+            if (!opened) {
+              this.navigate(linkHref)
+            }
+          })
+          return
+        }
+
         e.preventDefault()
         this.navigate(link.href)
       }
@@ -133,14 +172,7 @@ class SimpleRouter {
       const button = e.target.closest('button[data-route]')
       if (button) {
         e.preventDefault()
-
-        // Special handling for search button - open modal instead of navigating
-        if (button.dataset.route === '/search') {
-          this.openSearchModal()
-          return
-        }
-
-        this.navigate(button.dataset.route)
+        void this.handleRouteButtonClick(button)
       }
     })
 
@@ -205,6 +237,44 @@ class SimpleRouter {
     return true
   }
 
+  async handleRouteButtonClick(button) {
+    const targetRoute = String(button?.dataset?.route || '').trim()
+    if (!targetRoute) return
+
+    // Special handling for search button - open modal instead of navigating
+    if (targetRoute === '/search') {
+      this.openSearchModal()
+      return
+    }
+
+    const normalizedRoute = this.extractBasePath(targetRoute)
+
+    // Modal-first behavior for explicit auth CTA triggers.
+    if (button.dataset?.authOpen) {
+      const preferredMode = String(button.dataset.authOpen).toLowerCase() === 'signup' ? 'signup' : 'signin'
+      const action = String(button.dataset.authAction || 'continue').trim() || 'continue'
+      const source = String(button.dataset.authSource || 'route-button-auth').trim() || 'route-button-auth'
+      const opened = await this.openAuthModal({ preferredMode, action, source })
+      if (opened) return
+    }
+
+    // Protected in-app route clicks should open auth modal in place for guests.
+    if (this.isProtectedRoute(normalizedRoute)) {
+      const isAuthenticated = await this.checkAuthentication()
+      if (!isAuthenticated) {
+        const opened = await this.openAuthModal({
+          preferredMode: 'signin',
+          action: this.getProtectedRouteAuthAction(normalizedRoute),
+          source: 'protected-route-button',
+          onSuccess: () => this.navigate(normalizedRoute)
+        })
+        if (opened) return
+      }
+    }
+
+    this.navigate(targetRoute)
+  }
+
   // Check if currently on the courses page
   isOnCoursesPage() {
     return this.isCoursesRoute(this.currentPath)
@@ -262,7 +332,7 @@ class SimpleRouter {
     document.body.classList.toggle('auth-callback-active', normalizedPath === '/auth/callback')
   }
 
-  showRouteToast(message, durationMs = 2200) {
+  showRouteToast(message, durationMs = 2200, variant = 'info') {
     const normalized = String(message || '').trim()
     if (!normalized) return
 
@@ -271,6 +341,9 @@ class SimpleRouter {
 
     const toast = document.createElement('div')
     toast.id = 'link-copied-notification'
+    if (String(variant || '').toLowerCase() === 'error') {
+      toast.classList.add('is-error')
+    }
     toast.textContent = normalized
     document.body.appendChild(toast)
 
@@ -291,9 +364,34 @@ class SimpleRouter {
   flushQueuedRouteToasts() {
     try {
       const logoutMessage = window.sessionStorage.getItem(AUTH_LOGOUT_TOAST_KEY)
+        || window.localStorage.getItem(AUTH_LOGOUT_TOAST_KEY)
       if (logoutMessage) {
         window.sessionStorage.removeItem(AUTH_LOGOUT_TOAST_KEY)
+        window.localStorage.removeItem(AUTH_LOGOUT_TOAST_KEY)
         this.showRouteToast(logoutMessage)
+      }
+
+      const queuedRouteToastRaw = window.sessionStorage.getItem(ROUTE_TOAST_QUEUE_KEY)
+        || window.localStorage.getItem(ROUTE_TOAST_QUEUE_KEY)
+      if (queuedRouteToastRaw) {
+        window.sessionStorage.removeItem(ROUTE_TOAST_QUEUE_KEY)
+        window.localStorage.removeItem(ROUTE_TOAST_QUEUE_KEY)
+        let parsed = null
+        try {
+          parsed = JSON.parse(queuedRouteToastRaw)
+        } catch (_) {
+          parsed = null
+        }
+
+        if (parsed && typeof parsed === 'object') {
+          this.showRouteToast(
+            parsed.message || '',
+            Number(parsed.durationMs) || 2600,
+            parsed.variant || 'info'
+          )
+        } else {
+          this.showRouteToast(queuedRouteToastRaw)
+        }
       }
     } catch (error) {
       console.warn('Router: unable to read queued route toast message', error)
@@ -441,20 +539,10 @@ class SimpleRouter {
       <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
     `
 
-    if (!this.isMobileViewport() || isAuthenticated) {
-      appMisc.innerHTML = profileButtonMarkup
-      if (isAuthenticated) {
-        await this.hydrateMobileProfileButtonInitials()
-      }
-      return
+    appMisc.innerHTML = profileButtonMarkup
+    if (isAuthenticated) {
+      await this.hydrateMobileProfileButtonInitials()
     }
-
-    appMisc.innerHTML = `
-      <div class="mobile-guest-auth-actions">
-        <button type="button" class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn" data-route="/login">Log In</button>
-        <button type="button" class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn" data-route="/register">Sign Up</button>
-      </div>
-    `
   }
 
   navigate(path) {
@@ -555,6 +643,7 @@ class SimpleRouter {
   // Clean up existing components before loading new page
   cleanupCurrentPage() {
     this.cleanupCourseModalArtifacts()
+    this.cleanupTransientHoverArtifacts()
 
     // Run any registered cleanup functions
     this.componentCleanupFunctions.forEach(cleanup => {
@@ -656,6 +745,23 @@ class SimpleRouter {
     document.body.classList.remove('modal-open')
   }
 
+  cleanupTransientHoverArtifacts() {
+    const transientSelectors = [
+      '.course-eval-popover',
+      '.calendar-course-tooltip',
+      '.course-chip-tooltip',
+      '.home-calendar-tooltip'
+    ]
+
+    transientSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        if (element && typeof element.remove === 'function') {
+          element.remove()
+        }
+      })
+    })
+  }
+
   getRouteCacheKey(path) {
     return `route:${path}`
   }
@@ -701,6 +807,8 @@ class SimpleRouter {
 
     // Prevent stale class-info overlay from persisting across routes
     this.cleanupCourseModalArtifacts()
+    // Prevent stale hover tooltips/popovers from carrying across routes
+    this.cleanupTransientHoverArtifacts()
 
     // Save courses page state before navigating away
     if (this.isOnCoursesPage()) {
@@ -999,6 +1107,7 @@ class SimpleRouter {
     try {
       // Wait for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 10))
+      await this.ensureAuthSystem()
 
       // Re-import and reinitialize main.js functionality if on courses
       if (this.isCoursesRoute(path)) {
@@ -1026,6 +1135,10 @@ class SimpleRouter {
 
       if (path === '/auth/callback' || this.routes[path] === '/auth-callback.html') {
         await this.initializeAuthCallback()
+      }
+
+      if (path === '/login' || path === '/register') {
+        await this.initializeAuthPage()
       }
 
       // Initialize shared functionality for all pages
@@ -1670,6 +1783,21 @@ class SimpleRouter {
     }
   }
 
+  async initializeAuthPage() {
+    try {
+      const authModule = await import('./auth.js')
+      if (authModule && typeof authModule.initializeAuth === 'function') {
+        authModule.initializeAuth()
+        return
+      }
+      if (typeof window.initializeAuth === 'function') {
+        window.initializeAuth()
+      }
+    } catch (error) {
+      console.error('Error initializing auth page:', error)
+    }
+  }
+
   async initializeShared() {
     try {
       if (!this.sharedModulePromise) {
@@ -1836,8 +1964,61 @@ class SimpleRouter {
 
   // Check if a route requires authentication
   isProtectedRoute(path) {
-    const protectedRoutes = ['/timetable', '/assignments', '/setup']
+    const protectedRoutes = ['/timetable', '/assignments', '/profile', '/setup']
     return protectedRoutes.includes(path)
+  }
+
+  getProtectedRouteAuthAction(path) {
+    if (path === '/timetable') return 'open your timetable'
+    if (path === '/assignments') return 'open assignments'
+    if (path === '/profile') return 'open your account'
+    if (path === '/setup') return 'continue setup'
+    return 'continue'
+  }
+
+  async ensureAuthSystem() {
+    try {
+      if (!this.authModulePromise) {
+        this.authModulePromise = import('./auth.js')
+      }
+      await this.authModulePromise
+      return true
+    } catch (error) {
+      console.error('Router: Failed to load auth module', error)
+      return false
+    }
+  }
+
+  async openAuthModal({
+    preferredMode = 'signin',
+    action = 'continue',
+    source = 'router',
+    onSuccess = null
+  } = {}) {
+    const authReady = await this.ensureAuthSystem()
+    if (!authReady) return false
+
+    const manager = window.authManager
+    if (!manager) return false
+
+    const normalizedMode = String(preferredMode || '').toLowerCase() === 'signup' ? 'signup' : 'signin'
+    const options = {
+      action,
+      source,
+      onSuccess: typeof onSuccess === 'function' ? onSuccess : null
+    }
+
+    if (normalizedMode === 'signup' && typeof manager.openSignUp === 'function') {
+      manager.openSignUp(options)
+      return true
+    }
+
+    if (typeof manager.openSignIn === 'function') {
+      manager.openSignIn(options)
+      return true
+    }
+
+    return false
   }
 
   async getSupabaseClient() {

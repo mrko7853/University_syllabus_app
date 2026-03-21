@@ -90,6 +90,8 @@ body {
     --ui-control-shadow-press: 0 2px 8px rgba(50, 50, 93, 0.08);
     --ui-control-highlight: rgba(255, 255, 255, 0.62);
     --ui-focus-ring: rgba(124, 92, 168, 0.45);
+    --ui-error-color: #ff3b30;
+    --ui-error-color-soft: rgba(255, 59, 48, 0.22);
 
     --ui-surface-page: var(--color-bg-app);
     --ui-surface-panel: var(--color-bg-module);
@@ -493,6 +495,70 @@ input[type="range"]::-moz-range-thumb,
     .ui-page {
         --ui-current-page-padding-x: var(--ui-page-padding-x-mobile);
     }
+}
+
+/* App-wide field validation visuals */
+.app-field-error-message {
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    font-family: var(--ui-font-family);
+    font-size: 14px;
+    font-weight: 550;
+    line-height: 1.3;
+    color: var(--ui-error-color);
+}
+
+.app-field-error-message.is-visible {
+    display: flex;
+}
+
+.app-field-error-message::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    background-color: currentColor;
+    -webkit-mask: center / 16px 16px no-repeat url(/assets/alert-error.svg);
+    mask: center / 16px 16px no-repeat url(/assets/alert-error.svg);
+    transform: translateY(1px);
+}
+
+input.app-input-error,
+textarea.app-input-error,
+select.app-input-error,
+.custom-select-trigger.app-input-error,
+.profile-modal-picker-trigger.app-input-error,
+.search-input.app-input-error,
+.auth-field-input.app-input-error,
+.review-form-select.app-input-error,
+.review-form-textarea.app-input-error,
+.star-rating-input.app-input-error,
+.difficulty-scale-input.app-input-error {
+    border-color: var(--ui-error-color) !important;
+    box-shadow: 0 0 0 1px var(--ui-error-color) inset !important;
+}
+
+.star-rating-input.app-input-error,
+.difficulty-scale-input.app-input-error {
+    border: 1px solid var(--ui-error-color) !important;
+    border-radius: 12px;
+    padding: 6px;
+}
+
+input.app-input-error:focus,
+textarea.app-input-error:focus,
+select.app-input-error:focus,
+input.app-input-error:focus-visible,
+textarea.app-input-error:focus-visible,
+select.app-input-error:focus-visible,
+.custom-select-trigger.app-input-error:focus,
+.custom-select-trigger.app-input-error:focus-visible,
+.profile-modal-picker-trigger.app-input-error:focus,
+.profile-modal-picker-trigger.app-input-error:focus-visible {
+    outline: 2px solid var(--ui-error-color-soft);
+    outline-offset: 2px;
 }
 
 app-navigation {
@@ -3205,6 +3271,15 @@ latest-courses-preview {
     opacity: 0.5;
 }
 
+@media (hover: hover) and (pointer: fine) {
+    #home-main .home-next-class-inline term-box .home-next-class-title-wrap:hover,
+    #home-main .home-next-class-container term-box .home-next-class-title-wrap:hover {
+        transform: translateY(-1px);
+        border-color: var(--control-border-hover);
+        box-shadow: var(--control-shadow-hover);
+    }
+}
+
 .upcoming-assignment-deadline {
     display: block;
     opacity: 0.75;
@@ -3739,7 +3814,8 @@ calendar-page #calendar-main td.calendar-first {}
 #calendar-period-2,
 #calendar-period-3,
 #calendar-period-4,
-#calendar-period-5 {
+#calendar-period-5,
+#calendar-period-6 {
     padding: 8px 4px !important;
 }
 
@@ -7943,17 +8019,8 @@ td p {
     line-height: 1.45;
 }
 
-.class-info .course-review-text-excerpt.is-clamped {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.class-info .course-review-text-excerpt.is-own-review.is-clamped {
-    -webkit-line-clamp: 3;
-}
-
+.class-info .course-review-text-excerpt.is-clamped,
+.class-info .course-review-text-excerpt.is-own-review.is-clamped,
 .class-info .course-review-text-excerpt.is-expanded {
     display: block;
     -webkit-line-clamp: initial;
@@ -8560,44 +8627,29 @@ td p {
     margin: 8px 0 0;
 }
 
-.class-info.courseinfo-guest-assignments-preview .sheet-body {
+.class-info #class-assignments.course-assignments-guest-mode {
     position: relative;
     isolation: isolate;
+    --course-guest-fade-top: 44%;
+    padding-bottom: 132px;
 }
 
-.class-info.courseinfo-guest-assignments-preview .sheet-body::after {
+.class-info #class-assignments.course-assignments-guest-mode::after {
     content: "";
     position: absolute;
     left: 0;
     right: 0;
-    top: 44%;
+    top: var(--course-guest-fade-top);
     bottom: 0;
     border-radius: 0;
-    background: linear-gradient(180deg, #fff0 0%, #ffffffa1 28%, #ffffffe8 48%, #fff 64%, #fff 100%);
+    background: linear-gradient(180deg, #f7f8fb00 0%, #f7f8fba1 28%, #f7f8fbe8 48%, #f7f8fb 64%, #f7f8fb 100%);
     pointer-events: none;
-    z-index: 6;
+    z-index: 8;
 }
 
-.class-info #class-assignments.course-assignments-guest-mode {
-    position: relative;
-    padding-bottom: 132px;
-}
-
-@media (min-width: 1024px) {
-    .class-info #class-assignments.ds-card.course-assignments-guest-mode::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 44%;
-        bottom: 0;
-        border-radius: 0;
-        border-bottom-left-radius: var(--radius-card);
-        border-bottom-right-radius: var(--radius-card);
-        background: linear-gradient(180deg, #fff0 0%, #ffffffa1 28%, #ffffffe8 48%, #fff 64%, #fff 100%);
-        pointer-events: none;
-        z-index: 6;
-    }
+.class-info:not(.course-fullscreen) #class-assignments.course-assignments-guest-mode::after {
+    border-bottom-left-radius: var(--radius-card);
+    border-bottom-right-radius: var(--radius-card);
 }
 
 .class-info .class-subtitle-assignments--guest {
@@ -8727,8 +8779,11 @@ td p {
 
 @media (max-width: 1023px) {
     .class-info.courseinfo-guest-assignments-preview .sheet-body::after {
-        top: 30%;
-        background: linear-gradient(180deg, #fff0 0%, #ffffffac 26%, #ffffffec 46%, #fff 62%, #fff 100%);
+        display: none;
+    }
+
+    .class-info #class-assignments.course-assignments-guest-mode {
+        --course-guest-fade-top: 30%;
     }
 
     .sheet-body {
@@ -8763,14 +8818,21 @@ td p {
     .class-info .course-assignments-list--guest {
         height: 214px;
         padding: 0;
+        margin-bottom: 0;
+    }
+
+    .class-info #class-assignments.course-assignments-guest-mode {
+        padding-bottom: 0;
     }
 
     .class-info .course-assignments-guest-personalize {
-        left: 18px;
-        right: 18px;
-        bottom: -60px;
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        z-index: 12;
         gap: 12px;
-        margin-top: 0;
+        margin: -28px 18px 0;
         padding: 0;
         align-items: flex-start;
     }
@@ -9214,6 +9276,10 @@ td p {
     transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
+#link-copied-notification.is-error {
+    background: rgba(153, 27, 27, 0.96);
+}
+
 #link-copied-notification.show {
     opacity: 1;
     transform: translate(-50%, 0);
@@ -9234,269 +9300,526 @@ td p {
 
 /* ===== AUTHENTICATION MODALS ===== */
 
-/* Auth modal overlay */
+/* Unified auth modal overlay */
 .auth-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    z-index: 10000;
+    inset: 0;
+    z-index: 22100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    transition: opacity 0.24s ease, visibility 0.24s ease;
 }
 
 .auth-modal.hidden {
     opacity: 0;
     visibility: hidden;
-    /* Override the generic .hidden rule */
-    display: block !important;
-    transform: none !important;
+    display: flex !important;
+    pointer-events: none;
 }
 
 .auth-modal-background {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    inset: 0;
+    background: rgba(18, 16, 24, 0.66);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     cursor: pointer;
 }
 
 .auth-modal-content {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    border-radius: 20px;
-    min-width: 400px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    filter: drop-shadow(0 2px 3px rgba(50, 50, 93, 0.25));
+    position: relative;
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    border-radius: 26px;
+    border: var(--ui-card-border);
+    background:
+        radial-gradient(130% 100% at 0% 0%, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0) 70%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.94) 0%, #f3ecf7 52%, #ece3f2 100%);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--shadow);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+    transform: translateY(0);
+    transition: opacity 0.24s ease, transform 0.24s ease;
 }
 
 .auth-modal.hidden .auth-modal-content {
     opacity: 0;
     visibility: hidden;
-    transform: translate(-50%, -60%);
-}
-
-.auth-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 25px 30px;
-    border-bottom: 1px solid #E3E2E2;
-}
-
-.auth-modal-header h2 {
-    margin: 0;
-    font-size: var(--h2);
-    font-weight: 600;
-    color: #333;
+    transform: translateY(-8px);
 }
 
 .auth-close-btn {
-    background: var(--control-bg);
-    border: 1px solid var(--control-border);
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
     border-radius: var(--control-radius-round);
+    background: rgba(255, 255, 255, 0.9) center / 20px 20px no-repeat url(/assets/close.svg);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
-    font-size: 28px;
-    color: #666;
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0;
     cursor: pointer;
-    padding: 5px;
-    width: 42px;
-    height: 42px;
-    line-height: 1;
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.auth-close-btn:hover {
-    border-color: var(--control-border-hover);
-    background-color: var(--control-bg-hover);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
-    color: #333;
+    z-index: 2;
 }
 
 .auth-modal-body {
-    padding: 30px;
-}
-
-.auth-message {
-    text-align: center;
-    margin: 0 0 25px 0;
-    font-size: var(--p);
-    color: #666;
-    line-height: 1.5;
-}
-
-.auth-form {
+    padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    min-height: 0;
 }
 
-.auth-input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+.auth-modal-root {
+    min-height: 0;
 }
 
-.auth-input-group label {
-    font-size: var(--p);
-    font-weight: 500;
-    color: #333;
+.auth-unified-shell {
+    display: grid;
+    gap: 14px;
+    text-align: left;
+}
+
+.auth-unified-title {
     margin: 0;
+    font-size: clamp(30px, 4.1vw, 52px);
+    font-weight: 550;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
 }
 
-.auth-input-group input {
-    padding: 12px 16px;
-    border: 2px solid #E3E2E2;
-    border-radius: 10px;
-    font-size: var(--p);
-    font-family: var(--ui-font-family);
-    transition: border-color 0.2s ease;
-    background: white;
+.auth-unified-subtitle {
+    margin: 0;
+    color: var(--ui-text-subtitle);
+    font-size: 15px;
+    line-height: 1.45;
 }
 
-.auth-input-group input:focus {
-    outline: none;
-    border-color: #E3D5E9;
-    box-shadow: 0 0 0 3px rgba(227, 213, 233, 0.2);
+.auth-provider-list {
+    display: grid;
+    gap: 10px;
 }
 
-.auth-error-message {
-    background: #fee;
-    color: #c33;
-    padding: 12px 16px;
-    border-radius: 10px;
-    font-size: 14px;
-    text-align: center;
-    border: 1px solid #fcc;
-}
-
-.auth-field-error {
-    color: #c33;
-    font-size: 13px;
-    margin-top: 5px;
-    margin-bottom: 10px;
-}
-
-.auth-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-top: 10px;
-}
-
-.auth-submit-btn {
-    background: #E3D5E9;
-    color: #333;
-    border: 1px solid var(--control-border);
-    border-radius: var(--control-radius-pill);
-    padding: 14px 20px;
-    font-size: var(--p);
-    font-family: var(--ui-font-family);
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
-    width: auto;
+.auth-provider-btn {
+    width: 100%;
+    min-height: 52px;
     height: auto;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    color: var(--ui-text-heading) !important;
+    font-family: var(--ui-font-family);
+    font-size: 16px;
+    font-weight: 500;
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    box-sizing: border-box;
 }
 
-.auth-submit-btn:hover:not(:disabled) {
+.auth-provider-icon {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.auth-provider-icon--google {
+    background-image: url(/assets/google-logo.webp);
+}
+
+.auth-provider-icon--azure {
+    background-image: url(/assets/outlook-logo.png);
+}
+
+.auth-divider {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ui-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
+.auth-email-form {
+    display: grid;
+    gap: 10px;
+}
+
+.auth-field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ui-text-subtitle);
+}
+
+.auth-field-input {
+    width: 100%;
+    min-height: 52px;
+    height: 52px;
+    border-radius: 16px;
+    border: 1px solid var(--control-border);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    padding: 0 14px;
+    font-family: var(--ui-font-family);
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.auth-field-input--email-entry {
+    border-radius: 999px;
+    border: 1px solid var(--control-border);
+    background-color: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
+    font-weight: 500;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.auth-field-input::placeholder {
+    color: rgba(15, 23, 42, 0.5);
+}
+
+.auth-field-input:focus,
+.auth-field-input:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
     border-color: var(--control-border-hover);
-    background: #d4c5db;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
 }
 
-.auth-submit-btn:disabled {
-    opacity: 0.7;
+.auth-field-input--email-entry:focus,
+.auth-field-input--email-entry:focus-visible {
+    border-color: var(--control-border-hover);
+    background: var(--control-bg-active) !important;
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    -webkit-box-shadow: 0 0 0 1000px var(--control-bg-active) inset, inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
+.auth-field-input--email-entry:-webkit-autofill,
+.auth-field-input--email-entry:-webkit-autofill:hover,
+.auth-field-input--email-entry:-webkit-autofill:focus,
+.auth-field-input--email-entry:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--ui-text-heading);
+    -webkit-box-shadow: 0 0 0 1000px var(--control-bg-active) inset;
+    box-shadow: 0 0 0 1000px var(--control-bg-active) inset;
+    transition: background-color 99999s ease-in-out 0s;
+}
+
+.auth-primary-btn,
+.auth-back-btn,
+.auth-link-btn {
+    font-family: var(--ui-font-family);
+}
+
+.auth-primary-btn {
+    width: 100%;
+    min-height: 52px;
+    height: auto;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255, 255, 255, 0.95);
+    color: #0f172a !important;
+    font-size: 16px;
+    font-weight: 650;
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    box-sizing: border-box;
+}
+
+.auth-primary-btn:disabled,
+.auth-provider-btn:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
 }
 
-.auth-btn-loading {
+.auth-back-btn {
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    color: var(--ui-text-subtitle) !important;
+    font-size: 14px;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
+    gap: 6px;
+    justify-self: start;
+}
+
+.auth-back-btn:hover {
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-back-btn:active {
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-back-btn::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    background: center / 16px 16px no-repeat url(/assets/chevron-left.svg);
+}
+
+.auth-email-chip {
+    margin: 0;
+    display: inline-flex;
+    width: fit-content;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.auth-email-chip-input {
+    width: 100%;
+    margin: 0;
+    font-weight: 500;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.75);
+    cursor: default;
+    pointer-events: none;
+}
+
+.auth-mode-switch {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--ui-text-subtitle);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.auth-link-btn {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #0f172a !important;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.auth-inline-message {
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ui-text-subtitle);
+    display: none;
+}
+
+.auth-inline-message.visible {
+    display: block;
+}
+
+.auth-inline-message.error {
+    color: #991b1b;
+}
+
+.auth-inline-message.success {
+    color: #166534;
+}
+
+body.auth-modal-open {
+    overflow: hidden;
+}
+
+.auth-nav-teaser {
+    position: fixed;
+    z-index: 21950;
+    width: min(340px, calc(100vw - 24px));
+    border-radius: 24px;
+    overflow: hidden;
+    border: var(--ui-card-border);
+    background:
+        radial-gradient(130% 100% at 0% 0%, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0) 70%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.94) 0%, #f3ecf7 52%, #ece3f2 100%);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--shadow);
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.auth-nav-teaser.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.auth-nav-teaser-media {
+    width: 100%;
+    height: 156px;
+    background: linear-gradient(135deg, #b9b3f2 0%, #9bc8f7 100%);
+}
+
+.auth-nav-teaser-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.auth-nav-teaser-content {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+}
+
+.auth-nav-teaser-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.2;
+}
+
+.auth-nav-teaser-description {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ui-text-subtitle);
+    line-height: 1.4;
+}
+
+.auth-nav-teaser-actions {
+    display: flex;
     gap: 8px;
 }
 
-.auth-btn-loading[style*="display: none"] {
-    display: none !important;
-}
-
-.auth-btn-loading::before {
-    content: '';
-    width: 16px;
-    height: 16px;
-    border: 2px solid #666;
-    border-top: 2px solid transparent;
-    border-radius: 50%;
-    animation: authSpin 1s linear infinite;
-}
-
-@keyframes authSpin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-.auth-switch-btn {
-    background: var(--control-bg);
-    border: 1px solid var(--control-border);
-    border-radius: var(--control-radius-pill);
-    color: #666;
-    font-size: 14px;
-    font-family: var(--ui-font-family);
-    cursor: pointer;
-    padding: 10px 14px;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    width: auto;
+.auth-nav-teaser-btn {
+    flex: 1 1 0;
+    min-height: 44px;
     height: auto;
+    border-radius: 999px;
+    padding: 0 12px;
+    font-size: 14px;
+    font-weight: 650;
+    color: #0f172a !important;
+    box-sizing: border-box;
 }
 
-.auth-switch-btn:hover {
-    border-color: var(--control-border-hover);
-    background: var(--control-bg-hover);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
-    color: #333;
-    text-decoration: none;
+.auth-nav-teaser-btn--primary {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(15, 23, 42, 0.12);
 }
 
-/* Mobile responsive */
-@media (max-width: 768px) {
+.auth-nav-teaser-btn--secondary {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(15, 23, 42, 0.1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .auth-field-input--email-entry:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+
+    .auth-provider-btn:hover,
+    .auth-primary-btn:hover,
+    .auth-nav-teaser-btn:hover,
+    .auth-close-btn:hover {
+        border-color: var(--control-border-hover);
+        background-color: var(--control-bg-hover);
+        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
+    }
+
+    .auth-link-btn:hover {
+        color: #334155 !important;
+    }
+}
+
+@media (max-width: 1023px) {
+    .auth-modal {
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 0;
+    }
+
     .auth-modal-content {
-        min-width: 300px;
-        width: 95%;
-        margin: 20px;
+        width: 100%;
+        max-height: 100dvh;
+        height: 100dvh;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
     }
 
-    .auth-modal-header,
+    .auth-close-btn {
+        top: calc(var(--safe-area-top) + 12px);
+        right: 14px;
+    }
+
     .auth-modal-body {
-        padding: 20px;
+        padding: calc(var(--safe-area-top) + 68px) 20px calc(18px + var(--safe-area-bottom));
     }
 
-    .auth-modal-header h2 {
-        font-size: var(--h3);
+    .auth-unified-title {
+        font-size: clamp(36px, 10vw, 54px);
+    }
+
+    .auth-provider-btn,
+    .auth-primary-btn,
+    .auth-field-input {
+        min-height: 54px;
+        height: 54px;
+    }
+
+    .auth-nav-teaser {
+        display: none !important;
     }
 }
 
@@ -10117,6 +10440,12 @@ td p {
     font-size: 13px;
     margin-top: 5px;
     margin-bottom: 10px;
+}
+
+.review-field-error.app-field-error-message {
+    margin: 8px 0 0;
+    font-size: 14px;
+    color: var(--ui-error-color);
 }
 
 /* Modal buttons */
@@ -11329,16 +11658,16 @@ calendar-page .mobile-day-buttons {
     }
 
     .profile-header-back-btn {
-        width: 34px;
-        min-width: 34px;
-        height: 34px;
-        min-height: 34px;
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        min-height: 36px;
         padding: 0;
         margin-right: 8px;
         border-radius: 999px;
-        border: 1px solid var(--control-border);
-        background: var(--control-bg);
-        box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+        border: unset;
+        background: unset;
+        box-shadow: unset;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -11350,9 +11679,9 @@ calendar-page .mobile-day-buttons {
     }
 
     .profile-header-back-btn .profile-header-back-btn-icon {
-        width: 16px;
-        height: 16px;
-        background: center / 16px 16px no-repeat url(/assets/chevron-left.svg);
+        width: 36px;
+        height: 36px;
+        background: center / 36px 36px no-repeat url(/assets/chevron-left.svg);
         display: inline-block;
         filter: brightness(0) saturate(100%);
     }
@@ -11503,6 +11832,14 @@ body.auth-page .auth-background {
 @media (max-width: 1023px) {
     body.auth-page .auth-container {
         padding: max(16px, var(--ui-page-padding-x-mobile));
+    }
+
+    body.auth-page .auth-background {
+        box-sizing: border-box;
+        background: none;
+        padding: 0px;
+        border: none;
+        box-shadow: none;
     }
 }
 
@@ -14835,10 +15172,16 @@ calendar-page .calendar-mobile-view {
 }
 
 @media (min-width: 1024px) {
+    #home-main {
+        background: var(--ui-surface-page);
+    }
+
     #home-main .main-content {
-        max-width: 1200px;
-        margin: 0 auto;
+        width: 100%;
+        max-width: none;
+        margin: 0;
         padding: 16px 20px 24px;
+        box-sizing: border-box;
     }
 
     #home-main .home-container-above.container-above-desktop {
@@ -15102,7 +15445,8 @@ calendar-page .calendar-mobile-view {
         box-sizing: border-box;
         background: var(--next-class-accent, #ffffffb3);
         border: 1px solid var(--color-stroke-subtle);
-        transition: background-color 0.2s ease;
+        transform: translateY(0);
+        transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.2s ease;
     }
 
     #home-main .home-next-class-inline term-box .home-next-class-action-wrap {
@@ -15812,7 +16156,7 @@ calendar-page .calendar-mobile-view {
 
 @media (min-width: 1440px) {
     #home-main .main-content {
-        max-width: 1320px;
+        max-width: none;
     }
 
     #home-main .home-planner-hero {
@@ -15953,7 +16297,8 @@ calendar-page .calendar-mobile-view {
         background: var(--next-class-accent, #ffffffb3);
         border: 1px solid #0f172a14;
         box-sizing: border-box;
-        transition: background-color 0.2s ease;
+        transform: translateY(0);
+        transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.22s ease, background-color 0.2s ease;
         box-shadow: inset 0 1px #ffffffb8, var(--color-shadow-soft);
         font-size: 14px;
         font-weight: 500;
@@ -16554,18 +16899,34 @@ calendar-page .calendar-mobile-view {
     line-height: 1.35;
 }
 
+#course-list #course-professor {
+    align-items: flex-start;
+    min-width: 0;
+}
+
 #course-list .course-professor-line {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    row-gap: 6px;
 }
 
 #course-list .course-professor-name {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex: 1 1 140px;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+#course-list .course-professor-name::first-line {
+    line-height: 1;
+}
+
+#course-list .course-professor-line .course-new-prof-chip {
+    flex: 0 0 auto;
 }
 
 #course-list .course-new-prof-chip {
@@ -16925,6 +17286,40 @@ calendar-page .calendar-mobile-view {
     #course-list .skeleton-chip-row {
         margin-top: auto;
         padding-top: 30px;
+    }
+
+    #course-list .course-footer-row--desktop {
+        overflow-x: hidden;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    #course-list .course-footer-row--desktop::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+    }
+
+    #course-list .course-footer-row--desktop.course-footer-row--scrollable {
+        overflow-x: auto;
+        cursor: grab;
+        cursor: -webkit-grab;
+        touch-action: pan-x;
+    }
+
+    #course-list .course-footer-row--desktop.course-footer-row--scrollable.is-grabbing {
+        cursor: grabbing;
+        cursor: -webkit-grabbing;
+    }
+
+    #course-list .course-footer-row--desktop .course-footer-left {
+        flex: 0 0 max-content;
+        min-width: max-content;
+    }
+
+    #course-list .course-footer-row--desktop .course-chip {
+        white-space: nowrap;
+        overflow-wrap: normal;
     }
 
     #course-list .skeleton-section-line {
@@ -17392,9 +17787,15 @@ body:has(#profile-main.profile-page) #app-content {
 }
 
 .profile-page .profile-mobile-section-chevron {
-    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-block;
+    background: center / 16px 16px no-repeat url(/assets/chevron-right.svg);
     opacity: 0.68;
     line-height: 1;
+    font-size: 0;
+    color: transparent;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -17429,11 +17830,15 @@ body:has(#profile-main.profile-page) #app-content {
 }
 
 .profile-page .profile-section-icon--identity {
-    background-image: url(/assets/user.svg);
+    background-image: url(/assets/profile.svg);
 }
 
 .profile-page .profile-section-icon--academic {
-    background-image: url(/assets/dashboard.svg);
+    background-image: url('../assets/mobile/professor-mobile.svg');
+}
+
+.profile-page .profile-section-icon--reviews {
+    background-image: url(/assets/star-empty.svg);
 }
 
 .profile-page .profile-section-icon--preferences {
@@ -17441,11 +17846,11 @@ body:has(#profile-main.profile-page) #app-content {
 }
 
 .profile-page .profile-section-icon--privacy {
-    background-image: url(/assets/help.svg);
+    background-image: url(/assets/privacy.svg);
 }
 
 .profile-page .profile-section-icon--signout {
-    background-image: url(/assets/exit.svg);
+    background-image: url(/assets/logout.svg);
 }
 
 .profile-page .page-inner {
@@ -17583,12 +17988,17 @@ body:has(#profile-main.profile-page) #app-content {
     color: var(--ui-text-heading);
 }
 
+.profile-page .profile-connected-methods-title {
+    margin: 6px 0 14px;
+}
+
 .profile-page .setting-desc {
     margin: 4px 0 0;
     font-size: 14px;
     line-height: 1.3;
     font-family: var(--font-ui);
     color: var(--ui-text-subtitle);
+    opacity: 80%;
 }
 
 .profile-page .setting-control {
@@ -17615,6 +18025,106 @@ body:has(#profile-main.profile-page) #app-content {
     min-width: 0;
 }
 
+.profile-page .setting-row--auth-connection .setting-control {
+    min-width: 0;
+}
+
+.profile-page .profile-student-reviews-summary {
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-page .profile-student-reviews-summary .status-pill {
+    min-height: 32px;
+    font-size: 13px;
+    font-weight: 620;
+}
+
+.profile-page .card-head .profile-student-reviews-summary {
+    padding: 0;
+    border-bottom: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.profile-page .profile-student-reviews-list {
+    display: grid;
+    gap: 0;
+}
+
+.profile-page .setting-row--student-review {
+    align-items: flex-start;
+}
+
+.profile-page .setting-row--student-review .setting-control {
+    min-width: auto;
+}
+
+.profile-page .profile-student-review-meta {
+    display: grid;
+    gap: 4px;
+}
+
+.profile-page .profile-student-review-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-page .profile-student-review-title {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.profile-page .profile-student-review-header [data-action="edit-student-review"] {
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+.profile-page .profile-student-review-context {
+    margin-top: 0;
+}
+
+.profile-page .profile-student-review-excerpt {
+    margin: 0;
+    font-size: 13px;
+    font-family: var(--font-ui);
+    color: var(--ui-text-body);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+/* Ensure every edit button in My Reviews always shows the edit SVG icon. */
+.profile-page #profile-reviews [data-action="edit-student-review"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto !important;
+    padding: 0 14px;
+    min-height: 34px;
+    height: 34px;
+    border-radius: var(--ui-control-radius-pill);
+    gap: 6px;
+    font-size: 12px;
+}
+
+.profile-page #profile-reviews [data-action="edit-student-review"]::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-block;
+    background: center / contain no-repeat url("data:image/svg+xml,%3csvg%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%20fill='none'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M4.97445%2015.7038L16.9698%203.7084C17.8985%202.77971%2019.4042%202.77971%2020.3329%203.7084C21.2616%204.6371%2021.2616%206.14281%2020.3329%207.0715L8.33755%2019.0669M4.97445%2015.7038L8.33755%2019.0669M4.97445%2015.7038C4.57608%2016.1021%204.25968%2016.5748%204.04316%2017.0949L3.29335%2018.896C3.12601%2019.298%203.04234%2019.499%203.01918%2019.625C2.86732%2020.4514%203.58989%2021.174%204.4163%2021.0221C4.54232%2020.999%204.74331%2020.9153%205.14528%2020.748L6.94645%2019.9982C7.46656%2019.7816%207.93917%2019.4652%208.33755%2019.0669'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3e%3c/svg%3e");
+    filter: brightness(0) saturate(100%);
+}
+
+.profile-page #profile-reviews [data-action="edit-student-review"] .pill-icon--edit {
+    display: none !important;
+}
+
 .profile-page .setting-control .control-surface,
 .profile-page .setting-control .profile-action-pill,
 .profile-page .setting-control select.control-surface,
@@ -17624,6 +18134,16 @@ body:has(#profile-main.profile-page) #app-content {
     height: var(--ui-control-height);
     max-width: 100%;
     flex-shrink: 0;
+}
+
+.profile-page .setting-row--auth-connection .setting-control .control-surface:disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+    pointer-events: none;
+    color: var(--ui-text-muted) !important;
+    border-color: rgba(15, 23, 42, 0.10);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), var(--ui-control-shadow);
 }
 
 #profile-main .ui-btn:not(.icon-btn),
@@ -17817,8 +18337,14 @@ body:has(#profile-main.profile-page) #app-content {
 .profile-page .nav-row-chevron,
 .profile-page .picker-chevron {
     opacity: 0.68;
-    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-block;
+    background: center / 16px 16px no-repeat url(/assets/chevron-right.svg);
     line-height: 1;
+    font-size: 0;
+    color: transparent;
 }
 
 .profile-page .status-pill {
@@ -17913,6 +18439,13 @@ body:has(#profile-main.profile-page) #app-content {
     min-height: 18px;
     color: #9d1818;
     font-size: 13px;
+}
+
+.profile-inline-error.app-field-error-message {
+    margin: 8px 0 0;
+    min-height: 0;
+    font-size: 14px;
+    color: var(--ui-error-color);
 }
 
 .profile-page .danger-zone {
@@ -18549,8 +19082,14 @@ body:has(#profile-main.profile-page) #app-content {
 
 .profile-modal-layer .picker-chevron {
     opacity: 0.68;
-    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-block;
+    background: center / 16px 16px no-repeat url(/assets/chevron-right.svg);
     line-height: 1;
+    font-size: 0;
+    color: transparent;
 }
 
 .profile-modal-layer .danger-action-btn {
@@ -18599,6 +19138,53 @@ body:has(#profile-main.profile-page) #app-content {
     line-height: 1.35;
     font-family: var(--font-ui);
     color: var(--ui-text-subtitle);
+}
+
+.profile-about-grid {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 10px 14px;
+    align-items: baseline;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    line-height: 1.35;
+}
+
+.profile-about-grid>div:nth-child(odd) {
+    color: var(--ui-text-heading);
+}
+
+.profile-about-grid>div:nth-child(even) {
+    color: var(--ui-text-body);
+    overflow-wrap: anywhere;
+}
+
+.profile-about-debug {
+    margin: 16px 0 2px;
+    border-top: 1px solid rgba(10, 37, 64, 0.1);
+    padding-top: 12px;
+}
+
+.profile-about-debug summary {
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ui-text-heading);
+}
+
+.profile-about-debug-pre {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(122, 102, 143, 0.24);
+    background: rgba(255, 255, 255, 0.72);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow: auto;
+    max-height: min(42dvh, 320px);
 }
 
 .profile-modal-input {
@@ -18712,14 +19298,6 @@ body:has(#profile-main.profile-page) #app-content {
     background: center / contain no-repeat url(/assets/check.svg);
 }
 
-.profile-about-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 8px 10px;
-    font-size: 14px;
-    font-family: var(--font-ui);
-}
-
 .profile-modal-layer #profile-program-year-form .profile-custom-select,
 .profile-modal-layer #profile-program-year-form .profile-custom-select .custom-select-trigger,
 .profile-modal-layer #profile-program-year-form .profile-custom-select .custom-select-options {
@@ -18750,6 +19328,10 @@ body:has(#profile-main.profile-page) #app-content {
     opacity: 0;
     transition: transform 0.18s ease, opacity 0.18s ease;
     pointer-events: none;
+}
+
+.profile-toast.is-error {
+    background: rgba(153, 27, 27, 0.96);
 }
 
 .profile-toast.show {
@@ -18793,6 +19375,10 @@ body:has(#profile-main.profile-page) #app-content {
 
 .profile-skeleton-heading--academic {
     width: 130px;
+}
+
+.profile-skeleton-heading--reviews {
+    width: 142px;
 }
 
 .profile-skeleton-heading--preferences {
@@ -19029,7 +19615,6 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     }
 
     .profile-page .setting-row {
-        flex-wrap: wrap;
         gap: 10px;
         padding-top: 13px;
         padding-bottom: 13px;
@@ -19052,6 +19637,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .profile-page .setting-control .profile-picker-trigger,
     .profile-page .setting-control .custom-select-trigger {
         max-width: 100%;
+        width: auto;
     }
 
     .class-info #class-assignments .course-assignment-item {
@@ -19061,7 +19647,7 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     .profile-page .profile-picker-trigger,
     #profile-main .profile-custom-select,
     #profile-main .profile-custom-select .custom-select-trigger {
-        width: 100%;
+        width: auto;
     }
 
     .profile-page .setting-control-stack {
@@ -19084,23 +19670,33 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         margin-left: auto;
     }
 
-    .profile-page .setting-row--program-year .setting-control {
-        display: contents;
-    }
-
     .profile-page .setting-row--program-year {
         display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas:
-            "meta"
-            "status"
-            "button";
+            "title button"
+            "desc desc"
+            "status status";
         gap: 8px 10px;
         align-items: start;
     }
 
     .profile-page .setting-row--program-year .setting-meta {
-        grid-area: meta;
+        display: contents;
+    }
+
+    .profile-page .setting-row--program-year .setting-meta>.setting-title {
+        grid-area: title;
+        align-self: center;
+    }
+
+    .profile-page .setting-row--program-year .setting-meta>.setting-desc {
+        grid-area: desc;
+        margin-top: 0;
+    }
+
+    .profile-page .setting-row--program-year .setting-control {
+        display: contents;
     }
 
     .profile-page .setting-row--program-year .setting-control>.status-pill {
@@ -19114,21 +19710,56 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        padding: 12px;
+        box-sizing: border-box;
     }
 
     .profile-page .setting-row--program-year .setting-control>.profile-action-pill {
         grid-area: button;
+        justify-self: end;
+        width: auto !important;
+        max-width: none;
+        justify-content: center;
+        min-height: 34px;
+        height: 34px;
+        padding: 0 14px;
+        font-size: 12px;
     }
 
     .profile-page .setting-row--program-year .profile-action-pill--setup {
-        width: 100%;
+        width: auto !important;
         max-width: none;
-        justify-content: center;
     }
 
     .profile-page .setting-row--program-year .profile-action-pill.filter-btn {
+        width: auto !important;
+        max-width: none;
+    }
+
+    .profile-page .setting-row--student-review {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "meta"
+            "button";
+        gap: 10px;
+        align-items: start;
+    }
+
+    .profile-page .setting-row--student-review .setting-meta {
+        grid-area: meta;
+    }
+
+    .profile-page .setting-row--student-review .setting-control {
+        grid-area: button;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .profile-page .setting-row--student-review .setting-control .profile-action-pill {
         width: 100% !important;
         max-width: none;
+        justify-content: center;
     }
 
     .profile-page .danger-zone-row {
@@ -19176,7 +19807,11 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     #profile-clear-cache,
     #profile-open-about,
     #profile-signout {
-        width: 100% !important;
+        width: auto !important;
+    }
+
+    #profile-open-about {
+        justify-self: end;
     }
 
     .profile-page .profile-nav-list {
@@ -19535,6 +20170,17 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         flex: 0 0 20px;
     }
 
+    .profile-page .profile-content-shell {
+        padding: 0px;
+    }
+
+    .profile-page .profile-mobile-sections {
+        padding: 0px;
+    }
+
+    .profile-page .profile-student-review-header {
+        margin-bottom: 15px;
+    }
 }
 
 /* Mobile semester selector bottom sheet */
@@ -20146,6 +20792,12 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     line-height: 1.2;
 }
 
+/* Keep at least one title line visible in compact week cards */
+#course-summary.calendar-page-modern calendar-page .calendar-course-card .calendar-course-title {
+    flex: 0 0 auto;
+    min-height: 1.2em;
+}
+
 #course-summary.calendar-page-modern calendar-page .calendar-course-time {
     margin: 0;
     font-family: var(--font-ui);
@@ -20162,6 +20814,14 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
     font-weight: 400;
     line-height: 1.2;
     color: rgba(23, 32, 51, 0.78);
+}
+
+#course-summary.calendar-page-modern calendar-page .calendar-course-card .calendar-course-time,
+#course-summary.calendar-page-modern calendar-page .calendar-course-card .calendar-course-professor {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 #course-summary.calendar-page-modern calendar-page .calendar-course-badge-row {
@@ -20757,8 +21417,8 @@ button.calendar-slot-saved-card {
     }
 
     #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell {
-        height: 136px;
-        min-height: 136px;
+        height: var(--calendar-week-row-height);
+        min-height: var(--calendar-week-row-height);
     }
 }
 
@@ -22645,7 +23305,7 @@ button.calendar-slot-saved-card {
     }
 
     #assignments-main.page-assignments.is-calendar-view .assignments-page-main {
-        padding-bottom: 0 !important;
+        padding-bottom: 15px !important;
     }
 
     #assignments-main.page-assignments .assignments-toolbar-shell,
@@ -23846,11 +24506,6 @@ button.calendar-slot-saved-card {
 }
 
 @media (min-width: 1150px) {
-    #course-summary.calendar-page-modern calendar-page #calendar-main td.calendar-slot-cell {
-        height: 200px !important;
-        min-height: 200px !important;
-    }
-
     #course-summary.calendar-page-modern calendar-page .calendar-course-card,
     #course-summary.calendar-page-modern calendar-page .calendar-empty-slot-btn {
         inset: 10px;
@@ -25226,7 +25881,6 @@ button.calendar-slot-saved-card {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    cursor: pointer;
 }
 
 .course-info-inline-warnings .course-info-inline-warning::before {
@@ -25608,13 +26262,7 @@ button.calendar-slot-saved-card {
     line-height: 1.4;
 }
 
-.your-review-text.is-clamped {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
+.your-review-text.is-clamped,
 .your-review-text.is-expanded {
     display: block;
     -webkit-line-clamp: initial;
@@ -27601,15 +28249,17 @@ button.calendar-slot-saved-card {
         grid-template-rows: none;
         grid-auto-flow: row;
         grid-auto-columns: unset;
-        column-gap: 0;
+        column-gap: 15px;
     }
 
-    .course-info-details-grid .course-detail-row:nth-child(4n + 1) {
+    .course-info-details-grid .course-detail-row,
+    .course-info-details-grid .key-row {
         border-top: 1px solid rgba(15, 23, 42, 0.06);
         padding-top: 14px;
     }
 
-    .course-info-details-grid .course-detail-row:first-child {
+    .course-info-details-grid .course-detail-row:nth-child(-n + 2),
+    .course-info-details-grid .key-row:nth-child(-n + 2) {
         border-top: 0;
         padding-top: 2px;
     }
@@ -29223,6 +29873,12 @@ button.calendar-slot-saved-card {
     --courses-page-padding-x: var(--ui-page-padding-x-desktop);
     --courses-page-padding-top: 16px;
     --courses-page-padding-bottom: 24px;
+    --calendar-week-zoom-scale: 1;
+    --calendar-week-zoom-percent: 100%;
+    --calendar-week-row-count: 6;
+    --calendar-week-grid-header-height: 52px;
+    --calendar-week-chrome-offset-desktop: 250px;
+    --calendar-week-row-height: clamp(64px, calc((var(--app-height, 100vh) - var(--calendar-week-chrome-offset-desktop) - var(--calendar-week-grid-header-height)) / var(--calendar-week-row-count)), 136px);
 }
 
 #course-summary.calendar-page-modern .container-above.container-above-desktop,
@@ -29329,6 +29985,51 @@ button.calendar-slot-saved-card {
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
+    gap: 8px;
+}
+
+#course-summary.calendar-page-modern .calendar-zoom-controls {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: var(--calendar-toolbar-pill-height);
+    min-height: var(--calendar-toolbar-pill-height);
+    padding: 4px;
+    border: 1px solid var(--control-border);
+    background: var(--control-bg);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    border-radius: var(--calendar-toolbar-pill-radius);
+    box-sizing: border-box;
+}
+
+#course-summary.calendar-page-modern .calendar-zoom-controls[hidden] {
+    display: none !important;
+}
+
+#course-summary.calendar-page-modern .calendar-zoom-btn {
+    width: auto;
+    min-width: 42px;
+    height: calc(var(--calendar-toolbar-pill-height) - 8px) !important;
+    min-height: calc(var(--calendar-toolbar-pill-height) - 8px);
+    padding: 0 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: var(--ui-fw-h3);
+    color: var(--ui-text-heading);
+}
+
+#course-summary.calendar-page-modern .calendar-zoom-btn--readout {
+    min-width: 62px;
+    font-variant-numeric: tabular-nums;
+}
+
+#course-summary.calendar-page-modern .calendar-zoom-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 #course-summary.calendar-page-modern .calendar-filter-trigger {
@@ -29357,7 +30058,8 @@ button.calendar-slot-saved-card {
 @media (hover: hover) and (pointer: fine) {
     #course-summary.calendar-page-modern #filter-year-term .custom-select-trigger.control-surface:hover,
     #course-summary.calendar-page-modern #filter-year-term-mobile .custom-select-trigger.control-surface:hover,
-    #course-summary.calendar-page-modern .calendar-filter-trigger:hover {
+    #course-summary.calendar-page-modern .calendar-filter-trigger:hover,
+    #course-summary.calendar-page-modern .calendar-zoom-btn:not(:disabled):hover {
         border-color: var(--control-border-hover);
         background-color: var(--control-bg-hover);
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
@@ -29366,7 +30068,8 @@ button.calendar-slot-saved-card {
 
 #course-summary.calendar-page-modern #filter-year-term .custom-select-trigger.control-surface:active,
 #course-summary.calendar-page-modern #filter-year-term-mobile .custom-select-trigger.control-surface:active,
-#course-summary.calendar-page-modern .calendar-filter-trigger:active {
+#course-summary.calendar-page-modern .calendar-filter-trigger:active,
+#course-summary.calendar-page-modern .calendar-zoom-btn:not(:disabled):active {
     border-color: var(--control-border-hover);
     background-color: var(--control-bg-active);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
@@ -29439,6 +30142,10 @@ button.calendar-slot-saved-card {
     }
 
     #course-summary.calendar-page-modern #calendar-filter-trigger-mobile {
+        display: none !important;
+    }
+
+    #course-summary.calendar-page-modern .calendar-zoom-controls {
         display: none !important;
     }
 
@@ -29991,6 +30698,62 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     #course-summary.calendar-page-modern calendar-page #calendar-main td:last-child {
         border-right: 0 !important;
         box-shadow: none !important;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page .calendar-grid-scroll {
+        display: block !important;
+        overflow: auto;
+        flex: 1 1 760px !important;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        zoom: var(--calendar-week-zoom-scale);
+        transition: zoom 150ms ease;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page .calendar-wrapper {
+        display: flex !important;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 16px;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page #calendar-main {
+        flex: 0 0 auto;
+        width: 100% !important;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page .calendar-intensive-week-section {
+        flex: 0 0 320px;
+        width: 320px;
+        max-width: 100%;
+        margin: 0;
+        padding-top: 0;
+        zoom: var(--calendar-week-zoom-scale);
+        transition: zoom 150ms ease;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page .calendar-intensive-week-cards {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 10px;
+        width: 100%;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active.calendar-week-intensive-inline calendar-page .calendar-intensive-week-cards {
+        flex-direction: column;
+        flex-wrap: nowrap;
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active calendar-page .calendar-intensive-week-card {
+        width: min(100%, 150px);
+    }
+
+    #course-summary.calendar-page-modern.calendar-view-week-active.calendar-week-intensive-inline calendar-page .calendar-intensive-week-card {
+        width: 100%;
     }
 }
 
@@ -30990,6 +31753,7 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
     margin: 0;
     padding: 10px;
     border-top: 1px solid var(--color-stroke-subtle);
@@ -31009,7 +31773,15 @@ body:has(#course-summary.calendar-page-modern) .app-header,
 }
 
 #home-main #calendar-container course-calendar .calendar-wrapper.has-home-intensive table#calendar-main {
-    border-radius: 0;
+    border-radius: 14px 14px 0 0 !important;
+}
+
+#home-main #calendar-container course-calendar .calendar-wrapper.has-home-intensive #calendar-main tr:first-child th:first-child {
+    border-top-left-radius: 14px;
+}
+
+#home-main #calendar-container course-calendar .calendar-wrapper.has-home-intensive #calendar-main tr:first-child th:last-child {
+    border-top-right-radius: 14px;
 }
 
 #home-main #calendar-container course-calendar .calendar-wrapper:not(.has-home-intensive) #calendar-main tr:last-child td:first-child {
@@ -31033,6 +31805,7 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-width: 0;
 }
 
 #home-main #calendar-container course-calendar .home-calendar-intensive-card {
@@ -31040,6 +31813,8 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     -webkit-appearance: none;
     width: 100%;
     height: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     min-height: 62px;
     border-radius: 12px;
     border: 1px solid var(--control-border);
@@ -31065,9 +31840,16 @@ body:has(#course-summary.calendar-page-modern) .app-header,
 
 #home-main #calendar-container course-calendar .home-calendar-intensive-title {
     margin: 0;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     font-size: 13px;
     font-weight: 650;
     line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #home-main #calendar-container course-calendar .home-calendar-intensive-professor,
@@ -31090,5 +31872,9 @@ body:has(#course-summary.calendar-page-modern) .app-header,
 
     #home-main #calendar-container course-calendar .home-calendar-intensive {
         padding: 8px;
+    }
+
+    #home-main #calendar-container course-calendar .home-calendar-intensive-title {
+        white-space: unset;
     }
 }

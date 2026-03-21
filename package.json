@@ -4,10 +4,14 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "vite",
+    "sync:app-meta": "node scripts/sync-app-meta.mjs",
+    "dev": "APP_MODE=development npm run sync:app-meta && vite",
     "build:aliases": "node scripts/create-route-aliases.mjs",
-    "build:web": "vite build && npm run build:aliases",
-    "build": "npm run build:web"
+    "build:web": "APP_MODE=production npm run sync:app-meta && vite build && npm run build:aliases",
+    "build": "npm run build:web",
+    "build:prod": "VITE_APP_BUILD_LABEL=production npm run build:web",
+    "build:staging": "VITE_APP_BUILD_LABEL=staging npm run build:web",
+    "release": "node scripts/release.mjs"
   },
   "keywords": [],
   "author": "",

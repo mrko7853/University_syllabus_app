@@ -4,6 +4,7 @@ import { getCurrentAppPath, stripBase, toAppUrl, withBase } from './path-utils.j
 import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 import { isCourseSaved, readSavedCourses, syncSavedCoursesForUser, toggleSavedCourse } from './saved-courses.js';
 import { inferCurrentSemesterValue } from './preferences.js';
+import { clearFieldError, initializeGlobalFieldErrorUI, setFieldError } from './field-errors.js';
 
 // Course type to color mapping
 const courseTypeColors = {
@@ -17,10 +18,20 @@ const courseTypeColors = {
     'Japanese Politics and Global Studies Concentration': '#E6A4AE', // Placeholder - Light Pink
     'Other Elective Courses': '#CCCCFF',                             // Placeholder - Light Gray
     'Graduate courses': '#E8CFA2',                                   // Warm Sand
+    'Non-ILA Classes': '#C8B8C0',                                   // Requested neutral non-ILA color
+    'Non-ILA English': '#C8B8C0',                                   // Backward compatibility alias
 };
 
 // Default color for unknown types
 const defaultCourseColor = '#E0E0E0';
+
+const COURSE_SOURCE_ALL = 'all';
+const COURSE_SOURCE_ILA = 'ila';
+const COURSE_SOURCE_NONILA = 'nonila';
+const COURSE_SOURCE_TABLE_MAP = {
+    [COURSE_SOURCE_ILA]: 'courses',
+    [COURSE_SOURCE_NONILA]: 'courses_nonila'
+};
 
 const SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
 const SLOT_PERIOD_TO_TIME = {
@@ -28,7 +39,8 @@ const SLOT_PERIOD_TO_TIME = {
     2: '10:45',
     3: '13:10',
     4: '14:55',
-    5: '16:40'
+    5: '16:40',
+    6: '18:25'
 };
 const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective', 'Graduate']);
@@ -101,6 +113,8 @@ if (document.readyState === 'loading') {
     initMobileOrientationPolicy();
 }
 
+initializeGlobalFieldErrorUI();
+
 function normalizeSlotDay(day) {
     const raw = String(day || '').trim();
     if (!raw) return null;
@@ -124,7 +138,7 @@ function normalizeSlotDay(day) {
 function normalizeSlotPeriod(period) {
     if (period === null || period === undefined || period === '') return null;
     const parsed = parseInt(period, 10);
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) return null;
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 6) return null;
     return parsed;
 }
 
@@ -260,6 +274,15 @@ const japaneseNameMapping = {
     '森': 'Mori',
     '池田': 'Ikeda', '池': 'Ike',
     '橋本': 'Hashimoto', '橋': 'Hashi',
+    '前川': 'Maekawa',
+    '乾': 'Inui',
+    '廣田': 'Hirota',
+    '新井': 'Arai',
+    '本間': 'Honma',
+    '柴川': 'Shibakawa',
+    '植松': 'Uematsu',
+    '西谷': 'Nishitani',
+    '黄': 'Huang',
 
     // Common given names
     '旬子': 'Junko', '子': 'Ko', '旬': 'Jun',
@@ -281,6 +304,15 @@ const japaneseNameMapping = {
     '藍子': 'Aiko', '藍': 'Ai',
     '杏寧': 'Anna', '杏': 'An', '寧': 'Na',
     '勉': 'Tsutomu',
+    '直輝': 'Naoki',
+    '美紀': 'Miki',
+    '宏司': 'Koji',
+    '真由美': 'Mayumi',
+    '真生': 'Mao',
+    '桃里': 'Momori',
+    '祐子': 'Yuko',
+    '皓程': 'Jinting',
+    '京': 'Kyo',
 
     // Common Hiragana names (these will mostly be handled by WanaKana, but added for completeness)
     'たかはし': 'Takahashi', 'やぎ': 'Yagi', 'わだ': 'Wada',
@@ -324,7 +356,18 @@ const japaneseFullNameMapping = {
     '中西 久枝': 'Nakanishi Hisae',
     '南川 文里': 'Minamikawa Fumisato',
     '秋林 こずえ': 'Akibayashi Kozue',
-    '菅野 優香': 'Kanno Yuka'
+    '菅野 優香': 'Kanno Yuka',
+    '乾 美紀': 'Inui Miki',
+    '前川 直輝': 'Maekawa Naoki',
+    '廣田 浩': 'Hirota Hiroshi',
+    '張 皓程': 'Zhang Haocheng',
+    '新井 京': 'Arai Kyo',
+    '本間 桃里': 'Honma Momori',
+    '柴川 真由美': 'Shibakawa Mayumi',
+    '植松 真生': 'Uematsu Mao',
+    '西谷 祐子': 'Nishitani Yuko',
+    '高橋 宏司': 'Takahashi Koji',
+    '黄 ジン霆': 'Huang Jinting'
 };
 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/;
@@ -457,6 +500,31 @@ function getRomanizedProfessorName(name) {
     return romanizedProfessorCache.get(normalizedInput) || romanizeProfessorName(normalizedInput);
 }
 
+function canonicalizeProfessorForComparison(name) {
+    const normalizedInput = normalizeProfessorNameInput(name);
+    if (!normalizedInput) return '';
+
+    const romanized = String(getRomanizedProfessorName(normalizedInput) || normalizedInput)
+        .replace(/[　\s]+/g, ' ')
+        .trim()
+        .toLowerCase();
+    if (!romanized) return '';
+
+    const compact = romanized
+        .replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf\s'-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!compact) return romanized;
+
+    const tokens = compact
+        .split(' ')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .sort();
+
+    return tokens.join(' ');
+}
+
 export function formatProfessorDisplayName(name) {
     const raw = String(getRomanizedProfessorName(name) || '').trim();
     if (!raw) return 'TBA';
@@ -468,9 +536,15 @@ export function formatProfessorDisplayName(name) {
     const looksAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
     if (!looksAllCaps) return raw;
 
-    return raw
+    const titleCased = raw
         .toLowerCase()
         .replace(/\b([a-z])/g, (match) => match.toUpperCase());
+
+    // Preserve common generational roman numeral suffixes (e.g. III).
+    return titleCased.replace(
+        /\b(Ii|Iii|Iv|Vi|Vii|Viii|Ix|Xi|Xii|Xiii|Xiv|Xv|Xvi|Xvii|Xviii|Xix|Xx)\b/g,
+        (token) => token.toUpperCase()
+    );
 }
 
 // Helper function to normalize course titles
@@ -636,6 +710,12 @@ export function parseProfileCurrentYearLevel(profileRow) {
 }
 
 export function getCourseRequiredYearMeta(courseLike, userYearLevel = null) {
+    const normalizedCourseType = String(courseLike?.type || courseLike?.course_type || '').trim().toLowerCase();
+    const normalizedCourseSource = normalizeCourseSource(courseLike?.course_source || courseLike?.source);
+    const isNonIlaCourse = normalizedCourseSource === COURSE_SOURCE_NONILA
+        || normalizedCourseType === 'non-ila classes'
+        || normalizedCourseType === 'non-ila english';
+
     const requiredYearRaw = courseLike?.required_year ?? courseLike?.requiredYear ?? null;
     const overrideCandidates = [
         getGraduateRequiredYearOverride(courseLike),
@@ -645,9 +725,15 @@ export function getCourseRequiredYearMeta(courseLike, userYearLevel = null) {
         ? Math.max(...overrideCandidates)
         : null;
     const parsedRequiredYear = parseRequiredYearMinimum(requiredYearRaw);
-    const requiredYearMin = Number.isFinite(requiredYearOverride) && requiredYearOverride > 0
+    let requiredYearMin = Number.isFinite(requiredYearOverride) && requiredYearOverride > 0
         ? requiredYearOverride
         : parsedRequiredYear;
+
+    // Enrollment policy: all non-ILA classes are 2nd year+.
+    if (isNonIlaCourse) {
+        requiredYearMin = 2;
+    }
+
     const hasRequiredYear = Number.isFinite(requiredYearMin) && requiredYearMin > 0;
     const requiredYearLabelValue = hasRequiredYear
         ? `${formatOrdinalYearLabel(requiredYearMin)} year+`
@@ -688,7 +774,7 @@ function formatCourseTimeCompactLabel(rawTimeSlot) {
     const raw = String(rawTimeSlot || '').trim();
     if (!raw) return 'TBA';
     if (/(集中講義|集中)/.test(raw)) return 'Intensive';
-    const jp = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
+    const jp = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/);
     if (jp) {
         const dayMap = { 月: 'Mon', 火: 'Tue', 水: 'Wed', 木: 'Thu', 金: 'Fri', 土: 'Sat', 日: 'Sun' };
         const timeMap = {
@@ -696,7 +782,8 @@ function formatCourseTimeCompactLabel(rawTimeSlot) {
             '2': '10:45–12:15',
             '3': '13:10–14:40',
             '4': '14:55–16:25',
-            '5': '16:40–18:10'
+            '5': '16:40–18:10',
+            '6': '18:25–19:55'
         };
         const day = dayMap[jp[1]] || jp[1];
         return `${day} P${jp[2]} · ${timeMap[jp[2]] || ''}`.trim();
@@ -706,7 +793,7 @@ function formatCourseTimeCompactLabel(rawTimeSlot) {
     if (en) {
         const day = en[1].charAt(0).toUpperCase() + en[1].slice(1).toLowerCase();
         const start = en[2];
-        const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5' };
+        const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5', '18:25': '6' };
         const period = periodByStart[start];
         return period ? `${day} P${period} · ${start}–${en[3]}` : `${day} ${start}–${en[3]}`;
     }
@@ -1106,15 +1193,17 @@ function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
         '2': '2nd',
         '3': '3rd',
         '4': '4th',
-        '5': '5th'
+        '5': '5th',
+        '6': '6th'
     };
-    const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5' };
+    const periodByStart = { '09:00': '1', '10:45': '2', '13:10': '3', '14:55': '4', '16:40': '5', '18:25': '6' };
     const timeMap = {
         '1': '09:00 - 10:30',
         '2': '10:45 - 12:15',
         '3': '13:10 - 14:40',
         '4': '14:55 - 16:25',
-        '5': '16:40 - 18:10'
+        '5': '16:40 - 18:10',
+        '6': '18:25 - 19:55'
     };
 
     const buildLabel = (dayAbbr, period, timeRange) => {
@@ -1133,7 +1222,7 @@ function formatConflictPreviewTimeLabel(rawTimeSlot, options = {}) {
         return dayAbbr;
     };
 
-    const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
+    const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/);
     if (jpMatch) {
         const dayAbbr = dayMapJPToAbbr[jpMatch[1]] || jpMatch[1];
         const period = jpMatch[2];
@@ -2265,7 +2354,11 @@ const courseCacheInFlight = {};
 const COURSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const COURSE_CACHE_FULL_RESYNC_MS = 30 * 60 * 1000;
 
-let supportsCoursesUpdatedAt = true;
+const supportsCoursesUpdatedAtBySource = {
+    [COURSE_SOURCE_ALL]: false,
+    [COURSE_SOURCE_ILA]: true,
+    [COURSE_SOURCE_NONILA]: true
+};
 
 let coursesRealtimeSubscriptionInitialized = false;
 let coursesRealtimeChannel = null;
@@ -2285,6 +2378,331 @@ function normalizeCourseTerm(term) {
     if (lowerTerm.includes('spring') || rawTerm.includes('春')) return 'Spring';
 
     return rawTerm;
+}
+
+function normalizeCourseSource(source) {
+    const normalized = String(source || '').trim().toLowerCase();
+    if (normalized === COURSE_SOURCE_ILA) return COURSE_SOURCE_ILA;
+    if (normalized === COURSE_SOURCE_NONILA) return COURSE_SOURCE_NONILA;
+    return COURSE_SOURCE_ALL;
+}
+
+function getCourseTableNameForSource(source) {
+    const normalizedSource = normalizeCourseSource(source);
+    if (normalizedSource === COURSE_SOURCE_NONILA) return COURSE_SOURCE_TABLE_MAP[COURSE_SOURCE_NONILA];
+    return COURSE_SOURCE_TABLE_MAP[COURSE_SOURCE_ILA];
+}
+
+function normalizeNonIlaTitleDedupKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[()\[\]{}「」『』・]/g, '')
+        .replace(/[\s\-‐‑‒–—―_]+/g, '');
+}
+
+function normalizeNonIlaCourseTitle(rawTitle) {
+    let title = String(rawTitle || '')
+        .replace(/^[\s○△▲▽●◆◇■□]+/g, '')
+        .replace(/[　]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!title) return '';
+
+    const firstLatinIndex = title.search(/[A-Za-z]/);
+    if (firstLatinIndex > 0) {
+        title = title.slice(firstLatinIndex).trim();
+    }
+
+    const firstWordMatch = title.match(/^([A-Za-z][A-Za-z0-9&'’./:-]*)/);
+    if (firstWordMatch) {
+        const firstWord = firstWordMatch[1];
+        const marker = ` ${firstWord.toLowerCase()}`;
+        const lowerTitle = title.toLowerCase();
+        const duplicateIndex = lowerTitle.indexOf(marker, firstWord.length + 1);
+
+        if (duplicateIndex > 0) {
+            const leftPart = title.slice(0, duplicateIndex).trim();
+            const rightPart = title.slice(duplicateIndex + 1).trim();
+            if (normalizeNonIlaTitleDedupKey(leftPart) === normalizeNonIlaTitleDedupKey(rightPart)) {
+                title = rightPart;
+            }
+        }
+    }
+
+    // Keep only the lead English title before parenthesized subtitles.
+    // Example: "European Law-1(Cross-Border ...)" -> "European Law-1"
+    const parentheticalIndex = title.search(/\s*[\(\（]/);
+    if (parentheticalIndex > 0) {
+        const firstSegment = title.slice(0, parentheticalIndex).trim();
+        if (/[A-Za-z]/.test(firstSegment)) {
+            title = firstSegment;
+        }
+    }
+
+    // Non-ILA rows often append a long subtitle after a separator.
+    // Keep only the first English title segment (before " - ...").
+    const subtitleSeparatorMatch = title.match(/\s+[\-‐‑‒–—―－]\s*/);
+    if (subtitleSeparatorMatch && Number.isFinite(subtitleSeparatorMatch.index) && subtitleSeparatorMatch.index > 0) {
+        const firstSegment = title.slice(0, subtitleSeparatorMatch.index).trim();
+        if (firstSegment) {
+            title = firstSegment;
+        }
+    }
+
+    return title
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeNonIlaTimeSlot(rawTimeSlot) {
+    const raw = String(rawTimeSlot || '').trim();
+    if (!raw) return '';
+    if (/(集中講義|集中|intensive)/i.test(raw)) return 'Intensive';
+
+    const dayMap = {
+        月: 'Monday',
+        火: 'Tuesday',
+        水: 'Wednesday',
+        木: 'Thursday',
+        金: 'Friday',
+        土: 'Saturday',
+        日: 'Sunday'
+    };
+    const periodTimeMap = {
+        '1': '09:00 - 10:30',
+        '2': '10:45 - 12:15',
+        '3': '13:10 - 14:40',
+        '4': '14:55 - 16:25',
+        '5': '16:40 - 18:10',
+        '6': '18:25 - 19:55'
+    };
+
+    const collected = [];
+    const seen = new Set();
+    const addSlot = (dayName, rangeText = '') => {
+        const day = String(dayName || '').trim();
+        const range = String(rangeText || '').replace(/\s*[–—-]\s*/g, ' - ').trim();
+        if (!day) return;
+        const entry = range ? `${day} ${range}` : day;
+        const key = entry.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        collected.push(entry);
+    };
+
+    const jpMatches = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/g)];
+    jpMatches.forEach((match) => {
+        const day = dayMap[match[1]] || match[1];
+        const range = periodTimeMap[match[2]] || `Period ${match[2]}`;
+        addSlot(day, range);
+    });
+
+    const enMatches = [...raw.matchAll(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{2}:\d{2})\s*[-–]\s*(\d{2}:\d{2})/gi)];
+    const fullDay = {
+        Mon: 'Monday',
+        Tue: 'Tuesday',
+        Wed: 'Wednesday',
+        Thu: 'Thursday',
+        Fri: 'Friday',
+        Sat: 'Saturday',
+        Sun: 'Sunday'
+    };
+    enMatches.forEach((match) => {
+        const dayToken = match[1];
+        const normalizedDayToken = dayToken.charAt(0).toUpperCase() + dayToken.slice(1).toLowerCase();
+        const day = fullDay[normalizedDayToken] || normalizedDayToken;
+        addSlot(day, `${match[2]} - ${match[3]}`);
+    });
+
+    if (collected.length > 0) {
+        return collected.join(' / ');
+    }
+
+    let fallback = raw
+        .replace(/月曜日|月/g, 'Monday')
+        .replace(/火曜日|火/g, 'Tuesday')
+        .replace(/水曜日|水/g, 'Wednesday')
+        .replace(/木曜日|木/g, 'Thursday')
+        .replace(/金曜日|金/g, 'Friday')
+        .replace(/土曜日|土/g, 'Saturday')
+        .replace(/日曜日|日/g, 'Sunday')
+        .replace(/([1-9])講時/g, (_, p1) => periodTimeMap[p1] || `Period ${p1}`)
+        .replace(/[()（）]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!fallback) fallback = raw;
+    return fallback;
+}
+
+const NON_ILA_EVALUATION_EXACT_TRANSLATIONS = {
+    '授業への積極的な参加が必要です。出席カードのコメントを評価します。': 'Active class participation is required. Attendance card comments are evaluated.',
+    '授業内容のまとめと，自分の意見が述べられていることが重要です。': 'Summarize course content and clearly express your own views.',
+    '積極的なディスカッションへの参加を高く評価します。毎回，レスポンス・ペーパーを書いてもらいます。': 'Active participation in discussion is highly valued. A response paper is required each class.',
+    'レポートの書き方が習得できている。自分の言葉で述べられているかが評価のポイントです。': 'Proper report-writing skills and clearly stated personal analysis are key evaluation points.',
+    'ユダヤ人女性に関するテーマの発表が求められます。': 'A presentation on a topic related to Jewish women is required.'
+};
+
+const NON_ILA_EVALUATION_REPLACEMENTS = [
+    ['平常点(出席，クラス参加，グループ作業の成果等)', 'Attendance, class participation, and group work'],
+    ['平常点（クラス参加，授業時のグループ作業の成果等）', 'Class participation and group work'],
+    ['平常点(クラス参加，グループ作業の成果等)', 'Class participation and group work'],
+    ['平常点(出席，クラス参加，提出物)', 'Attendance, class participation, and submitted work'],
+    ['平常点(クラス参加，グループ作業の', 'Class participation and group work'],
+    ['期末レポート試験・論文', 'Final report, exam, and paper'],
+    ['期末レポート試験', 'Final report and exam'],
+    ['中間レポート試験', 'Midterm report and exam'],
+    ['期末レポート', 'Final report'],
+    ['中間レポート', 'Midterm report'],
+    ['期末試験', 'Final exam'],
+    ['クラスでの発表など', 'Class presentation'],
+    ['クラスへの貢献度', 'Contribution to class'],
+    ['出席カードのコメント', 'Attendance card comments'],
+    ['提出物', 'Submitted work'],
+    ['授業への参加', 'Class participation'],
+    ['授業参加', 'Class participation'],
+    ['グループ作業の成果等', 'group work'],
+    ['クラス参加', 'class participation'],
+    ['出席', 'attendance'],
+    ['レポート', 'report'],
+    ['発表', 'presentation'],
+    ['試験', 'exam'],
+    ['論文', 'paper']
+];
+
+const NON_ILA_EVALUATION_META_TAGS = new Set([
+    'nonila_english',
+    'english_only',
+    'pdf_allowlist',
+    'graduate_course'
+]);
+
+function normalizeNonIlaAssessmentText(rawText, options = {}) {
+    const fallback = String(options.fallback || '').trim();
+
+    let value = String(rawText || '')
+        .replace(/[　]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!value) return '';
+
+    if (NON_ILA_EVALUATION_EXACT_TRANSLATIONS[value]) {
+        value = NON_ILA_EVALUATION_EXACT_TRANSLATIONS[value];
+    }
+
+    NON_ILA_EVALUATION_REPLACEMENTS.forEach(([from, to]) => {
+        value = value.split(from).join(to);
+    });
+
+    value = value
+        .replace(/（/g, '(')
+        .replace(/）/g, ')')
+        .replace(/，/g, ', ')
+        .replace(/。/g, '. ')
+        .replace(/・/g, ' and ')
+        .replace(/[:：]+\s*$/g, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (JAPANESE_CHAR_REGEX.test(value)) {
+        if (/[A-Za-z]/.test(value)) {
+            value = value
+                .replace(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        } else if (fallback) {
+            value = fallback;
+        }
+    }
+
+    return value;
+}
+
+function normalizeNonIlaEvaluationCriteriaJson(rawCriteria) {
+    const parsed = parseEvaluationCriteriaJson(rawCriteria);
+    if (!parsed || !Array.isArray(parsed.components)) return rawCriteria;
+
+    const normalizedComponents = parsed.components
+        .map((component) => {
+            const normalizedName = normalizeNonIlaAssessmentText(component?.name, { fallback: 'Assessment' });
+            const normalizedNotes = normalizeNonIlaAssessmentText(component?.notes, { fallback: 'See syllabus for details.' });
+
+            return {
+                ...component,
+                name: normalizedName || 'Assessment',
+                notes: normalizedNotes || null
+            };
+        })
+        .filter(Boolean);
+
+    return {
+        ...parsed,
+        components: normalizedComponents
+    };
+}
+
+function normalizeNonIlaEvaluationTags(rawTags) {
+    if (!Array.isArray(rawTags)) return rawTags;
+
+    const seen = new Set();
+    const normalizedTags = [];
+
+    rawTags.forEach((tag) => {
+        const rawTag = String(tag || '').trim();
+        if (!rawTag) return;
+        if (NON_ILA_EVALUATION_META_TAGS.has(rawTag.toLowerCase())) return;
+
+        const normalizedTag = normalizeNonIlaAssessmentText(rawTag);
+        if (!normalizedTag) return;
+
+        const key = normalizedTag.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        normalizedTags.push(normalizedTag);
+    });
+
+    return normalizedTags;
+}
+
+function normalizeNonIlaCourseType(typeValue, source) {
+    const rawType = String(typeValue || '').trim();
+    if (!rawType && source === COURSE_SOURCE_NONILA) return 'Non-ILA Classes';
+    const lowerType = rawType.toLowerCase();
+    if (source === COURSE_SOURCE_NONILA || lowerType === 'non-ila english' || lowerType === 'non-ila classes') {
+        return 'Non-ILA Classes';
+    }
+    return rawType;
+}
+
+function annotateCoursesWithSource(courses, source) {
+    const normalizedSource = normalizeCourseSource(source);
+    if (!Array.isArray(courses) || courses.length === 0) return [];
+
+    return courses.map((course) => ({
+        ...course,
+        ...(normalizedSource === COURSE_SOURCE_NONILA
+            ? (() => {
+                const normalizedTitle = normalizeNonIlaCourseTitle(course?.title);
+                const normalizedShortTitleCandidate = normalizeNonIlaCourseTitle(course?.title_short);
+
+                return {
+                    title: normalizedTitle || String(course?.title || '').trim(),
+                    title_short: normalizedShortTitleCandidate || normalizedTitle || String(course?.title_short || course?.title || '').trim(),
+                    professor: formatProfessorDisplayName(course?.professor || ''),
+                    time_slot: normalizeNonIlaTimeSlot(course?.time_slot),
+                    required_year: 2,
+                    evaluation_criteria_json: normalizeNonIlaEvaluationCriteriaJson(course?.evaluation_criteria_json),
+                    evaluation_tags: normalizeNonIlaEvaluationTags(course?.evaluation_tags),
+                    evaluation_criteria_raw: normalizeNonIlaAssessmentText(course?.evaluation_criteria_raw, { fallback: '' })
+                };
+            })()
+            : {}),
+        type: normalizeNonIlaCourseType(course?.type, normalizedSource),
+        course_source: normalizedSource
+    }));
 }
 
 function normalizeCourseCodeForReview(codeValue) {
@@ -2438,10 +2856,7 @@ function hasAnyGpaSignal(course) {
 }
 
 function normalizeProfessorForComparison(name) {
-    return String(name || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
+    return canonicalizeProfessorForComparison(name);
 }
 
 export function isCourseGpaAlignedWithCurrentProfessor(course) {
@@ -2483,14 +2898,29 @@ export function isCourseGpaAlignedWithCurrentProfessor(course) {
     return true;
 }
 
-function getCourseCacheKey(year, term) {
+function getCourseCacheKey(year, term, source = COURSE_SOURCE_ALL) {
     const normalizedYear = normalizeCourseYear(year);
     const normalizedTerm = normalizeCourseTerm(term);
-    return `${normalizedYear}-${normalizedTerm}`;
+    const normalizedSource = normalizeCourseSource(source);
+    return `${normalizedSource}::${normalizedYear}-${normalizedTerm}`;
 }
 
 function getCourseIdentity(course) {
     return `${course.course_code}::${normalizeCourseYear(course.academic_year)}::${normalizeCourseTerm(course.term)}`;
+}
+
+function mergeCourseCollections(ilaCourses, nonIlaCourses) {
+    const mergedMap = new Map();
+
+    (Array.isArray(nonIlaCourses) ? nonIlaCourses : []).forEach((course) => {
+        mergedMap.set(getCourseIdentity(course), course);
+    });
+    // ILA rows win on duplicate identities.
+    (Array.isArray(ilaCourses) ? ilaCourses : []).forEach((course) => {
+        mergedMap.set(getCourseIdentity(course), course);
+    });
+
+    return Array.from(mergedMap.values());
 }
 
 function getLatestCourseUpdatedAt(courses) {
@@ -2527,7 +2957,8 @@ function mergeCourseUpdates(existingCourses, changedCourses) {
 }
 
 function setCourseCacheEntry(year, term, courses, options = {}) {
-    const cacheKey = getCourseCacheKey(year, term);
+    const normalizedSource = normalizeCourseSource(options.source);
+    const cacheKey = getCourseCacheKey(year, term, normalizedSource);
     const now = Date.now();
 
     courseCache[cacheKey] = courses;
@@ -2541,8 +2972,9 @@ function setCourseCacheEntry(year, term, courses, options = {}) {
     return cacheKey;
 }
 
-function getCourseCacheEntry(year, term) {
-    const cacheKey = getCourseCacheKey(year, term);
+function getCourseCacheEntry(year, term, source = COURSE_SOURCE_ALL) {
+    const normalizedSource = normalizeCourseSource(source);
+    const cacheKey = getCourseCacheKey(year, term, normalizedSource);
     const cachedCourses = courseCache[cacheKey];
     if (!cachedCourses) return null;
 
@@ -2562,8 +2994,12 @@ function isCourseCacheFresh(cacheEntry) {
 }
 
 function clearAvailableCourseDimensionCaches() {
-    availableSemestersCache = null;
-    availableYearsCache = null;
+    availableSemestersCacheBySource[COURSE_SOURCE_ALL] = null;
+    availableSemestersCacheBySource[COURSE_SOURCE_ILA] = null;
+    availableSemestersCacheBySource[COURSE_SOURCE_NONILA] = null;
+    availableYearsCacheBySource[COURSE_SOURCE_ALL] = null;
+    availableYearsCacheBySource[COURSE_SOURCE_ILA] = null;
+    availableYearsCacheBySource[COURSE_SOURCE_NONILA] = null;
 }
 
 function hasCoursesUpdatedAtError(error) {
@@ -2571,16 +3007,19 @@ function hasCoursesUpdatedAtError(error) {
     return message.includes('updated_at') && (message.includes('column') || message.includes('does not exist'));
 }
 
-function invalidateCourseCacheEntry(year, term) {
-    const cacheKey = getCourseCacheKey(year, term);
+function invalidateCourseCacheEntry(year, term, source = COURSE_SOURCE_ALL) {
+    const cacheKey = getCourseCacheKey(year, term, source);
     delete courseCache[cacheKey];
     delete courseCacheMeta[cacheKey];
     delete courseCacheInFlight[cacheKey];
     return cacheKey;
 }
 
-function markCourseCacheEntryStale(year, term, { requiresFullSync = false } = {}) {
-    const cacheKey = getCourseCacheKey(year, term);
+function markCourseCacheEntryStale(year, term, {
+    requiresFullSync = false,
+    source = COURSE_SOURCE_ALL
+} = {}) {
+    const cacheKey = getCourseCacheKey(year, term, source);
     const meta = courseCacheMeta[cacheKey];
     if (!meta) return false;
 
@@ -2594,11 +3033,14 @@ function markCourseCacheEntryStale(year, term, { requiresFullSync = false } = {}
     return true;
 }
 
-async function fetchDeltaCoursesSince(year, term, sinceIso) {
-    if (!supportsCoursesUpdatedAt || !sinceIso) return null;
+async function fetchDeltaCoursesSince(year, term, sinceIso, source = COURSE_SOURCE_ALL) {
+    const normalizedSource = normalizeCourseSource(source);
+    if (normalizedSource === COURSE_SOURCE_ALL) return null;
+    const tableName = getCourseTableNameForSource(normalizedSource);
+    if (!supportsCoursesUpdatedAtBySource[normalizedSource] || !sinceIso) return null;
 
     const { data, error } = await supabase
-        .from('courses')
+        .from(tableName)
         .select(`
             *,
             gpa_a_percent,
@@ -2613,18 +3055,31 @@ async function fetchDeltaCoursesSince(year, term, sinceIso) {
 
     if (error) {
         if (hasCoursesUpdatedAtError(error)) {
-            supportsCoursesUpdatedAt = false;
-            console.warn('courses.updated_at is unavailable; falling back to full fetch strategy');
+            supportsCoursesUpdatedAtBySource[normalizedSource] = false;
+            console.warn(`${tableName}.updated_at is unavailable; falling back to full fetch strategy`);
             return null;
         }
         throw new Error(`Delta courses query failed: ${error.message}`);
     }
 
-    return data || [];
+    return annotateCoursesWithSource(data || [], normalizedSource);
 }
 
-async function fetchCourseDataWithDelta(year, term, cacheEntry) {
-    const cacheKey = getCourseCacheKey(year, term);
+async function fetchCourseDataWithDelta(year, term, cacheEntry, source = COURSE_SOURCE_ALL) {
+    const normalizedSource = normalizeCourseSource(source);
+    const cacheKey = getCourseCacheKey(year, term, normalizedSource);
+    if (normalizedSource === COURSE_SOURCE_ALL) {
+        const fullCourses = await fetchCourseDataFallback(year, term, normalizedSource);
+        const meta = courseCacheMeta[cacheKey] || {};
+        setCourseCacheEntry(year, term, fullCourses, {
+            fullSyncAt: Date.now(),
+            updatedAtIso: meta.updatedAtIso || getLatestCourseUpdatedAt(fullCourses),
+            requiresFullSync: false,
+            source: normalizedSource
+        });
+        return fullCourses;
+    }
+
     const shouldDoFullResync = (
         !cacheEntry ||
         cacheEntry.requiresFullSync ||
@@ -2632,15 +3087,18 @@ async function fetchCourseDataWithDelta(year, term, cacheEntry) {
         (Date.now() - cacheEntry.fullSyncAt > COURSE_CACHE_FULL_RESYNC_MS)
     );
 
-    if (!shouldDoFullResync && cacheEntry?.updatedAtIso && supportsCoursesUpdatedAt) {
-        const changedCourses = await fetchDeltaCoursesSince(year, term, cacheEntry.updatedAtIso);
+    if (!shouldDoFullResync && cacheEntry?.updatedAtIso && supportsCoursesUpdatedAtBySource[normalizedSource]) {
+        const changedCourses = await fetchDeltaCoursesSince(year, term, cacheEntry.updatedAtIso, normalizedSource);
         if (changedCourses !== null) {
             if (changedCourses.length > 0) {
-                await applyHistoricalGpaFallback(changedCourses);
+                if (normalizedSource === COURSE_SOURCE_ILA) {
+                    await applyHistoricalGpaFallback(changedCourses);
+                }
                 const mergedCourses = mergeCourseUpdates(cacheEntry.courses, changedCourses);
                 setCourseCacheEntry(year, term, mergedCourses, {
                     fullSyncAt: cacheEntry.fullSyncAt,
-                    requiresFullSync: false
+                    requiresFullSync: false,
+                    source: normalizedSource
                 });
                 console.log(`Delta sync applied for ${term} ${year}: ${changedCourses.length} updated rows`);
                 return mergedCourses;
@@ -2649,28 +3107,30 @@ async function fetchCourseDataWithDelta(year, term, cacheEntry) {
             setCourseCacheEntry(year, term, cacheEntry.courses, {
                 fullSyncAt: cacheEntry.fullSyncAt,
                 updatedAtIso: cacheEntry.updatedAtIso,
-                requiresFullSync: false
+                requiresFullSync: false,
+                source: normalizedSource
             });
             return cacheEntry.courses;
         }
     }
 
-    const fullCourses = await fetchCourseDataFallback(year, term);
+    const fullCourses = await fetchCourseDataFallback(year, term, normalizedSource);
     const meta = courseCacheMeta[cacheKey] || {};
     setCourseCacheEntry(year, term, fullCourses, {
         fullSyncAt: Date.now(),
         updatedAtIso: meta.updatedAtIso || getLatestCourseUpdatedAt(fullCourses),
-        requiresFullSync: false
+        requiresFullSync: false,
+        source: normalizedSource
     });
     return fullCourses;
 }
 
-function refreshCourseDataInBackground(year, term, cacheKey, cacheEntry = null) {
+function refreshCourseDataInBackground(year, term, cacheKey, cacheEntry = null, source = COURSE_SOURCE_ALL) {
     if (courseCacheInFlight[cacheKey]) {
         return courseCacheInFlight[cacheKey];
     }
 
-    const refreshPromise = fetchCourseDataWithDelta(year, term, cacheEntry)
+    const refreshPromise = fetchCourseDataWithDelta(year, term, cacheEntry, source)
         .catch((error) => {
             console.warn(`Background refresh failed for ${term} ${year}:`, error);
             return null;
@@ -2688,46 +3148,60 @@ function ensureCoursesRealtimeInvalidation() {
     coursesRealtimeSubscriptionInitialized = true;
 
     try {
+        const handleRealtimePayload = (payload, source) => {
+            const normalizedSource = normalizeCourseSource(source);
+            const row = payload?.new || payload?.old || null;
+            const changedYear = row?.academic_year;
+            const changedTerm = row?.term;
+            const normalizedTerm = normalizeCourseTerm(changedTerm);
+            const isDeleteEvent = payload?.eventType === 'DELETE';
+
+            clearAvailableCourseDimensionCaches();
+
+            if (changedYear !== undefined && changedYear !== null && normalizedTerm) {
+                const marked = markCourseCacheEntryStale(changedYear, normalizedTerm, {
+                    requiresFullSync: isDeleteEvent,
+                    source: normalizedSource
+                });
+                markCourseCacheEntryStale(changedYear, normalizedTerm, {
+                    requiresFullSync: isDeleteEvent,
+                    source: COURSE_SOURCE_ALL
+                });
+                if (marked) {
+                    console.log(`Realtime cache marked stale for ${normalizedSource} ${normalizedTerm} ${changedYear}`);
+                }
+            } else {
+                Object.keys(courseCacheMeta).forEach((key) => {
+                    courseCacheMeta[key].fetchedAt = 0;
+                    if (isDeleteEvent) {
+                        courseCacheMeta[key].requiresFullSync = true;
+                        courseCacheMeta[key].fullSyncAt = 0;
+                    }
+                });
+                console.log('Realtime cache marked stale for all course cache entries');
+            }
+
+            window.dispatchEvent(new CustomEvent('coursesCacheInvalidated', {
+                detail: {
+                    eventType: payload?.eventType || 'unknown',
+                    year: changedYear ?? null,
+                    term: normalizedTerm || null,
+                    source: normalizedSource
+                }
+            }));
+        };
+
         coursesRealtimeChannel = supabase
             .channel('courses-cache-invalidation')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'courses' },
-                (payload) => {
-                    const row = payload?.new || payload?.old || null;
-                    const changedYear = row?.academic_year;
-                    const changedTerm = row?.term;
-                    const normalizedTerm = normalizeCourseTerm(changedTerm);
-                    const isDeleteEvent = payload?.eventType === 'DELETE';
-
-                    clearAvailableCourseDimensionCaches();
-
-                    if (changedYear !== undefined && changedYear !== null && normalizedTerm) {
-                        const marked = markCourseCacheEntryStale(changedYear, normalizedTerm, {
-                            requiresFullSync: isDeleteEvent
-                        });
-                        if (marked) {
-                            console.log(`Realtime cache marked stale for ${normalizedTerm} ${changedYear}`);
-                        }
-                    } else {
-                        Object.keys(courseCacheMeta).forEach((key) => {
-                            courseCacheMeta[key].fetchedAt = 0;
-                            if (isDeleteEvent) {
-                                courseCacheMeta[key].requiresFullSync = true;
-                                courseCacheMeta[key].fullSyncAt = 0;
-                            }
-                        });
-                        console.log('Realtime cache marked stale for all course cache entries');
-                    }
-
-                    window.dispatchEvent(new CustomEvent('coursesCacheInvalidated', {
-                        detail: {
-                            eventType: payload?.eventType || 'unknown',
-                            year: changedYear ?? null,
-                            term: normalizedTerm || null
-                        }
-                    }));
-                }
+                (payload) => handleRealtimePayload(payload, COURSE_SOURCE_ILA)
+            )
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'courses_nonila' },
+                (payload) => handleRealtimePayload(payload, COURSE_SOURCE_NONILA)
             )
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
@@ -2739,12 +3213,22 @@ function ensureCoursesRealtimeInvalidation() {
     }
 }
 
-export function invalidateCourseCache(year = null, term = null) {
+export function invalidateCourseCache(year = null, term = null, source = null) {
     clearAvailableCourseDimensionCaches();
 
     if (year !== null && year !== undefined && term !== null && term !== undefined) {
-        const removedKey = invalidateCourseCacheEntry(year, term);
-        return { removedKeys: [removedKey] };
+        if (source) {
+            const normalizedSource = normalizeCourseSource(source);
+            const removedKey = invalidateCourseCacheEntry(year, term, normalizedSource);
+            return { removedKeys: [removedKey] };
+        }
+
+        const removedKeys = [
+            invalidateCourseCacheEntry(year, term, COURSE_SOURCE_ALL),
+            invalidateCourseCacheEntry(year, term, COURSE_SOURCE_ILA),
+            invalidateCourseCacheEntry(year, term, COURSE_SOURCE_NONILA)
+        ];
+        return { removedKeys };
     }
 
     const removedKeys = Object.keys(courseCache);
@@ -2859,204 +3343,283 @@ function parseCourseURL() {
     return null;
 }
 
-// Helper function to find course by code, year, and term
-async function findCourseByParams(courseCode, year, term) {
-    try {
-        console.log('Searching for course:', { courseCode, year, term });
-        const courses = await fetchCourseData(year, term);
-        console.log('Total courses available:', courses.length);
+function findCourseInCollection(courses, courseCode) {
+    if (!Array.isArray(courses) || courses.length === 0) return null;
 
-        // Try exact match first (case insensitive)
-        let course = courses.find(c =>
-            c.course_code && c.course_code.toLowerCase() === courseCode.toLowerCase()
+    const normalizedCode = String(courseCode || '').toLowerCase();
+
+    // Try exact match first (case insensitive)
+    let course = courses.find((candidate) =>
+        candidate.course_code && candidate.course_code.toLowerCase() === normalizedCode
+    );
+
+    // If not found, try partial match on title
+    if (!course) {
+        const searchTerm = normalizedCode.replace(/_/g, ' ');
+        course = courses.find((candidate) =>
+            (candidate.title && candidate.title.toLowerCase().includes(searchTerm)) ||
+            (candidate.title && candidate.title.toLowerCase().replace(/\s+/g, '_').includes(normalizedCode))
         );
-        console.log('Exact match result:', course);
+    }
 
-        // If not found, try partial match on title
-        if (!course) {
-            const searchTerm = courseCode.toLowerCase().replace(/_/g, ' ');
-            course = courses.find(c =>
-                (c.title && c.title.toLowerCase().includes(searchTerm)) ||
-                (c.title && c.title.toLowerCase().replace(/\s+/g, '_').includes(courseCode.toLowerCase()))
-            );
-            console.log('Title match result:', course);
-        }
+    // If still not found, try matching by course code parts or containing
+    if (!course) {
+        course = courses.find((candidate) =>
+            (candidate.course_code && candidate.course_code.toLowerCase().includes(normalizedCode)) ||
+            (candidate.course_code && normalizedCode.includes(candidate.course_code.toLowerCase()))
+        );
+    }
 
-        // If still not found, try matching by course code parts or containing
-        if (!course) {
-            course = courses.find(c =>
-                (c.course_code && c.course_code.toLowerCase().includes(courseCode.toLowerCase())) ||
-                (c.course_code && courseCode.toLowerCase().includes(c.course_code.toLowerCase()))
-            );
-            console.log('Partial code match result:', course);
-        }
+    // If still not found, try to find by any numeric match (for codes like 12001104003)
+    if (!course && /^\d+$/.test(courseCode)) {
+        course = courses.find((candidate) =>
+            candidate.course_code && candidate.course_code.replace(/[^\d]/g, '') === courseCode
+        );
+    }
 
-        // If still not found, try to find by any numeric match (for codes like 12001104003)
-        if (!course && /^\d+$/.test(courseCode)) {
-            course = courses.find(c =>
-                c.course_code && c.course_code.replace(/[^\d]/g, '') === courseCode
-            );
-            console.log('Numeric match result:', course);
-        }
+    return course || null;
+}
 
-        // Log all available course codes for debugging
-        if (!course) {
-            console.log('Available course codes:', courses.slice(0, 10).map(c => c.course_code));
-        }
-
-        return course;
+// Helper function to find course by code, year, and term
+async function findCourseByParams(courseCode, year, term, preferredSource = COURSE_SOURCE_ALL) {
+    try {
+        const normalizedPreferredSource = normalizeCourseSource(preferredSource);
+        console.log('Searching for course:', { courseCode, year, term, preferredSource: normalizedPreferredSource });
+        const courses = await fetchCourseData(year, term, { source: normalizedPreferredSource });
+        console.log('Total courses available:', courses.length);
+        return findCourseInCollection(courses, courseCode);
     } catch (error) {
         console.error('Error finding course:', error);
         return null;
     }
 }
 
-// Cache for available years
-let availableYearsCache = null;
+// Cache for available years (scoped by source)
+const availableYearsCacheBySource = {
+    [COURSE_SOURCE_ALL]: null,
+    [COURSE_SOURCE_ILA]: null,
+    [COURSE_SOURCE_NONILA]: null
+};
 
-// Cache for available semesters (term + year combinations)
-let availableSemestersCache = null;
+// Cache for available semesters (term + year combinations, scoped by source)
+const availableSemestersCacheBySource = {
+    [COURSE_SOURCE_ALL]: null,
+    [COURSE_SOURCE_ILA]: null,
+    [COURSE_SOURCE_NONILA]: null
+};
 
 // Fetch available semesters (term + year combinations) from the database
-export async function fetchAvailableSemesters() {
+export async function fetchAvailableSemesters(options = {}) {
     ensureCoursesRealtimeInvalidation();
+    const source = normalizeCourseSource(options?.source);
 
     // Return cached data if available
-    if (availableSemestersCache) {
-        console.log('Using cached available semesters:', availableSemestersCache);
-        return availableSemestersCache;
+    if (availableSemestersCacheBySource[source] !== null) {
+        console.log(`Using cached available semesters (${source}):`, availableSemestersCacheBySource[source]);
+        return availableSemestersCacheBySource[source];
     }
 
-    try {
-        console.log('Fetching available semesters from database...');
+    const defaultSemesters = [
+        { term: 'Fall', year: 2025, label: 'Fall 2025' },
+        { term: 'Spring', year: 2025, label: 'Spring 2025' }
+    ];
 
-        // Query distinct term and academic_year combinations from courses table
+    const sortSemesters = (semesters) => semesters.sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        if (a.term === 'Fall' && b.term === 'Spring') return -1;
+        if (a.term === 'Spring' && b.term === 'Fall') return 1;
+        return 0;
+    });
+
+    const extractSemestersFromRows = (rows) => {
+        const semesterMap = new Map();
+        (rows || []).forEach((item) => {
+            const term = normalizeCourseTerm(item?.term);
+            const year = Number.parseInt(item?.academic_year, 10);
+            if (!term || !Number.isFinite(year)) return;
+
+            const key = `${term}-${year}`;
+            if (!semesterMap.has(key)) {
+                semesterMap.set(key, {
+                    term,
+                    year,
+                    label: `${term} ${year}`
+                });
+            }
+        });
+        return Array.from(semesterMap.values());
+    };
+
+    const fetchSemesterRows = async (targetSource) => {
+        const tableName = getCourseTableNameForSource(targetSource);
         const { data, error } = await supabase
-            .from('courses')
+            .from(tableName)
             .select('term, academic_year')
             .order('academic_year', { ascending: false });
 
-        if (error) {
-            console.error('Error fetching available semesters:', error);
-            // Return default semesters if query fails
-            return [
-                { term: 'Fall', year: 2025, label: 'Fall 2025' },
-                { term: 'Spring', year: 2025, label: 'Spring 2025' },
-                { term: 'Fall', year: 2024, label: 'Fall 2024' }
-            ];
-        }
+        if (error) throw error;
+        return data || [];
+    };
 
-        if (!data || data.length === 0) {
-            console.warn('No semesters found in database, using defaults');
-            return [
-                { term: 'Fall', year: 2025, label: 'Fall 2025' },
-                { term: 'Spring', year: 2025, label: 'Spring 2025' }
-            ];
-        }
+    try {
+        console.log(`Fetching available semesters from database (${source})...`);
 
-        // Extract unique term-year combinations
-        const semesterMap = new Map();
-        data.forEach(item => {
-            if (item.term && item.academic_year) {
-                const key = `${item.term}-${item.academic_year}`;
-                if (!semesterMap.has(key)) {
-                    semesterMap.set(key, {
-                        term: item.term,
-                        year: item.academic_year,
-                        label: `${item.term} ${item.academic_year}`
-                    });
-                }
+        let semesters = [];
+
+        if (source === COURSE_SOURCE_ALL) {
+            const [ilaResult, nonIlaResult] = await Promise.allSettled([
+                fetchSemesterRows(COURSE_SOURCE_ILA),
+                fetchSemesterRows(COURSE_SOURCE_NONILA)
+            ]);
+
+            if (ilaResult.status === 'rejected') {
+                console.error('Error fetching ILA semesters:', ilaResult.reason);
             }
-        });
+            if (nonIlaResult.status === 'rejected') {
+                console.warn('Error fetching non-ILA semesters:', nonIlaResult.reason);
+            }
 
-        // Convert to array and sort: by year descending, then Fall before Spring
-        const semesters = Array.from(semesterMap.values()).sort((a, b) => {
-            if (a.year !== b.year) return b.year - a.year;
-            // Fall comes before Spring in the same year
-            if (a.term === 'Fall' && b.term === 'Spring') return -1;
-            if (a.term === 'Spring' && b.term === 'Fall') return 1;
-            return 0;
-        });
+            const mergedRows = [
+                ...(ilaResult.status === 'fulfilled' ? ilaResult.value : []),
+                ...(nonIlaResult.status === 'fulfilled' ? nonIlaResult.value : [])
+            ];
+            semesters = extractSemestersFromRows(mergedRows);
+        } else {
+            const rows = await fetchSemesterRows(source);
+            semesters = extractSemestersFromRows(rows);
+            if (semesters.length === 0 && source === COURSE_SOURCE_NONILA) {
+                console.warn('No non-ILA semesters found in database');
+            }
+        }
+
+        if (semesters.length === 0) {
+            if (source === COURSE_SOURCE_NONILA) {
+                availableSemestersCacheBySource[source] = [];
+                return [];
+            }
+            console.warn('No semesters found in database, using defaults');
+            semesters = [...defaultSemesters];
+        }
+
+        sortSemesters(semesters);
 
         console.log('Available semesters from database:', semesters);
 
         // Cache the result
-        availableSemestersCache = semesters;
+        availableSemestersCacheBySource[source] = semesters;
 
         return semesters;
     } catch (error) {
         console.error('Error in fetchAvailableSemesters:', error);
-        return [
-            { term: 'Fall', year: 2025, label: 'Fall 2025' },
-            { term: 'Spring', year: 2025, label: 'Spring 2025' }
-        ];
+        if (source === COURSE_SOURCE_NONILA) {
+            return [];
+        }
+        return [...defaultSemesters];
     }
 }
 
 // Fetch available years from the database
-export async function fetchAvailableYears() {
+export async function fetchAvailableYears(options = {}) {
     ensureCoursesRealtimeInvalidation();
+    const source = normalizeCourseSource(options?.source);
 
     // Return cached data if available
-    if (availableYearsCache) {
-        console.log('Using cached available years:', availableYearsCache);
-        return availableYearsCache;
+    if (availableYearsCacheBySource[source] !== null) {
+        console.log(`Using cached available years (${source}):`, availableYearsCacheBySource[source]);
+        return availableYearsCacheBySource[source];
     }
 
-    try {
-        console.log('Fetching available years from database...');
+    const defaultYears = [2025, 2024];
 
-        // Query distinct academic_year values from courses table
+    const fetchYearRows = async (targetSource) => {
+        const tableName = getCourseTableNameForSource(targetSource);
         const { data, error } = await supabase
-            .from('courses')
+            .from(tableName)
             .select('academic_year')
             .order('academic_year', { ascending: false });
 
-        if (error) {
-            console.error('Error fetching available years:', error);
-            // Return default years if query fails
-            return [2025, 2024];
+        if (error) throw error;
+        return data || [];
+    };
+
+    const extractYearsFromRows = (rows) => [...new Set((rows || [])
+        .map((item) => Number.parseInt(item?.academic_year, 10))
+        .filter((year) => Number.isFinite(year)))]
+        .sort((a, b) => b - a);
+
+    try {
+        console.log(`Fetching available years from database (${source})...`);
+
+        let uniqueYears = [];
+
+        if (source === COURSE_SOURCE_ALL) {
+            const [ilaResult, nonIlaResult] = await Promise.allSettled([
+                fetchYearRows(COURSE_SOURCE_ILA),
+                fetchYearRows(COURSE_SOURCE_NONILA)
+            ]);
+
+            if (ilaResult.status === 'rejected') {
+                console.error('Error fetching ILA years:', ilaResult.reason);
+            }
+            if (nonIlaResult.status === 'rejected') {
+                console.warn('Error fetching non-ILA years:', nonIlaResult.reason);
+            }
+
+            const mergedRows = [
+                ...(ilaResult.status === 'fulfilled' ? ilaResult.value : []),
+                ...(nonIlaResult.status === 'fulfilled' ? nonIlaResult.value : [])
+            ];
+            uniqueYears = extractYearsFromRows(mergedRows);
+        } else {
+            const rows = await fetchYearRows(source);
+            uniqueYears = extractYearsFromRows(rows);
+            if (uniqueYears.length === 0 && source === COURSE_SOURCE_NONILA) {
+                console.warn('No non-ILA years found in database');
+            }
         }
 
-        if (!data || data.length === 0) {
+        if (uniqueYears.length === 0) {
+            if (source === COURSE_SOURCE_NONILA) {
+                availableYearsCacheBySource[source] = [];
+                return [];
+            }
             console.warn('No years found in database, using defaults');
-            return [2025, 2024];
+            uniqueYears = [...defaultYears];
         }
-
-        // Extract unique years and sort descending
-        const uniqueYears = [...new Set(data.map(item => item.academic_year))]
-            .filter(year => year !== null)
-            .sort((a, b) => b - a);
 
         console.log('Available years from database:', uniqueYears);
 
         // Cache the result
-        availableYearsCache = uniqueYears;
+        availableYearsCacheBySource[source] = uniqueYears;
 
         return uniqueYears;
     } catch (error) {
         console.error('Error in fetchAvailableYears:', error);
-        return [2025, 2024];
+        if (source === COURSE_SOURCE_NONILA) {
+            return [];
+        }
+        return [...defaultYears];
     }
 }
 
 export async function fetchCourseData(year, term, options = {}) {
     ensureCoursesRealtimeInvalidation();
 
+    const source = normalizeCourseSource(options?.source);
     const normalizedYear = normalizeCourseYear(year);
     const normalizedTerm = normalizeCourseTerm(term);
-    const cacheKey = getCourseCacheKey(normalizedYear, normalizedTerm);
+    const cacheKey = getCourseCacheKey(normalizedYear, normalizedTerm, source);
     const forceRefresh = options?.forceRefresh === true;
 
-    const cachedEntry = getCourseCacheEntry(normalizedYear, normalizedTerm);
+    const cachedEntry = getCourseCacheEntry(normalizedYear, normalizedTerm, source);
     if (cachedEntry && !forceRefresh) {
         if (isCourseCacheFresh(cachedEntry)) {
-            console.log(`Using cached courses for ${normalizedTerm} ${normalizedYear}`);
+            console.log(`Using cached courses (${source}) for ${normalizedTerm} ${normalizedYear}`);
             return cachedEntry.courses;
         }
 
-        console.log(`Using stale cached courses for ${normalizedTerm} ${normalizedYear}, refreshing in background`);
-        refreshCourseDataInBackground(normalizedYear, normalizedTerm, cacheKey, cachedEntry);
+        console.log(`Using stale cached courses (${source}) for ${normalizedTerm} ${normalizedYear}, refreshing in background`);
+        refreshCourseDataInBackground(normalizedYear, normalizedTerm, cacheKey, cachedEntry, source);
         return cachedEntry.courses;
     }
 
@@ -3066,15 +3629,15 @@ export async function fetchCourseData(year, term, options = {}) {
 
     const fetchPromise = (async () => {
         try {
-            console.log(`Fetching courses for ${normalizedTerm} ${normalizedYear}...`);
+            console.log(`Fetching courses (${source}) for ${normalizedTerm} ${normalizedYear}...`);
 
-            return await fetchCourseDataWithDelta(normalizedYear, normalizedTerm, cachedEntry);
+            return await fetchCourseDataWithDelta(normalizedYear, normalizedTerm, cachedEntry, source);
         } catch (error) {
-            console.error(`Error fetching course data for ${normalizedTerm} ${normalizedYear}:`, error);
+            console.error(`Error fetching course data (${source}) for ${normalizedTerm} ${normalizedYear}:`, error);
 
             // Check if we have stale cache data as fallback
             if (courseCache[cacheKey]) {
-                console.log(`Using stale cached data as fallback for ${normalizedTerm} ${normalizedYear}`);
+                console.log(`Using stale cached data (${source}) as fallback for ${normalizedTerm} ${normalizedYear}`);
                 return courseCache[cacheKey];
             }
 
@@ -3185,14 +3748,45 @@ async function applyHistoricalGpaFallback(courses) {
     return courses;
 }
 
-// Fallback method for when RPC permissions fail
-async function fetchCourseDataFallback(year, term) {
+// Fallback method for when delta fetch fails
+async function fetchCourseDataFallback(year, term, source = COURSE_SOURCE_ALL) {
+    const normalizedSource = normalizeCourseSource(source);
+    if (normalizedSource === COURSE_SOURCE_ALL) {
+        const [ilaResult, nonIlaResult] = await Promise.allSettled([
+            fetchCourseDataFallback(year, term, COURSE_SOURCE_ILA),
+            fetchCourseDataFallback(year, term, COURSE_SOURCE_NONILA)
+        ]);
+
+        const ilaCourses = ilaResult.status === 'fulfilled' ? ilaResult.value : [];
+        const nonIlaCourses = nonIlaResult.status === 'fulfilled' ? nonIlaResult.value : [];
+
+        if (ilaResult.status === 'rejected') {
+            console.error(`ILA fallback fetch failed for ${term} ${year}:`, ilaResult.reason);
+        }
+        if (nonIlaResult.status === 'rejected') {
+            console.warn(`Non-ILA fallback fetch failed for ${term} ${year}:`, nonIlaResult.reason);
+        }
+
+        if (ilaCourses.length === 0 && nonIlaCourses.length === 0) {
+            const fallbackError = ilaResult.status === 'rejected'
+                ? ilaResult.reason
+                : (nonIlaResult.status === 'rejected' ? nonIlaResult.reason : null);
+            if (fallbackError) throw fallbackError;
+        }
+
+        const mergedCourses = mergeCourseCollections(ilaCourses, nonIlaCourses);
+        setCourseCacheEntry(year, term, mergedCourses, { source: normalizedSource });
+        return mergedCourses;
+    }
+
+    const tableName = getCourseTableNameForSource(normalizedSource);
+
     try {
-        console.log(`Attempting fallback fetch for term="${term}" year=${year}...`);
+        console.log(`Attempting fallback fetch (${normalizedSource}) for term="${term}" year=${year}...`);
 
         // First, let's see what terms actually exist in the database
         const { data: termCheck, error: termError } = await supabase
-            .from('courses')
+            .from(tableName)
             .select('term')
             .eq('academic_year', year)
             .limit(5);
@@ -3205,7 +3799,7 @@ async function fetchCourseDataFallback(year, term) {
 
         // First, try to get courses WITH GPA columns directly
         const { data: courses, error: coursesError } = await supabase
-            .from('courses')
+            .from(tableName)
             .select(`
                 *,
                 gpa_a_percent,
@@ -3223,11 +3817,11 @@ async function fetchCourseDataFallback(year, term) {
         }
 
         if (!courses || courses.length === 0) {
-            console.warn(`No courses found in fallback method for term="${term}" year=${year}`);
+            console.warn(`No courses found in fallback method (${normalizedSource}) for term="${term}" year=${year}`);
             return [];
         }
 
-        console.log(`Successfully fetched ${courses.length} courses with embedded GPA data for ${term} ${year}`);
+        console.log(`Successfully fetched ${courses.length} courses with embedded GPA data (${normalizedSource}) for ${term} ${year}`);
 
         // Debug: Let's see what the first course looks like
         if (courses.length > 0) {
@@ -3242,19 +3836,22 @@ async function fetchCourseDataFallback(year, term) {
             });
         }
 
-        await applyHistoricalGpaFallback(courses);
+        if (normalizedSource === COURSE_SOURCE_ILA) {
+            await applyHistoricalGpaFallback(courses);
+        }
 
-        setCourseCacheEntry(year, term, courses);
+        const annotatedCourses = annotateCoursesWithSource(courses, normalizedSource);
+        setCourseCacheEntry(year, term, annotatedCourses, { source: normalizedSource });
 
-        return courses;
+        return annotatedCourses;
     } catch (error) {
-        console.error(`Fallback method failed for ${term} ${year}:`, error);
+        console.error(`Fallback method (${normalizedSource}) failed for ${term} ${year}:`, error);
 
         // Last resort: return courses with minimal data structure
         try {
             console.log('Attempting minimal fallback...');
             const { data: minimalCourses, error: minimalError } = await supabase
-                .from('courses')
+                .from(tableName)
                 .select(`
                     course_code,
                     title,
@@ -3270,7 +3867,7 @@ async function fetchCourseDataFallback(year, term) {
                 .eq('term', term);
 
             if (!minimalError && minimalCourses && minimalCourses.length > 0) {
-                console.log(`Minimal fallback successful: ${minimalCourses.length} courses`);
+                console.log(`Minimal fallback successful (${normalizedSource}): ${minimalCourses.length} courses`);
                 const minimalProcessed = minimalCourses.map(course => ({
                     ...course,
                     gpa_a_percent: null,
@@ -3280,8 +3877,9 @@ async function fetchCourseDataFallback(year, term) {
                     gpa_f_percent: null
                 }));
 
-                setCourseCacheEntry(year, term, minimalProcessed);
-                return minimalProcessed;
+                const annotatedMinimalCourses = annotateCoursesWithSource(minimalProcessed, normalizedSource);
+                setCourseCacheEntry(year, term, annotatedMinimalCourses, { source: normalizedSource });
+                return annotatedMinimalCourses;
             }
         } catch (minimalFallbackError) {
             console.error('Even minimal fallback failed:', minimalFallbackError);
@@ -3384,10 +3982,7 @@ async function fetchHistoricalGpaData(courseCodes) {
 let professorChangeCache = {};
 
 function normalizeProfessorComparisonName(name) {
-    return String(name || '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
+    return canonicalizeProfessorForComparison(name);
 }
 
 function getNormalizedTermSortRank(term) {
@@ -3643,7 +4238,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             "2": "10:45 - 12:15",
             "3": "13:10 - 14:40",
             "4": "14:55 - 16:25",
-            "5": "16:40 - 18:10"
+            "5": "16:40 - 18:10",
+            "6": "18:25 - 19:55"
         };
 
         const normalizedDayMap = {
@@ -3677,7 +4273,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         };
 
         // Collect Japanese slots: 月曜日3講時・木曜日3講時, (月1講時), etc.
-        const japaneseSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g)];
+        const japaneseSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/g)];
         japaneseSlots.forEach((slot) => {
             const dayName = dayMap[slot[1]] || slot[1];
             const timeRange = timeMap[slot[2]] || "";
@@ -4766,8 +5362,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         const safeCourseTermLabel = `${review.term?.includes('/') ? review.term.split('/')[1] : review.term || 'Term'} ${review.academic_year || ''}`.trim();
         const safeDate = formatDate(review.created_at);
         const hasWrittenContent = rawContent.trim().length > 0;
-        const isGuestViewer = !currentUserId;
-        const shouldClampText = !isGuestViewer && hasWrittenContent && (rawContent.trim().length > 180 || rawContent.includes('\n'));
         const reviewId = String(review.id || '');
         const escapedCourseTitle = String(course.title || '').replace(/'/g, "\\'");
         const escapedContentForEdit = rawContent.replace(/'/g, "\\'");
@@ -4825,8 +5419,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 </div>
                 <div class="review-note-row${hasWrittenContent ? '' : ' review-note-row--empty'}">
                     ${hasWrittenContent ? `
-                        <p class="course-review-text-excerpt${shouldClampText ? ' is-clamped' : ''}">${safeContent}</p>
-                        ${shouldClampText ? '<button type="button" class="course-review-inline-action" data-action="review-show-more" aria-expanded="false">Show More</button>' : ''}
+                        <p class="course-review-text-excerpt">${safeContent}</p>
                     ` : `
                         <p class="course-review-text-empty">No written review provided.</p>
                     `}
@@ -4964,29 +5557,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         );
     };
 
-    const bindReviewShowMoreButtons = (containerEl, labels = {}) => {
-        if (!containerEl) return;
-        const expandedLabel = labels.expanded || 'Show Less';
-        const collapsedLabel = labels.collapsed || 'Show More';
-        containerEl.querySelectorAll('[data-action="review-show-more"]').forEach((btn) => {
-            btn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const cardEl = event.currentTarget.closest('.course-review-card');
-                const excerptEl = cardEl?.querySelector('.course-review-text-excerpt');
-                if (!excerptEl) return;
-                const isExpanded = excerptEl.classList.toggle('is-expanded');
-                if (isExpanded) {
-                    excerptEl.classList.remove('is-clamped');
-                } else {
-                    excerptEl.classList.add('is-clamped');
-                }
-                event.currentTarget.textContent = isExpanded ? expandedLabel : collapsedLabel;
-                event.currentTarget.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-            });
-        });
-    };
-
     if (isDedicatedCoursePage) {
         classReview.classList.remove('ds-card');
     } else {
@@ -5073,7 +5643,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
         const bindDesktopReviewInteractions = () => {
             if (!desktopReviewsListEl) return;
-            bindReviewShowMoreButtons(desktopReviewsListEl, { collapsed: 'Show More', expanded: 'Show Less' });
 
             desktopReviewsListEl.querySelectorAll('[data-action="review-add-note"]').forEach((button) => {
                 button.addEventListener('click', (event) => {
@@ -5395,8 +5964,6 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 return renderReview(review, currentUserId, anonymousName, '/user.svg');
             }).join('');
 
-            bindReviewShowMoreButtons(reviewsListEl, { collapsed: 'Show More', expanded: 'Show Less' });
-
             if (visibleReviews.length < filteredReviews.length) {
                 const remaining = filteredReviews.length - visibleReviews.length;
                 reviewsFooterEl.innerHTML = `
@@ -5571,6 +6138,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             const cta = classAssignments.querySelector('.course-assignments-guest-cta');
             cta?.addEventListener('click', (event) => {
                 event.preventDefault();
+                if (window.authManager?.openSignUp) {
+                    window.authManager.openSignUp({
+                        action: 'create your account',
+                        source: 'course-assignments-guest-preview'
+                    });
+                    return;
+                }
                 if (window.router?.navigate) {
                     window.router.navigate('/register');
                     return;
@@ -5895,7 +6469,9 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         const tabBodySurface = classInfo.querySelector('.courseinfo-body') || tabsBodyScroller || tabPanelsViewport;
         let activeTab = requestedInitialTab;
         const shouldMeasureTabViewport = !isDedicatedCoursePage;
-        const tabSwipePanelGap = isDedicatedCoursePage ? 15 : 0;
+        // Keep breathing room between active and preview tab panels during swipe
+        // in both modal sheet and dedicated page layouts.
+        const tabSwipePanelGap = 15;
 
         let tabSwipePreview = null;
         let tabSwipePreviewTab = null;
@@ -6905,10 +7481,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 '2': '10:45-12:15',
                 '3': '13:10-14:40',
                 '4': '14:55-16:25',
-                '5': '16:40-18:10'
+                '5': '16:40-18:10',
+                '6': '18:25-19:55'
             };
 
-            const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/);
+            const jpMatch = raw.match(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/);
             if (jpMatch) {
                 const day = dayMapJPToAbbr[jpMatch[1]] || jpMatch[1];
                 const timeWindow = periodMap[jpMatch[2]];
@@ -7907,7 +8484,7 @@ function openReviewFormModal({
                 </div>
                 <span class="review-rating-value" data-role="${kind}-review-rating-value${suffix}">${Number(selectedRating) ? `${Number(selectedRating)}/5` : '0/5'}</span>
             </div>
-            <div class="review-field-error" id="${errorId}${isEdit ? '-edit' : ''}" style="display:none;"></div>
+            <div class="review-field-error app-field-error-message" id="${errorId}${isEdit ? '-edit' : ''}" style="display:none;"></div>
         </div>
     `;
 
@@ -7934,7 +8511,7 @@ function openReviewFormModal({
                 </div>
                 <span class="review-rating-value review-rating-value--difficulty" data-role="difficulty-review-rating-value${suffix}">${formatDifficultyRatingLabel(selectedRating)}</span>
             </div>
-            <div class="review-field-error" id="${errorId}${isEdit ? '-edit' : ''}" style="display:none;"></div>
+            <div class="review-field-error app-field-error-message" id="${errorId}${isEdit ? '-edit' : ''}" style="display:none;"></div>
         </div>
     `;
 
@@ -7947,7 +8524,7 @@ function openReviewFormModal({
                         <select id="review-term${suffix}" class="review-form-select">${buildReviewTermOptions(defaultTerm)}</select>
                         <select id="course-year${suffix}" class="review-form-select">${buildReviewYearOptions(defaultYear)}</select>
                     </div>
-                    <div class="review-field-error" id="course-year-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
+                    <div class="review-field-error app-field-error-message" id="course-year-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
                 </div>
                 ${buildStarRatingField({
         label: 'Quality rating',
@@ -7971,7 +8548,7 @@ function openReviewFormModal({
                     <label for="review-content${suffix}">Written review</label>
                     <textarea id="review-content${suffix}" class="review-form-textarea" maxlength="800" placeholder="Share your experience with this course...">${escapeHtml(content || '')}</textarea>
                     <div class="review-char-count" data-role="review-char-count${suffix}">0/800</div>
-                    <div class="review-field-error" id="review-content-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
+                    <div class="review-field-error app-field-error-message" id="review-content-error${isEdit ? '-edit' : ''}" style="display:none;"></div>
                 </div>
             </section>
         </div>
@@ -8187,21 +8764,65 @@ window.closeReviewModal = function () {
 };
 
 // Helper functions for review form validation
-function showReviewFieldError(fieldId, message) {
-    const errorElement = document.getElementById(`${fieldId}-error`);
-    if (errorElement) {
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
+function getReviewFieldErrorContext(fieldId, { isEdit = false } = {}) {
+    const suffix = isEdit ? '-edit' : '';
+    const key = String(fieldId || '').trim();
+
+    if (key === 'quality-rating') {
+        return {
+            control: document.getElementById(`quality-rating-input${suffix}`),
+            messageElement: document.getElementById(`quality-rating-error${suffix}`)
+        };
     }
+    if (key === 'difficulty-rating') {
+        return {
+            control: document.getElementById(`difficulty-rating-input${suffix}`),
+            messageElement: document.getElementById(`difficulty-rating-error${suffix}`)
+        };
+    }
+    if (key === 'review-content') {
+        return {
+            control: document.getElementById(`review-content${suffix}`),
+            messageElement: document.getElementById(`review-content-error${suffix}`)
+        };
+    }
+    if (key === 'course-year') {
+        return {
+            control: document.getElementById(`course-year${suffix}`),
+            messageElement: document.getElementById(`course-year-error${suffix}`)
+        };
+    }
+    if (key === 'review-term') {
+        return {
+            control: document.getElementById(`review-term${suffix}`),
+            messageElement: document.getElementById(`course-year-error${suffix}`)
+        };
+    }
+
+    return { control: null, messageElement: null };
 }
 
-function clearReviewFieldErrors() {
-    const fieldIds = ['course-year', 'quality-rating', 'difficulty-rating', 'review-content'];
-    fieldIds.forEach(fieldId => {
-        const errorElement = document.getElementById(`${fieldId}-error`);
-        if (errorElement) {
-            errorElement.style.display = 'none';
-        }
+function showReviewFieldError(fieldId, message, { isEdit = false } = {}) {
+    const { control, messageElement } = getReviewFieldErrorContext(fieldId, { isEdit });
+    if (!control) return;
+
+    setFieldError(control, message, {
+        messageElement
+    });
+}
+
+function clearReviewFieldError(fieldId, { isEdit = false } = {}) {
+    const { control, messageElement } = getReviewFieldErrorContext(fieldId, { isEdit });
+    if (!control) return;
+
+    clearFieldError(control, {
+        messageElement
+    });
+}
+
+function clearReviewFieldErrors({ isEdit = false } = {}) {
+    ['course-year', 'review-term', 'quality-rating', 'difficulty-rating', 'review-content'].forEach((fieldId) => {
+        clearReviewFieldError(fieldId, { isEdit });
     });
 }
 
@@ -8269,6 +8890,12 @@ function setReviewModalRating(kind, rating, { isEdit = false } = {}) {
 
     const input = document.getElementById(inputId);
     if (input) input.dataset.selectedRating = String(safeRating);
+
+    if (kind === 'quality') {
+        clearReviewFieldError('quality-rating', { isEdit });
+    } else if (kind === 'difficulty') {
+        clearReviewFieldError('difficulty-rating', { isEdit });
+    }
     const ratingValue = document.querySelector(valueSelector);
     if (ratingValue) {
         ratingValue.textContent = kind === 'difficulty'
@@ -8394,25 +9021,32 @@ window.updateReview = async function (reviewId) {
         const selectedYear = parseInt(yearInput.value);
         const selectedTerm = normalizeCourseTerm(termInput?.value || '');
 
+        clearReviewFieldErrors({ isEdit: true });
+        let hasErrors = false;
+
         if (!qualityRating) {
-            showGlobalToast('Please select a quality rating.');
-            return;
+            showReviewFieldError('quality-rating', 'Please select a quality rating.', { isEdit: true });
+            hasErrors = true;
         }
         if (!difficultyRating) {
-            showGlobalToast('Please select a difficulty rating.');
-            return;
+            showReviewFieldError('difficulty-rating', 'Please select a difficulty rating.', { isEdit: true });
+            hasErrors = true;
         }
 
         if (!selectedYear) {
-            showGlobalToast('Please select the year when you took this course.');
-            return;
+            showReviewFieldError('course-year', 'Please select the year when you took this course.', { isEdit: true });
+            hasErrors = true;
         }
         if (!selectedTerm) {
-            showGlobalToast('Please select the term when you took this course.');
-            return;
+            showReviewFieldError('review-term', 'Please select the term when you took this course.', { isEdit: true });
+            hasErrors = true;
         }
         if (content.length > 800) {
-            showGlobalToast('Review is too long. Please keep it under 800 characters.');
+            showReviewFieldError('review-content', 'Please keep the review under 800 characters.', { isEdit: true });
+            hasErrors = true;
+        }
+
+        if (hasErrors) {
             return;
         }
 
@@ -8711,34 +9345,34 @@ window.submitReview = async function (courseCode, academicYear, term) {
         const selectedTerm = normalizeCourseTerm(termInput?.value || term);
 
         // Clear previous errors
-        clearReviewFieldErrors();
+        clearReviewFieldErrors({ isEdit: false });
 
         let hasErrors = false;
 
         // Validate rating
         if (!qualityRating) {
-            showReviewFieldError('quality-rating', 'Please select a quality rating.');
+            showReviewFieldError('quality-rating', 'Please select a quality rating.', { isEdit: false });
             hasErrors = true;
         }
 
         if (!difficultyRating) {
-            showReviewFieldError('difficulty-rating', 'Please select a difficulty rating.');
+            showReviewFieldError('difficulty-rating', 'Please select a difficulty rating.', { isEdit: false });
             hasErrors = true;
         }
 
         // Validate year
         if (!selectedYear) {
-            showReviewFieldError('course-year', 'Please select the year when you took this course.');
+            showReviewFieldError('course-year', 'Please select the year when you took this course.', { isEdit: false });
             hasErrors = true;
         }
 
         if (!selectedTerm) {
-            showGlobalToast('Please select the term when you took this course.');
+            showReviewFieldError('review-term', 'Please select the term when you took this course.', { isEdit: false });
             hasErrors = true;
         }
 
         if (content.length > 800) {
-            showReviewFieldError('review-content', 'Please keep the review under 800 characters.');
+            showReviewFieldError('review-content', 'Please keep the review under 800 characters.', { isEdit: false });
             hasErrors = true;
         }
 
@@ -9358,10 +9992,11 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             '2': '10:45 - 12:15',
             '3': '13:10 - 14:40',
             '4': '14:55 - 16:25',
-            '5': '16:40 - 18:10'
+            '5': '16:40 - 18:10',
+            '6': '18:25 - 19:55'
         };
 
-        const jpSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-5])(?:講時)?/g)];
+        const jpSlots = [...raw.matchAll(/([月火水木金土日])(?:曜日)?\s*([1-9])(?:講時)?/g)];
         if (jpSlots.length > 0) {
             return jpSlots.map((slot) => {
                 const day = dayMapJPToAbbr[slot[1]] || slot[1];

@@ -100,6 +100,10 @@
                                     class="filter-checkbox" value="16:40">
                                 <label for="filter-period-5">5th<small>16:40 - 18:10</small></label>
 
+                                <input type="checkbox" id="filter-period-6" name="filter-period-6"
+                                    class="filter-checkbox" value="18:25">
+                                <label for="filter-period-6">6th<small>18:25 - 19:55</small></label>
+
                                 <input type="checkbox" id="filter-period-intensive" name="filter-period-intensive"
                                     class="filter-checkbox" value="Intensive">
                                 <label for="filter-period-intensive">Intensive</label>
@@ -154,6 +158,11 @@
                                     <input type="checkbox" id="filter-graduate" name="filter-graduate"
                                         class="filter-checkbox" value="graduate">
                                     <label for="filter-graduate">Graduate Classes</label>
+                                </div>
+                                <div class="checkbox-content">
+                                    <input type="checkbox" id="filter-nonila" name="filter-nonila"
+                                        class="filter-checkbox" value="nonila">
+                                    <label for="filter-nonila">Non-ILA Classes</label>
                                 </div>
                             </div>
                         </div>
@@ -328,6 +337,7 @@
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-presentation" aria-pressed="false">Has no presentation</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-exam" aria-pressed="false">Has no exam</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-fits-my-year" aria-pressed="false">Fits my year</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-nonila-only" aria-pressed="false">Non-ILA classes</button>
                     </div>
                     <div id="course-list" class="loading course-grid">
                         <!-- Initial skeleton placeholders - replaced when courses load -->
