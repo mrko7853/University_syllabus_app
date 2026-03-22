@@ -4894,14 +4894,14 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         evaluation: evaluationMeta,
         detailRows: [
             { label: 'Professor', value: formatProfessorDisplayName(course.professor) },
-            { label: 'Course Code', value: courseCodeValue },
-            { label: 'Course Type', value: courseType },
+            { label: 'Course code', value: courseCodeValue },
+            { label: 'Course type', value: courseType },
             ...(isGraduateJapaneseTaughtCourse(course) ? [{ label: 'Language', value: 'Japanese' }] : []),
             { label: 'Required year', value: requiredYearMeta.requiredYearLabel },
             ...(course.credits ? [{ label: 'Credits', value: formatCourseCreditsLabel(course.credits) }] : []),
             { label: 'Time', value: timeDetailLabel },
             { label: 'Term', value: formatCourseTermYearLabel(course) },
-            ...(locationValue ? [{ label: 'Location', value: locationValue }] : [])
+            ...(locationValue ? [{ label: 'Class number', value: locationValue }] : [])
         ],
         inlineWarnings: courseInfoInlineWarnings
     };

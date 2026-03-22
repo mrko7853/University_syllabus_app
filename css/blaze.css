@@ -9298,6 +9298,295 @@ td p {
     }
 }
 
+/* Course registration notice banner */
+#app-registration-notice-root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+    #app-registration-notice-root {
+        margin-left: 85px;
+        width: calc(100% - 85px);
+        max-width: calc(100% - 85px);
+    }
+}
+
+/* Guest home: keep registration notice over content without affecting layout flow */
+body.guest-dashboard #app-content {
+    position: relative;
+}
+
+body.guest-dashboard #app-registration-notice-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    z-index: 2100;
+    pointer-events: none;
+}
+
+body.guest-dashboard #app-registration-notice-root .course-registration-notice {
+    pointer-events: auto;
+}
+
+@media (min-width: 1024px) {
+    body.guest-dashboard #app-registration-notice-root {
+        left: 85px;
+        right: 0;
+        width: auto;
+        max-width: none;
+    }
+}
+
+@media (max-width: 1023px) {
+    body.home-mobile-header-sticky.guest-dashboard #app-registration-notice-root {
+        top: max(var(--home-mobile-header-height, 0px), calc(var(--safe-area-top) + 52px));
+    }
+}
+
+.course-registration-notice {
+    margin-left: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 20px;
+    background: #e5dfc5;
+    border-bottom: 1px solid rgba(15, 23, 42, .1);
+    color: #1a1721;
+    overflow-x: clip;
+}
+
+.course-registration-notice__icon {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    margin-top: 2px;
+    background: center / contain no-repeat url(/assets/alert-triangle.svg);
+}
+
+.course-registration-notice__content {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.course-registration-notice__header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.course-registration-notice__title {
+    margin: 0;
+    font-family: var(--secondary-font), sans-serif;
+    font-size: var(--h3);
+    line-height: 1;
+    font-weight: 500;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.course-registration-notice__period {
+    margin: 6px 0 0;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: rgba(18, 16, 24, 0.9);
+}
+
+.course-registration-notice__source {
+    margin-top: 6px;
+    display: inline-flex;
+    color: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+button.course-registration-notice__dismiss-action {
+    position: static;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    color: #1d1a24 !important;
+    font-size: 15px !important;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    box-shadow: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+button.course-registration-notice__dismiss-action:hover,
+button.course-registration-notice__dismiss-action:active {
+    background: transparent;
+    box-shadow: none;
+    transform: translateY(0);
+}
+
+.course-registration-notice__dismiss-icon {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    background: center / 16px 16px no-repeat url(/assets/close.svg);
+    filter: brightness(0) saturate(100%);
+}
+
+.course-registration-notice__dismiss-label {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    color: #1d1a24;
+    font-family: var(--secondary-font), sans-serif;
+}
+
+button.course-registration-notice__dismiss-action:focus-visible {
+    outline: 2px solid rgba(18, 16, 24, 0.7);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* Backward compatibility for older cached banner markup */
+button.course-registration-notice__dismiss {
+    position: static !important;
+    inset: auto !important;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 0 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 0 !important;
+    line-height: 1;
+    color: transparent !important;
+}
+
+button.course-registration-notice__dismiss::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    background: center / 16px 16px no-repeat url(/assets/close.svg);
+    filter: brightness(0) saturate(100%);
+}
+
+button.course-registration-notice__dismiss::after {
+    content: "Dismiss";
+    display: inline-block;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    color: #1d1a24;
+}
+
+button.course-registration-notice__dismiss:hover,
+button.course-registration-notice__dismiss:active {
+    background: transparent;
+    box-shadow: none;
+    transform: translateY(0);
+}
+
+button.course-registration-notice__dismiss:focus-visible {
+    outline: 2px solid rgba(18, 16, 24, 0.7);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+@media (max-width: 1023px) {
+    .course-registration-notice {
+        gap: 10px;
+        padding: 10px var(--ui-page-padding-x-mobile) 12px;
+    }
+
+    .course-registration-notice__icon {
+        width: 20px;
+        min-width: 20px;
+        height: 20px;
+        margin-top: 1px;
+    }
+
+    .course-registration-notice__title {
+        font-size: 14px;
+        line-height: 1.2;
+    }
+
+    .course-registration-notice__period {
+        margin-top: 4px;
+        font-size: 12px;
+    }
+
+    .course-registration-notice__source {
+        margin-top: 4px;
+        font-size: 11px;
+    }
+
+    .course-registration-notice__header-row {
+        gap: 8px;
+    }
+
+    button.course-registration-notice__dismiss-action {
+        gap: 4px;
+    }
+
+    .course-registration-notice__dismiss-icon {
+        width: 16px;
+        height: 16px;
+        min-width: 16px;
+        background-size: 16px 16px;
+    }
+
+    .course-registration-notice__dismiss-label {
+        font-size: 11px;
+    }
+
+    button.course-registration-notice__dismiss {
+        gap: 4px;
+    }
+
+    button.course-registration-notice__dismiss::before {
+        width: 16px;
+        height: 16px;
+        min-width: 16px;
+        background-size: 16px 16px;
+    }
+
+    button.course-registration-notice__dismiss::after {
+        font-size: 12px;
+    }
+}
+
 /* ===== AUTHENTICATION MODALS ===== */
 
 /* Unified auth modal overlay */
@@ -9356,21 +9645,23 @@ td p {
 }
 
 .auth-close-btn {
-    position: absolute;
-    top: 14px;
-    right: 14px;
     width: 40px;
     min-width: 40px;
     height: 40px;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    border-radius: var(--control-radius-round);
+    min-height: 40px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.9) center / 20px 20px no-repeat url(/assets/close.svg);
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
     color: transparent !important;
     font-size: 0 !important;
     line-height: 0;
     cursor: pointer;
-    z-index: 2;
 }
 
 .auth-modal-body {
@@ -9386,23 +9677,31 @@ td p {
 
 .auth-unified-shell {
     display: grid;
-    gap: 14px;
+    gap: 15px;
     text-align: left;
+}
+
+.auth-unified-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
 }
 
 .auth-unified-title {
     margin: 0;
-    font-size: clamp(30px, 4.1vw, 52px);
-    font-weight: 550;
-    line-height: 1.05;
-    letter-spacing: -0.02em;
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: var(--h1);
+    font-weight: var(--ui-fw-h3);
+    font-family: var(--font-ui);
+    line-height: 1.1;
+    color: var(--ui-text-title);
 }
 
 .auth-unified-subtitle {
     margin: 0;
-    color: var(--ui-text-subtitle);
-    font-size: 15px;
-    line-height: 1.45;
+    margin-bottom: 10px;
 }
 
 .auth-provider-list {
@@ -9479,10 +9778,101 @@ td p {
     gap: 10px;
 }
 
-.auth-field-label {
-    font-size: 13px;
-    font-weight: 600;
+/* Cancel the grid row gap above inline field errors in auth forms */
+.auth-email-form > .app-field-error-message {
+    margin-top: -10px;
+}
+
+.auth-field-wrap {
+    position: relative;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.auth-field-wrap .auth-field-input {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 20px;
+}
+
+.auth-field-wrap .auth-field-label {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    transform: translateY(-50%);
+    font-size: 15px;
+    line-height: 1;
+    font-weight: 540;
+    color: rgba(15, 23, 42, 0.56);
+    pointer-events: none;
+    padding: 2px 6px;
+    border-radius: 999px;
+    transition: top 0.16s ease, transform 0.16s ease, font-size 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.auth-field-wrap .auth-field-input:focus+.auth-field-label,
+.auth-field-wrap .auth-field-input:not(:placeholder-shown)+.auth-field-label,
+.auth-field-wrap--readonly .auth-field-label {
+    top: 0;
+    transform: translateY(-50%);
+    font-size: 12px;
     color: var(--ui-text-subtitle);
+    background: rgba(243, 236, 247, 0.96);
+}
+
+.auth-field-wrap .auth-field-input::placeholder {
+    color: transparent;
+}
+
+.auth-field-wrap--with-action .auth-field-input {
+    padding-right: 96px;
+}
+
+.auth-field-wrap--readonly .auth-field-input {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    caret-color: transparent;
+}
+
+.auth-field-inline-action {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-family: var(--ui-font-family);
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--control-focus-ring);
+    line-height: 1;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.auth-field-inline-action:hover {
+    text-decoration: underline;
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-field-inline-action:focus,
+.auth-field-inline-action:active {
+    transform: translateY(-50%);
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-field-inline-action:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 3px;
 }
 
 .auth-field-input {
@@ -9606,6 +9996,18 @@ td p {
     background: center / 16px 16px no-repeat url(/assets/chevron-left.svg);
 }
 
+.auth-close-btn:active {
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
+    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
+}
+
+.auth-close-btn:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+
 .auth-email-chip {
     margin: 0;
     display: inline-flex;
@@ -9653,6 +10055,43 @@ td p {
     font-size: 13px;
     font-weight: 700;
     text-decoration: underline;
+}
+
+.auth-link-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+.auth-password-help {
+    margin: -2px 0 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.auth-forgot-password-btn {
+    font-size: 14px;
+    font-weight: 650;
+    color: #000 !important;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.auth-forgot-password-btn:hover {
+    text-decoration: underline;
+    background: transparent;
+    box-shadow: none;
+    filter: none;
+    border: none;
+    color: #000 !important;
+}
+
+.auth-forgot-password-btn:active {
+    transform: none;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    color: #000 !important;
 }
 
 .auth-inline-message {
@@ -9777,9 +10216,6 @@ body.auth-modal-open {
         box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     }
 
-    .auth-link-btn:hover {
-        color: #334155 !important;
-    }
 }
 
 @media (max-width: 1023px) {
@@ -9799,12 +10235,32 @@ body.auth-modal-open {
     }
 
     .auth-close-btn {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+        position: fixed;
         top: calc(var(--safe-area-top) + 12px);
-        right: 14px;
+        right: 20px;
+        z-index: 22120;
     }
 
     .auth-modal-body {
-        padding: calc(var(--safe-area-top) + 68px) 20px calc(18px + var(--safe-area-bottom));
+        padding: calc(var(--safe-area-top) + 15px) 15px calc(15px + var(--safe-area-bottom));
+        min-height: 100dvh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .auth-modal-root,
+    .auth-unified-shell {
+        width: 100%;
+    }
+
+    .auth-modal .auth-unified-title-row {
+        justify-content: flex-start;
     }
 
     .auth-unified-title {
@@ -11625,6 +12081,36 @@ calendar-page .mobile-day-buttons {
         justify-content: center;
     }
 
+    .mobile-guest-auth-btn,
+    .mobile-guest-auth-btn:visited {
+        color: #1b2435 !important;
+        text-decoration: none;
+    }
+
+    .mobile-guest-auth-btn:hover,
+    .mobile-guest-auth-btn:active,
+    .mobile-guest-auth-btn:focus-visible {
+        color: #1b2435 !important;
+        text-decoration: none;
+    }
+
+    .mobile-guest-auth-btn--primary,
+    .mobile-guest-auth-btn--primary:visited {
+        background: #d9c5ea !important;
+        border-color: rgba(113, 91, 135, 0.42) !important;
+        color: #2f1d46 !important;
+        text-decoration: none;
+    }
+
+    .mobile-guest-auth-btn--primary:hover,
+    .mobile-guest-auth-btn--primary:active,
+    .mobile-guest-auth-btn--primary:focus-visible {
+        background: #d2bbe6 !important;
+        border-color: rgba(113, 91, 135, 0.52) !important;
+        color: #2f1d46 !important;
+        text-decoration: none;
+    }
+
     .app-logo {
         background-image: url(/assets/logo.svg);
         background-position: center;
@@ -11822,6 +12308,35 @@ body.auth-page .auth-container {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+}
+
+body.auth-page .auth-page-logo-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border-radius: 12px;
+    line-height: 0;
+}
+
+body.auth-page .auth-page-logo-image {
+    display: block;
+    width: 132px;
+    max-width: min(60vw, 132px);
+    height: auto;
+}
+
+body.auth-page .auth-page-logo-link:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 4px;
+}
+
+body.auth-page .auth-page-logo-link--top {
+    position: absolute;
+    top: max(16px, calc(var(--safe-area-top) + 12px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
 }
 
 body.auth-page .auth-background {
@@ -15702,7 +16217,7 @@ calendar-page .calendar-mobile-view {
         width: 100%;
         height: 100%;
         min-height: 420px;
-        object-fit: cover;
+        object-fit: contain;
         object-position: center top;
         pointer-events: none;
         user-select: none;
@@ -18958,21 +19473,26 @@ body:has(#profile-main.profile-page) #app-content {
 }
 
 .profile-modal-layer .profile-modal-head .icon-btn {
-    width: var(--ui-control-height);
-    min-width: var(--ui-control-height);
-    height: var(--ui-control-height);
-    min-height: var(--ui-control-height);
-    border-radius: var(--control-radius-round);
-    background: var(--control-bg);
-    border: 1px solid var(--control-border);
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: transparent;
     font-size: 0;
     line-height: 0;
     background-image: url(/assets/close.svg);
     background-position: center;
     background-repeat: no-repeat;
-    background-size: 22px 22px;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
+    background-size: 20px 20px;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
+    transform: translateY(0);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -18984,8 +19504,10 @@ body:has(#profile-main.profile-page) #app-content {
 }
 
 .profile-modal-layer .profile-modal-head .icon-btn:active {
-    transform: translateY(var(--control-press-translate));
+    border-color: var(--control-border-hover);
+    background-color: var(--control-bg-active);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-press-shadow);
+    transform: translateY(var(--control-press-translate));
 }
 
 .profile-modal-layer .profile-modal-head .icon-btn:focus-visible {
@@ -25789,12 +26311,13 @@ button.calendar-slot-saved-card {
     padding-top: 2px;
 }
 
-.course-info-details-grid .course-detail-row:nth-child(4n + 1) {
-    border-top: 0;
-    padding-top: 2px;
-}
-
 @media (min-width: 1024px) {
+    .course-info-details-grid .course-detail-row:nth-child(4n + 1),
+    .course-info-details-grid .key-row:nth-child(4n + 1) {
+        border-top: 0;
+        padding-top: 2px;
+    }
+
     .course-info-details-grid .course-detail-row:nth-child(4n),
     .course-info-details-grid .key-row:nth-child(4n) {
         padding-bottom: 0;
@@ -28246,6 +28769,7 @@ button.calendar-slot-saved-card {
     }
 
     .course-info-details-grid {
+        grid-template-columns: 1fr;
         grid-template-rows: none;
         grid-auto-flow: row;
         grid-auto-columns: unset;
@@ -28258,8 +28782,8 @@ button.calendar-slot-saved-card {
         padding-top: 14px;
     }
 
-    .course-info-details-grid .course-detail-row:nth-child(-n + 2),
-    .course-info-details-grid .key-row:nth-child(-n + 2) {
+    .course-info-details-grid .course-detail-row:first-child,
+    .course-info-details-grid .key-row:first-child {
         border-top: 0;
         padding-top: 2px;
     }
@@ -30908,6 +31432,28 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     order: -1;
 }
 
+@media (min-width: 1024px) {
+    .guest-dashboard #home-main {
+        --guest-v2-desktop-main-top-offset: 16px;
+        --guest-v2-desktop-main-bottom-compensation: 24px;
+        --guest-v2-desktop-teaser-height: calc(100vh - var(--guest-v2-desktop-main-top-offset) + var(--guest-v2-desktop-main-bottom-compensation));
+        --guest-v2-desktop-teaser-height: calc(100dvh - var(--guest-v2-desktop-main-top-offset) + var(--guest-v2-desktop-main-bottom-compensation));
+    }
+
+    .guest-dashboard #home-main #guest-v2-teaser-container {
+        height: var(--guest-v2-desktop-teaser-height);
+        min-height: var(--guest-v2-desktop-teaser-height);
+    }
+
+    .guest-dashboard #home-main #guest-v2-teaser-container guest-home-teaser-widget,
+    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser,
+    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-mock,
+    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-image {
+        height: 100%;
+        min-height: 0;
+    }
+}
+
 .guest-dashboard #guest-v2-showcase-container {
     border-radius: 28px;
     padding: 0 !important;
@@ -31249,9 +31795,9 @@ body:has(#course-summary.calendar-page-modern) .app-header,
             rgba(246, 247, 252, 0.42) 58%,
             rgba(246, 247, 252, 0.12) 84%),
         linear-gradient(180deg,
-            rgba(246, 247, 252, 0.12) 0%,
+            rgba(246, 247, 252, 0.12) 10%,
             rgba(246, 247, 252, 0.34) 44%,
-            rgba(246, 247, 252, 0.88) 88%,
+            rgba(246, 247, 252, 0.88) 78%,
             #f6f7fc 100%);
 }
 
@@ -31399,8 +31945,7 @@ body:has(#course-summary.calendar-page-modern) .app-header,
     .guest-dashboard #home-main #guest-v2-teaser-container guest-home-teaser-widget,
     .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser,
     .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-mock,
-    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-fade,
-    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-cta {
+    .guest-dashboard #home-main #guest-v2-teaser-container .guest-v2-teaser-image {
         height: 100%;
         min-height: 0;
     }

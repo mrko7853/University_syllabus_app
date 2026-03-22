@@ -271,7 +271,7 @@ function parseCourseMeetingSlots(timeSlot, fallbackDay = null, fallbackPeriod = 
       addSlot(jpMatch[1], Number(jpMatch[2]));
       jpMatch = jpRegex.exec(raw);
     }
-    const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})(?:\s*-\s*(\d{1,2}):(\d{2}))?/gi;
+    const enRegex = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2}):(\d{2})(?:\s*-\s*(\d{1,2}):(\d{2}))?/gi;
     let enMatch = enRegex.exec(raw);
     while (enMatch) {
       const period = mapStartTimeToHomePeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));
@@ -3349,8 +3349,8 @@ class GuestHomeTeaserWidget extends HTMLElement {
         </div>
         <div class="guest-v2-teaser-fade" aria-hidden="true"></div>
         <div class="guest-v2-teaser-cta">
-          <h3 class="guest-v2-teaser-title">Build your semester in one personal workspace.</h3>
-          <p class="guest-v2-teaser-subtitle">Save courses, track assignments, and keep your timetable organized so every week is easier to manage.</p>
+          <h3 class="guest-v2-teaser-title">Built by ILA students, for ILA students.</h3>
+          <p class="guest-v2-teaser-subtitle">Everything you need to plan your semester — courses, timetable, and assignments in one place.</p>
           <div class="guest-v2-teaser-actions">
             <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--primary" href="/register">Get started</a>
             <a class="home-calendar-link guest-v2-teaser-btn guest-v2-teaser-btn--secondary" href="/courses">Browse courses</a>

@@ -3765,7 +3765,7 @@ class CalendarPageComponent extends HTMLElement {
         jpMatch = jpRegex.exec(raw);
       }
 
-      const enRegex = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+(\d{1,2}):(\d{2})/gi;
+      const enRegex = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2}):(\d{2})/gi;
       let enMatch = enRegex.exec(raw);
       while (enMatch) {
         const period = this.mapStartTimeToPeriod(parseInt(enMatch[2], 10), parseInt(enMatch[3], 10));

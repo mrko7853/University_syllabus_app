@@ -1,6 +1,7 @@
 import { fetchAvailableSemesters, fetchCourseData, openCourseInfoMenu, formatProfessorDisplayName } from "./shared.js";
 import { getCurrentAppPath, withBase } from "./path-utils.js";
 import { openSemesterMobileSheet } from "./semester-mobile-sheet.js";
+import { initializeRegistrationNoticeSystem } from "./registration-notice.js";
 
 const COURSE_PAGE_SEARCH_PREFILL_KEY = "ila_courses_search_prefill";
 const COURSE_PAGE_OPEN_REVIEW_INTENT_KEY = "ila_open_review_from_suggestion";
@@ -829,6 +830,8 @@ function toggleCoursePageSkeleton(isLoading) {
 }
 
 export async function initializeCoursePage() {
+  initializeRegistrationNoticeSystem();
+
   const initRequestVersion = ++coursePageInitRequestVersion;
   const initialPath = getCurrentAppPath();
   const isStaleInitialization = () => {

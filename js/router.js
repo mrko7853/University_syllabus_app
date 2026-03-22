@@ -5,6 +5,7 @@
 import { getCurrentAppPath, stripBase, withBase } from './path-utils.js'
 import { applyPreferredTermToGlobals, inferCurrentSemesterValue, normalizeTermValue, setPreferredTermValue } from './preferences.js'
 import { isSetupCompleteFromProfile, isSetupSchemaMissingError, normalizeSetupProfile } from './setup-status.js'
+import { initializeRegistrationNoticeSystem } from './registration-notice.js'
 import * as wanakana from 'wanakana'
 
 const IS_PRODUCTION = import.meta.env.PROD
@@ -72,6 +73,9 @@ class SimpleRouter {
 
     // Create loading bar
     this.createLoadingBar()
+
+    // Initialize global registration/withdrawal notice system.
+    initializeRegistrationNoticeSystem()
 
     // Keep SPA route changes from restoring previous scroll positions.
     if ('scrollRestoration' in window.history) {
@@ -535,12 +539,36 @@ class SimpleRouter {
     const appMisc = appHeader?.querySelector('.app-misc')
     if (!appMisc) return
 
+    const isMobileViewport = window.innerWidth <= 1023
     const profileButtonMarkup = `
       <button id="profile-mobile" type="button" data-route="/profile" aria-label="Profile"></button>
     `
+    const guestAuthMarkup = `
+      <div class="mobile-guest-auth-actions" aria-label="Guest actions">
+        <a
+          class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn"
+          href="/login"
+          data-auth-open="signin"
+          data-auth-action="continue"
+          data-auth-source="mobile-header"
+        >Log in</a>
+        <a
+          class="ui-btn ui-btn--secondary control-surface mobile-guest-auth-btn mobile-guest-auth-btn--primary"
+          href="/register"
+          data-auth-open="signup"
+          data-auth-action="create your account"
+          data-auth-source="mobile-header"
+        >Sign up</a>
+      </div>
+    `
 
-    appMisc.innerHTML = profileButtonMarkup
-    if (isAuthenticated) {
+    appMisc.innerHTML = (!isAuthenticated && isMobileViewport) ? guestAuthMarkup : profileButtonMarkup
+    if (!isAuthenticated && isMobileViewport) {
+      window.authManager?.bindGlobalAuthTriggers?.()
+      return
+    }
+
+    if (isAuthenticated && appMisc.querySelector('#profile-mobile')) {
       await this.hydrateMobileProfileButtonInitials()
     }
   }

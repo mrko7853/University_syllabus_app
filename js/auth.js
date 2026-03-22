@@ -4,25 +4,29 @@ import { clearFieldError, clearFieldErrors, initializeGlobalFieldErrorUI, setFie
 
 const AUTH_SUCCESS_TOAST_KEY = "ila_auth_success_toast";
 const AUTH_SUCCESS_TOAST_MESSAGE = "Login successful.";
+const AUTH_PASSWORD_UPDATED_TOAST_MESSAGE = "Password updated. You're now signed in.";
 const AUTH_EXPECTED_OAUTH_EMAIL_KEY = "ila_auth_expected_oauth_email";
 const ROUTE_TOAST_QUEUE_KEY = "ila_route_toast";
+const PASSWORD_RECOVERY_COOLDOWN_STORAGE_KEY = "ila_auth_password_recovery_cooldowns";
+const PASSWORD_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
+const FORGOT_PASSWORD_BUTTON_LABEL = "Forgot password?";
 const MODAL_ID = "auth-unified-modal";
 const DEDICATED_AUTH_ROUTES = new Set(["/login", "/register"]);
 const PROTECTED_NAV_TEASERS = {
     "/timetable": {
         title: "Plan your week with the timetable",
         description: "Save courses and instantly see your full class schedule in one place.",
-        image: withBase("/assets/auth-teaser-timetable-placeholder.svg")
+        image: withBase("/screen-feature2.png")
     },
     "/assignments": {
         title: "Track every assignment deadline",
         description: "Organize tasks, due dates, and status updates so nothing is missed.",
-        image: withBase("/assets/auth-teaser-assignments-placeholder.svg")
+        image: withBase("/screen-feature1.png")
     },
     "/profile": {
         title: "Keep your account in sync",
         description: "Manage your account, preferences, and connected sign-in methods.",
-        image: withBase("/assets/auth-teaser-profile-placeholder.svg")
+        image: withBase("/screen-feature4.png")
     }
 };
 
@@ -107,6 +111,59 @@ function isValidEmail(value) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
+function normalizeEmailForStorage(email) {
+    return String(email || "").trim().toLowerCase();
+}
+
+function readPasswordRecoveryCooldownMap() {
+    try {
+        const raw = window.localStorage.getItem(PASSWORD_RECOVERY_COOLDOWN_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return {};
+        return parsed;
+    } catch (_) {
+        return {};
+    }
+}
+
+function writePasswordRecoveryCooldownMap(map) {
+    try {
+        window.localStorage.setItem(PASSWORD_RECOVERY_COOLDOWN_STORAGE_KEY, JSON.stringify(map || {}));
+    } catch (_) { }
+}
+
+function getPasswordRecoveryCooldownRemainingMs(email) {
+    const normalizedEmail = normalizeEmailForStorage(email);
+    if (!isValidEmail(normalizedEmail)) return 0;
+
+    const cooldownMap = readPasswordRecoveryCooldownMap();
+    const startedAt = Number(cooldownMap[normalizedEmail]);
+    if (!Number.isFinite(startedAt) || startedAt <= 0) return 0;
+
+    const remainingMs = (startedAt + PASSWORD_RECOVERY_COOLDOWN_MS) - Date.now();
+    if (remainingMs > 0) return remainingMs;
+
+    delete cooldownMap[normalizedEmail];
+    writePasswordRecoveryCooldownMap(cooldownMap);
+    return 0;
+}
+
+function markPasswordRecoverySent(email) {
+    const normalizedEmail = normalizeEmailForStorage(email);
+    if (!isValidEmail(normalizedEmail)) return;
+    const cooldownMap = readPasswordRecoveryCooldownMap();
+    cooldownMap[normalizedEmail] = Date.now();
+    writePasswordRecoveryCooldownMap(cooldownMap);
+}
+
+function formatCooldownTimer(remainingMs) {
+    const totalSeconds = Math.max(0, Math.ceil(Number(remainingMs || 0) / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function setExpectedOAuthEmail(email) {
     const normalized = String(email || "").trim().toLowerCase();
     if (!isValidEmail(normalized)) return;
@@ -164,8 +221,12 @@ function getAuthCallbackRedirectTo() {
     return `${window.location.origin}${withBase("/auth/callback/")}`;
 }
 
-function navigateAfterAuthSuccess() {
-    queueAuthSuccessToast();
+function getPasswordRecoveryRedirectTo() {
+    return `${window.location.origin}${withBase("/login/?auth_intent=password-reset")}`;
+}
+
+function navigateAfterAuthSuccess(message = AUTH_SUCCESS_TOAST_MESSAGE) {
+    queueAuthSuccessToast(message);
     if (window.router?.navigate) {
         window.router.navigate("/");
         return;
@@ -208,6 +269,14 @@ function isEmailNotConfirmedError(error) {
 function isUserAlreadyRegisteredError(error) {
     const message = String(error?.message || "").toLowerCase();
     return message.includes("user already registered") || message.includes("already been registered");
+}
+
+function isLikelyNetworkError(error) {
+    const message = String(error?.message || "").toLowerCase();
+    return message.includes("failed to fetch")
+        || message.includes("networkerror")
+        || message.includes("network request failed")
+        || message.includes("load failed");
 }
 
 function normalizeMode(value) {
@@ -475,12 +544,18 @@ class UnifiedAuthManager {
             email: ""
         };
         this.modalSubmissionInFlight = false;
+        this.modalRecoveryRequestInFlight = false;
         this.pageState = {
             step: "entry",
             mode: "signin",
             email: ""
         };
         this.pageSubmissionInFlight = false;
+        this.pageRecoveryRequestInFlight = false;
+        this.forgotPasswordCooldownTimers = {
+            "auth-modal": null,
+            "auth-page": null
+        };
         this.pageRoot = null;
         this.authStateSubscription = null;
         this.navTeaser = new AuthNavTeaserController(this);
@@ -581,7 +656,9 @@ class UnifiedAuthManager {
             email: ""
         };
 
-        this.renderDedicatedAuthPage();
+        this.applyAuthPrefillFromUrl();
+
+        void this.initializeDedicatedAuthPageFlow();
     }
 
     bindDedicatedPageActionHandlers() {
@@ -602,14 +679,236 @@ class UnifiedAuthManager {
                 this.renderDedicatedAuthPage();
                 return;
             }
+            if (action === "auth-change-email") {
+                this.pageState.step = "entry";
+                this.renderDedicatedAuthPage();
+                return;
+            }
             if (action === "auth-oauth-google") {
                 this.handleOAuthLogin("google", { isModal: false });
                 return;
             }
             if (action === "auth-oauth-azure") {
                 this.handleOAuthLogin("azure", { isModal: false });
+                return;
+            }
+            if (action === "auth-forgot-password") {
+                this.handleForgotPasswordRequest({ isModal: false });
             }
         });
+    }
+
+    async initializeDedicatedAuthPageFlow() {
+        const activatedRecovery = await this.tryActivatePasswordRecoveryFlow();
+        if (activatedRecovery) return;
+        this.renderDedicatedAuthPage();
+    }
+
+    getAuthFlowUrlContext() {
+        const url = new URL(window.location.href);
+        const hashParams = new URLSearchParams(String(url.hash || "").replace(/^#/, ""));
+
+        const authIntent = String(url.searchParams.get("auth_intent") || "").trim().toLowerCase();
+        const queryType = String(url.searchParams.get("type") || "").trim().toLowerCase();
+        const hashType = String(hashParams.get("type") || "").trim().toLowerCase();
+        const hasRecoveryIntent = authIntent === "password-reset" || queryType === "recovery" || hashType === "recovery";
+
+        return { url, hashParams, hasRecoveryIntent };
+    }
+
+    applyAuthPrefillFromUrl() {
+        const url = new URL(window.location.href);
+        const prefillEmail = String(url.searchParams.get("auth_email") || "").trim();
+        const prefillStep = String(url.searchParams.get("auth_step") || "").trim().toLowerCase();
+        let shouldClean = false;
+
+        if (isValidEmail(prefillEmail)) {
+            this.pageState.email = prefillEmail;
+        }
+
+        if (prefillStep === "email-signup" || prefillStep === "email-signin") {
+            this.pageState.step = prefillStep;
+            this.pageState.mode = prefillStep === "email-signup" ? "signup" : "signin";
+        }
+
+        if (url.searchParams.has("auth_email")) {
+            url.searchParams.delete("auth_email");
+            shouldClean = true;
+        }
+        if (url.searchParams.has("auth_step")) {
+            url.searchParams.delete("auth_step");
+            shouldClean = true;
+        }
+
+        if (!shouldClean) return;
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState({}, "", nextUrl || url.pathname);
+    }
+
+    navigateToDedicatedAuthStep({ mode, email, step }) {
+        const normalizedMode = normalizeMode(mode);
+        const targetRoute = normalizedMode === "signup" ? "/register" : "/login";
+        const params = new URLSearchParams();
+
+        if (isValidEmail(email)) {
+            params.set("auth_email", String(email).trim());
+        }
+        if (step === "email-signup" || step === "email-signin") {
+            params.set("auth_step", step);
+        }
+
+        const query = params.toString();
+        const targetPath = query ? `${targetRoute}?${query}` : targetRoute;
+
+        if (window.router?.navigate) {
+            window.router.navigate(targetPath);
+            return;
+        }
+
+        window.location.href = withBase(targetPath);
+    }
+
+    clearProcessedAuthUrlState({ keepRecoveryIntent = true } = {}) {
+        const { url } = this.getAuthFlowUrlContext();
+        let shouldReplace = false;
+        const paramsToClear = ["code", "type", "error", "error_code", "error_description", "token_hash"];
+
+        paramsToClear.forEach((key) => {
+            if (url.searchParams.has(key)) {
+                url.searchParams.delete(key);
+                shouldReplace = true;
+            }
+        });
+
+        if (!keepRecoveryIntent && url.searchParams.has("auth_intent")) {
+            url.searchParams.delete("auth_intent");
+            shouldReplace = true;
+        }
+
+        if (url.hash) {
+            url.hash = "";
+            shouldReplace = true;
+        }
+
+        if (!shouldReplace) return;
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState({}, "", nextUrl || url.pathname);
+    }
+
+    async tryActivatePasswordRecoveryFlow() {
+        if (!this.pageRoot) return false;
+        const { url, hashParams, hasRecoveryIntent } = this.getAuthFlowUrlContext();
+        if (!hasRecoveryIntent) return false;
+
+        try {
+            const authCode = String(url.searchParams.get("code") || "").trim();
+            if (authCode && typeof supabase.auth.exchangeCodeForSession === "function") {
+                await supabase.auth.exchangeCodeForSession(authCode);
+            }
+
+            const accessToken = String(hashParams.get("access_token") || "").trim();
+            const refreshToken = String(hashParams.get("refresh_token") || "").trim();
+            if (accessToken && refreshToken) {
+                await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+            }
+        } catch (error) {
+            console.warn("Auth: password recovery session setup failed", error);
+        } finally {
+            this.clearProcessedAuthUrlState({ keepRecoveryIntent: true });
+        }
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const recoveryEmail = String(session?.user?.email || "").trim();
+
+            if (!session?.user) {
+                this.clearProcessedAuthUrlState({ keepRecoveryIntent: false });
+                this.pageState = {
+                    step: "entry",
+                    mode: "signin",
+                    email: ""
+                };
+                this.renderDedicatedAuthPage();
+                const message = document.getElementById("auth-page-message");
+                this.setInlineMessage(message, "This password reset link is invalid or expired. Request a new one.", "error");
+                return true;
+            }
+
+            this.pageState = {
+                step: "password-reset",
+                mode: "signin",
+                email: recoveryEmail
+            };
+            this.renderDedicatedAuthPage();
+            return true;
+        } catch (error) {
+            console.warn("Auth: unable to confirm password recovery session", error);
+            this.clearProcessedAuthUrlState({ keepRecoveryIntent: false });
+            this.pageState = {
+                step: "entry",
+                mode: "signin",
+                email: ""
+            };
+            this.renderDedicatedAuthPage();
+            const message = document.getElementById("auth-page-message");
+            this.setInlineMessage(message, "This password reset link is invalid or expired. Request a new one.", "error");
+            return true;
+        }
+    }
+
+    clearForgotPasswordCooldownTimer(rootId) {
+        const timer = this.forgotPasswordCooldownTimers[rootId];
+        if (!timer) return;
+        window.clearInterval(timer);
+        this.forgotPasswordCooldownTimers[rootId] = null;
+    }
+
+    getForgotPasswordButton(rootId) {
+        const containerId = rootId === "auth-modal" ? "auth-modal-root" : "auth-page-root";
+        const container = document.getElementById(containerId);
+        if (!container) return null;
+        return container.querySelector('[data-action="auth-forgot-password"]');
+    }
+
+    applyForgotPasswordCooldownState({ rootId, email }) {
+        const refreshButtonState = () => {
+            const forgotButton = this.getForgotPasswordButton(rootId);
+            if (!forgotButton) {
+                this.clearForgotPasswordCooldownTimer(rootId);
+                return;
+            }
+
+            const inFlight = rootId === "auth-modal"
+                ? this.modalRecoveryRequestInFlight
+                : this.pageRecoveryRequestInFlight;
+            const remainingMs = getPasswordRecoveryCooldownRemainingMs(email);
+
+            if (inFlight) {
+                forgotButton.disabled = true;
+                forgotButton.textContent = FORGOT_PASSWORD_BUTTON_LABEL;
+                return;
+            }
+
+            if (remainingMs > 0) {
+                forgotButton.disabled = true;
+                forgotButton.textContent = `Resend in ${formatCooldownTimer(remainingMs)}`;
+                return;
+            }
+
+            forgotButton.disabled = false;
+            forgotButton.textContent = FORGOT_PASSWORD_BUTTON_LABEL;
+            this.clearForgotPasswordCooldownTimer(rootId);
+        };
+
+        this.clearForgotPasswordCooldownTimer(rootId);
+        refreshButtonState();
+
+        if (getPasswordRecoveryCooldownRemainingMs(email) > 0) {
+            this.forgotPasswordCooldownTimers[rootId] = window.setInterval(refreshButtonState, 1000);
+        }
     }
 
     renderDedicatedAuthPage() {
@@ -618,6 +917,15 @@ class UnifiedAuthManager {
         const mode = normalizeMode(this.pageState.mode);
         const { step, email } = this.pageState;
 
+        if (step === "password-reset") {
+            this.pageRoot.innerHTML = this.buildPasswordResetMarkup({
+                rootId: "auth-page",
+                email
+            });
+            this.bindPasswordResetHandlers();
+            return;
+        }
+
         if (step === "entry") {
             this.pageRoot.innerHTML = this.buildEntryMarkup({
                 mode,
@@ -625,6 +933,7 @@ class UnifiedAuthManager {
                 rootId: "auth-page"
             });
             this.bindEntryHandlers({ isModal: false });
+            this.applyForgotPasswordCooldownState({ rootId: "auth-page", email });
             return;
         }
 
@@ -634,6 +943,7 @@ class UnifiedAuthManager {
             rootId: "auth-page"
         });
         this.bindPasswordHandlers({ isModal: false });
+        this.applyForgotPasswordCooldownState({ rootId: "auth-page", email });
     }
 
     ensureModalExists() {
@@ -644,7 +954,6 @@ class UnifiedAuthManager {
             <div id="${MODAL_ID}" class="auth-modal hidden" aria-hidden="true">
                 <div class="auth-modal-background" data-action="close-auth-modal"></div>
                 <div class="auth-modal-content" role="dialog" aria-modal="true" aria-label="Log in or sign up">
-                    <button type="button" class="auth-close-btn" data-action="close-auth-modal" aria-label="Close authentication dialog"></button>
                     <div class="auth-modal-body">
                         <div id="auth-modal-root" class="auth-modal-root"></div>
                     </div>
@@ -670,12 +979,21 @@ class UnifiedAuthManager {
                 this.renderModal();
                 return;
             }
+            if (action === "auth-change-email") {
+                this.modalState.step = "entry";
+                this.renderModal();
+                return;
+            }
             if (action === "auth-oauth-google") {
                 this.handleOAuthLogin("google", { isModal: true });
                 return;
             }
             if (action === "auth-oauth-azure") {
                 this.handleOAuthLogin("azure", { isModal: true });
+                return;
+            }
+            if (action === "auth-forgot-password") {
+                this.handleForgotPasswordRequest({ isModal: true });
                 return;
             }
         });
@@ -724,6 +1042,7 @@ class UnifiedAuthManager {
                 actionLabel: this.activeContext.action
             });
             this.bindEntryHandlers({ isModal: true });
+            this.applyForgotPasswordCooldownState({ rootId: "auth-modal", email });
             return;
         }
 
@@ -734,15 +1053,77 @@ class UnifiedAuthManager {
             actionLabel: this.activeContext.action
         });
         this.bindPasswordHandlers({ isModal: true });
+        this.applyForgotPasswordCooldownState({ rootId: "auth-modal", email });
+    }
+
+    normalizeSubtitleAction(actionLabel) {
+        const rawAction = String(actionLabel || "").trim().replace(/\s+/g, " ");
+        if (!rawAction) return "";
+
+        const normalized = rawAction.toLowerCase().replace(/[.!?]+$/g, "");
+        const genericActions = new Set([
+            "continue",
+            "proceed",
+            "next",
+            "get started",
+            "log in",
+            "login",
+            "sign in",
+            "sign up",
+            "register",
+            "registered"
+        ]);
+
+        if (genericActions.has(normalized)) return "";
+        return rawAction.replace(/[.!?\s]+$/g, "");
+    }
+
+    getEntrySubtitle({ mode, actionLabel }) {
+        const rawAction = String(actionLabel || "").trim().replace(/\s+/g, " ");
+        const normalizedAction = rawAction.toLowerCase().replace(/[.!?]+$/g, "");
+
+        if (mode === "signup" && normalizedAction === "get started") {
+            return "Create your account with any email address to access all the functionalities in one place.";
+        }
+
+        const contextualAction = this.normalizeSubtitleAction(actionLabel);
+        if (contextualAction) {
+            return `Continue to ${contextualAction}.`;
+        }
+
+        if (mode === "signup") {
+            return "Create your account with any email address to access all the functionalities in one place.";
+        }
+
+        return "Use any email address to log in or create an account.";
+    }
+
+    getPasswordSubtitle({ mode, actionLabel }) {
+        if (mode === "signup") {
+            return "You'll use this password to log in to your account.";
+        }
+
+        const contextualAction = this.normalizeSubtitleAction(actionLabel);
+        if (contextualAction) {
+            return `Log in to ${contextualAction}.`;
+        }
+
+        return "Enter your password to continue.";
     }
 
     buildEntryMarkup({ mode, email, rootId, actionLabel = "continue" }) {
         const title = "Log in or sign up";
-        const subtitle = `Continue to ${String(actionLabel || "continue").trim()}.`;
+        const subtitle = this.getEntrySubtitle({ mode, actionLabel });
+        const closeButtonMarkup = rootId === "auth-modal"
+            ? `<button type="button" class="auth-close-btn" data-action="close-auth-modal" aria-label="Close authentication dialog"></button>`
+            : "";
 
         return `
             <div class="auth-unified-shell" data-auth-root="${rootId}" data-auth-step="entry" data-auth-mode="${mode}">
-                <h2 class="auth-unified-title">${title}</h2>
+                <div class="auth-unified-title-row">
+                    <h2 class="auth-unified-title">${title}</h2>
+                    ${closeButtonMarkup}
+                </div>
                 <p class="auth-unified-subtitle">${subtitle}</p>
 
                 <div class="auth-provider-list" role="group" aria-label="Social sign in options">
@@ -759,7 +1140,10 @@ class UnifiedAuthManager {
                 <div class="auth-divider" role="separator" aria-label="or"><span>OR</span></div>
 
                 <form class="auth-email-form" id="${rootId}-entry-form" novalidate>
-                    <input type="email" id="${rootId}-email" class="auth-field-input auth-field-input--email-entry" aria-label="Email address" placeholder="Email address" autocomplete="email" value="${escapeHtml(email || "")}" required>
+                    <label class="auth-field-wrap">
+                        <input type="email" id="${rootId}-email" class="auth-field-input auth-field-input--email-entry" aria-label="Email address" placeholder=" " autocomplete="email" value="${escapeHtml(email || "")}" required>
+                        <span class="auth-field-label">Email address</span>
+                    </label>
                     <button type="submit" class="auth-provider-btn" id="${rootId}-entry-submit">Continue</button>
                 </form>
 
@@ -770,32 +1154,74 @@ class UnifiedAuthManager {
 
     buildPasswordStepMarkup({ mode, email, rootId, actionLabel = "continue" }) {
         const isSignUp = mode === "signup";
-        const title = isSignUp ? "Create your account" : "Log in";
-        const subtitle = isSignUp
-            ? `You're one step away from saving your workspace.`
-            : `Continue to ${String(actionLabel || "continue").trim()}.`;
+        const title = isSignUp ? "Create a password" : "Log in";
+        const subtitle = this.getPasswordSubtitle({ mode, actionLabel });
+        const closeButtonMarkup = rootId === "auth-modal"
+            ? `<button type="button" class="auth-close-btn" data-action="close-auth-modal" aria-label="Close authentication dialog"></button>`
+            : "";
 
         return `
             <div class="auth-unified-shell" data-auth-root="${rootId}" data-auth-step="${isSignUp ? "email-signup" : "email-signin"}" data-auth-mode="${mode}">
-                <button type="button" class="auth-back-btn" data-action="auth-back-entry">Back</button>
-                <h2 class="auth-unified-title">${title}</h2>
+                <div class="auth-unified-title-row">
+                    <h2 class="auth-unified-title">${title}</h2>
+                    ${closeButtonMarkup}
+                </div>
                 <p class="auth-unified-subtitle">${subtitle}</p>
-                <input
-                    type="email"
-                    class="auth-field-input auth-field-input--email-entry auth-email-chip-input"
-                    id="${rootId}-email-readonly"
-                    value="${escapeHtml(email)}"
-                    aria-label="Email address"
-                    readonly
-                    tabindex="-1"
-                >
+                <div class="auth-field-wrap auth-field-wrap--readonly auth-field-wrap--with-action">
+                    <input
+                        type="email"
+                        class="auth-field-input auth-field-input--email-entry auth-email-chip-input"
+                        id="${rootId}-email-readonly"
+                        value="${escapeHtml(email)}"
+                        aria-label="Email address"
+                        placeholder=" "
+                        readonly
+                        tabindex="-1"
+                    >
+                    <span class="auth-field-label">Email address</span>
+                    <button type="button" class="auth-field-inline-action" data-action="auth-change-email">Change</button>
+                </div>
 
                 <form class="auth-email-form" id="${rootId}-password-form" novalidate>
-                    <input type="password" id="${rootId}-password" class="auth-field-input auth-field-input--email-entry" aria-label="Password" placeholder="${isSignUp ? "Create password" : "Password"}" autocomplete="${isSignUp ? "new-password" : "current-password"}" required>
+                    <label class="auth-field-wrap">
+                        <input type="password" id="${rootId}-password" class="auth-field-input auth-field-input--email-entry" aria-label="Password" placeholder=" " autocomplete="${isSignUp ? "new-password" : "current-password"}" minlength="${isSignUp ? "12" : "1"}" required>
+                        <span class="auth-field-label">${isSignUp ? "Create password" : "Password"}</span>
+                    </label>
                     ${isSignUp ? `
-                        <input type="password" id="${rootId}-password-confirm" class="auth-field-input auth-field-input--email-entry" aria-label="Confirm password" placeholder="Confirm password" autocomplete="new-password" required>
+                        <label class="auth-field-wrap">
+                            <input type="password" id="${rootId}-password-confirm" class="auth-field-input auth-field-input--email-entry" aria-label="Confirm password" placeholder=" " autocomplete="new-password" minlength="12" required>
+                            <span class="auth-field-label">Confirm password</span>
+                        </label>
                     ` : ""}
+                    ${isSignUp ? "" : `
+                        <div class="auth-password-help">
+                            <button type="button" class="auth-link-btn auth-forgot-password-btn" data-action="auth-forgot-password">Forgot password?</button>
+                        </div>
+                    `}
                     <button type="submit" class="auth-primary-btn" id="${rootId}-password-submit">${isSignUp ? "Create account" : "Log in"}</button>
+                </form>
+
+                ${createInlineMessageMarkup(`${rootId}-message`)}
+            </div>
+        `;
+    }
+
+    buildPasswordResetMarkup({ rootId, email }) {
+        return `
+            <div class="auth-unified-shell" data-auth-root="${rootId}" data-auth-step="password-reset" data-auth-mode="signin">
+                <h2 class="auth-unified-title">Reset your password</h2>
+                <p class="auth-unified-subtitle">Choose a new password for ${escapeHtml(email || "your account")}.</p>
+
+                <form class="auth-email-form" id="${rootId}-reset-form" novalidate>
+                    <label class="auth-field-wrap">
+                        <input type="password" id="${rootId}-reset-password" class="auth-field-input auth-field-input--email-entry" aria-label="New password" placeholder=" " autocomplete="new-password" minlength="12" required>
+                        <span class="auth-field-label">New password</span>
+                    </label>
+                    <label class="auth-field-wrap">
+                        <input type="password" id="${rootId}-reset-password-confirm" class="auth-field-input auth-field-input--email-entry" aria-label="Confirm new password" placeholder=" " autocomplete="new-password" minlength="12" required>
+                        <span class="auth-field-label">Confirm new password</span>
+                    </label>
+                    <button type="submit" class="auth-primary-btn" id="${rootId}-reset-submit">Update password</button>
                 </form>
 
                 ${createInlineMessageMarkup(`${rootId}-message`)}
@@ -828,17 +1254,34 @@ class UnifiedAuthManager {
             clearFieldErrors(form);
             this.setInlineMessage(message, "", "");
             if (!email) {
-                setFieldError(emailInput, "Email is required.", { root: form });
+                setFieldError(emailInput, "Email is required.", {
+                    root: form,
+                    anchor: emailInput?.closest(".auth-field-wrap")
+                });
                 return;
             }
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                setFieldError(emailInput, "Please enter a valid email address.", { root: form });
+                setFieldError(emailInput, "Please enter a valid email address.", {
+                    root: form,
+                    anchor: emailInput?.closest(".auth-field-wrap")
+                });
                 return;
             }
 
             if (submitButton) submitButton.disabled = true;
 
             if (isModal) {
+                const modalMode = normalizeMode(this.modalState.mode);
+                if (modalMode === "signup") {
+                    this.closeCurrentModal();
+                    this.navigateToDedicatedAuthStep({
+                        mode: "signup",
+                        email,
+                        step: "email-signup"
+                    });
+                    return;
+                }
+
                 this.modalState.email = email;
                 this.modalState.step = this.modalState.mode === "signup" ? "email-signup" : "email-signin";
                 this.renderModal();
@@ -886,21 +1329,33 @@ class UnifiedAuthManager {
             this.setInlineMessage(message, "", "");
 
             if (!password) {
-                setFieldError(passwordInput, "Password is required.", { root: form });
+                setFieldError(passwordInput, "Password is required.", {
+                    root: form,
+                    anchor: passwordInput?.closest(".auth-field-wrap")
+                });
                 return;
             }
 
             if (mode === "signup") {
-                if (password.length < 6) {
-                    setFieldError(passwordInput, "Password must be at least 6 characters long.", { root: form });
+                if (password.length < 12) {
+                    setFieldError(passwordInput, "Password must be at least 12 characters long.", {
+                        root: form,
+                        anchor: passwordInput?.closest(".auth-field-wrap")
+                    });
                     return;
                 }
                 if (!confirmPassword) {
-                    setFieldError(confirmInput, "Please confirm your password.", { root: form });
+                    setFieldError(confirmInput, "Please confirm your password.", {
+                        root: form,
+                        anchor: confirmInput?.closest(".auth-field-wrap")
+                    });
                     return;
                 }
                 if (password !== confirmPassword) {
-                    setFieldError(confirmInput, "Passwords do not match.", { root: form });
+                    setFieldError(confirmInput, "Passwords do not match.", {
+                        root: form,
+                        anchor: confirmInput?.closest(".auth-field-wrap")
+                    });
                     return;
                 }
             }
@@ -923,6 +1378,148 @@ class UnifiedAuthManager {
         });
     }
 
+    async handleForgotPasswordRequest({ isModal }) {
+        const rootId = isModal ? "auth-modal" : "auth-page";
+        const state = isModal ? this.modalState : this.pageState;
+        const email = String(state?.email || "").trim().toLowerCase();
+        const message = document.getElementById(`${rootId}-message`);
+
+        if (!isValidEmail(email)) {
+            this.setInlineMessage(message, "Enter your email first, then try password recovery.", "error");
+            return;
+        }
+
+        const existingCooldownMs = getPasswordRecoveryCooldownRemainingMs(email);
+        if (existingCooldownMs > 0) {
+            this.setInlineMessage(message, `Please wait ${formatCooldownTimer(existingCooldownMs)} before requesting another reset email.`, "error");
+            this.applyForgotPasswordCooldownState({ rootId, email });
+            return;
+        }
+
+        if (isModal ? this.modalRecoveryRequestInFlight : this.pageRecoveryRequestInFlight) return;
+        if (isModal) this.modalRecoveryRequestInFlight = true;
+        else this.pageRecoveryRequestInFlight = true;
+        this.applyForgotPasswordCooldownState({ rootId, email });
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: getPasswordRecoveryRedirectTo()
+            });
+
+            if (error) {
+                if (isLikelyNetworkError(error)) {
+                    this.setInlineMessage(message, "Could not reach the server. Please try again.", "error");
+                    return;
+                }
+                this.setInlineMessage(message, "Could not send a reset email right now. Please try again shortly.", "error");
+                return;
+            }
+
+            // Never reveal whether an email is registered.
+            markPasswordRecoverySent(email);
+            this.setInlineMessage(message, "If an account exists for this email, a password reset link has been sent.", "success");
+        } catch (error) {
+            if (isLikelyNetworkError(error)) {
+                this.setInlineMessage(message, "Could not reach the server. Please try again.", "error");
+                return;
+            }
+            this.setInlineMessage(message, "Could not send a reset email right now. Please try again shortly.", "error");
+        } finally {
+            if (isModal) this.modalRecoveryRequestInFlight = false;
+            else this.pageRecoveryRequestInFlight = false;
+            this.applyForgotPasswordCooldownState({ rootId, email });
+        }
+    }
+
+    bindPasswordResetHandlers() {
+        const rootId = "auth-page";
+        const form = document.getElementById(`${rootId}-reset-form`);
+        const message = document.getElementById(`${rootId}-message`);
+
+        if (!form || form.dataset.authBound === "true") return;
+        form.dataset.authBound = "true";
+
+        const passwordInput = document.getElementById(`${rootId}-reset-password`);
+        const confirmInput = document.getElementById(`${rootId}-reset-password-confirm`);
+        passwordInput?.addEventListener("input", () => {
+            clearFieldError(passwordInput, { root: form });
+            this.setInlineMessage(message, "", "");
+        });
+        confirmInput?.addEventListener("input", () => {
+            clearFieldError(confirmInput, { root: form });
+            this.setInlineMessage(message, "", "");
+        });
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (this.pageSubmissionInFlight) return;
+
+            const submitButton = document.getElementById(`${rootId}-reset-submit`);
+            const password = String(passwordInput?.value || "");
+            const confirmPassword = String(confirmInput?.value || "");
+
+            clearFieldErrors(form);
+            this.setInlineMessage(message, "", "");
+
+            if (!password) {
+                setFieldError(passwordInput, "New password is required.", {
+                    root: form,
+                    anchor: passwordInput?.closest(".auth-field-wrap")
+                });
+                return;
+            }
+            if (password.length < 12) {
+                setFieldError(passwordInput, "Password must be at least 12 characters long.", {
+                    root: form,
+                    anchor: passwordInput?.closest(".auth-field-wrap")
+                });
+                return;
+            }
+            if (!confirmPassword) {
+                setFieldError(confirmInput, "Please confirm your new password.", {
+                    root: form,
+                    anchor: confirmInput?.closest(".auth-field-wrap")
+                });
+                return;
+            }
+            if (password !== confirmPassword) {
+                setFieldError(confirmInput, "Passwords do not match.", {
+                    root: form,
+                    anchor: confirmInput?.closest(".auth-field-wrap")
+                });
+                return;
+            }
+
+            if (submitButton) submitButton.disabled = true;
+            this.pageSubmissionInFlight = true;
+
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) {
+                    this.setInlineMessage(message, "Your reset session has expired. Request a new reset link.", "error");
+                    return;
+                }
+
+                const { error } = await supabase.auth.updateUser({ password });
+                if (error) {
+                    this.setInlineMessage(message, getAuthErrorMessage(error, "Could not update password right now."), "error");
+                    return;
+                }
+
+                this.clearProcessedAuthUrlState({ keepRecoveryIntent: false });
+                this.setInlineMessage(message, "Password updated successfully. Redirecting...", "success");
+                window.setTimeout(() => {
+                    navigateAfterAuthSuccess(AUTH_PASSWORD_UPDATED_TOAST_MESSAGE);
+                }, 280);
+            } catch (error) {
+                this.setInlineMessage(message, getAuthErrorMessage(error, "Could not update password right now."), "error");
+            } finally {
+                this.pageSubmissionInFlight = false;
+                if (submitButton) submitButton.disabled = false;
+            }
+        });
+    }
+
     async handleEmailSignIn({ email, password, messageTarget, isModal, rootId }) {
         try {
             const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -934,7 +1531,10 @@ class UnifiedAuthManager {
                 if (isInvalidCredentialsError(error)) {
                     const passwordInput = document.getElementById(`${rootId}-password`);
                     const form = document.getElementById(`${rootId}-password-form`);
-                    setFieldError(passwordInput, "Invalid email or password. Please try again.", { root: form || document });
+                    setFieldError(passwordInput, "Invalid email or password. Please try again.", {
+                        root: form || document,
+                        anchor: passwordInput?.closest(".auth-field-wrap")
+                    });
                     return;
                 }
                 this.setInlineMessage(messageTarget, getAuthErrorMessage(error, "Could not sign in right now."), "error");
@@ -1161,6 +1761,7 @@ class UnifiedAuthManager {
         modal.setAttribute("aria-hidden", "true");
         document.body.classList.remove("auth-modal-open");
         this.currentModal = null;
+        this.clearForgotPasswordCooldownTimer("auth-modal");
 
         if (clearCallback) {
             this.onSuccessCallback = null;
