@@ -1,3 +1,9 @@
+import {
+  coerceSemesterValue,
+  isBlockedSemesterValue,
+  normalizeSemesterValue
+} from './semester-visibility.js'
+
 export const PREFERENCE_KEYS = {
   currentTerm: 'ila_current_term',
   latestAvailableTerm: 'ila_latest_available_term',
@@ -78,18 +84,7 @@ function normalizeWeekStart(value) {
 }
 
 export function normalizeTermValue(value) {
-  if (!value) return null
-
-  const cleaned = String(value).trim().replace(/\s+/g, '-')
-  const match = cleaned.match(/^([A-Za-z]+)-(\d{4})$/)
-  if (!match) return null
-
-  const termRaw = match[1].toLowerCase()
-  const term = termRaw.charAt(0).toUpperCase() + termRaw.slice(1)
-  const year = parseInt(match[2], 10)
-
-  if (!Number.isFinite(year)) return null
-  return `${term}-${year}`
+  return normalizeSemesterValue(value)
 }
 
 export function parseTermValue(value) {
@@ -168,11 +163,18 @@ function findClosestSemesterForInferredTarget(semesterValues, inferred) {
 }
 
 export function getPreferredTermValue() {
-  return normalizeTermValue(readStorage(PREFERENCE_KEYS.currentTerm))
+  const storedValue = normalizeTermValue(readStorage(PREFERENCE_KEYS.currentTerm))
+  const coercedValue = coerceSemesterValue(storedValue)
+
+  if (coercedValue && coercedValue !== storedValue) {
+    writeStorage(PREFERENCE_KEYS.currentTerm, coercedValue)
+  }
+
+  return coercedValue
 }
 
 export function setPreferredTermValue(value) {
-  const normalized = normalizeTermValue(value)
+  const normalized = coerceSemesterValue(value)
   if (!normalized) {
     removeStorage(PREFERENCE_KEYS.currentTerm)
     return null
@@ -218,7 +220,7 @@ function syncSemesterSelectors(parsed) {
 }
 
 export function applyPreferredTermToGlobals(value = getPreferredTermValue()) {
-  const parsed = parseTermValue(value)
+  const parsed = parseTermValue(coerceSemesterValue(value))
   if (!parsed.value) return parsed
 
   window.globalCurrentTerm = parsed.term
@@ -243,6 +245,7 @@ export function resolvePreferredTermForAvailableSemesters(semesterValues = []) {
   const normalizedValues = (Array.isArray(semesterValues) ? semesterValues : [])
     .map((value) => normalizeTermValue(value))
     .filter(Boolean)
+    .filter((value) => !isBlockedSemesterValue(value))
 
   if (!normalizedValues.length) return null
 
@@ -293,7 +296,7 @@ export function setStoredPreference(key, value) {
     case PREFERENCE_KEYS.reduceMotion:
       return writeStorage(key, toStoredBoolean(Boolean(value)))
     case PREFERENCE_KEYS.currentTerm: {
-      const normalized = normalizeTermValue(value)
+      const normalized = coerceSemesterValue(value)
       if (!normalized) return false
       return writeStorage(key, normalized)
     }

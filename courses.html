@@ -4,18 +4,52 @@
 <head>
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-        content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="height=device-height, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="application-name" content="ILA Companion">
+    <meta name="apple-mobile-web-app-title" content="ILA Companion">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="msapplication-TileColor" content="#0f172a">
+    <meta name="msapplication-TileImage" content="/assets/mstile-150x150.png">
+    <meta name="msapplication-config" content="/assets/browserconfig.xml">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+    <link rel="shortcut icon" href="/assets/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/android-chrome-512x512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="mask-icon" href="/assets/logo-symbol.svg" color="#0f172a">
+    <link rel="manifest" href="/assets/site.webmanifest">
 
     <title>Courses - ILA Companion</title>
+    <meta name="description" content="Browse and compare courses on ILA Companion with schedules, evaluation details, and student insights to plan a smarter semester.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="author" content="ILA Companion">
+    <meta name="keywords" content="course catalog, class search, student course reviews, course planning, semester planning">
+    <link rel="canonical" href="https://ilacompanion.app/courses/">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="ILA Companion">
+    <meta property="og:title" content="Courses - ILA Companion">
+    <meta property="og:description" content="Browse and compare courses on ILA Companion with schedules, evaluation details, and student insights to plan a smarter semester.">
+    <meta property="og:url" content="https://ilacompanion.app/courses/">
+    <meta property="og:image" content="https://ilacompanion.app/assets/app-icon.png">
+    <meta property="og:image:alt" content="ILA Companion app icon">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Courses - ILA Companion">
+    <meta name="twitter:description" content="Browse and compare courses on ILA Companion with schedules, evaluation details, and student insights to plan a smarter semester.">
+    <meta name="twitter:image" content="https://ilacompanion.app/assets/app-icon.png">
+
     <link rel="stylesheet" href="css/blaze.css">
-    <!-- Import components first to ensure web components are defined -->
     <script type="module" src="js/components.js"></script>
     <script type="module" src="js/shared.js"></script>
     <script type="module" src="js/calendar-page-component.js"></script>
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/main.js"></script>
-    <!-- Simple Router -->
     <script type="module" src="js/router.js"></script>
 </head>
 
@@ -333,7 +367,7 @@
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-empty-slots" aria-pressed="false">My empty slots</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-no-conflicts" aria-pressed="false">No conflicts</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-saved-only" aria-pressed="false">Saved only</button>
-                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-registered-only" aria-pressed="false">Registered only</button>
+                        <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-registered-only" aria-pressed="false">In timetable only</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-presentation" aria-pressed="false">Has no presentation</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-has-exam" aria-pressed="false">Has no exam</button>
                         <button type="button" class="ui-pill ui-pill--filter assignment-quick-filter course-quick-filter" data-course-preset="preset-fits-my-year" aria-pressed="false">Fits my year</button>

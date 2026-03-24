@@ -1,5 +1,5 @@
 import { supabase } from "../supabase.js";
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters, openCourseSearchForSlot, formatProfessorDisplayName } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, fetchAvailableSemesters, openCourseSearchForSlot, formatProfessorDisplayName, getFaceToFaceClassStatus } from "./shared.js";
 import { withBase } from "./path-utils.js";
 import {
   applyPreferredTermToGlobals,
@@ -207,6 +207,13 @@ function parseCreditsValue(rawCredits) {
   if (!matched) return 0;
   const parsed = parseFloat(matched[1]);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+function getCourseRoomValue(courseLike = {}) {
+  const rawValue = courseLike?.location ?? courseLike?.classroom ?? courseLike?.room ?? '';
+  const normalized = String(rawValue).normalize('NFKC').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (/^(n\/?a|none|null|undefined|tba|to be announced|未定|-)$/i.test(normalized)) return '';
+  return normalized;
 }
 function getPeriodMeta(period) {
   return HOME_PERIOD_BY_NUMBER[Number(period)] || null;
@@ -1116,10 +1123,12 @@ function setupHomeMobileSearchModal() {
         openCourseInfoMenu(selectedCourse);
       }
     });
-    window.setTimeout(() => {
-      searchInput.focus();
-      if (searchInput.value) searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
-    }, 90);
+    if (window.innerWidth > 1023) {
+      window.setTimeout(() => {
+        searchInput.focus();
+        if (searchInput.value) searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      }, 90);
+    }
   };
   const handleSearchSubmit = async () => {
     const query = String(searchInput.value || '').trim();
@@ -1240,12 +1249,63 @@ function initializeHomeMobileStickyHeaderBehavior() {
     return;
   }
   document.body.classList.add('home-mobile-header-sticky');
+  let behaviorActive = true;
   const setHeights = () => {
+    if (!behaviorActive) return;
     const headerHeight = Math.min(160, Math.ceil(header.getBoundingClientRect().height || 0));
     const toolbarHeight = Math.min(160, Math.ceil(homeToolbar.getBoundingClientRect().height || 0));
     document.documentElement.style.setProperty('--home-mobile-header-height', `${headerHeight}px`);
     document.documentElement.style.setProperty('--home-mobile-toolbar-height', `${toolbarHeight}px`);
   };
+  let measureRafId = 0;
+  const scheduleHeightMeasure = () => {
+    if (!behaviorActive) return;
+    if (measureRafId) return;
+    measureRafId = window.requestAnimationFrame(() => {
+      measureRafId = 0;
+      setHeights();
+    });
+  };
+  let headerResizeObserver = null;
+  let headerMutationObserver = null;
+  if (typeof ResizeObserver === 'function') {
+    headerResizeObserver = new ResizeObserver(() => {
+      scheduleHeightMeasure();
+    });
+    headerResizeObserver.observe(header);
+    headerResizeObserver.observe(homeToolbar);
+  } else if (typeof MutationObserver === 'function') {
+    headerMutationObserver = new MutationObserver(() => {
+      scheduleHeightMeasure();
+    });
+    [header, homeToolbar].forEach((element) => {
+      headerMutationObserver.observe(element, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden']
+      });
+    });
+  }
+  const onVisualViewportUpdate = () => {
+    scheduleHeightMeasure();
+  };
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onVisualViewportUpdate, { passive: true });
+    window.visualViewport.addEventListener('scroll', onVisualViewportUpdate, { passive: true });
+  }
+  const delayedMeasureTimers = [60, 220].map((delayMs) => (
+    window.setTimeout(() => {
+      scheduleHeightMeasure();
+    }, delayMs)
+  ));
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      scheduleHeightMeasure();
+    }).catch(() => {
+      // Ignore font readiness failures and keep the current measured heights.
+    });
+  }
   const getCurrentScrollY = () => {
     const windowScrollY = window.scrollY || window.pageYOffset || 0;
     const rootScrollY = document.documentElement?.scrollTop || 0;
@@ -1298,11 +1358,12 @@ function initializeHomeMobileStickyHeaderBehavior() {
       teardownHomeMobileStickyHeaderBehavior();
       return;
     }
-    setHeights();
+    scheduleHeightMeasure();
     header.classList.remove('app-header--hidden');
     homeToolbar.classList.remove('home-toolbar--hidden');
   };
   setHeights();
+  scheduleHeightMeasure();
   header.classList.remove('app-header--hidden');
   homeToolbar.classList.remove('home-toolbar--hidden');
   window.addEventListener('scroll', onScroll, { passive: true });
@@ -1311,11 +1372,25 @@ function initializeHomeMobileStickyHeaderBehavior() {
   document.addEventListener('scroll', onScroll, { passive: true, capture: true });
   window.addEventListener('resize', onResize);
   homeMobileHeaderBehaviorCleanup = () => {
+    behaviorActive = false;
     window.removeEventListener('scroll', onScroll);
     appContent?.removeEventListener('scroll', onScroll);
     homeMain.removeEventListener('scroll', onScroll);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('resize', onResize);
+    if (measureRafId) {
+      window.cancelAnimationFrame(measureRafId);
+      measureRafId = 0;
+    }
+    delayedMeasureTimers.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    headerResizeObserver?.disconnect();
+    headerMutationObserver?.disconnect();
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', onVisualViewportUpdate);
+      window.visualViewport.removeEventListener('scroll', onVisualViewportUpdate);
+    }
     header.classList.remove('app-header--hidden');
     homeToolbar.classList.remove('home-toolbar--hidden');
   };
@@ -2036,6 +2111,28 @@ class TermBox extends HTMLElement {
         if (actionCueEl) actionCueEl.hidden = true;
         return;
       }
+      const faceToFaceStatus = await getFaceToFaceClassStatus(year, term);
+      if (faceToFaceStatus.hasPeriod && !faceToFaceStatus.isActive) {
+        resetTitleAccent();
+        labelEl.textContent = 'Next Class';
+        if (faceToFaceStatus.phase === 'before_start') {
+          nameEl.textContent = 'Face-to-face classes have not started';
+          timeEl.textContent = faceToFaceStatus.startsAt
+            ? `Starts ${this.formatFaceToFaceBoundaryDate(faceToFaceStatus.startsAt)}`
+            : '';
+        } else if (faceToFaceStatus.phase === 'after_end') {
+          nameEl.textContent = 'Face-to-face classes have ended';
+          timeEl.textContent = faceToFaceStatus.endsAt
+            ? `Ended ${this.formatFaceToFaceBoundaryDate(faceToFaceStatus.endsAt)}`
+            : '';
+        } else {
+          nameEl.textContent = 'No classes scheduled';
+          timeEl.textContent = '';
+        }
+        timeEl.style.display = timeEl.textContent ? 'block' : 'none';
+        if (actionCueEl) actionCueEl.hidden = true;
+        return;
+      }
       // Get user's selected courses
       const { data: profile } = await supabase
         .from('profiles')
@@ -2115,6 +2212,16 @@ class TermBox extends HTMLElement {
       timeEl.style.display = 'none';
       if (actionCueEl) actionCueEl.hidden = true;
     }
+  }
+  formatFaceToFaceBoundaryDate(dateValue) {
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (!Number.isFinite(date.getTime())) return '';
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tokyo',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(date);
   }
   formatHumanizedTimeRemaining(totalMinutes) {
     const minutes = Number.isFinite(Number(totalMinutes))
@@ -2252,8 +2359,10 @@ class CourseCalendar extends HTMLElement {
     this.retryCount = 0;
     this.maxRetries = 5;
     this.renderRequestId = 0;
+    this.faceToFaceStatus = null;
     this.tooltipElement = null;
     this.activeTooltipCell = null;
+    this.activeTooltipIntensiveCourseKey = null;
     this.intensiveCourseLookup = new Map();
     this.handleCalendarClickBound = this.handleCalendarClick.bind(this);
     this.handleCalendarKeyDownBound = this.handleCalendarKeyDown.bind(this);
@@ -2356,6 +2465,9 @@ class CourseCalendar extends HTMLElement {
     this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+    this.homeIntensiveSection?.addEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.homeIntensiveSection?.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.homeIntensiveSection?.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
   }
   initializeDayHeaderInteractions() {
     const headerCells = Array.from(this.calendarHeader).slice(1);
@@ -2373,11 +2485,17 @@ class CourseCalendar extends HTMLElement {
     this.calendar.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+    this.homeIntensiveSection?.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.homeIntensiveSection?.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.homeIntensiveSection?.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
     this.calendarWrapper?.addEventListener("click", this.handleCalendarClickBound);
     this.calendar.addEventListener("keydown", this.handleCalendarKeyDownBound);
     this.calendar.addEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+    this.homeIntensiveSection?.addEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.homeIntensiveSection?.addEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.homeIntensiveSection?.addEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
 
     // Only initialize if not already done
     if (!this.isInitialized) {
@@ -2398,6 +2516,9 @@ class CourseCalendar extends HTMLElement {
     this.calendar.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
     this.calendar.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
     this.calendar.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
+    this.homeIntensiveSection?.removeEventListener("mouseover", this.handleCalendarPointerOverBound);
+    this.homeIntensiveSection?.removeEventListener("mousemove", this.handleCalendarPointerMoveBound);
+    this.homeIntensiveSection?.removeEventListener("mouseleave", this.handleCalendarPointerLeaveBound);
     document.removeEventListener('pageLoaded', this.handleCalendarPageLoaded);
     document.removeEventListener('change', this.handleCalendarSelectionChange);
     document.removeEventListener('homeSemesterChanged', this.handleCalendarSelectionChange);
@@ -2412,19 +2533,34 @@ class CourseCalendar extends HTMLElement {
     console.log('Mini calendar: Refreshing from selectors:', year, term);
     this.showCourseWithRetry(year, term);
   }
+  async refreshFaceToFaceStatus(yearValue, termValue) {
+    const year = Number.parseInt(yearValue, 10);
+    const term = normalizeTermName(termValue);
+    if (!Number.isFinite(year) || !term) {
+      this.faceToFaceStatus = null;
+      return null;
+    }
+    this.faceToFaceStatus = await getFaceToFaceClassStatus(year, term);
+    return this.faceToFaceStatus;
+  }
+  isFaceToFaceActiveNow() {
+    if (!this.faceToFaceStatus || !this.faceToFaceStatus.hasPeriod) return true;
+    return this.faceToFaceStatus.isActive !== false;
+  }
   async initializeCalendar() {
     try {
       this.showLoading();
       // Get fresh session data
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
+      // Use selected year/term from selectors instead of current date
+      const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
+      const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
+      await this.refreshFaceToFaceStatus(year, term);
       // Initial highlight
       this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
       this.highlightPeriod();
       this.highlightCurrentTimePeriod();
-      // Use selected year/term from selectors instead of current date
-      const year = window.getCurrentYear ? window.getCurrentYear() : new Date().getFullYear();
-      const term = window.getCurrentTerm ? window.getCurrentTerm() : 'Fall';
       console.log('Mini calendar: Initializing with year/term:', year, term);
       // Load courses with retry mechanism
       await this.showCourseWithRetry(year, term);
@@ -2636,7 +2772,7 @@ class CourseCalendar extends HTMLElement {
     const legendEntries = Array.from(typeColorMap.entries())
       .sort((a, b) => a[0].localeCompare(b[0]));
     if (!legendEntries.length) {
-      legendContainer.innerHTML = '<span class="home-calendar-legend-empty">No registered courses yet</span>';
+      legendContainer.innerHTML = '<span class="home-calendar-legend-empty">No timetable courses yet</span>';
       return;
     }
     legendContainer.innerHTML = legendEntries.map(([typeLabel, color]) => `
@@ -2651,6 +2787,7 @@ class CourseCalendar extends HTMLElement {
     this.calendar.querySelectorAll('thead th, tbody td').forEach(el => {
       el.classList.remove('highlight-day', 'highlight-current-day');
     });
+    if (!this.isFaceToFaceActiveNow()) return;
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
     // Highlight the header
@@ -2672,6 +2809,8 @@ class CourseCalendar extends HTMLElement {
   }
   highlightCurrentTimePeriod() {
     // Get current time
+    this.calendar.querySelectorAll('tbody td').forEach((cell) => cell.classList.remove('highlight-current-time'));
+    if (!this.isFaceToFaceActiveNow()) return;
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
@@ -2703,6 +2842,10 @@ class CourseCalendar extends HTMLElement {
     this.displayedYear = year;
     this.displayedTerm = term;
     try {
+      await this.refreshFaceToFaceStatus(year, term);
+      if (this.isRenderRequestStale(requestId)) return;
+      this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
+      this.highlightCurrentTimePeriod();
       // Ensure we have the latest user session
       if (!this.currentUser) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -2794,11 +2937,13 @@ class CourseCalendar extends HTMLElement {
             ? `${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`
             : '';
           const typeLabel = String(course.type || 'General').trim() || 'General';
+          const roomLabel = getCourseRoomValue(course);
           div_box.style.backgroundColor = getCourseColorByType(course.type);
           div.dataset.courseIdentifier = course.course_code;
           div.dataset.courseCode = String(course.course_code || '');
           div.dataset.courseTitle = title;
           div.dataset.courseType = typeLabel;
+          div.dataset.roomLabel = roomLabel;
           div.dataset.day = dayEN;
           div.dataset.period = String(period);
           div.dataset.slotLabel = formatSlotLabel(dayEN, period);
@@ -2867,6 +3012,7 @@ class CourseCalendar extends HTMLElement {
       title = cell.dataset.courseTitle || cell.dataset.courseCode || 'Course';
       subtitle = [slotLabel, timeLabel].filter(Boolean).join(' • ');
       const detailParts = [];
+      if (cell.dataset.roomLabel) detailParts.push(`Room ${cell.dataset.roomLabel}`);
       if (cell.dataset.creditsLabel) detailParts.push(cell.dataset.creditsLabel);
       if (cell.dataset.courseType) detailParts.push(cell.dataset.courseType);
       detail = detailParts.join(' • ');
@@ -2882,23 +3028,105 @@ class CourseCalendar extends HTMLElement {
     tooltip.classList.add('is-visible');
     this.positionTooltip(event.clientX, event.clientY);
   }
+  showTooltipForIntensiveCourse(course, event) {
+    if (!this.isDesktopPlannerMode()) return;
+    const tooltip = this.ensureTooltipElement();
+    if (!tooltip) return;
+
+    const title = normalizeCourseTitle(course?.title || course?.course_code || 'Course');
+    const subtitle = 'Intensive';
+    const detailParts = [];
+    const roomLabel = getCourseRoomValue(course);
+    if (roomLabel) detailParts.push(`Room ${roomLabel}`);
+
+    const creditsValue = parseCreditsValue(course?.credits);
+    if (creditsValue > 0) {
+      detailParts.push(`${creditsValue % 1 === 0 ? creditsValue.toFixed(0) : creditsValue.toFixed(1)} credits`);
+    }
+
+    const typeLabel = String(course?.type || '').trim();
+    if (typeLabel) detailParts.push(typeLabel);
+
+    const professorLabel = formatProfessorDisplayName(course?.professor);
+    if (professorLabel && professorLabel !== 'TBA') detailParts.push(professorLabel);
+
+    const detail = detailParts.join(' • ');
+    tooltip.innerHTML = `
+      <div class="home-calendar-tooltip-title">${escapeHtml(title)}</div>
+      <div class="home-calendar-tooltip-subtitle">${escapeHtml(subtitle)}</div>
+      ${detail ? `<div class="home-calendar-tooltip-detail">${escapeHtml(detail)}</div>` : ''}
+    `;
+    tooltip.classList.add('is-visible');
+    this.positionTooltip(event.clientX, event.clientY);
+  }
   hideTooltip() {
     if (!this.tooltipElement) return;
     this.tooltipElement.classList.remove('is-visible');
   }
   handleCalendarPointerOver(event) {
-    if (!this.isDesktopPlannerMode()) return;
+    if (!this.isDesktopPlannerMode()) {
+      this.activeTooltipCell = null;
+      this.activeTooltipIntensiveCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
+
+    const intensiveCard = event.target.closest('.home-calendar-intensive-card');
+    if (intensiveCard && this.homeIntensiveSection?.contains(intensiveCard)) {
+      const courseKey = String(intensiveCard.dataset.courseKey || '').trim();
+      const intensiveCourse = this.intensiveCourseLookup.get(courseKey);
+      if (intensiveCourse) {
+        this.activeTooltipCell = null;
+        this.activeTooltipIntensiveCourseKey = courseKey;
+        this.showTooltipForIntensiveCourse(intensiveCourse, event);
+        return;
+      }
+    }
+
     const cell = event.target.closest('.course-cell-main');
-    if (!cell || !this.calendar.contains(cell)) return;
+    if (!cell || !this.calendar.contains(cell)) {
+      this.activeTooltipCell = null;
+      this.activeTooltipIntensiveCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
+
+    this.activeTooltipIntensiveCourseKey = null;
     this.activeTooltipCell = cell;
     this.showTooltipForCell(cell, event);
   }
   handleCalendarPointerMove(event) {
-    if (!this.isDesktopPlannerMode() || !this.activeTooltipCell) return;
+    if (!this.isDesktopPlannerMode()) {
+      this.activeTooltipCell = null;
+      this.activeTooltipIntensiveCourseKey = null;
+      this.hideTooltip();
+      return;
+    }
+
+    if (this.activeTooltipIntensiveCourseKey) {
+      const intensiveCard = event.target.closest('.home-calendar-intensive-card');
+      const hoveredCourseKey = String(intensiveCard?.dataset?.courseKey || '').trim();
+      if (!intensiveCard || !this.homeIntensiveSection?.contains(intensiveCard) || hoveredCourseKey !== this.activeTooltipIntensiveCourseKey) {
+        this.activeTooltipIntensiveCourseKey = null;
+        this.hideTooltip();
+        return;
+      }
+      this.positionTooltip(event.clientX, event.clientY);
+      return;
+    }
+
+    if (!this.activeTooltipCell) return;
+    const cell = event.target.closest('.course-cell-main');
+    if (!cell || !this.calendar.contains(cell) || cell !== this.activeTooltipCell) {
+      this.activeTooltipCell = null;
+      this.hideTooltip();
+      return;
+    }
     this.positionTooltip(event.clientX, event.clientY);
   }
   handleCalendarPointerLeave() {
     this.activeTooltipCell = null;
+    this.activeTooltipIntensiveCourseKey = null;
     this.hideTooltip();
   }
   getHeaderDayFromEventTarget(target) {
@@ -3410,7 +3638,7 @@ class ReviewSuggestionWidget extends HTMLElement {
         <div class="home-review-suggestion-header">
           <div class="home-review-suggestion-header-copy">
             <h3 class="home-review-suggestion-title">Suggestion</h3>
-            <p class="home-review-suggestion-text">Review a course you have registered for</p>
+            <p class="home-review-suggestion-text">Review a course in your timetable</p>
           </div>
         </div>
         <div class="home-review-suggestion-grid">

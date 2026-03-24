@@ -297,11 +297,20 @@ class SimpleRouter {
   }
 
   isProfileRoute(path) {
-    return path === '/profile' || path === '/settings' || path === '/help'
+    const normalizedPath = String(path || '').split('?')[0].split('#')[0] || ''
+    return (
+      normalizedPath === '/profile' ||
+      normalizedPath.startsWith('/profile/') ||
+      normalizedPath === '/settings' ||
+      normalizedPath.startsWith('/settings/') ||
+      normalizedPath === '/help' ||
+      normalizedPath.startsWith('/help/')
+    )
   }
 
   getMobileHeaderRouteTitle(path) {
     if (typeof path === 'string' && (path.startsWith('/courses/') || path.startsWith('/course/'))) return 'Courses'
+    if (typeof path === 'string' && path.startsWith('/settings/')) return 'Profile'
     if (path === '/courses' || path === '/dashboard') return 'Courses'
     if (path === '/timetable') return 'Timetable'
     if (path === '/assignments') return 'Assignments'
@@ -581,6 +590,7 @@ class SimpleRouter {
 
     const appPath = stripBase(path)
     const normalizedAppPath = (String(appPath || '/').split('?')[0].split('#')[0] || '/').replace(/\/+$/, '') || '/'
+    const isSettingsSectionPath = normalizedAppPath.startsWith('/settings/')
 
     if (this.coursePattern.test(normalizedAppPath)) {
       if (normalizedAppPath !== this.currentPath || !this.isInitialized) {
@@ -595,7 +605,9 @@ class SimpleRouter {
     const cleanPath = this.extractBasePath(appPath)
 
     // Normalize path
-    if (cleanPath === '' || cleanPath === '/' || cleanPath === '/home') {
+    if (isSettingsSectionPath) {
+      path = normalizedAppPath
+    } else if (cleanPath === '' || cleanPath === '/' || cleanPath === '/home') {
       path = '/'
     } else if (cleanPath === '/dashboard') {
       path = '/courses' // Redirect legacy dashboard to courses
@@ -645,6 +657,10 @@ class SimpleRouter {
 
   getCanonicalHistoryPath(path) {
     const normalized = String(path || '/')
+
+    if (normalized.startsWith('/settings/')) {
+      return `${normalized.replace(/\/+$/, '')}/`
+    }
 
     // Keep a single canonical URL shape for top-level pages.
     // This avoids duplicate route forms like /dev/assignments and /dev/assignments/.
@@ -1114,9 +1130,14 @@ class SimpleRouter {
   }
 
   updateActiveNav(currentPath) {
-    const navPath = currentPath === '/settings' || currentPath === '/help'
+    const normalizedCurrentPath = String(currentPath || '')
+    let navPath = (normalizedCurrentPath === '/settings' || normalizedCurrentPath === '/help' || normalizedCurrentPath.startsWith('/settings/') || normalizedCurrentPath.startsWith('/help/'))
       ? '/profile'
-      : currentPath
+      : normalizedCurrentPath
+
+    if (navPath === '/home') {
+      navPath = '/'
+    }
 
     // Remove active class and add false class to all nav buttons
     document.querySelectorAll('[data-route]').forEach(el => {
@@ -2441,7 +2462,7 @@ class SimpleRouter {
       modal.style.display = 'flex'
       // Focus on search input
       const searchInput = modal.querySelector('#global-search-input')
-      if (searchInput) {
+      if (searchInput && window.innerWidth > 1023) {
         setTimeout(() => searchInput.focus(), 100)
       }
     }

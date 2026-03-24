@@ -6,6 +6,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.resolve(__dirname, '..', 'dist');
 
+function normalizeBasePath(baseUrl) {
+  const sanitized = String(baseUrl || '/').trim().replace(/\/+$/, '');
+  return sanitized === '' || sanitized === '/' ? '' : sanitized;
+}
+
+function withBase(pathname = '/') {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  if (!APP_BASE_PATH) return normalizedPath;
+  return `${APP_BASE_PATH}${normalizedPath}`;
+}
+
+const APP_BASE_PATH = normalizeBasePath(process.env.VITE_APP_BASE_PATH || '/');
+
 const routeAliases = {
   assignments: 'assignments.html',
   timetable: 'timetable.html',
@@ -24,9 +37,9 @@ const routeAliases = {
 };
 
 const nestedRouteFallbacks = {
-  course: '/dev/course/',
-  courses: '/dev/courses/',
-  'auth/callback': '/dev/auth/callback/',
+  course: withBase('/course/'),
+  courses: withBase('/courses/'),
+  'auth/callback': withBase('/auth/callback/'),
 };
 
 function buildHtaccessForNestedAlias(rewriteBase) {

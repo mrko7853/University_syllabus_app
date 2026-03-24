@@ -2,9 +2,8 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
-export default defineConfig(({ command }) => {
-  const isBuild = command === 'build';
-  const base = isBuild ? '/dev/' : '/';
+export default defineConfig(() => {
+  const base = '/';
 
   return {
     base,

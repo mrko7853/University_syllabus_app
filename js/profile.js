@@ -47,6 +47,17 @@ const PROFILE_SECTION_CONFIG = [
   { id: "profile-data-privacy", label: "Data & Privacy", iconClass: "profile-section-icon--privacy" },
   { id: "profile-auth", label: "Sign Out", iconClass: "profile-section-icon--signout" }
 ];
+const PROFILE_SETTINGS_SECTION_PATH_BY_ID = {
+  "profile-identity": "/settings/account",
+  "profile-academic": "/settings/academic",
+  "profile-reviews": "/settings/reviews",
+  "profile-preferences": "/settings/preferences",
+  "profile-data-privacy": "/settings/privacy",
+  "profile-auth": "/settings/sign-out"
+};
+const PROFILE_SETTINGS_SECTION_ID_BY_PATH = Object.fromEntries(
+  Object.entries(PROFILE_SETTINGS_SECTION_PATH_BY_ID).map(([sectionId, path]) => [path, sectionId])
+);
 let profileCustomSelectDocumentHandler = null;
 let profileHeaderScrollCleanup = null;
 let profileSectionResizeHandler = null;
@@ -82,9 +93,46 @@ function normalizeProfileRoutePath(path = "/") {
   return withLeadingSlash.length > 1 ? (withLeadingSlash.replace(/\/+$/, "") || "/") : withLeadingSlash;
 }
 
-function getCurrentRouteForProfile() {
-  const route = normalizeProfileRoutePath(getCurrentAppPath());
+function getCurrentProfileRoutePath() {
+  return normalizeProfileRoutePath(getCurrentAppPath());
+}
+
+function getProfileRouteBase(path = getCurrentProfileRoutePath()) {
+  const route = normalizeProfileRoutePath(path);
+  if (route.startsWith("/settings/")) return "/settings";
+  if (route.startsWith("/profile/")) return "/profile";
+  if (route.startsWith("/help/")) return "/help";
   return PROFILE_ROUTES.has(route) ? route : "/profile";
+}
+
+function resolveProfileSectionIdFromRoutePath(path = getCurrentProfileRoutePath()) {
+  const normalizedPath = normalizeProfileRoutePath(path);
+  const settingsSectionId = PROFILE_SETTINGS_SECTION_ID_BY_PATH[normalizedPath];
+  if (settingsSectionId) {
+    return resolveProfileSectionId(settingsSectionId);
+  }
+
+  return "";
+}
+
+function getSettingsSectionRoutePath(sectionId) {
+  const resolvedSectionId = resolveProfileSectionId(sectionId);
+  return PROFILE_SETTINGS_SECTION_PATH_BY_ID[resolvedSectionId] || "/settings/account";
+}
+
+function syncProfileSectionRoute(sectionId, { replace = false } = {}) {
+  const nextPath = getSettingsSectionRoutePath(sectionId);
+  const currentPath = getCurrentProfileRoutePath();
+  if (currentPath === nextPath || currentPath === `${nextPath}/`) {
+    return;
+  }
+
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({}, "", withBase(`${nextPath}/`));
+}
+
+function isProfileContextPath(path = "/") {
+  return PROFILE_ROUTES.has(getProfileRouteBase(path));
 }
 
 function isMobileViewport() {
@@ -275,6 +323,7 @@ function bindProfileSectionNavigationActions() {
       const target = button.getAttribute("data-profile-section-target");
       if (!target) return;
       state.activeSectionId = resolveProfileSectionId(target);
+      syncProfileSectionRoute(state.activeSectionId);
       applyProfileSectionState({ scrollToTop: true });
     });
   });
@@ -285,12 +334,17 @@ function bindProfileSectionNavigationActions() {
       if (!target) return;
       state.mobileSectionView = "detail";
       state.activeSectionId = resolveProfileSectionId(target);
+      syncProfileSectionRoute(state.activeSectionId);
       applyProfileSectionState({ scrollToTop: true });
     });
   });
 }
 
-function initializeProfileSectionNavigation(route = getCurrentRouteForProfile()) {
+function initializeProfileSectionNavigation(routePath = getCurrentProfileRoutePath()) {
+  const routeBase = getProfileRouteBase(routePath);
+  const routeSectionId = resolveProfileSectionIdFromRoutePath(routePath);
+  const mobileViewport = isMobileViewport();
+
   renderProfileSectionNavigation();
   bindProfileSectionNavigationActions();
 
@@ -298,14 +352,18 @@ function initializeProfileSectionNavigation(route = getCurrentRouteForProfile())
     state.activeSectionId = getDefaultProfileSectionId();
   }
 
-  if (route === "/settings") {
+  if (routeSectionId) {
+    state.activeSectionId = routeSectionId;
+  } else if (routeBase === "/settings") {
     state.activeSectionId = resolveProfileSectionId("profile-preferences");
+  } else if (routeBase === "/profile") {
+    state.activeSectionId = resolveProfileSectionId("profile-identity");
   } else {
     state.activeSectionId = resolveProfileSectionId(state.activeSectionId);
   }
 
-  if (isMobileViewport()) {
-    if (route === "/settings") {
+  if (mobileViewport) {
+    if (routeSectionId) {
       state.mobileSectionView = "detail";
     } else if (state.mobileSectionView !== "detail") {
       state.mobileSectionView = "list";
@@ -313,6 +371,9 @@ function initializeProfileSectionNavigation(route = getCurrentRouteForProfile())
   }
 
   applyProfileSectionState();
+  if (!mobileViewport && routeBase === "/settings" && !routeSectionId) {
+    syncProfileSectionRoute(state.activeSectionId, { replace: true });
+  }
 
   if (profileSectionResizeHandler) {
     window.removeEventListener("resize", profileSectionResizeHandler);
@@ -830,7 +891,7 @@ function isSetupFieldCompleted(profile, field) {
 }
 
 function consumeGuestPrompt(route) {
-  if (route === "/settings") {
+  if (getProfileRouteBase(route) === "/settings") {
     return "Sign in to access settings and sync your preferences.";
   }
 
@@ -1474,7 +1535,9 @@ function buildProfileSectionSkeletonMarkup(sectionId) {
 }
 
 function renderSignedInSkeleton() {
-  const route = getCurrentRouteForProfile();
+  const routePath = getCurrentProfileRoutePath();
+  const routeBase = getProfileRouteBase(routePath);
+  const routeSectionId = resolveProfileSectionIdFromRoutePath(routePath);
   const isMobile = isMobileViewport();
   const sections = [
     "profile-identity",
@@ -1486,11 +1549,11 @@ function renderSignedInSkeleton() {
   ];
 
   state.activeSectionId = resolveProfileSectionId(
-    route === "/settings" ? "profile-preferences" : state.activeSectionId
+    routeSectionId || (routeBase === "/settings" ? "profile-preferences" : state.activeSectionId)
   );
 
   if (isMobile) {
-    state.mobileSectionView = route === "/settings" ? "detail" : "list";
+    state.mobileSectionView = routeSectionId ? "detail" : "list";
   }
 
   renderProfileNavigationSkeleton();
@@ -1829,7 +1892,6 @@ function renderSignedInView() {
           <div class="identity-meta">
             <div class="name">${escapeHtml(displayName)}</div>
             <div class="email">${escapeHtml(email)}</div>
-            <div class="ui-pill status-pill status-pill--signed-in">Signed in</div>
           </div>
         </div>
         ${
@@ -1965,7 +2027,7 @@ function renderSignedInView() {
   }
 
   bindSignedInActions();
-  initializeProfileSectionNavigation(getCurrentRouteForProfile());
+  initializeProfileSectionNavigation(getCurrentProfileRoutePath());
 }
 
 function bindGuestActions() {
@@ -2790,10 +2852,10 @@ function openDeleteAccountModal() {
   const layer = openModal({
     title: "Delete Account",
     bodyMarkup: `
-      <p>This action permanently deletes your account and all related data.</p>
-      <p>Type <strong>DELETE</strong> to confirm.</p>
+      <p class="delete_p_modal">This action permanently deletes your account and all related data.</p>
+      <p class="delete_p_modal">Type <strong>DELETE</strong> to confirm.</p>
       <input id="profile-delete-confirm-input" class="search-input profile-modal-input" type="text" autocomplete="off" spellcheck="false" />
-      <p id="profile-delete-error" class="profile-inline-error"></p>
+      <p id="profile-delete-error" class="profile-inline-error delete_p_modal"></p>
     `,
     footerMarkup: `
       <button type="button" class="ui-btn ui-btn--secondary control-surface" data-modal-close="true">Cancel</button>
@@ -3053,7 +3115,7 @@ function openEditProfileModal() {
 
       closeModal();
       renderSignedInView();
-      applyRouteFocus(getCurrentRouteForProfile());
+      applyRouteFocus(getCurrentProfileRoutePath());
       showProfileToast("Saved");
     } catch (error) {
       console.error("Profile: failed to save profile", error);
@@ -3079,14 +3141,16 @@ function openChangePasswordModal() {
     title: "Change Password",
     bodyMarkup: `
       <form id="profile-password-form" novalidate>
-        <p class="profile-modal-help">Enter your current password and choose a new one (at least 8 characters).</p>
+        <p class="profile-modal-help">Enter your current password and choose a new one (at least 12 characters).</p>
         <label class="profile-modal-label" for="profile-old-password">Current password</label>
         <input class="search-input profile-modal-input" id="profile-old-password" type="password" minlength="1" maxlength="72" autocomplete="current-password" required />
+        <p class="profile-inline-error app-field-error-message" id="profile-old-password-error" hidden></p>
         <label class="profile-modal-label" for="profile-new-password">New password</label>
-        <input class="search-input profile-modal-input" id="profile-new-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
+        <input class="search-input profile-modal-input" id="profile-new-password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required />
+        <p class="profile-inline-error app-field-error-message" id="profile-new-password-error" hidden></p>
         <label class="profile-modal-label" for="profile-confirm-password">Confirm new password</label>
-        <input class="search-input profile-modal-input" id="profile-confirm-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required />
-        <p class="profile-inline-error app-field-error-message" id="profile-password-error"></p>
+        <input class="search-input profile-modal-input" id="profile-confirm-password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required />
+        <p class="profile-inline-error app-field-error-message" id="profile-confirm-password-error" hidden></p>
       </form>
     `,
     footerMarkup: `
@@ -3101,22 +3165,23 @@ function openChangePasswordModal() {
   const oldPasswordInput = layer.querySelector("#profile-old-password");
   const passwordInput = layer.querySelector("#profile-new-password");
   const confirmInput = layer.querySelector("#profile-confirm-password");
-  const passwordErrorLine = layer.querySelector("#profile-password-error");
+  const oldPasswordErrorLine = layer.querySelector("#profile-old-password-error");
+  const newPasswordErrorLine = layer.querySelector("#profile-new-password-error");
+  const confirmPasswordErrorLine = layer.querySelector("#profile-confirm-password-error");
 
   oldPasswordInput?.addEventListener("input", () => {
-    clearFieldError(oldPasswordInput, { root: form || layer, messageElement: passwordErrorLine });
+    clearFieldError(oldPasswordInput, { root: form || layer, messageElement: oldPasswordErrorLine });
   });
   passwordInput?.addEventListener("input", () => {
-    clearFieldError(passwordInput, { root: form || layer, messageElement: passwordErrorLine });
+    clearFieldError(passwordInput, { root: form || layer, messageElement: newPasswordErrorLine });
   });
   confirmInput?.addEventListener("input", () => {
-    clearFieldError(confirmInput, { root: form || layer, messageElement: passwordErrorLine });
+    clearFieldError(confirmInput, { root: form || layer, messageElement: confirmPasswordErrorLine });
   });
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const errorLine = passwordErrorLine;
     const saveButton = layer.querySelector("#profile-password-save");
 
     const oldPassword = String(oldPasswordInput?.value || "");
@@ -3128,33 +3193,37 @@ function openChangePasswordModal() {
     if (oldPassword.length < 1) {
       setFieldError(oldPasswordInput, "Current password is required.", {
         root: form || layer,
-        messageElement: errorLine
+        messageElement: oldPasswordErrorLine
       });
       return;
     } else if (!state.user?.email) {
       setFieldError(oldPasswordInput, "Your account email is unavailable. Please sign out and sign back in.", {
         root: form || layer,
-        messageElement: errorLine
+        messageElement: oldPasswordErrorLine
       });
       return;
-    } else if (password.length < 8) {
-      setFieldError(passwordInput, "Password must be at least 8 characters.", {
-        root: form || layer
+    } else if (password.length < 12) {
+      setFieldError(passwordInput, "Password must be at least 12 characters.", {
+        root: form || layer,
+        messageElement: newPasswordErrorLine
       });
       return;
     } else if (password.length > 72) {
       setFieldError(passwordInput, "Password must be 72 characters or fewer.", {
-        root: form || layer
+        root: form || layer,
+        messageElement: newPasswordErrorLine
       });
       return;
     } else if (password === oldPassword) {
       setFieldError(passwordInput, "New password must be different from current password.", {
-        root: form || layer
+        root: form || layer,
+        messageElement: newPasswordErrorLine
       });
       return;
     } else if (password !== confirmPassword) {
       setFieldError(confirmInput, "Passwords do not match.", {
-        root: form || layer
+        root: form || layer,
+        messageElement: confirmPasswordErrorLine
       });
       return;
     }
@@ -3192,17 +3261,17 @@ function openChangePasswordModal() {
       if (isInvalidCurrentPassword) {
         setFieldError(oldPasswordInput, "Current password is incorrect.", {
           root: form || layer,
-          messageElement: errorLine
+          messageElement: oldPasswordErrorLine
         });
       } else if (message.includes("reauthentication") || message.includes("not fresh")) {
         setFieldError(oldPasswordInput, "Please sign out and sign back in, then try changing your password again.", {
           root: form || layer,
-          messageElement: errorLine
+          messageElement: oldPasswordErrorLine
         });
       } else {
         setFieldError(passwordInput, "Could not update password right now. Please try again.", {
           root: form || layer,
-          messageElement: errorLine
+          messageElement: newPasswordErrorLine
         });
       }
       if (saveButton) {
@@ -3386,7 +3455,7 @@ function openLegacyProgramYearSetupModal() {
 
       closeModal();
       renderSignedInView();
-      applyRouteFocus(getCurrentRouteForProfile());
+      applyRouteFocus(getCurrentProfileRoutePath());
       showProfileToast("Saved");
     } catch (error) {
       console.error("Profile: failed to save program/year", error);
@@ -3589,7 +3658,7 @@ function openAcademicSetupModal(field = "year") {
 
       closeModal();
       renderSignedInView();
-      applyRouteFocus(getCurrentRouteForProfile());
+      applyRouteFocus(getCurrentProfileRoutePath());
       showProfileToast("Saved");
     } catch (error) {
       console.error("Profile: failed to save academic setup", error);
@@ -3742,9 +3811,17 @@ async function signOutUser() {
 }
 
 function applyRouteFocus(route) {
+  if (isMobileViewport() && state.mobileSectionView !== "detail") {
+    return;
+  }
+
+  const normalizedRoute = normalizeProfileRoutePath(route || getCurrentProfileRoutePath());
+  const sectionFromRoute = resolveProfileSectionIdFromRoutePath(normalizedRoute);
   let target = null;
 
-  if (route === "/settings") {
+  if (sectionFromRoute) {
+    target = document.getElementById(sectionFromRoute);
+  } else if (getProfileRouteBase(normalizedRoute) === "/settings") {
     target = document.getElementById(state.isAuthenticated ? "profile-preferences" : "profile-identity");
   }
 
@@ -3797,7 +3874,7 @@ async function initializeProfile() {
   teardownProfileSectionNavigation();
   initializeProfileMobileHeaderBehavior();
 
-  const route = getCurrentRouteForProfile();
+  const route = getCurrentProfileRoutePath();
 
   try {
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -3847,7 +3924,7 @@ if (document.readyState === "loading") {
 document.addEventListener("pageLoaded", (event) => {
   const eventRoute = normalizeProfileRoutePath(event?.detail?.path || "");
   const currentRoute = normalizeProfileRoutePath(getCurrentAppPath());
-  const isProfileContext = PROFILE_ROUTES.has(eventRoute) || PROFILE_ROUTES.has(currentRoute);
+  const isProfileContext = isProfileContextPath(eventRoute) || isProfileContextPath(currentRoute);
 
   if (isProfileContext) {
     window.setTimeout(() => initializeProfile(), 20);

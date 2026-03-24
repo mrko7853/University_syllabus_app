@@ -383,9 +383,11 @@ function setupCoursePageSearchModal({
       }
     }
 
-    window.setTimeout(() => {
-      searchInput.focus();
-    }, 100);
+    if (!isMobileViewport()) {
+      window.setTimeout(() => {
+        searchInput.focus();
+      }, 100);
+    }
   };
 
   const closeModal = () => {

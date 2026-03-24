@@ -1,4 +1,4 @@
-import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSearchForSlot, formatProfessorDisplayName } from "./shared.js";
+import { fetchCourseData, openCourseInfoMenu, getCourseColorByType, openCourseSearchForSlot, formatProfessorDisplayName, getFaceToFaceClassStatus } from "./shared.js";
 import { readSavedCourses } from "./saved-courses.js";
 import { supabase } from "../supabase.js";
 
@@ -20,6 +20,7 @@ class CalendarPageComponent extends HTMLElement {
 
     this.isInitialized = false;
     this.currentUser = null;
+    this.faceToFaceStatus = null;
     this.retryCount = 0;
     this.maxRetries = 5;
     this.isMobile = window.innerWidth <= 1023;
@@ -68,6 +69,7 @@ class CalendarPageComponent extends HTMLElement {
     };
     this.busySlots = new Set();
 
+    this.allCoursesInSemester = [];
     this.allRegisteredCourses = [];
     this.mobileCoursesBySlot = new Map();
     this.mobileCourseLookup = new Map();
@@ -161,7 +163,7 @@ class CalendarPageComponent extends HTMLElement {
             </div>
           </div>
 
-          <div class="calendar-list-view" style="display: none;" aria-label="Registered courses list">
+          <div class="calendar-list-view" style="display: none;" aria-label="Timetable courses list">
             <div class="calendar-list-scroll">
               <div class="calendar-list-content"></div>
             </div>
@@ -263,6 +265,9 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.addEventListener("mouseover", this.boundCalendarPointerOver);
     this.calendar.addEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.addEventListener("mouseleave", this.boundCalendarPointerLeave);
+    this.weekIntensiveSection?.addEventListener("mouseover", this.boundCalendarPointerOver);
+    this.weekIntensiveSection?.addEventListener("mousemove", this.boundCalendarPointerMove);
+    this.weekIntensiveSection?.addEventListener("mouseleave", this.boundCalendarPointerLeave);
     this.calendarWrapper?.addEventListener("click", this.boundCalendarWrapperClickHandler);
 
     this.mobileView?.addEventListener("click", this.boundMobileClickHandler);
@@ -291,6 +296,9 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.removeEventListener("mouseover", this.boundCalendarPointerOver);
     this.calendar.removeEventListener("mousemove", this.boundCalendarPointerMove);
     this.calendar.removeEventListener("mouseleave", this.boundCalendarPointerLeave);
+    this.weekIntensiveSection?.removeEventListener("mouseover", this.boundCalendarPointerOver);
+    this.weekIntensiveSection?.removeEventListener("mousemove", this.boundCalendarPointerMove);
+    this.weekIntensiveSection?.removeEventListener("mouseleave", this.boundCalendarPointerLeave);
     this.calendarWrapper?.removeEventListener("click", this.boundCalendarWrapperClickHandler);
 
     this.mobileView?.removeEventListener("click", this.boundMobileClickHandler);
@@ -775,7 +783,7 @@ class CalendarPageComponent extends HTMLElement {
       }
 
       const searchInput = document.getElementById("search-input");
-      if (searchInput) {
+      if (searchInput && window.innerWidth > 1023) {
         setTimeout(() => searchInput.focus(), 100);
       }
     };
@@ -848,6 +856,7 @@ class CalendarPageComponent extends HTMLElement {
     const typePolitics = document.getElementById("calendar-type-politics");
     const typeSpecial = document.getElementById("calendar-type-special");
     const typeGraduate = document.getElementById("calendar-type-graduate");
+    const typeNonIla = document.getElementById("calendar-type-nonila");
     const typeUnderstandingKyoto = document.getElementById("calendar-type-understanding-kyoto");
     const typeAcademicSkills = document.getElementById("calendar-type-academic-skills");
     const typeSeminarHonor = document.getElementById("calendar-type-seminar-honor");
@@ -963,7 +972,7 @@ class CalendarPageComponent extends HTMLElement {
       this.applyActiveFiltersAndRender();
     };
 
-    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeGraduate, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showEmpty].forEach((checkbox) => {
+    [typeCulture, typeEconomy, typePolitics, typeSpecial, typeGraduate, typeNonIla, typeUnderstandingKyoto, typeAcademicSkills, typeSeminarHonor, showRegistered, showEmpty].forEach((checkbox) => {
       if (!checkbox) return;
       checkbox.addEventListener("change", onFilterChange);
       this.toolbarCleanupFns.push(() => checkbox.removeEventListener("change", onFilterChange));
@@ -1141,6 +1150,7 @@ class CalendarPageComponent extends HTMLElement {
     const politics = document.getElementById("calendar-type-politics")?.checked;
     const special = document.getElementById("calendar-type-special")?.checked;
     const graduate = document.getElementById("calendar-type-graduate")?.checked;
+    const nonIla = document.getElementById("calendar-type-nonila")?.checked;
     const understandingKyoto = document.getElementById("calendar-type-understanding-kyoto")?.checked;
     const academicSkills = document.getElementById("calendar-type-academic-skills")?.checked;
     const seminarHonor = document.getElementById("calendar-type-seminar-honor")?.checked;
@@ -1152,6 +1162,7 @@ class CalendarPageComponent extends HTMLElement {
     if (politics) selected.add("Politics");
     if (special) selected.add("Special");
     if (graduate) selected.add("Graduate");
+    if (nonIla) selected.add("NonIla");
     if (understandingKyoto) selected.add("UnderstandingJapanKyoto");
     if (academicSkills) selected.add("AcademicSkills");
     if (seminarHonor) selected.add("SeminarHonorThesis");
@@ -1173,6 +1184,7 @@ class CalendarPageComponent extends HTMLElement {
       "calendar-type-politics",
       "calendar-type-special",
       "calendar-type-graduate",
+      "calendar-type-nonila",
       "calendar-type-understanding-kyoto",
       "calendar-type-academic-skills",
       "calendar-type-seminar-honor"
@@ -1229,6 +1241,10 @@ class CalendarPageComponent extends HTMLElement {
         <input type="checkbox" id="calendar-type-graduate" class="filter-checkbox">
         <label for="calendar-type-graduate">Graduate Classes</label>
       </div>
+      <div class="checkbox-content">
+        <input type="checkbox" id="calendar-type-nonila" class="filter-checkbox">
+        <label for="calendar-type-nonila">Non-ILA Classes</label>
+      </div>
     `;
 
     const syncChecked = (id, key) => {
@@ -1241,6 +1257,7 @@ class CalendarPageComponent extends HTMLElement {
     syncChecked("calendar-type-politics", "Politics");
     syncChecked("calendar-type-special", "Special");
     syncChecked("calendar-type-graduate", "Graduate");
+    syncChecked("calendar-type-nonila", "NonIla");
     syncChecked("calendar-type-understanding-kyoto", "UnderstandingJapanKyoto");
     syncChecked("calendar-type-academic-skills", "AcademicSkills");
     syncChecked("calendar-type-seminar-honor", "SeminarHonorThesis");
@@ -1254,6 +1271,7 @@ class CalendarPageComponent extends HTMLElement {
     if (document.getElementById("calendar-type-politics")?.checked) selected.add("Politics");
     if (document.getElementById("calendar-type-special")?.checked) selected.add("Special");
     if (document.getElementById("calendar-type-graduate")?.checked) selected.add("Graduate");
+    if (document.getElementById("calendar-type-nonila")?.checked) selected.add("NonIla");
     if (document.getElementById("calendar-type-understanding-kyoto")?.checked) selected.add("UnderstandingJapanKyoto");
     if (document.getElementById("calendar-type-academic-skills")?.checked) selected.add("AcademicSkills");
     if (document.getElementById("calendar-type-seminar-honor")?.checked) selected.add("SeminarHonorThesis");
@@ -1588,6 +1606,22 @@ class CalendarPageComponent extends HTMLElement {
     return this.dayLongNames[dayCode] || dayCode;
   }
 
+  async refreshFaceToFaceStatus(yearValue = this.displayedYear, termValue = this.displayedTerm) {
+    const year = parseInt(yearValue, 10);
+    const term = this.normalizeTermValue(termValue);
+    if (!Number.isFinite(year) || !term) {
+      this.faceToFaceStatus = null;
+      return null;
+    }
+    this.faceToFaceStatus = await getFaceToFaceClassStatus(year, term);
+    return this.faceToFaceStatus;
+  }
+
+  isFaceToFaceActiveNow() {
+    if (!this.faceToFaceStatus || !this.faceToFaceStatus.hasPeriod) return true;
+    return this.faceToFaceStatus.isActive !== false;
+  }
+
   updateMobileDayButtons() {
     if (!this.mobileDayTabs) return;
 
@@ -1620,6 +1654,7 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   getCurrentDayCode() {
+    if (!this.isFaceToFaceActiveNow()) return null;
     const dayMap = {
       Monday: "Mon",
       Tuesday: "Tue",
@@ -1637,6 +1672,16 @@ class CalendarPageComponent extends HTMLElement {
 
   normalizeCourseCodeKey(value) {
     return String(value || "").trim().toUpperCase();
+  }
+
+  getDisplayedSemesterCourseByCode(courseCode) {
+    const normalizedCode = this.normalizeCourseCodeKey(courseCode);
+    if (!normalizedCode) return null;
+    if (!Array.isArray(this.allCoursesInSemester) || this.allCoursesInSemester.length === 0) return null;
+
+    return this.allCoursesInSemester.find(
+      (course) => this.normalizeCourseCodeKey(course?.course_code || course?.code) === normalizedCode
+    ) || null;
   }
 
   getCanonicalAssignmentStatus(status) {
@@ -2330,16 +2375,9 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   getDefaultMobileDayIndex() {
-    const currentDayName = this.getCurrentDayName();
-    const dayMap = {
-      Monday: 0,
-      Tuesday: 1,
-      Wednesday: 2,
-      Thursday: 3,
-      Friday: 4
-    };
-
-    return dayMap[currentDayName] ?? 0;
+    const currentDayCode = this.getCurrentDayCode();
+    const index = this.dayOrder.indexOf(currentDayCode);
+    return index >= 0 ? index : 0;
   }
 
   isWeekendDay(dayName) {
@@ -2347,6 +2385,7 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   getSuggestedExpandedPeriod() {
+    if (!this.isFaceToFaceActiveNow()) return null;
     if (this.isWeekendDay(this.getCurrentDayName())) return null;
 
     const now = new Date();
@@ -2500,6 +2539,8 @@ class CalendarPageComponent extends HTMLElement {
         mappedGroups.add("Foundation");
       } else if (typeFilter === "Graduate") {
         mappedGroups.add("Graduate");
+      } else if (typeFilter === "NonIla") {
+        mappedGroups.add("NonIla");
       } else if (typeFilter === "Special" || typeFilter === "SeminarHonorThesis") {
         mappedGroups.add("Elective");
       } else {
@@ -2679,13 +2720,12 @@ class CalendarPageComponent extends HTMLElement {
     title.textContent = String(item?.title || item?.code || "Saved course");
     button.appendChild(title);
 
-    const code = String(item?.code || "").trim();
-    if (code) {
-      const meta = document.createElement("p");
-      meta.className = "calendar-slot-saved-card-meta";
-      meta.textContent = code;
-      button.appendChild(meta);
-    }
+    const matchedCourse = this.getDisplayedSemesterCourseByCode(item?.code || item?.course_code);
+    const professorSource = matchedCourse?.professor ?? item?.professor ?? "";
+    const meta = document.createElement("p");
+    meta.className = "calendar-slot-saved-card-meta";
+    meta.textContent = formatProfessorDisplayName(professorSource);
+    button.appendChild(meta);
 
     return button;
   }
@@ -2887,6 +2927,14 @@ class CalendarPageComponent extends HTMLElement {
     return `${formatted} ${parsed === 1 ? "Credit" : "Credits"}`;
   }
 
+  getCourseRoomValue(course) {
+    const rawValue = course?.location ?? course?.classroom ?? course?.room ?? "";
+    const normalized = String(rawValue).normalize("NFKC").replace(/\s+/g, " ").trim();
+    if (!normalized) return null;
+    if (/^(n\/?a|none|null|undefined|tba|to be announced|未定|-|—)$/i.test(normalized)) return null;
+    return normalized;
+  }
+
   createDayPeriodRow({ dayCode, periodDef, isExpanded, isToday, courses, matchingSuggestions, canExpand, interactive = true }) {
     const hasCourses = Array.isArray(courses) && courses.length > 0;
     const primaryCourse = hasCourses ? courses[0] : null;
@@ -2957,13 +3005,16 @@ class CalendarPageComponent extends HTMLElement {
       previewTitle.className = "calendar-day-preview-title";
       previewTitle.textContent = this.getDetailedTitle(primaryCourse);
 
-      const previewProfessor = document.createElement("p");
-      previewProfessor.className = "calendar-day-preview-professor";
-      previewProfessor.textContent = formatProfessorDisplayName(primaryCourse.professor);
+      const roomNumber = this.getCourseRoomValue(primaryCourse);
+      const previewRoom = document.createElement("p");
+      previewRoom.className = "calendar-day-preview-professor";
+      previewRoom.textContent = roomNumber;
 
       previewCard.style.backgroundColor = this.getCalendarCourseColor(primaryCourse.type);
       previewMain.appendChild(previewTitle);
-      previewMain.appendChild(previewProfessor);
+      if (roomNumber) {
+        previewMain.appendChild(previewRoom);
+      }
 
       if (courses.length > 1) {
         const overflow = document.createElement("span");
@@ -3266,9 +3317,10 @@ class CalendarPageComponent extends HTMLElement {
       title.className = "calendar-day-preview-title";
       title.textContent = this.getDetailedTitle(course);
 
-      const professor = document.createElement("p");
-      professor.className = "calendar-day-preview-professor";
-      professor.textContent = formatProfessorDisplayName(course?.professor);
+      const roomNumber = this.getCourseRoomValue(course);
+      const room = document.createElement("p");
+      room.className = "calendar-day-preview-professor";
+      room.textContent = roomNumber;
 
       const meta = document.createElement("p");
       meta.className = "calendar-day-preview-meta";
@@ -3279,7 +3331,9 @@ class CalendarPageComponent extends HTMLElement {
 
       card.appendChild(title);
       card.appendChild(meta);
-      card.appendChild(professor);
+      if (roomNumber) {
+        card.appendChild(room);
+      }
       card.appendChild(badges);
       list.appendChild(card);
     });
@@ -3331,6 +3385,11 @@ class CalendarPageComponent extends HTMLElement {
     professor.className = "calendar-list-item-professor";
     professor.textContent = formatProfessorDisplayName(course?.professor);
 
+    const roomNumber = this.getCourseRoomValue(course);
+    const room = document.createElement("p");
+    room.className = "calendar-list-item-professor calendar-list-item-room";
+    room.textContent = roomNumber;
+
     const badges = document.createElement("div");
     badges.className = "calendar-list-item-badges";
 
@@ -3357,6 +3416,9 @@ class CalendarPageComponent extends HTMLElement {
     row.appendChild(title);
     row.appendChild(meta);
     row.appendChild(professor);
+    if (roomNumber) {
+      row.appendChild(room);
+    }
     row.appendChild(badges);
     return row;
   }
@@ -3485,7 +3547,7 @@ class CalendarPageComponent extends HTMLElement {
     if (!hasRegisteredCourses) {
       const emptyState = document.createElement("div");
       emptyState.className = "calendar-list-empty-state";
-      emptyState.textContent = "No registered courses for this term yet.";
+      emptyState.textContent = "No courses in your timetable for this term yet.";
       this.listContent.appendChild(emptyState);
       return;
     }
@@ -3646,11 +3708,11 @@ class CalendarPageComponent extends HTMLElement {
       const { data: { session } } = await supabase.auth.getSession();
       this.currentUser = session?.user || null;
 
+      const { year, term } = await this.resolveInitialYearTerm();
+      await this.refreshFaceToFaceStatus(year, term);
       this.highlightDay(new Date().toLocaleDateString("en-US", { weekday: "short" }));
       this.highlightPeriod();
       this.highlightCurrentTimePeriod();
-
-      const { year, term } = await this.resolveInitialYearTerm();
       await this.showCourseWithRetry(year, term);
 
       this.isInitialized = true;
@@ -3850,6 +3912,7 @@ class CalendarPageComponent extends HTMLElement {
     if (raw === "Academic and Research Skills") return "AcademicSkills";
     if (raw === "Other Elective Courses" || raw === "Special Lecture Series") return "Special";
     if (raw === "Graduate courses") return "Graduate";
+    if (raw === "Non-ILA Classes" || raw === "Non-ILA English") return "NonIla";
 
     if (
       raw === "Introductory Seminars"
@@ -3952,6 +4015,7 @@ class CalendarPageComponent extends HTMLElement {
   async showCourse(year, term) {
     this.displayedYear = parseInt(year, 10);
     this.displayedTerm = this.normalizeTermValue(term);
+    await this.refreshFaceToFaceStatus(this.displayedYear, this.displayedTerm);
     this.courseDueAssignmentCounts.clear();
     this.loadBusySlotsForDisplayedSemester();
 
@@ -3980,6 +4044,17 @@ class CalendarPageComponent extends HTMLElement {
       }
 
       if (!this.currentUser || selectedCourses.length === 0) {
+        if (this.currentUser) {
+          try {
+            const allCoursesInSemester = await fetchCourseData(this.displayedYear, this.displayedTerm);
+            this.allCoursesInSemester = Array.isArray(allCoursesInSemester) ? allCoursesInSemester : [];
+          } catch (lookupError) {
+            console.warn("Unable to load semester metadata for saved slot cards:", lookupError);
+            this.allCoursesInSemester = [];
+          }
+        } else {
+          this.allCoursesInSemester = [];
+        }
         this.allRegisteredCourses = [];
         this.courseDueAssignmentCounts.clear();
         this.applyActiveFiltersAndRender();
@@ -3987,9 +4062,10 @@ class CalendarPageComponent extends HTMLElement {
       }
 
       const allCoursesInSemester = await fetchCourseData(this.displayedYear, this.displayedTerm);
+      this.allCoursesInSemester = Array.isArray(allCoursesInSemester) ? allCoursesInSemester : [];
       const selectedCourseCodes = new Set(selectedCourses.map((course) => course.code));
 
-      this.allRegisteredCourses = allCoursesInSemester.filter((course) => selectedCourseCodes.has(course.course_code));
+      this.allRegisteredCourses = this.allCoursesInSemester.filter((course) => selectedCourseCodes.has(course.course_code));
       await this.updateCourseDueAssignmentCounts(selectedCourseCodes);
       this.applyActiveFiltersAndRender();
     } catch (error) {
@@ -4017,6 +4093,7 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   showEmptyCalendar() {
+    this.allCoursesInSemester = [];
     this.allRegisteredCourses = [];
     this.visibleIntensiveCourses = [];
     this.courseDueAssignmentCounts.clear();
@@ -4079,9 +4156,10 @@ class CalendarPageComponent extends HTMLElement {
           title.className = "calendar-course-title";
           title.textContent = this.getDetailedTitle(primaryCourse);
 
-          const timeText = document.createElement("p");
-          timeText.className = "calendar-course-time";
-          timeText.textContent = periodDef.timeRange;
+          const roomNumber = this.getCourseRoomValue(primaryCourse);
+          const roomText = document.createElement("p");
+          roomText.className = "calendar-course-time";
+          roomText.textContent = roomNumber;
 
           const badges = document.createElement("div");
           badges.className = "calendar-course-badge-row";
@@ -4095,7 +4173,9 @@ class CalendarPageComponent extends HTMLElement {
           }
 
           courseButton.appendChild(title);
-          courseButton.appendChild(timeText);
+          if (roomNumber) {
+            courseButton.appendChild(roomText);
+          }
           courseButton.appendChild(badges);
 
           if (slotCourses.length > 1) {
@@ -4169,9 +4249,10 @@ class CalendarPageComponent extends HTMLElement {
       title.className = "calendar-course-title";
       title.textContent = this.getDetailedTitle(course);
 
-      const timeText = document.createElement("p");
-      timeText.className = "calendar-course-time";
-      timeText.textContent = "Intensive";
+      const roomNumber = this.getCourseRoomValue(course);
+      const roomText = document.createElement("p");
+      roomText.className = "calendar-course-time";
+      roomText.textContent = roomNumber;
 
       const badges = document.createElement("div");
       badges.className = "calendar-course-badge-row";
@@ -4185,7 +4266,9 @@ class CalendarPageComponent extends HTMLElement {
       }
 
       card.appendChild(title);
-      card.appendChild(timeText);
+      if (roomNumber) {
+        card.appendChild(roomText);
+      }
       card.appendChild(badges);
       fragment.appendChild(card);
     });
@@ -4199,6 +4282,7 @@ class CalendarPageComponent extends HTMLElement {
     this.calendar.querySelectorAll("thead th, tbody td").forEach((element) => {
       element.classList.remove("highlight-day", "highlight-current-day");
     });
+    if (!this.isFaceToFaceActiveNow()) return;
 
     const colIndex = this.getColIndexByDayEN(dayShort);
     if (colIndex === -1) return;
@@ -4224,6 +4308,7 @@ class CalendarPageComponent extends HTMLElement {
   highlightCurrentTimePeriod() {
     this.calendar.querySelectorAll("tbody td").forEach((cell) => cell.classList.remove("highlight-current-time"));
     this.calendar.querySelectorAll("tbody td.calendar-time-cell").forEach((cell) => cell.classList.remove("highlight-current-period"));
+    if (!this.isFaceToFaceActiveNow()) return;
 
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -4248,7 +4333,11 @@ class CalendarPageComponent extends HTMLElement {
   }
 
   getCourseByLookupKey(courseKey) {
-    return this.desktopCourseLookup.get(courseKey) || this.mobileCourseLookup.get(courseKey) || null;
+    return this.desktopCourseLookup.get(courseKey)
+      || this.mobileCourseLookup.get(courseKey)
+      || this.weekIntensiveCourseLookup.get(courseKey)
+      || this.listCourseLookup.get(courseKey)
+      || null;
   }
 
   async handleCalendarClick(event) {
@@ -4334,15 +4423,21 @@ class CalendarPageComponent extends HTMLElement {
     const schedules = this.parseCourseScheduleSlots(course);
     const slotLabel = schedules.length > 0
       ? schedules.map((schedule) => this.getSlotSubtitle(schedule.dayEN, schedule.period)).join(" • ")
-      : String(course.time_slot || "");
+      : (this.isIntensiveCourse(course) ? "Intensive" : String(course.time_slot || ""));
     const credits = course.credits ? `${course.credits} credits` : "Credits TBA";
     const professorName = formatProfessorDisplayName(course.professor);
     const professor = `Professor ${professorName}`;
+    const roomNumber = this.getCourseRoomValue(course);
+    const detailParts = [professor];
+    if (roomNumber) {
+      detailParts.push(`Room ${roomNumber}`);
+    }
+    detailParts.push(credits);
 
     tooltip.innerHTML = `
       <div class="calendar-course-tooltip-title">${this.escapeHtml(this.getDetailedTitle(course))}</div>
       <div class="calendar-course-tooltip-subtitle">${this.escapeHtml(slotLabel)}</div>
-      <div class="calendar-course-tooltip-detail">${this.escapeHtml(professor)} • ${this.escapeHtml(credits)}</div>
+      <div class="calendar-course-tooltip-detail">${this.escapeHtml(detailParts.join(" • "))}</div>
     `;
 
     tooltip.classList.add("is-visible");
@@ -4361,8 +4456,10 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
-    const card = event.target.closest(".calendar-course-card");
-    if (!card || !this.calendar.contains(card)) {
+    const card = event.target.closest(".calendar-course-card, .calendar-intensive-week-card");
+    const withinCalendarGrid = !!(card && this.calendar.contains(card));
+    const withinWeekIntensive = !!(card && this.weekIntensiveSection?.contains(card));
+    if (!card || (!withinCalendarGrid && !withinWeekIntensive)) {
       this.activeTooltipCourseKey = null;
       this.hideTooltip();
       return;
@@ -4387,9 +4484,11 @@ class CalendarPageComponent extends HTMLElement {
       return;
     }
 
-    const card = event.target.closest(".calendar-course-card");
+    const card = event.target.closest(".calendar-course-card, .calendar-intensive-week-card");
     const hoveredCourseKey = card?.dataset?.courseKey;
-    if (!card || !this.calendar.contains(card) || hoveredCourseKey !== this.activeTooltipCourseKey) {
+    const withinCalendarGrid = !!(card && this.calendar.contains(card));
+    const withinWeekIntensive = !!(card && this.weekIntensiveSection?.contains(card));
+    if (!card || (!withinCalendarGrid && !withinWeekIntensive) || hoveredCourseKey !== this.activeTooltipCourseKey) {
       this.activeTooltipCourseKey = null;
       this.hideTooltip();
       return;

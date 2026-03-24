@@ -10,6 +10,7 @@ const ROUTE_TOAST_QUEUE_KEY = "ila_route_toast";
 const PASSWORD_RECOVERY_COOLDOWN_STORAGE_KEY = "ila_auth_password_recovery_cooldowns";
 const PASSWORD_RECOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const FORGOT_PASSWORD_BUTTON_LABEL = "Forgot password?";
+const EMAIL_SIGNIN_METHOD_LOOKUP_RPC = "get_email_signin_methods";
 const MODAL_ID = "auth-unified-modal";
 const DEDICATED_AUTH_ROUTES = new Set(["/login", "/register"]);
 const PROTECTED_NAV_TEASERS = {
@@ -240,8 +241,11 @@ function getAuthErrorMessage(error, fallback = "Authentication failed. Please tr
 }
 
 function getOAuthProviderDisplayName(provider) {
+    if (provider === "google") return "Google";
     if (provider === "azure") return "Outlook";
-    return "Google";
+    const normalized = String(provider || "").trim().toLowerCase();
+    if (!normalized) return "OAuth";
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 function getOAuthOptions(provider) {
@@ -269,6 +273,22 @@ function isEmailNotConfirmedError(error) {
 function isUserAlreadyRegisteredError(error) {
     const message = String(error?.message || "").toLowerCase();
     return message.includes("user already registered") || message.includes("already been registered");
+}
+
+function normalizeOAuthProviderName(provider) {
+    const normalized = String(provider || "").trim().toLowerCase();
+    if (!normalized || normalized === "email" || normalized === "phone" || normalized === "anonymous") {
+        return "";
+    }
+    if (normalized === "azuread" || normalized === "microsoft" || normalized === "outlook") {
+        return "azure";
+    }
+    return normalized;
+}
+
+function isSupportedAuthOAuthProvider(provider) {
+    const normalized = normalizeOAuthProviderName(provider);
+    return normalized === "google" || normalized === "azure";
 }
 
 function isLikelyNetworkError(error) {
@@ -301,12 +321,16 @@ function isProtectedRoute(route) {
 function getActionLabelFromRoute(route) {
     if (route === "/timetable") return "open your timetable";
     if (route === "/assignments") return "open assignments";
-    if (route === "/profile") return "open your account";
+    if (route === "/profile") return "open your profile";
     return "continue";
 }
 
 function isDesktopHoverEnvironment() {
     return window.innerWidth > 1023 && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
+function isMobileViewport() {
+    return window.innerWidth <= 1023;
 }
 
 function createInlineMessageMarkup(id) {
@@ -559,6 +583,7 @@ class UnifiedAuthManager {
         this.pageRoot = null;
         this.authStateSubscription = null;
         this.navTeaser = new AuthNavTeaserController(this);
+        this.emailSignInMethodLookupAvailable = true;
         this.init();
     }
 
@@ -923,6 +948,7 @@ class UnifiedAuthManager {
                 email
             });
             this.bindPasswordResetHandlers();
+            this.suppressMobileAuthInputAutofocus(this.pageRoot);
             return;
         }
 
@@ -934,6 +960,7 @@ class UnifiedAuthManager {
             });
             this.bindEntryHandlers({ isModal: false });
             this.applyForgotPasswordCooldownState({ rootId: "auth-page", email });
+            this.suppressMobileAuthInputAutofocus(this.pageRoot);
             return;
         }
 
@@ -944,6 +971,23 @@ class UnifiedAuthManager {
         });
         this.bindPasswordHandlers({ isModal: false });
         this.applyForgotPasswordCooldownState({ rootId: "auth-page", email });
+        this.suppressMobileAuthInputAutofocus(this.pageRoot);
+    }
+
+    suppressMobileAuthInputAutofocus(container) {
+        if (!container || !isMobileViewport()) return;
+
+        const blurFocusedAuthInput = () => {
+            const activeElement = document.activeElement;
+            if (!(activeElement instanceof HTMLElement)) return;
+            if (!container.contains(activeElement)) return;
+            if (!activeElement.matches("input, textarea, select")) return;
+            activeElement.blur();
+        };
+
+        blurFocusedAuthInput();
+        window.requestAnimationFrame(blurFocusedAuthInput);
+        window.setTimeout(blurFocusedAuthInput, 40);
     }
 
     ensureModalExists() {
@@ -1020,10 +1064,14 @@ class UnifiedAuthManager {
         document.body.classList.add("auth-modal-open");
         this.currentModal = "unified";
 
-        window.setTimeout(() => {
-            const input = modal.querySelector("#auth-modal-email");
-            input?.focus({ preventScroll: true });
-        }, 30);
+        if (!isMobileViewport()) {
+            window.setTimeout(() => {
+                const input = modal.querySelector("#auth-modal-email");
+                input?.focus({ preventScroll: true });
+            }, 30);
+        } else {
+            this.suppressMobileAuthInputAutofocus(modal);
+        }
     }
 
     renderModal() {
@@ -1043,6 +1091,7 @@ class UnifiedAuthManager {
             });
             this.bindEntryHandlers({ isModal: true });
             this.applyForgotPasswordCooldownState({ rootId: "auth-modal", email });
+            this.suppressMobileAuthInputAutofocus(modalRoot);
             return;
         }
 
@@ -1054,6 +1103,7 @@ class UnifiedAuthManager {
         });
         this.bindPasswordHandlers({ isModal: true });
         this.applyForgotPasswordCooldownState({ rootId: "auth-modal", email });
+        this.suppressMobileAuthInputAutofocus(modalRoot);
     }
 
     normalizeSubtitleAction(actionLabel) {
@@ -1083,7 +1133,7 @@ class UnifiedAuthManager {
         const normalizedAction = rawAction.toLowerCase().replace(/[.!?]+$/g, "");
 
         if (mode === "signup" && normalizedAction === "get started") {
-            return "Create your account with any email address to access all the functionalities in one place.";
+            return "Create your account with any email address to access all the functionalities for free.";
         }
 
         const contextualAction = this.normalizeSubtitleAction(actionLabel);
@@ -1092,18 +1142,21 @@ class UnifiedAuthManager {
         }
 
         if (mode === "signup") {
-            return "Create your account with any email address to access all the functionalities in one place.";
+            return "Create your account with any email address to access all the functionalities for free.";
         }
 
         return "Use any email address to log in or create an account.";
     }
 
     getPasswordSubtitle({ mode, actionLabel }) {
+        const contextualAction = this.normalizeSubtitleAction(actionLabel);
         if (mode === "signup") {
-            return "You'll use this password to log in to your account.";
+            if (contextualAction) {
+                return `Sign up to ${contextualAction}.`;
+            }
+            return "Create a password to finish setting up your account.";
         }
 
-        const contextualAction = this.normalizeSubtitleAction(actionLabel);
         if (contextualAction) {
             return `Log in to ${contextualAction}.`;
         }
@@ -1144,7 +1197,7 @@ class UnifiedAuthManager {
                         <input type="email" id="${rootId}-email" class="auth-field-input auth-field-input--email-entry" aria-label="Email address" placeholder=" " autocomplete="email" value="${escapeHtml(email || "")}" required>
                         <span class="auth-field-label">Email address</span>
                     </label>
-                    <button type="submit" class="auth-provider-btn" id="${rootId}-entry-submit">Continue</button>
+                    <button type="submit" class="auth-provider-btn" id="${rootId}-entry-submit">Continue with email</button>
                 </form>
 
                 ${createInlineMessageMarkup(`${rootId}-message`)}
@@ -1154,7 +1207,7 @@ class UnifiedAuthManager {
 
     buildPasswordStepMarkup({ mode, email, rootId, actionLabel = "continue" }) {
         const isSignUp = mode === "signup";
-        const title = isSignUp ? "Create a password" : "Log in";
+        const title = isSignUp ? "Sign up" : "Log in";
         const subtitle = this.getPasswordSubtitle({ mode, actionLabel });
         const closeButtonMarkup = rootId === "auth-modal"
             ? `<button type="button" class="auth-close-btn" data-action="close-auth-modal" aria-label="Close authentication dialog"></button>`
@@ -1183,9 +1236,10 @@ class UnifiedAuthManager {
                 </div>
 
                 <form class="auth-email-form" id="${rootId}-password-form" novalidate>
-                    <label class="auth-field-wrap">
+                    <label class="auth-field-wrap ${isSignUp ? "" : "auth-field-wrap--with-password-toggle"}">
                         <input type="password" id="${rootId}-password" class="auth-field-input auth-field-input--email-entry" aria-label="Password" placeholder=" " autocomplete="${isSignUp ? "new-password" : "current-password"}" minlength="${isSignUp ? "12" : "1"}" required>
                         <span class="auth-field-label">${isSignUp ? "Create password" : "Password"}</span>
+                        ${isSignUp ? "" : `<button type="button" id="${rootId}-password-toggle" class="auth-password-visibility-toggle" aria-label="Show password" aria-controls="${rootId}-password" aria-pressed="false"></button>`}
                     </label>
                     ${isSignUp ? `
                         <label class="auth-field-wrap">
@@ -1229,6 +1283,68 @@ class UnifiedAuthManager {
         `;
     }
 
+    async lookupEmailSignInMethods(email) {
+        if (!this.emailSignInMethodLookupAvailable) return null;
+
+        const normalizedEmail = normalizeEmailForStorage(email);
+        if (!isValidEmail(normalizedEmail)) return null;
+
+        try {
+            const { data, error } = await supabase.rpc(EMAIL_SIGNIN_METHOD_LOOKUP_RPC, {
+                lookup_email: normalizedEmail
+            });
+
+            if (error) {
+                const message = String(error?.message || "").toLowerCase();
+                if (error?.code === "42883" || message.includes("does not exist")) {
+                    this.emailSignInMethodLookupAvailable = false;
+                }
+                return null;
+            }
+
+            const row = Array.isArray(data) ? data[0] : data;
+            if (!row || typeof row !== "object") return null;
+
+            const hasAccount = Boolean(row.has_account);
+            const hasPassword = Boolean(row.has_password);
+            const primaryOAuthProvider = normalizeOAuthProviderName(row.primary_oauth_provider);
+            const oauthProviders = Array.from(new Set(
+                (Array.isArray(row.oauth_providers) ? row.oauth_providers : [])
+                    .map((provider) => normalizeOAuthProviderName(provider))
+                    .filter(Boolean)
+            ));
+
+            return { hasAccount, hasPassword, primaryOAuthProvider, oauthProviders };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    getPreferredOAuthProviderFromLookup(lookupResult) {
+        if (!lookupResult || typeof lookupResult !== "object") return "";
+
+        const candidates = [];
+        if (lookupResult.primaryOAuthProvider) {
+            candidates.push(lookupResult.primaryOAuthProvider);
+        }
+
+        const oauthProviders = Array.isArray(lookupResult.oauthProviders) ? lookupResult.oauthProviders : [];
+        oauthProviders.forEach((provider) => {
+            const normalized = normalizeOAuthProviderName(provider);
+            if (normalized) {
+                candidates.push(normalized);
+            }
+        });
+
+        for (const provider of candidates) {
+            if (isSupportedAuthOAuthProvider(provider)) {
+                return provider;
+            }
+        }
+
+        return "";
+    }
+
     bindEntryHandlers({ isModal }) {
         const rootId = isModal ? "auth-modal" : "auth-page";
         const form = document.getElementById(`${rootId}-entry-form`);
@@ -1270,25 +1386,55 @@ class UnifiedAuthManager {
 
             if (submitButton) submitButton.disabled = true;
 
-            if (isModal) {
-                const modalMode = normalizeMode(this.modalState.mode);
-                if (modalMode === "signup") {
-                    this.closeCurrentModal();
-                    this.navigateToDedicatedAuthStep({
-                        mode: "signup",
-                        email,
-                        step: "email-signup"
-                    });
+            try {
+                const state = isModal ? this.modalState : this.pageState;
+                const currentMode = normalizeMode(state.mode);
+                const lookupResult = await this.lookupEmailSignInMethods(email);
+
+                if (lookupResult?.hasAccount && !lookupResult.hasPassword) {
+                    const oauthProvider = this.getPreferredOAuthProviderFromLookup(lookupResult);
+                    if (oauthProvider) {
+                        const providerName = getOAuthProviderDisplayName(oauthProvider);
+                        this.setInlineMessage(message, `This account uses ${providerName}. Redirecting to ${providerName} sign-in...`, "success");
+                        await this.handleOAuthLogin(oauthProvider, { isModal });
+                        return;
+                    }
+                    this.setInlineMessage(message, "This account does not use email/password. Continue with a social sign-in provider.", "error");
                     return;
                 }
 
-                this.modalState.email = email;
-                this.modalState.step = this.modalState.mode === "signup" ? "email-signup" : "email-signin";
-                this.renderModal();
-            } else {
-                this.pageState.email = email;
-                this.pageState.step = this.pageState.mode === "signup" ? "email-signup" : "email-signin";
-                this.renderDedicatedAuthPage();
+                const hasKnownNoAccount = lookupResult?.hasAccount === false;
+                const hasPasswordMethod = Boolean(lookupResult?.hasAccount && lookupResult.hasPassword);
+                const nextMode = hasKnownNoAccount
+                    ? "signup"
+                    : (hasPasswordMethod ? "signin" : currentMode);
+                const nextStep = nextMode === "signup" ? "email-signup" : "email-signin";
+
+                if (isModal) {
+                    if (nextMode === "signup" && !hasKnownNoAccount) {
+                        this.closeCurrentModal();
+                        this.navigateToDedicatedAuthStep({
+                            mode: "signup",
+                            email,
+                            step: "email-signup"
+                        });
+                        return;
+                    }
+
+                    this.modalState.mode = nextMode;
+                    this.modalState.email = email;
+                    this.modalState.step = nextStep;
+                    this.renderModal();
+                } else {
+                    this.pageState.mode = nextMode;
+                    this.pageState.email = email;
+                    this.pageState.step = nextStep;
+                    this.renderDedicatedAuthPage();
+                }
+            } finally {
+                if (submitButton && submitButton.isConnected) {
+                    submitButton.disabled = false;
+                }
             }
         });
     }
@@ -1303,6 +1449,24 @@ class UnifiedAuthManager {
 
         const passwordInput = document.getElementById(`${rootId}-password`);
         const confirmInput = document.getElementById(`${rootId}-password-confirm`);
+        const passwordToggle = document.getElementById(`${rootId}-password-toggle`);
+        const syncPasswordToggleState = () => {
+            if (!passwordToggle || !passwordInput) return;
+            const isVisible = passwordInput.type === "text";
+            passwordToggle.classList.toggle("is-visible", isVisible);
+            passwordToggle.setAttribute("aria-label", isVisible ? "Hide password" : "Show password");
+            passwordToggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
+        };
+        if (passwordToggle && passwordInput) {
+            syncPasswordToggleState();
+            passwordToggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                const isVisible = passwordInput.type === "text";
+                passwordInput.type = isVisible ? "password" : "text";
+                syncPasswordToggleState();
+                passwordInput.focus({ preventScroll: true });
+            });
+        }
         passwordInput?.addEventListener("input", () => {
             clearFieldError(passwordInput, { root: form });
             this.setInlineMessage(message, "", "");

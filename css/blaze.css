@@ -677,12 +677,24 @@ nav ul {
     background-image: url(/assets/home.svg);
 }
 
+.nav-btn#home-btn.active .nav-icon {
+    background-image: url(/assets/home-fill.svg);
+}
+
 .nav-btn#dashboard .nav-icon {
-    background-image: url(/assets/dashboard.svg);
+    background-image: url(/assets/course.svg);
+}
+
+.nav-btn#dashboard.active .nav-icon {
+    background-image: url(/assets/course-fill.svg);
 }
 
 .nav-btn#calendar-btn .nav-icon {
     background-image: url(/assets/calendar.svg);
+}
+
+.nav-btn#calendar-btn.active .nav-icon {
+    background-image: url(/assets/calendar-fill.svg);
 }
 
 .nav-btn#search .nav-icon {
@@ -838,7 +850,7 @@ button#previous {
 
 .false:hover {
     border-color: var(--control-border-hover);
-    background-color: var(--control-bg-hover);
+    background-color: color-mix(in srgb,var(--color-accent-primary-soft) 65%,var(--color-bg-card) 35%);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover);
     filter: none;
 }
@@ -851,6 +863,10 @@ button#previous {
 }
 
 .active {
+    background-color: var(--control-bg-active);
+}
+
+.active:hover {
     background-color: var(--control-bg-active);
 }
 
@@ -918,6 +934,21 @@ select:focus-visible {
 .accessibility-dropdown:hover button#settings,
 .accessibility-dropdown:hover button#help {
     box-shadow: rgba(50, 50, 93, 0.25) 0px 5px 20px 0px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+}
+
+@media (min-width: 1024px) {
+    .nav-btn,
+    .nav-btn.false,
+    .nav-btn.active,
+    .nav-btn:hover,
+    .nav-btn:active,
+    .nav-btn:focus,
+    .nav-btn:focus-visible,
+    .nav-btn.false:hover,
+    .nav-btn.false:active,
+    .accessibility-dropdown:hover .nav-btn {
+        box-shadow: none !important;
+    }
 }
 
 /* Main page top content style */
@@ -6160,6 +6191,9 @@ td p {
         border-radius: 12px !important;
         box-shadow: none !important;
         filter: none !important;
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
     }
 
     .nav-btn:hover {
@@ -6174,6 +6208,12 @@ td p {
         transform: none !important;
     }
 
+    .nav-btn:focus,
+    .nav-btn:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
     /* Mobile nav icons - match desktop icon assets */
     .nav-btn#profile .nav-icon {
         background-image: url(/assets/profile.svg) !important;
@@ -6183,16 +6223,33 @@ td p {
         background-image: url(/assets/home.svg) !important;
     }
 
+    .nav-btn#home-btn.active .nav-icon {
+        background-image: url(/assets/home-fill.svg) !important;
+    }
+
     .nav-btn#dashboard .nav-icon {
-        background-image: url(/assets/dashboard.svg) !important;
+        background-image: url(/assets/course.svg) !important;
+    }
+
+    .nav-btn#dashboard.active .nav-icon {
+        background-image: url(/assets/course-fill.svg) !important;
     }
 
     .nav-btn#calendar-btn .nav-icon {
         background-image: url(/assets/calendar.svg) !important;
     }
 
+    .nav-btn#calendar-btn.active .nav-icon {
+        background-image: url(/assets/calendar-fill.svg) !important;
+    }
+
     .nav-btn#assignments-btn .nav-icon {
-        background-image: url(/assets/assignment.svg) !important;
+        background-image: url(/assets/book.svg) !important;
+    }
+
+    .nav-btn#assignments-btn.active .nav-icon {
+        background-image: url(/assets/book-fill.svg) !important;
+        filter: none !important;
     }
 
     .nav-btn#search .nav-icon {
@@ -9775,7 +9832,7 @@ button.course-registration-notice__dismiss:focus-visible {
 
 .auth-email-form {
     display: grid;
-    gap: 10px;
+    gap: 15px;
 }
 
 /* Cancel the grid row gap above inline field errors in auth forms */
@@ -9828,11 +9885,58 @@ button.course-registration-notice__dismiss:focus-visible {
     padding-right: 96px;
 }
 
+.auth-field-wrap--with-password-toggle .auth-field-input {
+    padding-right: 56px;
+}
+
 .auth-field-wrap--readonly .auth-field-input {
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
     caret-color: transparent;
+}
+
+.auth-password-visibility-toggle {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 0;
+    min-height: 0;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background-color: transparent;
+    background-image: url("/assets/hide.svg");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 22px 22px;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.auth-password-visibility-toggle.is-visible {
+    background-image: url("/assets/hide-off.svg");
+}
+
+.auth-password-visibility-toggle:hover {
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.auth-password-visibility-toggle:focus,
+.auth-password-visibility-toggle:active {
+    transform: translateY(-50%);
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.auth-password-visibility-toggle:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 3px;
 }
 
 .auth-field-inline-action {
@@ -10240,13 +10344,13 @@ body.auth-modal-open {
         height: 44px;
         min-height: 44px;
         position: fixed;
-        top: calc(var(--safe-area-top) + 12px);
+        top: calc(var(--safe-area-top) + 20px);
         right: 20px;
         z-index: 22120;
     }
 
     .auth-modal-body {
-        padding: calc(var(--safe-area-top) + 15px) 15px calc(15px + var(--safe-area-bottom));
+        padding: calc(var(--safe-area-top) + 20px) 20px calc(20px + var(--safe-area-bottom));
         min-height: 100dvh;
         box-sizing: border-box;
         display: flex;
@@ -10272,6 +10376,24 @@ body.auth-modal-open {
     .auth-field-input {
         min-height: 54px;
         height: 54px;
+    }
+
+    .auth-field-wrap .auth-field-input {
+        padding-top: 7px;
+        padding-bottom: 9px;
+        line-height: 1.25;
+    }
+
+    .auth-field-wrap .auth-field-input:focus,
+    .auth-field-wrap .auth-field-input:not(:placeholder-shown) {
+        padding-top: 7px;
+        padding-bottom: 9px;
+        line-height: 1.25;
+    }
+
+    .auth-field-input--email-entry:focus,
+    .auth-field-input--email-entry:focus-visible {
+        transform: translateY(0);
     }
 
     .auth-nav-teaser {
@@ -10705,17 +10827,6 @@ body.auth-modal-open {
 
 /* Course loading and error states */
 
-.course-error-state {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    padding: 40px !important;
-    font-size: 18px !important;
-    color: #d32f2f !important;
-    grid-column: 1 / -1 !important;
-    text-align: center !important;
-}
-
 @keyframes courseLoadSpin {
     0% {
         transform: rotate(0deg);
@@ -10727,22 +10838,7 @@ body.auth-modal-open {
 }
 
 .course-retry-button {
-    background-color: #E3D5E9 !important;
-    border: 1px solid var(--control-border) !important;
-    padding: 10px 20px !important;
-    border-radius: var(--control-radius-pill) !important;
-    cursor: pointer !important;
-    font-family: var(--ui-font-family) !important;
-    font-size: 16px !important;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow) !important;
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease !important;
-    transform: translateY(0) !important;
-}
-
-.course-retry-button:hover {
-    border-color: var(--control-border-hover) !important;
-    background-color: #BDAAC6 !important;
-    box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow-hover) !important;
+    min-width: 162px;
 }
 
 /* ===== REVIEW MODALS ===== */
@@ -12547,6 +12643,7 @@ body.setup-flow-active #app-content {
     }
 
     .setup-option-row {
+        height: auto;
         min-height: 54px;
         padding: 13px 14px;
     }
@@ -12624,12 +12721,13 @@ body.setup-flow-active #app-content {
 
 /* Assignments navigation button icon */
 .nav-btn#assignments-btn .nav-icon {
-    background-image: url(/assets/assignment.svg);
+    background-image: url(/assets/book.svg);
     filter: brightness(0) saturate(100%);
 }
 
 .nav-btn#assignments-btn.active .nav-icon {
-    filter: brightness(0) saturate(100%);
+    background-image: url(/assets/book-fill.svg);
+    filter: none;
 }
 
 .assignment-add-icon {
@@ -13588,7 +13686,7 @@ body.assignment-modal-open #course-summary.calendar-page-modern .container-above
     justify-content: space-between;
     width: 100%;
     min-width: 0;
-    height: 46px;
+    height: auto;
     min-height: 46px;
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius-pill);
@@ -13600,7 +13698,7 @@ body.assignment-modal-open #course-summary.calendar-page-modern .container-above
     box-sizing: border-box;
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease;
     touch-action: manipulation;
-    padding: 0 14px;
+    padding: 8px 14px;
     font-size: 14px;
     font-family: var(--font-ui);
     box-shadow: inset 0 1px 0 var(--control-highlight), var(--control-shadow);
@@ -13635,19 +13733,25 @@ body.assignment-modal-open #course-summary.calendar-page-modern .container-above
 }
 
 .assignment-modal .subject-tag {
-    display: inline-block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    flex: 1 1 auto;
+    min-width: 0;
     padding: 0;
     border-radius: 0;
     font-size: 14px;
     font-family: var(--font-ui);
     font-weight: 620;
-    line-height: 1;
+    line-height: 1.2;
     color: var(--subject-tag-color);
     background-color: transparent;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    max-width: calc(100% - 22px);
+    max-height: calc(1.2em * 2);
+    overflow-wrap: anywhere;
 }
 
 .assignment-modal .subject-tag.has-tag {
@@ -13749,16 +13853,25 @@ body.assignment-modal-open #course-summary.calendar-page-modern .container-above
 }
 
 .assignment-modal .subject-option .option-tag {
-    display: inline-flex;
-    align-items: center;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    width: 100%;
+    min-width: 0;
     max-width: 100%;
-    padding: 4px 9px;
+    box-sizing: border-box;
+    padding: 8px 10px;
     border-radius: 999px;
     font-size: 12px;
     font-family: var(--font-ui);
     font-weight: 600;
     color: #2b3345;
-    line-height: 1;
+    line-height: 1.25;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-height: calc(1.25em * 2);
+    overflow-wrap: anywhere;
     border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -17341,7 +17454,7 @@ calendar-page .calendar-mobile-view {
 }
 
 #course-list .course-assessment-primary .course-assessment-item:not(:last-child)::after {
-    content: ' ·';
+    content: " \00B7";
     color: rgba(15, 23, 38, 0.5);
     font-size: 16px;
     line-height: 1;
@@ -18062,7 +18175,43 @@ calendar-page .calendar-mobile-view {
     padding: 26px 18px;
     text-align: center;
     font-family: var(--font-ui);
-    color: rgba(34, 25, 44, 0.84);
+    color: var(--color-text-secondary);
+}
+
+#course-list .course-empty-state.course-empty-state--error {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--ui-error-color) 38%, rgba(120, 98, 144, 0.42));
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 246, 246, 0.9));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 8px 20px rgba(37, 16, 63, 0.07);
+}
+
+#course-list .course-empty-eyebrow {
+    margin: 0 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: color-mix(in srgb, var(--ui-error-color) 72%, #4f3e63);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 630;
+    letter-spacing: 0.02em;
+}
+
+#course-list .course-empty-eyebrow-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--ui-error-color) 30%, #ffffff);
+    border: 1px solid color-mix(in srgb, var(--ui-error-color) 58%, transparent);
+    color: color-mix(in srgb, var(--ui-error-color) 76%, #5d476d);
+    font-size: 12px;
+    line-height: 1;
+    font-weight: 700;
 }
 
 #course-list .course-empty-title {
@@ -18071,6 +18220,8 @@ calendar-page .calendar-mobile-view {
     font-weight: 650;
     line-height: 1.3;
     font-family: var(--font-ui);
+    color: inherit;
+    opacity: .6;
 }
 
 #course-list .course-empty-message {
@@ -18079,6 +18230,7 @@ calendar-page .calendar-mobile-view {
     line-height: 1.35;
     opacity: 0.9;
     font-family: var(--font-ui);
+    color: inherit;
 }
 
 #course-list .course-empty-actions {
@@ -19656,10 +19808,8 @@ body:has(#profile-main.profile-page) #app-content {
 
 .profile-modal-help {
     margin: 0 0 12px;
-    font-size: 13px;
     line-height: 1.35;
     font-family: var(--font-ui);
-    color: var(--ui-text-subtitle);
 }
 
 .profile-about-grid {
@@ -20520,6 +20670,12 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
         box-sizing: border-box;
     }
 
+    #profile-edit-form,
+    #profile-academic-concentration-form,
+    #profile-academic-year-form {
+        margin-bottom: 16px;
+    }
+
     .profile-modal.profile-modal--swipe .profile-modal-footer {
         width: 100%;
         min-width: 0;
@@ -20664,13 +20820,65 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 
     .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-choice-list {
         gap: 12px;
+        margin-bottom: 0px;
         padding: 12px 0 18px;
+    }
+
+    .profile-inline-error {
+        margin-bottom: 0px !important;
+    }
+
+    .profile-modal .search-input.profile-modal-input {
+        margin-bottom: 0px;
+    }
+
+    .profile-about-debug {
+        margin-bottom: 10px;
+    }
+
+    .profile-modal.profile-modal--swipe .profile-modal-body .profile-modal-input,
+    .profile-modal.profile-modal--swipe .profile-modal-body .search-input.profile-modal-input {
+        --profile-swipe-input-bleed: var(--ui-page-padding-x-mobile);
+        width: 100%;
+        max-width: none;
+    }
+
+    .profile-about-grid {
+        margin-bottom: 0px !important;
+        margin-top: 10px;
+    }
+
+    #profile-password-form {
+        margin-top: 10px;
+        margin-bottom: 16px;
+    }
+
+    .profile-modal.profile-modal--swipe .profile-modal-body .profile-modal-input:focus,
+    .profile-modal.profile-modal--swipe .profile-modal-body .search-input.profile-modal-input:focus,
+    .profile-modal.profile-modal--swipe .profile-modal-body .profile-modal-input:active,
+    .profile-modal.profile-modal--swipe .profile-modal-body .search-input.profile-modal-input:active,
+    .profile-modal.profile-modal--swipe .profile-modal-body .profile-modal-input:focus-visible,
+    .profile-modal.profile-modal--swipe .profile-modal-body .search-input.profile-modal-input:focus-visible {
+        outline: none;
+        border-color: var(--control-border-hover);
+        background-color: var(--ui-control-bg-active);
+        box-shadow: none;
+        transform: none;
+    }
+
+    .profile-modal.profile-modal--swipe .profile-modal-body p {
+        margin-bottom: 16px;
+    }
+
+    .profile-modal.profile-modal--swipe .delete_p_modal {
+        margin: 0;
     }
 
     .profile-modal.profile-modal--swipe.profile-modal--picker-sheet .profile-choice-option {
         min-height: var(--ui-control-height-mobile);
         height: auto;
         border-radius: 18px;
+        margin-bottom: 0px;
         padding: 16px 18px;
         font-size: 18px;
         font-weight: 600;
@@ -20808,8 +21016,21 @@ body.no-full-card-colors #course-list .class-container .course-type-label {
 }
 
 .semester-mobile-sheet-option-label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
     pointer-events: none;
     text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    line-height: 1.2;
+    max-height: calc(1.2em * 2);
+    overflow-wrap: anywhere;
+    padding-right: 12px;
 }
 
 .semester-mobile-sheet-option-check {
@@ -23777,7 +23998,9 @@ button.calendar-slot-saved-card {
 }
 
 #assignments-main.page-assignments .empty-state-actions {
+    margin-top: 14px;
     display: inline-flex;
+    align-items: center;
     gap: 8px;
     flex-wrap: wrap;
     justify-content: center;
@@ -23788,20 +24011,11 @@ button.calendar-slot-saved-card {
     min-width: 140px;
     min-height: 42px;
     height: 42px;
-    border: 1px solid var(--control-border);
-    background: var(--control-bg);
     border-radius: 999px;
     padding: 0 16px;
     font-family: var(--font-ui);
     font-size: 14px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    cursor: pointer;
-    margin-top: 16px;
-}
-
-#assignments-main.page-assignments .empty-state-cta--secondary {
-    border-color: var(--color-accent-primary-border);
+    font-weight: 620;
 }
 
 @media (min-width: 1024px) {
@@ -24902,7 +25116,7 @@ button.calendar-slot-saved-card {
     }
 
     #course-summary.calendar-page-modern calendar-page .calendar-day-period-label::after {
-        content: "·";
+        content: "\00B7";
         margin-left: 6px;
         color: rgba(56, 44, 68, 0.7);
     }
@@ -26229,6 +26443,10 @@ button.calendar-slot-saved-card {
     color: rgba(15, 23, 42, 0.66);
 }
 
+.course-assessment-breakdown-notes::first-letter {
+    text-transform: uppercase;
+}
+
 .course-assessment-breakdown-notes--empty {
     color: rgba(15, 23, 42, 0.54);
 }
@@ -26291,37 +26509,34 @@ button.calendar-slot-saved-card {
 
 .course-info-details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(4, auto);
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
     column-gap: 14px;
 }
 
-.course-info-details-grid .course-detail-row,
-.course-info-details-grid .key-row {
+.course-info-details-column {
+    display: grid;
+    gap: 0;
+    align-content: start;
+}
+
+.course-info-details-column .course-detail-row,
+.course-info-details-column .key-row {
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr);
     align-items: center;
     gap: 16px;
     padding: 14px 0;
-    border-top-color: rgba(0, 0, 0, 0.08);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.course-info-details-grid .course-detail-row:first-child {
+.course-info-details-column .course-detail-row:first-child,
+.course-info-details-column .key-row:first-child {
+    border-top: 0;
     padding-top: 2px;
 }
 
-@media (min-width: 1024px) {
-    .course-info-details-grid .course-detail-row:nth-child(4n + 1),
-    .course-info-details-grid .key-row:nth-child(4n + 1) {
-        border-top: 0;
-        padding-top: 2px;
-    }
-
-    .course-info-details-grid .course-detail-row:nth-child(4n),
-    .course-info-details-grid .key-row:nth-child(4n) {
-        padding-bottom: 0;
-    }
+.course-info-details-column .course-detail-row:last-child,
+.course-info-details-column .key-row:last-child {
+    padding-bottom: 0;
 }
 
 .course-detail-meta {
@@ -28312,6 +28527,10 @@ button.calendar-slot-saved-card {
     .review-modal-host .review-form-section--meta {
         padding: 15px 20px !important;
     }
+
+    .course-info-footer-layout {
+        grid-template-columns: 1fr minmax(0, 1fr);
+    }
 }
 
 @media (max-width: 1023px) {
@@ -28479,7 +28698,7 @@ button.calendar-slot-saved-card {
 
     .class-info:not(.course-fullscreen) .course-info-footer-layout {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-columns: 1fr minmax(0, 1fr);
         gap: 10px;
         margin-left: 0;
         margin-right: 0;
@@ -28527,7 +28746,7 @@ button.calendar-slot-saved-card {
     }
 
     .class-info:not(.course-fullscreen) .course-info-footer-layout.has-write-review {
-        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
 
     .course-info-footer-layout {
@@ -28553,6 +28772,14 @@ button.calendar-slot-saved-card {
 
     .class-info:not(.course-fullscreen) .course-info-footer-layout.has-write-review .course-info-footer-secondary {
         width: 100%;
+    }
+
+    .class-info:not(.course-fullscreen) .course-info-footer-layout.has-write-review .course-info-footer-primary,
+    .course-page-mode .course-fullscreen .course-info-footer-layout.has-write-review .course-info-footer-primary,
+    body.course-page-mode #course-page-footer-dock.is-active>#course-info-footer.sheet-footer .course-info-footer-layout.has-write-review .course-info-footer-primary {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
     }
 
     .class-info:not(.course-fullscreen) .course-info-footer-layout .course-info-footer-secondary .course-info-save-btn {
@@ -28587,13 +28814,15 @@ button.calendar-slot-saved-card {
         min-width: 0;
         min-height: 50px;
         height: 50px;
-        padding: 0 20px;
+        padding: 0 16px;
+        font-size: 12px !important;
         white-space: nowrap;
     }
 
     .class-info:not(.course-fullscreen) .course-info-footer-layout.has-write-review .course-info-footer-secondary .course-info-write-review-btn {
         flex: 1 1 auto !important;
         width: 100% !important;
+        max-width: none;
     }
 
     .class-info:not(.course-fullscreen) #course-info-actions .course-info-footer-secondary .btn-secondary {
@@ -28629,7 +28858,7 @@ button.calendar-slot-saved-card {
     }
 
     .course-page-mode .course-fullscreen .course-info-footer-layout.has-write-review {
-        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     }
 
     .course-page-mode .course-fullscreen .course-info-footer-layout .course-info-footer-primary,
@@ -28685,13 +28914,15 @@ button.calendar-slot-saved-card {
         min-width: 0;
         min-height: 50px;
         height: 50px;
-        padding: 0 20px;
+        padding: 0 16px;
+        font-size: 12px !important;
         white-space: nowrap;
     }
 
     .course-page-mode .course-fullscreen .course-info-footer-layout.has-write-review .course-info-footer-secondary .course-info-write-review-btn {
         flex: 1 1 auto !important;
         width: 100% !important;
+        max-width: none;
     }
 
     .course-page-mode .course-fullscreen #course-info-actions .course-info-footer-secondary .btn-secondary {
@@ -28761,7 +28992,7 @@ button.calendar-slot-saved-card {
         flex: 0 0 14px;
     }
 
-    .course-info-details-grid .course-detail-row {
+    .course-info-details-column .course-detail-row {
         grid-template-columns: 1fr;
         align-items: start;
         gap: 4px;
@@ -28769,27 +29000,24 @@ button.calendar-slot-saved-card {
     }
 
     .course-info-details-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: none;
-        grid-auto-flow: row;
-        grid-auto-columns: unset;
-        column-gap: 15px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 12px;
     }
 
-    .course-info-details-grid .course-detail-row,
-    .course-info-details-grid .key-row {
+    .course-info-details-column .course-detail-row,
+    .course-info-details-column .key-row {
         border-top: 1px solid rgba(15, 23, 42, 0.06);
         padding-top: 14px;
     }
 
-    .course-info-details-grid .course-detail-row:first-child,
-    .course-info-details-grid .key-row:first-child {
+    .course-info-details-column .course-detail-row:first-child,
+    .course-info-details-column .key-row:first-child {
         border-top: 0;
         padding-top: 2px;
     }
 
-    .course-info-details-grid .course-detail-row:last-child,
-    .course-info-details-grid .key-row:last-child {
+    .course-info-details-column .course-detail-row:last-child,
+    .course-info-details-column .key-row:last-child {
         padding-bottom: 0;
     }
 
@@ -29204,7 +29432,7 @@ button.calendar-slot-saved-card {
         position: static !important;
         margin: 0 !important;
         width: 100% !important;
-        padding: 15px 15px 15px 15px !important;
+        padding: 8px 15px !important;
         box-sizing: border-box;
         pointer-events: auto;
     }
@@ -29232,6 +29460,18 @@ button.calendar-slot-saved-card {
 
     body.course-page-mode #course-page-footer-dock.is-active>#course-info-footer.sheet-footer .course-info-footer-secondary .course-info-save-label {
         display: none;
+    }
+
+    body.course-page-mode #course-page-footer-dock.is-active>#course-info-footer.sheet-footer .course-info-footer-secondary .course-info-write-review-btn {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0;
+        max-width: none;
+        min-height: 50px;
+        height: 50px;
+        padding: 0 16px;
+        font-size: 12px !important;
+        white-space: nowrap;
     }
 
     body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove {
@@ -29265,8 +29505,8 @@ button.calendar-slot-saved-card {
     }
 
     body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove.class-info-course-action.is-remove {
-        border: 1px solid rgba(185, 28, 28, 0.72);
-        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(185, 28, 28, 0.8);
+        background: #f8bcc0cc;
         color: #991b1b;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62), 0 2px 10px rgba(127, 29, 29, 0.22);
     }
@@ -29285,6 +29525,19 @@ button.calendar-slot-saved-card {
         box-shadow: none;
     }
 
+    .class-info:not(.course-fullscreen) #course-info-actions #class-add-remove.class-info-course-action.is-add,
+    .class-info:not(.course-fullscreen) #course-info-actions #class-add-remove.class-info-course-action.is-remove,
+    .course-page-mode .course-fullscreen #course-info-actions #class-add-remove.class-info-course-action.is-add,
+    .course-page-mode .course-fullscreen #course-info-actions #class-add-remove.class-info-course-action.is-remove,
+    body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove.class-info-course-action.is-add,
+    body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove.class-info-course-action.is-remove {
+        font-size: 12px !important;
+        padding: 0 16px;
+        width: 100% !important;
+        max-width: 100%;
+        flex: 0 1 auto !important;
+    }
+
     body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove:disabled {
         cursor: not-allowed;
     }
@@ -29298,7 +29551,7 @@ button.calendar-slot-saved-card {
 
     body.course-page-mode #course-page-footer-dock.is-active #course-info-actions #class-add-remove.class-info-course-action.is-remove:not(:disabled):active {
         border-color: rgba(153, 27, 27, 0.9);
-        background-color: rgba(220, 38, 38, 0.34);
+        background-color: rgba(220, 38, 38, 0.8);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46), 0 1px 5px rgba(127, 29, 29, 0.26);
         transform: translateY(var(--control-press-translate));
     }
@@ -31311,14 +31564,14 @@ body:has(#course-summary.calendar-page-modern) .app-header,
 
 #course-summary.calendar-page-modern.calendar-view-list-active {
     min-height: 100dvh;
-    background: #f2f3f7 !important;
+    background: var(--ui-surface-page) !important;
     justify-content: unset !important;
     align-items: unset !important;
 }
 
 #course-summary.calendar-page-modern.calendar-view-list-active .main-content {
     min-height: calc(100dvh - 72px);
-    background: #f2f3f7 !important;
+    background: var(--ui-surface-page) !important;
     justify-content: unset !important;
     align-items: unset !important;
 }
@@ -31330,7 +31583,7 @@ body:has(#course-summary.calendar-page-modern) .app-header,
 #course-summary.calendar-page-modern.calendar-view-list-active calendar-page .calendar-list-scroll,
 #course-summary.calendar-page-modern.calendar-view-list-active calendar-page .calendar-list-content {
     min-height: 100%;
-    background: #f2f3f7 !important;
+    background: var(--ui-surface-page) !important;
     justify-content: unset !important;
     align-items: unset !important;
 }

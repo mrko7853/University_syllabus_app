@@ -4,6 +4,7 @@ import { getCurrentAppPath, stripBase, toAppUrl, withBase } from './path-utils.j
 import { openSemesterMobileSheet } from './semester-mobile-sheet.js';
 import { isCourseSaved, readSavedCourses, syncSavedCoursesForUser, toggleSavedCourse } from './saved-courses.js';
 import { inferCurrentSemesterValue } from './preferences.js';
+import { filterBlockedSemesters, parseSemesterValue, LATEST_ACTIVE_SEMESTER_VALUE } from './semester-visibility.js';
 import { clearFieldError, initializeGlobalFieldErrorUI, setFieldError } from './field-errors.js';
 
 // Course type to color mapping
@@ -34,6 +35,10 @@ const COURSE_SOURCE_TABLE_MAP = {
 };
 
 const SLOT_PREFILTER_KEY = 'ila_home_slot_prefilter';
+const FACE_TO_FACE_PERIODS_TABLE = 'undergrad_face_to_face_periods';
+const FACE_TO_FACE_SYNC_FUNCTION_NAME = 'undergrad-face-to-face-sync';
+const FACE_TO_FACE_STATUS_CACHE_TTL_MS = 15 * 60 * 1000;
+const FACE_TO_FACE_STALE_SYNC_THRESHOLD_MS = 40 * 24 * 60 * 60 * 1000;
 const SLOT_PERIOD_TO_TIME = {
     1: '09:00',
     2: '10:45',
@@ -45,6 +50,8 @@ const SLOT_PERIOD_TO_TIME = {
 const SLOT_ALLOWED_DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
 const SLOT_ALLOWED_TYPE_FILTERS = new Set(['Core', 'Foundation', 'Elective', 'Graduate']);
 const SLOT_ALLOWED_TIMES = new Set(Object.values(SLOT_PERIOD_TO_TIME));
+const faceToFaceStatusCache = new Map();
+const faceToFaceSyncAttemptedKeys = new Set();
 let courseEvalTooltipElement = null;
 let activeCourseEvalTooltipTarget = null;
 let courseEvalInfoPopoverElement = null;
@@ -158,6 +165,93 @@ function normalizeSlotTerm(term) {
     return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
+function normalizeFaceToFaceTerm(termValue) {
+    const raw = String(termValue || '').trim();
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    if (lower.includes('spring') || raw.includes('春')) return 'Spring';
+    if (lower.includes('fall') || raw.includes('秋')) return 'Fall';
+    return null;
+}
+
+function normalizeFaceToFaceYear(yearValue) {
+    const parsed = parseInt(yearValue, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseDateOrNull(value) {
+    const date = value ? new Date(value) : null;
+    return date && Number.isFinite(date.getTime()) ? date : null;
+}
+
+function buildFaceToFaceStatus({ year, term, row, now = new Date() }) {
+    const startsAt = parseDateOrNull(row?.face_to_face_start_at);
+    const endsAt = parseDateOrNull(row?.face_to_face_end_at);
+    const hasPeriod = Boolean(startsAt || endsAt);
+
+    let isActive = true;
+    let phase = 'unknown';
+
+    if (startsAt && now < startsAt) {
+        isActive = false;
+        phase = 'before_start';
+    } else if (endsAt && now > endsAt) {
+        isActive = false;
+        phase = 'after_end';
+    } else if (hasPeriod) {
+        isActive = true;
+        phase = 'active';
+    }
+
+    return {
+        year,
+        term,
+        hasPeriod,
+        isActive,
+        phase,
+        startsAt,
+        endsAt,
+        startsAtIso: startsAt ? startsAt.toISOString() : null,
+        endsAtIso: endsAt ? endsAt.toISOString() : null,
+        lastSyncedAt: parseDateOrNull(row?.last_synced_at),
+        sourceUrl: row?.source_url || null,
+        sourceSnapshotHash: row?.source_snapshot_hash || null,
+    };
+}
+
+async function fetchFaceToFacePeriodRow(year, term) {
+    const { data, error } = await supabase
+        .from(FACE_TO_FACE_PERIODS_TABLE)
+        .select('academic_year,term,source_url,source_snapshot_hash,face_to_face_start_at,face_to_face_end_at,last_synced_at')
+        .eq('academic_year', year)
+        .eq('term', term)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+}
+
+function shouldTriggerFaceToFaceSync(row, forceSync) {
+    if (forceSync) return true;
+    const lastSyncedAtMs = Date.parse(String(row?.last_synced_at || ''));
+    if (!Number.isFinite(lastSyncedAtMs)) return true;
+    return (Date.now() - lastSyncedAtMs) > FACE_TO_FACE_STALE_SYNC_THRESHOLD_MS;
+}
+
+async function trySyncFaceToFacePeriods(year, term, reason = 'client_staleness') {
+    try {
+        await supabase.functions.invoke(FACE_TO_FACE_SYNC_FUNCTION_NAME, {
+            body: {
+                reason,
+                year,
+                term,
+            },
+        });
+    } catch (error) {
+        console.warn('Unable to sync face-to-face class periods:', error);
+    }
+}
+
 function normalizeSlotTypeFilters(typeFilters) {
     if (!Array.isArray(typeFilters)) return null;
 
@@ -228,6 +322,47 @@ export function openCourseSearchForSlot(payload = {}) {
     storeSlotPrefilterPayload(normalized);
     navigateToCoursesForSlot();
     return normalized;
+}
+
+export async function getFaceToFaceClassStatus(yearValue, termValue, options = {}) {
+    const year = normalizeFaceToFaceYear(yearValue);
+    const term = normalizeFaceToFaceTerm(termValue);
+    const now = options.now instanceof Date ? options.now : new Date();
+    const forceRefresh = options.forceRefresh === true;
+    const forceSync = options.forceSync === true;
+
+    if (!year || !term) {
+        return buildFaceToFaceStatus({ year, term, row: null, now });
+    }
+
+    const cacheKey = `${year}-${term}`;
+    const cacheEntry = faceToFaceStatusCache.get(cacheKey);
+    const cacheIsFresh = cacheEntry && (Date.now() - cacheEntry.cachedAtMs) < FACE_TO_FACE_STATUS_CACHE_TTL_MS;
+    if (!forceRefresh && cacheIsFresh) {
+        return buildFaceToFaceStatus({ year, term, row: cacheEntry.row, now });
+    }
+
+    try {
+        let row = await fetchFaceToFacePeriodRow(year, term);
+        const shouldSync = shouldTriggerFaceToFaceSync(row, forceSync);
+        const shouldAttemptSync = shouldSync && (forceSync || !faceToFaceSyncAttemptedKeys.has(cacheKey));
+
+        if (shouldAttemptSync) {
+            faceToFaceSyncAttemptedKeys.add(cacheKey);
+            await trySyncFaceToFacePeriods(year, term, forceSync ? 'forced_client_sync' : 'client_staleness');
+            row = await fetchFaceToFacePeriodRow(year, term);
+        }
+
+        faceToFaceStatusCache.set(cacheKey, {
+            row,
+            cachedAtMs: Date.now(),
+        });
+
+        return buildFaceToFaceStatus({ year, term, row, now });
+    } catch (error) {
+        console.warn('Unable to load face-to-face class status:', error);
+        return buildFaceToFaceStatus({ year, term, row: null, now });
+    }
 }
 
 // Function to get color based on course type
@@ -930,7 +1065,14 @@ function normalizeAssessmentDescriptionText(value) {
         .replace(/[\s.!?;:：]+$/g, '')
         .trim();
 
-    return normalized ? `${normalized}.` : '';
+    if (!normalized) return '';
+
+    const firstLetterIndex = normalized.search(/[A-Za-z]/);
+    const normalizedWithCapitalizedFirstLetter = firstLetterIndex === -1
+        ? normalized
+        : `${normalized.slice(0, firstLetterIndex)}${normalized.charAt(firstLetterIndex).toUpperCase()}${normalized.slice(firstLetterIndex + 1)}`;
+
+    return `${normalizedWithCapitalizedFirstLetter}.`;
 }
 
 function normalizeEvaluationLabelPrefix(name) {
@@ -1257,6 +1399,10 @@ let activeCourseInfoTabController = null;
 let courseInfoOpenRequestVersion = 0;
 let courseInfoBodyLockSnapshot = null;
 let courseInfoBodyLockScrollY = 0;
+let courseInfoBodyLockContainer = null;
+let courseInfoBodyLockContainerScrollTop = 0;
+let courseInfoBodyLockContainerInlineStyle = null;
+let courseInfoBodyLockContainerFrame = null;
 let dsModalBodyLockDepth = 0;
 let dsModalBodyLockSnapshot = null;
 let dsModalBodyLockScrollY = 0;
@@ -1413,14 +1559,84 @@ function createFocusTrap(container, { onEscape = null } = {}) {
 }
 
 function lockBodyScrollForCourseInfoSheet() {
+    if (isCourseInfoMobileViewport()) {
+        // Mobile course-info sheet already uses a full-screen backdrop that blocks
+        // interaction with the background. Avoid body/app-content locking here
+        // because it can snap the underlying courses list to top while open.
+        return;
+    }
+
     if (courseInfoBodyLockSnapshot && !document.body.classList.contains('modal-open')) {
         courseInfoBodyLockSnapshot = null;
         courseInfoBodyLockScrollY = 0;
+        courseInfoBodyLockContainer = null;
+        courseInfoBodyLockContainerScrollTop = 0;
+        courseInfoBodyLockContainerInlineStyle = null;
+        courseInfoBodyLockContainerFrame = null;
     }
     if (courseInfoBodyLockSnapshot) return;
 
     const body = document.body;
-    courseInfoBodyLockScrollY = window.scrollY || window.pageYOffset || 0;
+    const appContent = document.getElementById('app-content');
+    const mainContent = document.querySelector('.page-courses .main-content')
+        || document.querySelector('#course-summary.calendar-page-modern .main-content')
+        || document.querySelector('.main-content');
+    const sectionContent = document.querySelector('section');
+    const syllabusMain = document.getElementById('syllabus-main');
+    const courseMainDiv = document.getElementById('course-main-div');
+    const containerCandidates = [
+        appContent,
+        mainContent,
+        sectionContent,
+        syllabusMain,
+        courseMainDiv
+    ].filter(Boolean);
+    const preLockContainerScrollPositions = containerCandidates.map((node) => ({
+        node,
+        scrollTop: Number(node?.scrollTop) || 0
+    }));
+    const windowScrollY = window.scrollY || window.pageYOffset || 0;
+    const rootScrollY = document.documentElement?.scrollTop || 0;
+    const bodyScrollY = document.body?.scrollTop || 0;
+    const scrollingElementScrollY = Number(document.scrollingElement?.scrollTop) || 0;
+    const lockScrollY = Math.max(windowScrollY, rootScrollY, bodyScrollY, scrollingElementScrollY);
+    const shouldUseWindowLock = lockScrollY > 0;
+
+    let lockContainer = null;
+    let lockContainerScrollTop = 0;
+    if (!shouldUseWindowLock) {
+        lockContainer = containerCandidates
+            .map((node) => ({ node, scrollTop: Number(node?.scrollTop) || 0 }))
+            .sort((a, b) => b.scrollTop - a.scrollTop)[0]?.node || null;
+        lockContainerScrollTop = Number(lockContainer?.scrollTop) || 0;
+        if (lockContainerScrollTop <= 0) {
+            lockContainer = null;
+            lockContainerScrollTop = 0;
+        }
+    }
+
+    courseInfoBodyLockScrollY = lockScrollY;
+    courseInfoBodyLockContainer = lockContainer;
+    courseInfoBodyLockContainerScrollTop = lockContainerScrollTop;
+    courseInfoBodyLockContainerInlineStyle = courseInfoBodyLockContainer
+        ? {
+            position: courseInfoBodyLockContainer.style.position,
+            top: courseInfoBodyLockContainer.style.top,
+            left: courseInfoBodyLockContainer.style.left,
+            right: courseInfoBodyLockContainer.style.right,
+            width: courseInfoBodyLockContainer.style.width,
+            overflow: courseInfoBodyLockContainer.style.overflow
+        }
+        : null;
+    courseInfoBodyLockContainerFrame = courseInfoBodyLockContainer
+        ? (() => {
+            const rect = courseInfoBodyLockContainer.getBoundingClientRect();
+            return {
+                left: Math.round(rect.left),
+                width: Math.round(rect.width)
+            };
+        })()
+        : null;
     courseInfoBodyLockSnapshot = {
         overflow: body.style.overflow,
         position: body.style.position,
@@ -1434,9 +1650,52 @@ function lockBodyScrollForCourseInfoSheet() {
     body.style.top = `-${courseInfoBodyLockScrollY}px`;
     body.style.width = '100%';
     body.classList.add('modal-open');
+
+    if (courseInfoBodyLockContainer) {
+        const frame = courseInfoBodyLockContainerFrame;
+        courseInfoBodyLockContainer.style.setProperty('position', 'fixed', 'important');
+        courseInfoBodyLockContainer.style.setProperty('top', `-${lockContainerScrollTop}px`, 'important');
+        if (frame && Number.isFinite(frame.left) && Number.isFinite(frame.width) && frame.width > 0) {
+            courseInfoBodyLockContainer.style.setProperty('left', `${frame.left}px`, 'important');
+            courseInfoBodyLockContainer.style.setProperty('right', 'auto', 'important');
+            courseInfoBodyLockContainer.style.setProperty('width', `${frame.width}px`, 'important');
+        } else {
+            courseInfoBodyLockContainer.style.setProperty('left', '0', 'important');
+            courseInfoBodyLockContainer.style.setProperty('right', '0', 'important');
+            courseInfoBodyLockContainer.style.setProperty('width', '100%', 'important');
+        }
+        courseInfoBodyLockContainer.style.setProperty('overflow', 'hidden', 'important');
+    }
+
+    const restorePreLockScrollState = () => {
+        window.scrollTo(0, lockScrollY);
+        if (document.documentElement) {
+            document.documentElement.scrollTop = lockScrollY;
+        }
+        if (document.body) {
+            document.body.scrollTop = lockScrollY;
+        }
+        preLockContainerScrollPositions.forEach(({ node, scrollTop }) => {
+            if (!node) return;
+            node.scrollTop = scrollTop;
+        });
+    };
+
+    // Keep the background anchored even if modal-open CSS/layout changes shift scroll containers.
+    restorePreLockScrollState();
+    window.requestAnimationFrame(() => {
+        restorePreLockScrollState();
+        window.requestAnimationFrame(() => {
+            restorePreLockScrollState();
+        });
+    });
 }
 
 function unlockBodyScrollForCourseInfoSheet() {
+    if (isCourseInfoMobileViewport() && !courseInfoBodyLockSnapshot) {
+        return;
+    }
+
     if (!courseInfoBodyLockSnapshot) {
         return;
     }
@@ -1444,6 +1703,9 @@ function unlockBodyScrollForCourseInfoSheet() {
     const body = document.body;
     const previousSnapshot = courseInfoBodyLockSnapshot;
     const previousScrollY = courseInfoBodyLockScrollY;
+    const lockedContainer = courseInfoBodyLockContainer;
+    const lockedContainerScrollTop = courseInfoBodyLockContainerScrollTop;
+    const lockedContainerInlineStyle = courseInfoBodyLockContainerInlineStyle;
 
     if (previousSnapshot) {
         body.style.overflow = previousSnapshot.overflow;
@@ -1464,9 +1726,31 @@ function unlockBodyScrollForCourseInfoSheet() {
     }
     courseInfoBodyLockSnapshot = null;
     courseInfoBodyLockScrollY = 0;
+    courseInfoBodyLockContainer = null;
+    courseInfoBodyLockContainerScrollTop = 0;
+    courseInfoBodyLockContainerInlineStyle = null;
+    courseInfoBodyLockContainerFrame = null;
+
+    if (lockedContainer && lockedContainerInlineStyle) {
+        lockedContainer.style.position = lockedContainerInlineStyle.position;
+        lockedContainer.style.top = lockedContainerInlineStyle.top;
+        lockedContainer.style.left = lockedContainerInlineStyle.left;
+        lockedContainer.style.right = lockedContainerInlineStyle.right;
+        lockedContainer.style.width = lockedContainerInlineStyle.width;
+        lockedContainer.style.overflow = lockedContainerInlineStyle.overflow;
+    }
 
     if (previousSnapshot) {
         window.scrollTo(0, previousScrollY);
+        if (document.documentElement) {
+            document.documentElement.scrollTop = previousScrollY;
+        }
+        if (document.body) {
+            document.body.scrollTop = previousScrollY;
+        }
+        if (lockedContainer) {
+            lockedContainer.scrollTop = lockedContainerScrollTop || 0;
+        }
     }
 }
 
@@ -2016,6 +2300,17 @@ function CourseInfoContent(model, options = {}) {
     const conflictPreviewMarkup = model?.conflictPreview
         ? `<div class="course-info-inline-warning" id="course-conflict-preview">${escapeHtml(model.conflictPreview)}</div>`
         : '<div class="course-info-inline-warning" id="course-conflict-preview" style="display:none;"></div>';
+    const renderDetailRowMarkup = (row) => `
+        <div class="ds-row course-detail-row key-row">
+            <div class="course-detail-meta">
+                <div class="ds-row-label course-detail-label">${escapeHtml(row.label)}</div>
+                ${row.helper ? `<div class="course-detail-helper">${escapeHtml(row.helper)}</div>` : ''}
+            </div>
+            <div class="ds-row-value course-detail-value ${row.subtle ? 'ds-row-subtle' : ''} ${row.pill ? 'course-detail-value--pill' : ''}">${row.html ?? escapeHtml(row.value || '—')}</div>
+        </div>
+    `;
+    const detailRowsLeft = detailRows.filter((_, index) => index % 2 === 0);
+    const detailRowsRight = detailRows.filter((_, index) => index % 2 === 1);
 
     return `
         <div class="course-info-stack">
@@ -2043,8 +2338,10 @@ function CourseInfoContent(model, options = {}) {
                     </div>
                 </section>
             `}
-            ${inlineWarningsMarkup ? `<div class="course-info-inline-warnings">${inlineWarningsMarkup}</div>` : ''}
-            ${conflictPreviewMarkup}
+            <div class="course-info-inline-warnings">
+                ${inlineWarningsMarkup}
+                ${conflictPreviewMarkup}
+            </div>
 
             <section class="ds-card">
                 <div class="ds-card-header">
@@ -2052,15 +2349,12 @@ function CourseInfoContent(model, options = {}) {
                 </div>
                 <div class="key-details-inner">
                     <div class="course-info-details-grid">
-                    ${detailRows.map((row) => `
-                        <div class="ds-row course-detail-row key-row">
-                            <div class="course-detail-meta">
-                                <div class="ds-row-label course-detail-label">${escapeHtml(row.label)}</div>
-                                ${row.helper ? `<div class="course-detail-helper">${escapeHtml(row.helper)}</div>` : ''}
-                            </div>
-                            <div class="ds-row-value course-detail-value ${row.subtle ? 'ds-row-subtle' : ''} ${row.pill ? 'course-detail-value--pill' : ''}">${row.html ?? escapeHtml(row.value || '—')}</div>
+                        <div class="course-info-details-column course-info-details-column--left">
+                            ${detailRowsLeft.map(renderDetailRowMarkup).join('')}
                         </div>
-                    `).join('')}
+                        <div class="course-info-details-column course-info-details-column--right">
+                            ${detailRowsRight.map(renderDetailRowMarkup).join('')}
+                        </div>
                     </div>
                 </div>
             </section>
@@ -2400,7 +2694,7 @@ function normalizeNonIlaTitleDedupKey(value) {
         .replace(/[\s\-‐‑‒–—―_]+/g, '');
 }
 
-function normalizeNonIlaCourseTitle(rawTitle) {
+export function normalizeNonIlaCourseTitle(rawTitle) {
     let title = String(rawTitle || '')
         .replace(/^[\s○△▲▽●◆◇■□]+/g, '')
         .replace(/[　]+/g, ' ')
@@ -3413,16 +3707,22 @@ export async function fetchAvailableSemesters(options = {}) {
     ensureCoursesRealtimeInvalidation();
     const source = normalizeCourseSource(options?.source);
 
+    const latestActiveFallback = parseSemesterValue(LATEST_ACTIVE_SEMESTER_VALUE);
+    const defaultSemesters = latestActiveFallback?.value ? [{
+        term: latestActiveFallback.term,
+        year: latestActiveFallback.year,
+        label: `${latestActiveFallback.term} ${latestActiveFallback.year}`
+    }] : [];
+
     // Return cached data if available
     if (availableSemestersCacheBySource[source] !== null) {
-        console.log(`Using cached available semesters (${source}):`, availableSemestersCacheBySource[source]);
-        return availableSemestersCacheBySource[source];
+        const cachedSemesters = filterBlockedSemesters(availableSemestersCacheBySource[source]);
+        if (cachedSemesters.length !== availableSemestersCacheBySource[source].length) {
+            availableSemestersCacheBySource[source] = cachedSemesters;
+        }
+        console.log(`Using cached available semesters (${source}):`, cachedSemesters);
+        return cachedSemesters;
     }
-
-    const defaultSemesters = [
-        { term: 'Fall', year: 2025, label: 'Fall 2025' },
-        { term: 'Spring', year: 2025, label: 'Spring 2025' }
-    ];
 
     const sortSemesters = (semesters) => semesters.sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
@@ -3491,6 +3791,8 @@ export async function fetchAvailableSemesters(options = {}) {
                 console.warn('No non-ILA semesters found in database');
             }
         }
+
+        semesters = filterBlockedSemesters(semesters);
 
         if (semesters.length === 0) {
             if (source === COURSE_SOURCE_NONILA) {
@@ -4725,7 +5027,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         button.style.cursor = '';
 
         if (state === 'locked') {
-            button.textContent = "Registration Closed";
+            button.textContent = "Timetable Updates Closed";
             button.classList.add('is-locked');
             button.disabled = true;
             button.style.cursor = "not-allowed";
@@ -4741,10 +5043,10 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }
 
         if (state === 'remove') {
-            button.textContent = "Remove Course";
+            button.textContent = "Remove from Timetable";
             button.classList.add('is-remove');
         } else {
-            button.textContent = "Register";
+            button.textContent = "Add to Timetable";
             button.classList.add('is-add');
         }
 
@@ -4833,11 +5135,15 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 : null
         });
     }
+    courseInfoInlineWarnings.push({
+        kind: 'warning',
+        text: 'Adding this class here only updates your timetable. Complete official registration in DUET during the university registration period.'
+    });
     if (session && requiredYearMeta.hasRequiredYear && requiredYearMeta.hasKnownUserYear && !requiredYearMeta.meetsRequirement) {
         if (isAlreadySelected) {
             courseInfoInlineWarnings.push({
                 kind: 'error',
-                text: `Your profile is set to ${requiredYearMeta.userYearLabel}, but this course requires ${requiredYearMeta.requiredYearLabel} for new registrations.`
+                text: `Your profile is set to ${requiredYearMeta.userYearLabel}, but this course requires ${requiredYearMeta.requiredYearLabel} for new timetable additions.`
             });
         } else {
             courseInfoInlineWarnings.push({
@@ -4848,12 +5154,12 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
     } else if (session && shouldWarnUnknownYear) {
         courseInfoInlineWarnings.push({
             kind: 'warning',
-            text: `We could not verify your current year. You can still register, but this course requires ${requiredYearMeta.requiredYearLabel}`
+            text: `We could not verify your current year. You can still add this class to your timetable, but this course requires ${requiredYearMeta.requiredYearLabel}`
         });
     }
     const visibleBadges = [
         ...(session ? [{
-            label: isAlreadySelected ? 'Registered' : 'Not registered',
+            label: isAlreadySelected ? 'In timetable' : 'Not in timetable',
             variant: isAlreadySelected ? 'success' : 'muted',
             role: 'registration-status'
         }] : []),
@@ -4987,7 +5293,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
         }
 
         registrationBadge.className = `ds-badge ${isAlreadySelected ? 'ds-badge--success' : 'ds-badge--muted'}`;
-        registrationBadge.textContent = isAlreadySelected ? 'Registered' : 'Not registered';
+        registrationBadge.textContent = isAlreadySelected ? 'In timetable' : 'Not in timetable';
     };
     syncRegistrationStatusBadge();
 
@@ -5987,6 +6293,13 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
     // Load and display assignments for this course
     if (classAssignments) {
+        const OPEN_NEW_ASSIGNMENT_MODAL_INTENT_KEY = 'open_new_assignment_modal';
+        const OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY = 'ila_open_new_assignment_course';
+        const OPEN_NEW_ASSIGNMENT_URL_FLAG_PARAM = 'newAssignment';
+        const OPEN_NEW_ASSIGNMENT_URL_COURSE_CODE_PARAM = 'prefillCourseCode';
+        const OPEN_NEW_ASSIGNMENT_URL_YEAR_PARAM = 'prefillYear';
+        const OPEN_NEW_ASSIGNMENT_URL_TERM_PARAM = 'prefillTerm';
+        const OPEN_NEW_ASSIGNMENT_URL_TITLE_PARAM = 'prefillCourseTitle';
         classInfo.classList.remove('courseinfo-guest-assignments-preview');
         if (isDedicatedCoursePage) {
             classAssignments.classList.remove('ds-card');
@@ -6011,6 +6324,50 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             const query = params.toString();
             const hash = options.hash ? `#${options.hash}` : '';
             return `${withBase('/assignments')}${query ? `?${query}` : ''}${hash}`;
+        };
+
+        const buildCourseAssignmentPrefillIntent = () => {
+            const courseCode = String(course?.course_code || '').trim();
+            if (!courseCode) return null;
+
+            const yearValue = course?.academic_year;
+            const normalizedTerm = normalizeCourseTerm(course?.term);
+            const title = String(course?.title || '').trim();
+
+            return {
+                courseCode,
+                year: yearValue != null ? String(yearValue) : null,
+                term: normalizedTerm ? String(normalizedTerm) : null,
+                courseTitle: title || null,
+                timestamp: Date.now()
+            };
+        };
+
+        const buildCourseAssignmentComposerURL = () => {
+            const params = new URLSearchParams();
+            params.set(OPEN_NEW_ASSIGNMENT_URL_FLAG_PARAM, '1');
+
+            const prefill = buildCourseAssignmentPrefillIntent();
+            if (prefill?.courseCode) params.set(OPEN_NEW_ASSIGNMENT_URL_COURSE_CODE_PARAM, String(prefill.courseCode));
+            if (prefill?.year) params.set(OPEN_NEW_ASSIGNMENT_URL_YEAR_PARAM, String(prefill.year));
+            if (prefill?.term) params.set(OPEN_NEW_ASSIGNMENT_URL_TERM_PARAM, String(prefill.term));
+            if (prefill?.courseTitle) params.set(OPEN_NEW_ASSIGNMENT_URL_TITLE_PARAM, String(prefill.courseTitle));
+
+            const query = params.toString();
+            return `${withBase('/assignments')}${query ? `?${query}` : ''}`;
+        };
+
+        const storeOpenNewAssignmentIntent = (payload = null) => {
+            try {
+                sessionStorage.setItem(OPEN_NEW_ASSIGNMENT_MODAL_INTENT_KEY, '1');
+                if (payload) {
+                    sessionStorage.setItem(OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY, JSON.stringify(payload));
+                } else {
+                    sessionStorage.removeItem(OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY);
+                }
+            } catch (error) {
+                console.warn('Unable to store assignment creation intent from course info:', error);
+            }
         };
 
         const navigateToCourseAssignmentsPage = (url) => {
@@ -6049,8 +6406,11 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             const showLink = options.showLink !== false;
             const linkText = options.linkText || 'Open assignments';
             const linkIcon = options.linkIcon || null;
-            const linkId = options.linkId || 'add-assignment-link';
+            const openComposerForCourse = options.openComposerForCourse === true;
             const targetHref = options.targetHref || buildCourseAssignmentsPageURL();
+            const composerTargetHref = options.composerTargetHref || buildCourseAssignmentComposerURL();
+            const resolvedTargetHref = openComposerForCourse ? composerTargetHref : targetHref;
+            const linkAction = openComposerForCourse ? 'open-composer' : 'open-assignments';
             const assignmentCount = Number.isFinite(Number(options.assignmentCount))
                 ? Math.max(0, Math.floor(Number(options.assignmentCount)))
                 : 0;
@@ -6063,7 +6423,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         <p class="course-assignments-total">${formatCourseAssignmentCountLabel(assignmentCount)}</p>
                     </div>
                     ${showLink ? `
-                        <a href="${targetHref}" class="add-assignment-link${linkIcon ? ' add-assignment-link--icon' : ''}" id="${linkId}">
+                        <a href="${resolvedTargetHref}" class="add-assignment-link${linkIcon ? ' add-assignment-link--icon' : ''}" data-course-assignments-action="${linkAction}">
                             ${linkIcon === 'plus' ? '<span class="add-assignment-link-icon" aria-hidden="true"></span>' : ''}
                             <span>${linkText}</span>
                         </a>
@@ -6076,10 +6436,16 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             updateOverviewAssignmentsShortcut(0);
 
             if (showLink) {
-                const actionLink = document.getElementById(linkId);
+                const actionLink = classAssignments.querySelector('[data-course-assignments-action]');
                 if (actionLink) {
                     actionLink.addEventListener('click', (e) => {
                         e.preventDefault();
+                        const action = actionLink.getAttribute('data-course-assignments-action');
+                        if (action === 'open-composer') {
+                            storeOpenNewAssignmentIntent(buildCourseAssignmentPrefillIntent());
+                            navigateToCourseAssignmentsPage(composerTargetHref);
+                            return;
+                        }
                         navigateToCourseAssignmentsPage(targetHref);
                     });
                 }
@@ -6196,7 +6562,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 ));
 
                 if (!isRegisteredForCourse) {
-                    renderAssignmentsEmptyState('Add this course to your schedule to start adding assignments to it.', {
+                    renderAssignmentsEmptyState('Add this course to your timetable to start adding assignments to it.', {
                         showLink: false
                     });
                 } else {
@@ -6328,7 +6694,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                         <p class="subtitle-opacity">Your Assignments</p>
                                         <p class="course-assignments-total">${formatCourseAssignmentCountLabel(matchingAssignments.length)}</p>
                                     </div>
-                                    <a href="${buildCourseAssignmentsPageURL()}" class="view-all-assignments-btn" id="view-all-assignments-link">
+                                    <a href="${buildCourseAssignmentsPageURL()}" class="view-all-assignments-btn" data-course-assignments-action="view-all">
                                         <div class="button-icon">
                                             <p>${viewAllLabel}</p>
                                             <div class="course-assignments-nav-icon" aria-hidden="true"></div>
@@ -6371,7 +6737,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                                 });
                             });
 
-                            const viewAllLink = document.getElementById('view-all-assignments-link');
+                            const viewAllLink = classAssignments.querySelector('[data-course-assignments-action="view-all"]');
                             if (viewAllLink) {
                                 viewAllLink.addEventListener('click', (e) => {
                                     e.preventDefault();
@@ -6381,7 +6747,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         } else {
                             renderAssignmentsEmptyState('No assignments for this course yet.', {
                                 linkText: 'Add Assignment',
-                                linkIcon: 'plus'
+                                linkIcon: 'plus',
+                                openComposerForCourse: true
                             });
                         }
                     }
@@ -7284,7 +7651,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     <span class="course-info-save-icon" aria-hidden="true"></span>
                     <span class="course-info-save-label">Save</span>
                 </button>
-                <button type="button" class="btn-secondary course-info-write-review-btn" data-action="write-review-footer" hidden>Write Review</button>
+                <button type="button" class="btn-secondary course-info-write-review-btn" data-action="write-review-footer" hidden>Add Review</button>
             </div>
             <div class="course-info-footer-primary">
                 <button id="class-add-remove"></button>
@@ -7605,7 +7972,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
             // Check if we can modify courses for this semester
             if (!isCurrentSemester()) {
-                showCourseActionToast('Registration is closed for this semester.');
+                showCourseActionToast('Timetable changes are closed for this semester.');
                 return;
             }
 
@@ -7613,7 +7980,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
             if (!session) {
                 // Use authentication modal system
                 if (window.requireAuth) {
-                    window.requireAuth('add this course to your schedule', async () => {
+                    window.requireAuth('add this course to your timetable', async () => {
                         // After successful authentication, update the UI and check course status
                         await updateCourseButtonState(course, newButton);
                         // Then trigger the add course action
@@ -7671,7 +8038,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                     ) {
                         didShowUnknownYearWarning = true;
                         showCourseActionToast(
-                            `We could not verify your current year. Registration is allowed, but this course requires ${requiredYearMeta.requiredYearLabel}.`,
+                            `We could not verify your current year. Adding to your timetable is allowed, but this course requires ${requiredYearMeta.requiredYearLabel}.`,
                             3600
                         );
                     }
@@ -7682,7 +8049,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                 if (isCurrentlySelected) {
                     const shouldRemove = await openConfirmModal({
                         title: 'Remove course',
-                        message: 'Remove this course from your schedule?',
+                        message: 'Remove this course from your timetable?',
                         confirmLabel: 'Remove',
                         cancelLabel: 'Cancel',
                         destructive: true
@@ -7708,8 +8075,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (removalStats.selectedCount > 0 && removalStats.totalCredits < SEMESTER_MIN_CREDITS) {
                         showCourseActionToast(
-                            `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                            `This change would leave you with ${formatCreditsValue(removalStats.totalCredits)} credits.`,
+                            `Minimum limit: You must keep at least ${SEMESTER_MIN_CREDITS} credits in your timetable per semester. ` +
+                            `This change would leave your timetable with ${formatCreditsValue(removalStats.totalCredits)} credits.`,
                             3600
                         );
                         return;
@@ -7726,7 +8093,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         return;
                     }
 
-                    showCourseActionToast('Course removed successfully!');
+                    showCourseActionToast('Course removed from timetable.');
                     // Update button state after successful removal
                     await updateCourseButtonState(course, newButton);
                 } else {
@@ -7775,8 +8142,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                                 if (replacementStats.totalCredits > SEMESTER_MAX_CREDITS) {
                                     showCourseActionToast(
-                                        `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
-                                        `This change would bring you to ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
+                                        `Maximum limit: You can add up to ${SEMESTER_MAX_CREDITS} credits to your timetable per semester. ` +
+                                        `This change would bring your timetable to ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
                                         3600
                                     );
                                     return;
@@ -7784,8 +8151,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                                 if (replacementStats.selectedCount > 0 && replacementStats.totalCredits < SEMESTER_MIN_CREDITS) {
                                     showCourseActionToast(
-                                        `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                                        `This change would leave you with ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
+                                        `Minimum limit: You must keep at least ${SEMESTER_MIN_CREDITS} credits in your timetable per semester. ` +
+                                        `This change would leave your timetable with ${formatCreditsValue(replacementStats.totalCredits)} credits.`,
                                         3600
                                     );
                                     return;
@@ -7850,8 +8217,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (additionStats.totalCredits > SEMESTER_MAX_CREDITS) {
                         showCourseActionToast(
-                            `Maximum limit: You can register for up to ${SEMESTER_MAX_CREDITS} credits per semester. ` +
-                            `This change would bring you to ${formatCreditsValue(additionStats.totalCredits)} credits.`,
+                            `Maximum limit: You can add up to ${SEMESTER_MAX_CREDITS} credits to your timetable per semester. ` +
+                            `This change would bring your timetable to ${formatCreditsValue(additionStats.totalCredits)} credits.`,
                             3600
                         );
                         return;
@@ -7859,8 +8226,8 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
 
                     if (additionStats.selectedCount > 0 && additionStats.totalCredits < SEMESTER_MIN_CREDITS) {
                         showCourseActionToast(
-                            `Minimum limit: You must register for at least ${SEMESTER_MIN_CREDITS} credits per semester. ` +
-                            `This change would leave you with ${formatCreditsValue(additionStats.totalCredits)} credits.`,
+                            `Minimum limit: You must keep at least ${SEMESTER_MIN_CREDITS} credits in your timetable per semester. ` +
+                            `This change would leave your timetable with ${formatCreditsValue(additionStats.totalCredits)} credits.`,
                             3600
                         );
                         return;
@@ -7879,7 +8246,7 @@ export async function openCourseInfoMenu(course, updateURL = true, options = {})
                         return;
                     }
 
-                    showCourseActionToast('Course added successfully!');
+                    showCourseActionToast('Course added to timetable.');
                 }
 
                 // Update button and refresh calendar
@@ -9154,7 +9521,16 @@ window.deleteReview = async function (reviewId) {
         showGlobalToast('Review deleted successfully!');
         closeReviewModal();
 
-        // Reload the page to show updated reviews
+        // Keep Settings review deep-links stable after deletion so the user returns
+        // to the same tab instead of the default settings section.
+        const rawAppPath = String(getCurrentAppPath() || '/').split('?')[0].split('#')[0] || '/';
+        const normalizedAppPath = rawAppPath.length > 1 ? (rawAppPath.replace(/\/+$/, '') || '/') : rawAppPath;
+        if (normalizedAppPath.startsWith('/settings/')) {
+            window.location.assign(withBase('/settings/reviews/'));
+            return;
+        }
+
+        // Reload the page to show updated reviews.
         window.location.reload();
 
     } catch (error) {
@@ -9903,12 +10279,12 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     ));
 
     const introCopy = hasSectionConflict && hasTimeConflict
-        ? 'This selection overlaps your schedule and also duplicates a section of a class you already registered for.'
+        ? 'This selection overlaps your timetable and also duplicates a section of a class already in your timetable.'
         : (hasSectionConflict
-            ? 'This selection is another section of a class you already registered for. You can keep only one section.'
-            : 'This course conflicts with a course you already registered for.');
+            ? 'This selection is another section of a class already in your timetable. You can keep only one section.'
+            : 'This course conflicts with a course already in your timetable.');
     const questionCopy = hasSectionConflict
-        ? 'Choose which course section to keep in your schedule.'
+        ? 'Choose which course section to keep in your timetable.'
         : 'Choose what to keep for this time slot.';
 
     const escapeHtml = (value) => String(value ?? '')
@@ -10088,7 +10464,7 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
             <p class="conflict-intro">${escapeHtml(introCopy)}</p>
             <div class="conflict-comparison-grid">
                 <section class="conflict-comparison-column">
-                    <h3 class="conflict-column-title">Currently registered</h3>
+                    <h3 class="conflict-column-title">Currently in timetable</h3>
                     <div class="conflict-course-stack">
                         ${safeConflictingCourses.length
             ? safeConflictingCourses
@@ -10096,13 +10472,13 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
                     const isSectionConflict = String(courseEntry?.conflict_type || '') === 'same-course-section';
                     return buildCourseCardMarkup(
                         courseEntry,
-                        'Registered',
+                        'In timetable',
                         'conflict-course-card--existing',
                         { emphasisMode: isSectionConflict ? 'code' : 'time' }
                     );
                 })
                 .join('')
-            : '<p class="conflict-empty">No registered course details found.</p>'}
+            : '<p class="conflict-empty">No timetable course details found.</p>'}
                     </div>
                 </section>
                 <section class="conflict-comparison-column">
@@ -10124,8 +10500,8 @@ export function showTimeConflictModal(conflictingCourses, newCourse, onResolve) 
     `;
 
     const footerHtml = `
-        <button type="button" class="btn-secondary conflict-cancel" data-action="conflict-keep">Keep Registered Course</button>
-        <button type="button" class="btn-primary conflict-replace" data-action="conflict-replace">Replace & Register</button>
+        <button type="button" class="btn-secondary conflict-cancel" data-action="conflict-keep">Keep Timetable Course</button>
+        <button type="button" class="btn-primary conflict-replace" data-action="conflict-replace">Replace & Add to Timetable</button>
     `;
 
     let resolved = false;

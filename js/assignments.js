@@ -1,9 +1,17 @@
 import { supabase } from "../supabase.js";
-import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName, openConfirmModal, showGlobalToast } from "./shared.js";
+import { fetchAvailableSemesters, fetchCourseData, getCourseColorByType, formatProfessorDisplayName, normalizeNonIlaCourseTitle, openConfirmModal, showGlobalToast } from "./shared.js";
 import { applyPreferredTermToGlobals, normalizeTermValue, resolvePreferredTermForAvailableSemesters, setPreferredTermValue } from "./preferences.js";
 import { openSemesterMobileSheet, closeSemesterMobileSheet } from "./semester-mobile-sheet.js";
 
 const OPEN_ASSIGNMENT_INTENT_KEY = 'ila_open_assignment_id';
+const OPEN_NEW_ASSIGNMENT_MODAL_INTENT_KEY = 'open_new_assignment_modal';
+const OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY = 'ila_open_new_assignment_course';
+const OPEN_NEW_ASSIGNMENT_COURSE_INTENT_MAX_AGE_MS = 10 * 60 * 1000;
+const OPEN_NEW_ASSIGNMENT_URL_FLAG_PARAM = 'newAssignment';
+const OPEN_NEW_ASSIGNMENT_URL_COURSE_CODE_PARAM = 'prefillCourseCode';
+const OPEN_NEW_ASSIGNMENT_URL_YEAR_PARAM = 'prefillYear';
+const OPEN_NEW_ASSIGNMENT_URL_TERM_PARAM = 'prefillTerm';
+const OPEN_NEW_ASSIGNMENT_URL_TITLE_PARAM = 'prefillCourseTitle';
 
 /**
  * Assignments Manager - Handles all assignment CRUD operations and UI
@@ -36,6 +44,10 @@ class AssignmentsManager {
         this.courseNameDisplayMaxLengthMobile = 32;
         this.courseNameDisplayMaxLengthDesktop = 18;
         this.coursePrefilter = this.readCoursePrefilterFromURL();
+        this.assignmentModalInitialState = null;
+        this.assignmentModalCloseConfirmInFlight = false;
+        this.assignmentModalDirty = false;
+        this.assignmentModalSuppressDirtyTracking = false;
         this.quickFilter = 'all';
         this.searchQuery = '';
         this.sortKey = 'due_date_asc';
@@ -150,9 +162,9 @@ class AssignmentsManager {
 
     consumeOpenNewAssignmentIntent() {
         try {
-            const shouldOpen = sessionStorage.getItem('open_new_assignment_modal') === '1';
+            const shouldOpen = sessionStorage.getItem(OPEN_NEW_ASSIGNMENT_MODAL_INTENT_KEY) === '1';
             if (shouldOpen) {
-                sessionStorage.removeItem('open_new_assignment_modal');
+                sessionStorage.removeItem(OPEN_NEW_ASSIGNMENT_MODAL_INTENT_KEY);
             }
             return shouldOpen;
         } catch (error) {
@@ -180,27 +192,132 @@ class AssignmentsManager {
         return this.assignments.some((item) => String(item?.id || '').trim() === normalizedId);
     }
 
+    normalizeCoursePrefilterPayload(payload = {}) {
+        const courseCode = String(payload?.courseCode || payload?.course_code || '').trim();
+        const year = String(payload?.year || '').trim();
+        const term = String(payload?.term || '').trim();
+        const courseTitle = String(payload?.courseTitle || payload?.course_title || '').trim();
+
+        if (!courseCode) return null;
+
+        return {
+            courseCode,
+            normalizedCourseCode: courseCode.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+            year: year || null,
+            term: term || null,
+            courseTitle: courseTitle || null
+        };
+    }
+
     readCoursePrefilterFromURL() {
         try {
             const params = new URLSearchParams(window.location.search || '');
-            const courseCode = (params.get('courseCode') || params.get('course_code') || '').trim();
-            const year = (params.get('year') || '').trim();
-            const term = (params.get('term') || '').trim();
-            const courseTitle = (params.get('courseTitle') || '').trim();
-
-            if (!courseCode) return null;
-
-            return {
-                courseCode,
-                normalizedCourseCode: courseCode.toUpperCase().replace(/[^A-Z0-9]/g, ''),
-                year: year || null,
-                term: term || null,
-                courseTitle: courseTitle || null
-            };
+            return this.normalizeCoursePrefilterPayload({
+                courseCode: params.get('courseCode') || params.get('course_code') || '',
+                year: params.get('year') || '',
+                term: params.get('term') || '',
+                courseTitle: params.get('courseTitle') || ''
+            });
         } catch (error) {
             console.warn('Unable to read assignment course prefilter from URL:', error);
             return null;
         }
+    }
+
+    consumeOpenNewAssignmentCourseIntent() {
+        try {
+            const raw = sessionStorage.getItem(OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY);
+            if (!raw) return null;
+            sessionStorage.removeItem(OPEN_NEW_ASSIGNMENT_COURSE_INTENT_KEY);
+
+            const payload = JSON.parse(raw);
+            const timestamp = Number(payload?.timestamp) || 0;
+            if (timestamp > 0 && (Date.now() - timestamp) > OPEN_NEW_ASSIGNMENT_COURSE_INTENT_MAX_AGE_MS) {
+                return null;
+            }
+
+            return this.normalizeCoursePrefilterPayload(payload);
+        } catch (error) {
+            console.warn('Unable to read assignment course prefill intent:', error);
+            return null;
+        }
+    }
+
+    consumeOpenNewAssignmentIntentFromURL() {
+        try {
+            const url = new URL(window.location.href);
+            const params = url.searchParams;
+            const shouldOpenFromURL = String(params.get(OPEN_NEW_ASSIGNMENT_URL_FLAG_PARAM) || '').toLowerCase();
+            const shouldOpen = shouldOpenFromURL === '1' || shouldOpenFromURL === 'true';
+            if (!shouldOpen) {
+                return { shouldOpen: false, prefillCourse: null };
+            }
+
+            const prefillCourse = this.normalizeCoursePrefilterPayload({
+                courseCode: params.get(OPEN_NEW_ASSIGNMENT_URL_COURSE_CODE_PARAM) || '',
+                year: params.get(OPEN_NEW_ASSIGNMENT_URL_YEAR_PARAM) || '',
+                term: params.get(OPEN_NEW_ASSIGNMENT_URL_TERM_PARAM) || '',
+                courseTitle: params.get(OPEN_NEW_ASSIGNMENT_URL_TITLE_PARAM) || ''
+            });
+
+            [
+                OPEN_NEW_ASSIGNMENT_URL_FLAG_PARAM,
+                OPEN_NEW_ASSIGNMENT_URL_COURSE_CODE_PARAM,
+                OPEN_NEW_ASSIGNMENT_URL_YEAR_PARAM,
+                OPEN_NEW_ASSIGNMENT_URL_TERM_PARAM,
+                OPEN_NEW_ASSIGNMENT_URL_TITLE_PARAM
+            ].forEach((key) => params.delete(key));
+
+            const nextSearch = params.toString();
+            const nextURL = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash || ''}`;
+            window.history.replaceState(null, '', nextURL);
+
+            return { shouldOpen: true, prefillCourse };
+        } catch (error) {
+            console.warn('Unable to read assignment URL open intent:', error);
+            return { shouldOpen: false, prefillCourse: null };
+        }
+    }
+
+    consumeOpenNewAssignmentRequest() {
+        const shouldOpenFromSession = this.consumeOpenNewAssignmentIntent();
+        const prefillFromSession = this.consumeOpenNewAssignmentCourseIntent();
+        const fromURL = this.consumeOpenNewAssignmentIntentFromURL();
+        return {
+            shouldOpen: Boolean(shouldOpenFromSession || fromURL.shouldOpen),
+            prefillCourse: prefillFromSession || fromURL.prefillCourse || null
+        };
+    }
+
+    resolveCoursePrefillSelection(prefill = null) {
+        if (!prefill?.normalizedCourseCode) return null;
+
+        const normalizeCode = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const normalizeTerm = (value) => String(value || '').trim().toLowerCase();
+        const normalizeYear = (value) => String(value ?? '').trim();
+        const targetYear = normalizeYear(prefill.year);
+        const targetTerm = normalizeTerm(prefill.term);
+
+        const candidates = (this.userCourses || []).filter((course) =>
+            normalizeCode(course?.code) === prefill.normalizedCourseCode
+        );
+
+        const preferredCourse = candidates.find((course) => {
+            const yearMatches = !targetYear || normalizeYear(course?.year) === targetYear;
+            const termMatches = !targetTerm || normalizeTerm(course?.term) === targetTerm;
+            return yearMatches && termMatches;
+        }) || candidates[0] || null;
+
+        const code = String(preferredCourse?.code || prefill.courseCode || '').trim();
+        if (!code) return null;
+
+        return {
+            code,
+            name: String(preferredCourse?.title || prefill.courseTitle || code).trim(),
+            color: String(preferredCourse?.color || '').trim(),
+            year: String(preferredCourse?.year ?? prefill.year ?? '').trim(),
+            term: String(preferredCourse?.term || prefill.term || '').trim()
+        };
     }
 
     matchesCoursePrefilter(assignment) {
@@ -248,7 +365,7 @@ class AssignmentsManager {
 
         try {
             console.log('Assignments Manager: Starting initialization...');
-            const shouldOpenNewAssignment = this.consumeOpenNewAssignmentIntent();
+            const openNewAssignmentRequest = this.consumeOpenNewAssignmentRequest();
             const openAssignmentId = this.consumeOpenAssignmentIntent();
 
             // Setup event listeners FIRST - these should always work
@@ -260,8 +377,8 @@ class AssignmentsManager {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
                 console.log('User not authenticated, assignments data not loaded (but UI is ready)');
-                if (shouldOpenNewAssignment) {
-                    await this.openNewAssignmentModal();
+                if (openNewAssignmentRequest.shouldOpen) {
+                    await this.openNewAssignmentModal({ prefillCourse: openNewAssignmentRequest.prefillCourse });
                 }
                 this.isInitialized = true;
                 return;
@@ -290,11 +407,28 @@ class AssignmentsManager {
             if (!handledHashRoute && !handledOpenAssignmentIntent && openAssignmentId) {
                 console.warn('Assignment not found for stored home navigation intent:', openAssignmentId);
             }
-            if (!handledHashRoute && !handledOpenAssignmentIntent && shouldOpenNewAssignment) {
-                await this.openNewAssignmentModal();
+            if (!handledHashRoute && !handledOpenAssignmentIntent && openNewAssignmentRequest.shouldOpen) {
+                await this.openNewAssignmentModal({ prefillCourse: openNewAssignmentRequest.prefillCourse });
             }
         } finally {
             this.isInitializing = false;
+        }
+    }
+
+    async handleRouteActivation() {
+        if (this.isInitializing) return;
+        if (!this.isInitialized) return;
+
+        const openNewAssignmentRequest = this.consumeOpenNewAssignmentRequest();
+        const openAssignmentId = this.consumeOpenAssignmentIntent();
+
+        if (openAssignmentId && this.hasAssignmentById(openAssignmentId)) {
+            await this.openAssignmentById(openAssignmentId);
+            return;
+        }
+
+        if (openNewAssignmentRequest.shouldOpen) {
+            await this.openNewAssignmentModal({ prefillCourse: openNewAssignmentRequest.prefillCourse });
         }
     }
 
@@ -330,6 +464,7 @@ class AssignmentsManager {
             const coursesSelection = profile?.courses_selection || [];
             this.userCourseSelections = coursesSelection
                 .filter(course => course?.code && course?.year && course?.term);
+            this.userCourses = [];
             console.log('Raw courses_selection:', coursesSelection);
 
             // Deduplicate course codes first
@@ -337,42 +472,110 @@ class AssignmentsManager {
             console.log('Unique course codes:', uniqueCourseCodes);
 
             if (uniqueCourseCodes.length > 0) {
-                const { data: coursesData, error: coursesError } = await supabase
-                    .from('courses')
-                    .select('course_code, title, type')
-                    .in('course_code', uniqueCourseCodes);
+                const normalizeCode = (value) => String(value || '').trim().toUpperCase();
+                const normalizeYear = (value) => String(value ?? '').trim();
+                const normalizeTerm = (value) => String(value || '').trim().toLowerCase();
+                const isNonIlaCourse = (source = '', typeValue = '') => {
+                    if (String(source || '').trim().toLowerCase() === 'nonila') return true;
+                    return String(typeValue || '').trim().toLowerCase().includes('non-ila');
+                };
+                const normalizeCourseTitleForPicker = (rawTitle, { source = '', type = '' } = {}) => {
+                    const fallbackTitle = String(rawTitle || '').trim();
+                    if (!fallbackTitle) return '';
+                    if (!isNonIlaCourse(source, type)) return fallbackTitle;
+                    return normalizeNonIlaCourseTitle(fallbackTitle) || fallbackTitle;
+                };
+                const buildLookupKey = ({ code, year, term }) => `${code}::${year}::${term}`;
+                const upsertPreferredRecord = (map, key, nextRecord) => {
+                    if (!key || !nextRecord) return;
+                    const existingRecord = map.get(key);
+                    if (!existingRecord) {
+                        map.set(key, nextRecord);
+                        return;
+                    }
+                    const existingHasTitle = Boolean(existingRecord.title);
+                    const nextHasTitle = Boolean(nextRecord.title);
+                    if (!existingHasTitle && nextHasTitle) {
+                        map.set(key, nextRecord);
+                    }
+                };
+                const toLookupRecord = (courseRow, source = 'ila') => {
+                    const code = normalizeCode(courseRow?.course_code);
+                    if (!code) return null;
 
-                if (!coursesError && coursesData && coursesData.length > 0) {
-                    // Deduplicate by course_code in case the query returns duplicates
-                    const seenCodes = new Set();
-                    const courseMap = new Map();
-                    coursesData.forEach(course => {
-                        courseMap.set(course.course_code, course);
-                    });
+                    const rawType = String(courseRow?.type || '').trim();
+                    const type = rawType || (source === 'nonila' ? 'Non-ILA Classes' : 'General');
+                    const title = normalizeCourseTitleForPicker(courseRow?.title, { source, type });
 
-                    this.userCourses = this.userCourseSelections.map(selection => {
-                        const course = courseMap.get(selection.code);
-                        const type = course?.type || selection.type || 'General';
-                        return {
-                            code: selection.code,
-                            title: course?.title || selection.title || selection.code,
-                            type,
-                            color: getCourseColorByType(type),
-                            year: selection.year,
-                            term: selection.term
-                        };
-                    });
-                } else {
-                    // Fallback with deduplication
-                    this.userCourses = this.userCourseSelections.map(course => ({
-                        code: course.code,
-                        title: course.title || course.code,
-                        type: course.type || 'General',
-                        color: getCourseColorByType(course.type || 'General'),
-                        year: course.year,
-                        term: course.term
-                    }));
+                    return {
+                        code,
+                        title,
+                        type,
+                        source: String(source || '').trim().toLowerCase(),
+                        year: normalizeYear(courseRow?.academic_year),
+                        term: normalizeTerm(courseRow?.term)
+                    };
+                };
+
+                const [ilaLookup, nonIlaLookup] = await Promise.all([
+                    supabase
+                        .from('courses')
+                        .select('course_code, title, type, academic_year, term')
+                        .in('course_code', uniqueCourseCodes),
+                    supabase
+                        .from('courses_nonila')
+                        .select('course_code, title, type, academic_year, term')
+                        .in('course_code', uniqueCourseCodes)
+                ]);
+
+                if (ilaLookup.error) {
+                    console.warn('Unable to load ILA course names for assignment picker:', ilaLookup.error);
                 }
+                if (nonIlaLookup.error) {
+                    console.warn('Unable to load non-ILA course names for assignment picker:', nonIlaLookup.error);
+                }
+
+                const exactCourseMap = new Map();
+                const byCodeCourseMap = new Map();
+                const allCourseRows = [
+                    ...(Array.isArray(ilaLookup.data) ? ilaLookup.data.map((row) => ({ ...row, _source: 'ila' })) : []),
+                    ...(Array.isArray(nonIlaLookup.data) ? nonIlaLookup.data.map((row) => ({ ...row, _source: 'nonila' })) : [])
+                ];
+
+                allCourseRows.forEach((courseRow) => {
+                    const normalized = toLookupRecord(courseRow, courseRow?._source || 'ila');
+                    if (!normalized) return;
+                    upsertPreferredRecord(byCodeCourseMap, normalized.code, normalized);
+                    if (normalized.year && normalized.term) {
+                        upsertPreferredRecord(exactCourseMap, buildLookupKey(normalized), normalized);
+                    }
+                });
+
+                this.userCourses = this.userCourseSelections.map((selection) => {
+                    const normalizedSelection = {
+                        code: normalizeCode(selection?.code),
+                        year: normalizeYear(selection?.year),
+                        term: normalizeTerm(selection?.term)
+                    };
+                    const exactMatch = normalizedSelection.code && normalizedSelection.year && normalizedSelection.term
+                        ? exactCourseMap.get(buildLookupKey(normalizedSelection))
+                        : null;
+                    const matchedCourse = exactMatch || byCodeCourseMap.get(normalizedSelection.code);
+                    const type = matchedCourse?.type || selection.type || 'General';
+                    const fallbackTitle = normalizeCourseTitleForPicker(selection?.title, {
+                        source: matchedCourse?.source || '',
+                        type
+                    });
+
+                    return {
+                        code: selection.code,
+                        title: matchedCourse?.title || fallbackTitle || selection.code,
+                        type,
+                        color: getCourseColorByType(type),
+                        year: selection.year,
+                        term: selection.term
+                    };
+                });
             }
 
             console.log('Loaded user courses (deduplicated):', this.userCourses);
@@ -419,6 +622,8 @@ class AssignmentsManager {
         this.currentAssignment = null;
         this.isNewAssignment = true;
         this.previousView = this.currentView;
+        this.assignmentModalSuppressDirtyTracking = true;
+        this.assignmentModalDirty = false;
 
         const overlay = document.getElementById('assignment-modal-overlay');
         const titleInput = document.getElementById('assignment-modal-title');
@@ -429,6 +634,7 @@ class AssignmentsManager {
         const subjectSelector = document.getElementById('assignment-modal-subject');
         const subjectDropdown = document.getElementById('subject-dropdown');
         const subjectCurrent = document.getElementById('subject-current');
+        const subjectSelect = document.getElementById('assignment-modal-course-select');
         const deleteBtn = document.getElementById('assignment-delete-btn');
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
         const saveBtn = document.getElementById('assignment-save-btn');
@@ -477,6 +683,16 @@ class AssignmentsManager {
         if (subjectCurrent) subjectCurrent.classList.remove('open');
 
         this.populateSubjectDropdown(subjectDropdown, subjectTag);
+        const prefillSelection = this.resolveCoursePrefillSelection(options?.prefillCourse || this.coursePrefilter);
+        if (prefillSelection) {
+            this.applySubjectSelection(prefillSelection, {
+                subjectTag,
+                subjectSelector,
+                subjectCurrent,
+                subjectDropdown,
+                subjectSelect
+            });
+        }
 
         closeSemesterMobileSheet({ immediate: true });
         this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
@@ -485,6 +701,8 @@ class AssignmentsManager {
         if (titleInput) {
             window.requestAnimationFrame(() => titleInput.focus());
         }
+        this.captureAssignmentModalInitialState();
+        this.assignmentModalSuppressDirtyTracking = false;
     }
 
     populateSubjectDropdown(subjectDropdown, subjectTag) {
@@ -522,7 +740,7 @@ class AssignmentsManager {
                      data-year="${course.year}"
                      data-term="${course.term}">
                     <span class="option-tag" style="background-color: ${course.color}">
-                        ${this.truncateText(course.title, 25)}
+                        ${this.escapeHtml(course.title || course.code || '')}
                     </span>
                 </div>
             `).join('')}
@@ -672,12 +890,14 @@ class AssignmentsManager {
         const modalClose = document.getElementById('assignment-modal-close');
         const modalOverlay = document.getElementById('assignment-modal-overlay');
         if (modalClose) {
-            modalClose.addEventListener('click', () => this.closeAssignmentModal());
+            modalClose.addEventListener('click', () => {
+                void this.requestAssignmentModalClose();
+            });
         }
         if (modalOverlay) {
             modalOverlay.addEventListener('click', (e) => {
                 if (e.target === modalOverlay) {
-                    this.closeAssignmentModal();
+                    void this.requestAssignmentModalClose();
                 }
             });
         }
@@ -696,8 +916,30 @@ class AssignmentsManager {
             cancelBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.closeAssignmentModal();
+                void this.requestAssignmentModalClose();
             });
+        }
+
+        const titleInput = document.getElementById('assignment-modal-title');
+        const dueDateInput = document.getElementById('assignment-modal-due-date');
+        const statusSelect = document.getElementById('assignment-modal-status');
+        const instructionsTextarea = document.getElementById('assignment-modal-instructions');
+
+        if (titleInput && titleInput.dataset.dirtyListenerAttached !== 'true') {
+            titleInput.dataset.dirtyListenerAttached = 'true';
+            titleInput.addEventListener('input', () => this.markAssignmentModalDirty());
+        }
+        if (dueDateInput && dueDateInput.dataset.dirtyListenerAttached !== 'true') {
+            dueDateInput.dataset.dirtyListenerAttached = 'true';
+            dueDateInput.addEventListener('change', () => this.markAssignmentModalDirty());
+        }
+        if (statusSelect && statusSelect.dataset.dirtyListenerAttached !== 'true') {
+            statusSelect.dataset.dirtyListenerAttached = 'true';
+            statusSelect.addEventListener('change', () => this.markAssignmentModalDirty());
+        }
+        if (instructionsTextarea && instructionsTextarea.dataset.dirtyListenerAttached !== 'true') {
+            instructionsTextarea.dataset.dirtyListenerAttached = 'true';
+            instructionsTextarea.addEventListener('input', () => this.markAssignmentModalDirty());
         }
 
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
@@ -748,9 +990,13 @@ class AssignmentsManager {
 
             const selectEmoji = (emojiValue) => {
                 if (!emojiValue) return;
+                const previousEmoji = String(emojiTrigger.dataset.emoji || '');
                 emojiTrigger.textContent = emojiValue;
                 emojiTrigger.dataset.emoji = emojiValue;
                 this.addRecentEmoji(emojiValue);
+                if (previousEmoji !== String(emojiValue)) {
+                    this.markAssignmentModalDirty();
+                }
                 hideEmojiPickerPopup();
             };
 
@@ -813,8 +1059,12 @@ class AssignmentsManager {
 
             if (emojiRemove) {
                 emojiRemove.addEventListener('click', () => {
+                    const previousEmoji = String(emojiTrigger.dataset.emoji || '');
                     emojiTrigger.textContent = '';
                     emojiTrigger.dataset.emoji = '';
+                    if (previousEmoji !== '') {
+                        this.markAssignmentModalDirty();
+                    }
                     hideEmojiPickerPopup();
                 });
             }
@@ -1431,7 +1681,7 @@ class AssignmentsManager {
             }
 
             const searchInput = document.getElementById('search-input');
-            if (searchInput) setTimeout(() => searchInput.focus(), 100);
+            if (searchInput && window.innerWidth > 1023) setTimeout(() => searchInput.focus(), 100);
         };
 
         searchButtons.forEach(btn => {
@@ -1964,6 +2214,8 @@ class AssignmentsManager {
         this.currentAssignment = assignment;
         this.isNewAssignment = false;
         this.previousView = this.currentView;
+        this.assignmentModalSuppressDirtyTracking = true;
+        this.assignmentModalDirty = false;
 
         const overlay = document.getElementById('assignment-modal-overlay');
         const titleInput = document.getElementById('assignment-modal-title');
@@ -1978,6 +2230,19 @@ class AssignmentsManager {
         const emojiTrigger = document.getElementById('assignment-emoji-trigger');
         const saveBtn = document.getElementById('assignment-save-btn');
         const subtitleNode = document.getElementById('assignment-modal-subtitle');
+        const normalizedAssignmentCode = String(assignment?.course_code || '').trim().toUpperCase();
+        const normalizedAssignmentYear = String(assignment?.course_year ?? '').trim();
+        const normalizedAssignmentTerm = String(assignment?.course_term || '').trim().toLowerCase();
+        const matchedAssignedCourse = (this.userCourses || []).find((course) => {
+            const courseCodeMatches = String(course?.code || '').trim().toUpperCase() === normalizedAssignmentCode;
+            if (!courseCodeMatches) return false;
+            if (!normalizedAssignmentYear || !normalizedAssignmentTerm) return true;
+            return String(course?.year ?? '').trim() === normalizedAssignmentYear
+                && String(course?.term || '').trim().toLowerCase() === normalizedAssignmentTerm;
+        });
+        const resolvedAssignmentCourseName = String(
+            matchedAssignedCourse?.title || assignment?.course_tag_name || ''
+        ).trim();
 
         if (!overlay) return;
         overlay.dataset.assignmentId = assignment?.id != null ? String(assignment.id) : '';
@@ -2010,15 +2275,15 @@ class AssignmentsManager {
         }
 
         if (subjectTag) {
-            if (assignment.course_tag_name) {
-                subjectTag.textContent = this.truncateText(assignment.course_tag_name, this.getCourseNameDisplayMaxLength());
+            if (resolvedAssignmentCourseName) {
+                subjectTag.textContent = resolvedAssignmentCourseName;
                 subjectTag.style.backgroundColor = '';
                 subjectTag.classList.add('has-tag');
                 subjectTag.dataset.code = assignment.course_code || '';
                 subjectTag.dataset.color = assignment.course_tag_color || '';
                 subjectTag.dataset.year = assignment.course_year || '';
                 subjectTag.dataset.term = assignment.course_term || '';
-                subjectTag.dataset.fullName = assignment.course_tag_name;
+                subjectTag.dataset.fullName = resolvedAssignmentCourseName;
             } else {
                 subjectTag.textContent = 'Select course';
                 subjectTag.style.backgroundColor = '';
@@ -2032,7 +2297,7 @@ class AssignmentsManager {
         }
 
         if (subtitleNode) {
-            const subtitle = String(assignment?.course_tag_name || '').trim();
+            const subtitle = resolvedAssignmentCourseName;
             if (subtitle) {
                 subtitleNode.textContent = subtitle;
                 subtitleNode.hidden = false;
@@ -2053,6 +2318,8 @@ class AssignmentsManager {
         this.closeAssignmentDueDateSheet({ immediate: true, restoreFocus: false });
         overlay.style.display = 'flex';
         document.body.classList.add('assignment-modal-open');
+        this.captureAssignmentModalInitialState();
+        this.assignmentModalSuppressDirtyTracking = false;
     }
 
     closeAssignmentModal() {
@@ -2077,10 +2344,103 @@ class AssignmentsManager {
         this.currentAssignment = null;
         this.isNewAssignment = false;
         this.isSaving = false;
+        this.assignmentModalInitialState = null;
+        this.assignmentModalCloseConfirmInFlight = false;
+        this.assignmentModalDirty = false;
+        this.assignmentModalSuppressDirtyTracking = false;
         const targetView = this.previousView || this.currentView || 'all-assignments';
         this.previousView = null;
         this.switchView(targetView);
         setTimeout(() => this.renderAssignments(), 0);
+    }
+
+    readAssignmentModalState() {
+        const titleInput = document.getElementById('assignment-modal-title');
+        const dueDateInput = document.getElementById('assignment-modal-due-date');
+        const statusSelect = document.getElementById('assignment-modal-status');
+        const instructionsTextarea = document.getElementById('assignment-modal-instructions');
+        const subjectTag = document.getElementById('subject-tag');
+        const emojiTrigger = document.getElementById('assignment-emoji-trigger');
+        const hasCourseTag = Boolean(subjectTag?.classList.contains('has-tag'));
+
+        return {
+            title: String(titleInput?.value || ''),
+            dueDate: String(dueDateInput?.value || ''),
+            status: String(this.getCanonicalStatus(statusSelect?.value || 'not_started')),
+            instructions: String(instructionsTextarea?.value || ''),
+            courseCode: hasCourseTag ? String(subjectTag?.dataset.code || '') : '',
+            courseYear: hasCourseTag ? String(subjectTag?.dataset.year || '') : '',
+            courseTerm: hasCourseTag ? String(subjectTag?.dataset.term || '') : '',
+            courseName: hasCourseTag ? String(subjectTag?.dataset.fullName || subjectTag?.textContent || '') : '',
+            emoji: String(emojiTrigger?.dataset.emoji || '')
+        };
+    }
+
+    captureAssignmentModalInitialState() {
+        this.assignmentModalInitialState = this.readAssignmentModalState();
+        this.assignmentModalCloseConfirmInFlight = false;
+        this.assignmentModalDirty = false;
+    }
+
+    markAssignmentModalDirty() {
+        if (this.assignmentModalSuppressDirtyTracking) return;
+        if (!this.isAssignmentModalVisible()) return;
+        this.assignmentModalDirty = true;
+    }
+
+    hasAssignmentModalUnsavedChanges() {
+        if (this.assignmentModalDirty) return true;
+        if (!this.assignmentModalInitialState) return false;
+        const currentState = this.readAssignmentModalState();
+        return Object.keys(this.assignmentModalInitialState).some((key) => (
+            String(currentState[key] ?? '') !== String(this.assignmentModalInitialState[key] ?? '')
+        ));
+    }
+
+    isAssignmentModalVisible() {
+        const overlay = document.getElementById('assignment-modal-overlay');
+        if (!overlay) return false;
+        const inlineDisplay = String(overlay.style.display || '').trim().toLowerCase();
+        if (inlineDisplay === 'none') return false;
+
+        const computed = window.getComputedStyle(overlay);
+        if (!computed) return true;
+        return computed.display !== 'none' && computed.visibility !== 'hidden';
+    }
+
+    async requestAssignmentModalClose({ force = false } = {}) {
+        if (!this.isAssignmentModalVisible()) {
+            return false;
+        }
+        if (force || this.isSaving) {
+            this.closeAssignmentModal();
+            return true;
+        }
+        if (!this.hasAssignmentModalUnsavedChanges()) {
+            this.closeAssignmentModal();
+            return true;
+        }
+        if (this.assignmentModalCloseConfirmInFlight) {
+            return false;
+        }
+
+        this.assignmentModalCloseConfirmInFlight = true;
+        try {
+            const shouldDiscard = await openConfirmModal({
+                title: 'Discard changes?',
+                message: 'You have unsaved changes to this assignment.',
+                confirmLabel: 'Discard',
+                cancelLabel: 'Keep editing',
+                destructive: true
+            });
+            if (shouldDiscard) {
+                this.closeAssignmentModal();
+                return true;
+            }
+            return false;
+        } finally {
+            this.assignmentModalCloseConfirmInFlight = false;
+        }
     }
 
     loadRecentEmojis() {
@@ -2657,7 +3017,12 @@ class AssignmentsManager {
         };
 
         const applySelectedDate = (value) => {
-            targetInput.value = value || '';
+            const nextValue = String(value || '');
+            const previousValue = String(targetInput.value || '');
+            targetInput.value = nextValue;
+            if (previousValue !== nextValue) {
+                this.markAssignmentModalDirty();
+            }
             this.closeAssignmentDueDateSheet();
         };
 
@@ -3046,7 +3411,12 @@ class AssignmentsManager {
         if (this.datePickerTarget?.mode === 'modal') {
             const targetInput = this.datePickerTarget.element;
             if (targetInput) {
-                targetInput.value = date ? this.formatDateInputValue(date) : '';
+                const nextValue = date ? this.formatDateInputValue(date) : '';
+                const previousValue = String(targetInput.value || '');
+                targetInput.value = nextValue;
+                if (previousValue !== nextValue) {
+                    this.markAssignmentModalDirty();
+                }
             }
         } else if (this.datePickerTarget?.assignment) {
             const normalizedDate = date ? this.normalizeDateForStorage(date) : null;
@@ -3135,12 +3505,13 @@ class AssignmentsManager {
         const daysUntilDue = Math.round((dueDate.getTime() - today.getTime()) / MS_PER_DAY);
         const status = this.getCanonicalStatus(assignment?.status);
         const isCompleted = status === 'completed';
+        const isDueToday = daysUntilDue === 0 && !isCompleted;
 
         return {
             dueDate,
             daysUntilDue,
-            isDueToday: daysUntilDue === 0 && !isCompleted,
-            isDueSoon: daysUntilDue >= 1 && daysUntilDue <= 7 && !isCompleted,
+            isDueToday,
+            isDueSoon: daysUntilDue >= 0 && daysUntilDue <= 7 && !isCompleted,
             isOverdue: daysUntilDue < 0 && !isCompleted
         };
     }
@@ -3301,7 +3672,9 @@ class AssignmentsManager {
             emptyNode.innerHTML = `
                 <h3>No assignments yet</h3>
                 <p>Start building your planner by creating your first assignment.</p>
-                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                <div class="empty-state-actions">
+                    <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                </div>
             `;
             return;
         }
@@ -3312,7 +3685,7 @@ class AssignmentsManager {
                 <p>No assignments match "${this.escapeHtml(this.searchQuery)}".</p>
                 <div class="empty-state-actions">
                     <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="clear-search">Clear Search</button>
-                    <button type="button" class="ui-btn ui-btn--secondary empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                    <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
                 </div>
             `;
             return;
@@ -3323,7 +3696,7 @@ class AssignmentsManager {
             <p>Try a different filter or reset to the default list.</p>
             <div class="empty-state-actions">
                 <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="show-all">Show All</button>
-                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta empty-state-cta--secondary control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
+                <button type="button" class="ui-btn ui-btn--secondary empty-state-cta control-surface control-surface--secondary" data-empty-action="new-assignment">Add Assignment</button>
             </div>
         `;
     }
@@ -4242,10 +4615,19 @@ class AssignmentsManager {
         const subjectCurrent = refs.subjectCurrent || document.getElementById('subject-current');
         const subjectDropdown = refs.subjectDropdown || document.getElementById('subject-dropdown');
         const subjectSelect = refs.subjectSelect || document.getElementById('assignment-modal-course-select');
+        const previousSelection = subjectTag
+            ? {
+                code: String(subjectTag.dataset.code || ''),
+                year: String(subjectTag.dataset.year || ''),
+                term: String(subjectTag.dataset.term || ''),
+                name: String(subjectTag.dataset.fullName || ''),
+                hasTag: subjectTag.classList.contains('has-tag')
+            }
+            : null;
 
         if (subjectTag) {
             if (code && name) {
-                subjectTag.textContent = this.truncateText(name, this.getCourseNameDisplayMaxLength());
+                subjectTag.textContent = name;
                 subjectTag.style.backgroundColor = '';
                 subjectTag.classList.add('has-tag');
                 subjectTag.dataset.code = code;
@@ -4282,6 +4664,24 @@ class AssignmentsManager {
         if (subjectSelector) subjectSelector.classList.remove('open');
         if (subjectCurrent) subjectCurrent.classList.remove('open');
         this.updateSubjectSelectorAppearance(subjectTag, subjectSelector);
+
+        if (!this.assignmentModalSuppressDirtyTracking && this.isAssignmentModalVisible() && previousSelection) {
+            const nextSelection = {
+                code,
+                year,
+                term,
+                name,
+                hasTag: Boolean(code && name)
+            };
+            const changed = previousSelection.code !== nextSelection.code
+                || previousSelection.year !== nextSelection.year
+                || previousSelection.term !== nextSelection.term
+                || previousSelection.name !== nextSelection.name
+                || previousSelection.hasTag !== nextSelection.hasTag;
+            if (changed) {
+                this.assignmentModalDirty = true;
+            }
+        }
     }
 
     updateSubjectSelectorAppearance(subjectTag = null, subjectSelector = null) {
@@ -4326,10 +4726,16 @@ function initializeAssignments() {
     if (!currentRoot) return;
 
     if (window._assignmentsInitializedRoot === currentRoot && (window._assignmentsInitInProgress || window._assignmentsInitialized)) {
+        if (assignmentsManager && typeof assignmentsManager.handleRouteActivation === 'function') {
+            void assignmentsManager.handleRouteActivation();
+        }
         return;
     }
 
     if (assignmentsManager && assignmentsManager.root === currentRoot && (assignmentsManager.isInitialized || assignmentsManager.isInitializing)) {
+        if (typeof assignmentsManager.handleRouteActivation === 'function') {
+            void assignmentsManager.handleRouteActivation();
+        }
         return;
     }
 

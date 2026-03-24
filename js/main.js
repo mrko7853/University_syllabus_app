@@ -445,7 +445,7 @@ const COURSE_SMART_PRESET_CONFIG = {
     },
     'preset-registered-only': {
         id: 'preset-registered-only',
-        label: 'Registered only'
+        label: 'In timetable only'
     },
     'preset-has-presentation': {
         id: 'preset-has-presentation',
@@ -1571,7 +1571,7 @@ async function buildCourseStatusLookup(courses = [], year, term) {
         const isRegistered = registeredCourseKeys.has(key);
 
         if (registeredCourseKeys.has(key)) {
-            context.statusLookup.set(key, 'Registered');
+            context.statusLookup.set(key, 'In timetable');
         } else if (savedCourseKeys.has(key)) {
             context.statusLookup.set(key, 'Saved');
         }
@@ -1621,15 +1621,23 @@ function getRegisteredChipInlineStyle(courseColor) {
     return ` style="background:${backgroundColor}; border-color:${borderColor}; color:rgba(255, 255, 255, 0.97);"`;
 }
 
+function isInTimetableStatusLabel(statusLabel) {
+    const normalized = String(statusLabel || '').trim().toLowerCase();
+    return normalized === 'registered' || normalized === 'in timetable';
+}
+
+function isSavedStatusLabel(statusLabel) {
+    return String(statusLabel || '').trim().toLowerCase() === 'saved';
+}
+
 function getCourseStatusChipMarkup(statusLabel, courseColor = '') {
     const label = String(statusLabel || '').trim();
     if (!label) return '';
 
-    const lower = label.toLowerCase();
-    const variantClass = lower === 'registered'
+    const variantClass = isInTimetableStatusLabel(label)
         ? 'course-chip-status-registered'
         : 'course-chip-status-saved';
-    const registeredStyle = lower === 'registered' ? getRegisteredChipInlineStyle(courseColor) : '';
+    const registeredStyle = isInTimetableStatusLabel(label) ? getRegisteredChipInlineStyle(courseColor) : '';
 
     return `<span class="course-chip course-chip-status ${variantClass}"${registeredStyle}>${escapeCourseMarkup(label)}</span>`;
 }
@@ -1652,9 +1660,9 @@ function getCourseHelperBadgeMarkup(scheduleSignal = {}, stateFlags = {}) {
 function getMobilePrimarySignalChipMarkup(statusLabel = '', scheduleSignal = {}, courseColor = '') {
     const normalizedStatus = String(statusLabel || '').trim().toLowerCase();
 
-    if (normalizedStatus === 'registered') {
+    if (isInTimetableStatusLabel(statusLabel)) {
         const registeredStyle = getRegisteredChipInlineStyle(courseColor);
-        return `<span class="course-chip course-chip-status course-chip-status-registered course-chip-mobile-signal"${registeredStyle}>Registered</span>`;
+        return `<span class="course-chip course-chip-status course-chip-status-registered course-chip-mobile-signal"${registeredStyle}>In timetable</span>`;
     }
 
     if (scheduleSignal?.type === 'conflict') {
@@ -1676,7 +1684,7 @@ function getMobilePrimarySignalChipMarkup(statusLabel = '', scheduleSignal = {},
         return `<span class="course-chip course-chip-helper course-chip-helper-fit course-chip-mobile-signal">${escapeCourseMarkup(compactLabel)}</span>`;
     }
 
-    if (normalizedStatus === 'saved') {
+    if (isSavedStatusLabel(normalizedStatus)) {
         return '<span class="course-chip course-chip-status course-chip-status-saved course-chip-mobile-signal">Saved</span>';
     }
 
@@ -2175,7 +2183,7 @@ async function showCourse(year, term) {
             courseList.innerHTML = `
                 <div class="course-empty-state no-results">
                     <h3 class="course-empty-title">No courses in ${escapeCourseMarkup(term)} ${escapeCourseMarkup(year)}</h3>
-                    <p class="course-empty-message">Try selecting a different semester.</p>
+                    <p class="course-empty-message">Try selecting a different semester</p>
                     <div class="course-empty-actions">
                         <button type="button" class="course-empty-clear-btn control-surface control-surface--secondary" data-action="change-course-term">Change term</button>
                     </div>
@@ -2287,8 +2295,8 @@ function renderCourses(courses, courseList, year, term, professorChanges = new S
             workloadLabel: null
         };
         const stateFlags = {
-            isRegistered: courseStatusLabel === 'Registered',
-            isSaved: courseStatusLabel === 'Saved',
+            isRegistered: isInTimetableStatusLabel(courseStatusLabel),
+            isSaved: isSavedStatusLabel(courseStatusLabel),
             isHidden: false
         };
         const assessmentFlags = deriveDeterministicAssessmentFlags(course);
@@ -2479,10 +2487,15 @@ function showCourseLoadError() {
     if (!courseList) return;
 
     courseList.innerHTML = `
-        <div class="course-error-state">
-            <div>
-                <p style="margin-bottom: 15px;">⚠️ Failed to load courses</p>
-                <button class="course-retry-button" onclick="retryLoadCourses()">Retry</button>
+        <div class="course-empty-state course-empty-state--error no-results" role="status" aria-live="polite">
+            <p class="course-empty-eyebrow">
+                <span class="course-empty-eyebrow-icon" aria-hidden="true">!</span>
+                Course list unavailable
+            </p>
+            <h3 class="course-empty-title">We couldn&apos;t load courses right now</h3>
+            <p class="course-empty-message">Please check your connection and try again</p>
+            <div class="course-empty-actions">
+                <button type="button" class="course-empty-clear-btn course-retry-button control-surface control-surface--primary" onclick="retryLoadCourses()">Retry loading</button>
             </div>
         </div>
     `;
@@ -2613,31 +2626,31 @@ function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
 
     const model = {
         title: hasSearch
-            ? `No courses match "${activeSearchQuery.trim()}".`
-            : 'No courses match the selected filters.',
+            ? `No courses match "${activeSearchQuery.trim()}"`
+            : 'No courses match the selected filters',
         message: hasSearch
-            ? 'Try a different keyword or remove filters.'
-            : 'Try adjusting filters to widen the results.',
+            ? 'Try a different keyword or remove filters'
+            : 'Try adjusting filters to widen the results',
         actions: [{ action: 'clear-course-filters', label: 'Clear filters' }]
     };
 
     if (presetId === 'preset-saved-only') {
-        model.title = 'No saved courses in this term.';
-        model.message = 'Save courses from course details, then return to this preset.';
+        model.title = 'No saved courses in this term';
+        model.message = 'Save courses from course details, then return to this preset';
         model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
         return model;
     }
 
     if (presetId === 'preset-registered-only') {
-        model.title = 'No registered courses in this term.';
-        model.message = 'Register courses from course details or switch semesters.';
+        model.title = 'No courses in your timetable this term';
+        model.message = 'Add courses to your timetable from course details or switch semesters';
         model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
         return model;
     }
 
     if (presetId === 'preset-empty-slots') {
-        model.title = 'No courses fit your empty slots.';
-        model.message = 'Try changing slot filters or review your calendar availability.';
+        model.title = 'No courses fit your empty slots';
+        model.message = 'Try changing slot filters or review your calendar availability';
         model.actions = [
             { action: 'show-all-courses', label: 'Show all courses' },
             { action: 'open-calendar-empty-slots', label: 'Open timetable' }
@@ -2646,8 +2659,8 @@ function buildNoResultsStateModel(activeSearchQuery, selectedFilterState) {
     }
 
     if (presetId === 'preset-fits-my-year') {
-        model.title = 'No courses fit your current year.';
-        model.message = 'Try clearing this preset or switching semesters.';
+        model.title = 'No courses fit your current year';
+        model.message = 'Try clearing this preset or switching semesters';
         model.actions = [{ action: 'show-all-courses', label: 'Show all courses' }];
         return model;
     }
@@ -3785,7 +3798,7 @@ function setupDashboardEventListeners() {
                     // Focus on search input after animation
                     setTimeout(() => {
                         const searchInput = document.getElementById('search-input');
-                        if (searchInput) searchInput.focus();
+                        if (searchInput && window.innerWidth > 1023) searchInput.focus();
                     }, 100);
                 }
             });
@@ -5351,8 +5364,8 @@ function displaySuggestedCourses(coursesWithRelevance, searchQuery) {
         const courseStatusLabel = statusLookup.get(statusKey) || '';
         const scheduleSignal = scheduleLookup.get(statusKey) || { type: 'none', label: '' };
         const stateFlags = {
-            isRegistered: courseStatusLabel === 'Registered',
-            isSaved: courseStatusLabel === 'Saved',
+            isRegistered: isInTimetableStatusLabel(courseStatusLabel),
+            isSaved: isSavedStatusLabel(courseStatusLabel),
             isHidden: false
         };
         const courseStatusChip = getCourseStatusChipMarkup(courseStatusLabel, suggestedCourseColor);
